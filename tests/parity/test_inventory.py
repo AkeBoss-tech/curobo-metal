@@ -47,7 +47,8 @@ def test_equivalence_and_blocked_claims_carry_the_required_evidence():
     blocked = [item for item in records if item["classification"] == "evidence_blocked"]
     assert blocked
     assert all(item["evidence_needed"] for item in blocked)
-    assert any(item["implementable_gaps"] for item in blocked)
+    # Evidence requirements are not portable implementation gaps.
+    assert all(not item["implementable_gaps"] for item in blocked)
 
 
 def test_every_partial_record_names_an_implementable_gap():

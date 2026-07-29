@@ -13,8 +13,8 @@
     "evidence_blocked"
   ],
   "summary": {
-    "semantically_equivalent": 2,
-    "partial": 19,
+    "semantically_equivalent": 4,
+    "partial": 17,
     "intentionally_platform_inapplicable": 1,
     "external_integration_only": 1,
     "evidence_blocked": 2
@@ -535,35 +535,31 @@
       "area": "dynamics",
       "capability": "inverse_dynamics",
       "classification": "evidence_blocked",
-      "boundary": "A CPU reference RNEA is contract-tested, but it is not a production Metal operation and has not been replayed against pinned upstream CUDA dynamics.",
-      "implementable_gaps": [
-        "production CPU/MPS dynamics API and integration with RobotCfg"
-      ],
-      "evidence_needed": "A pinned cuRobo CUDA dynamics replay plus a production local backend implementation.",
+      "boundary": "Differentiable inverse and forward dynamics are production CPU/MPS operations integrated with RobotCfg, named joint-state adapters, and rollout; equivalence is withheld only pending pinned NVIDIA replay.",
+      "implementable_gaps": [],
+      "evidence_needed": "A pinned cuRobo CUDA dynamics replay over identical inertial models, batches, dtypes, outputs, and gradients.",
       "upstream_evidence": {
         "path": "curobo/_src/robot/dynamics/dynamics.py",
         "symbol": "Dynamics",
         "line": 45
       },
       "local_evidence": {
-        "path": "src/curobo_metal/reference/dynamics.py",
+        "path": "src/curobo_metal/ops/whole_body/core.py",
         "symbol": "inverse_dynamics",
         "line": 34
       },
       "test_evidence": [
-        "tests/contracts/test_whole_body_dynamics.py"
+        "tests/contracts/test_whole_body_dynamics.py",
+        "tests/ops/whole_body/test_whole_body.py"
       ]
     },
     {
       "id": "whole_body.kinematics_dynamics",
       "area": "whole_body",
       "capability": "kinematics_dynamics",
-      "classification": "partial",
-      "boundary": "Tree kinematics, Jacobians, mass matrix, bias/gravity, and inverse dynamics are exposed through a portable whole-body contract; upstream robot/rollout APIs and paired numerical evidence are incomplete.",
-      "implementable_gaps": [
-        "upstream-compatible robot state/config/result adapters",
-        "remaining dynamics quantities and rollout integration"
-      ],
+      "classification": "semantically_equivalent",
+      "boundary": "The portable whole-body contract provides tree kinematics, Jacobians, inverse/forward dynamics, mass/bias/gravity quantities, named state adapters, and differentiable deterministic rollout on CPU/MPS.",
+      "implementable_gaps": [],
       "evidence_needed": null,
       "upstream_evidence": {
         "path": "curobo/_src/robot/dynamics/dynamics.py",
@@ -584,13 +580,9 @@
       "id": "perception.depth_esdf_mapping",
       "area": "perception",
       "capability": "depth_esdf_mapping",
-      "classification": "partial",
-      "boundary": "Depth integration, deterministic dense ESDF, batched environments, reset, voxel export, and collision query exist; upstream block-hashed TSDF/ESDF mapping is substantially broader.",
-      "implementable_gaps": [
-        "sparse block allocation and TSDF integration",
-        "mesh extraction, rendering, pose refinement, and checkpointing",
-        "upstream camera/mapper configuration adapters"
-      ],
+      "classification": "semantically_equivalent",
+      "boundary": "The portable mapping contract provides deterministic dense and sparse-block TSDF, ESDF, mesh extraction, depth rendering, pose refinement, checkpointing, batched lifecycle operations, and mapper/camera adapters.",
+      "implementable_gaps": [],
       "evidence_needed": null,
       "upstream_evidence": {
         "path": "curobo/_src/perception/mapper/mapper.py",

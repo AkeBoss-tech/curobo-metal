@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 import torch
 
@@ -24,6 +24,7 @@ class PerceptionConfig:
     occupancy_threshold: float = 0.0
     unobserved_esdf: float = 1.0
     environments: int = 1
+    block_size: int = 8
 
     def __post_init__(self) -> None:
         if len(self.shape) != 3 or any(not isinstance(v, int) or v < 2 for v in self.shape):
@@ -38,6 +39,30 @@ class PerceptionConfig:
             raise ValueError("depth_min must be nonnegative and less than depth_max")
         if self.unobserved_esdf <= 0 or not isinstance(self.environments, int) or self.environments < 1:
             raise ValueError("unobserved_esdf and environments must be positive")
+        if not isinstance(self.block_size, int) or self.block_size < 1:
+            raise ValueError("block_size must be a positive integer")
+
+    @classmethod
+    def from_mapper_config(cls, value: Mapping[str, Any]) -> "PerceptionConfig":
+        """Adapt portable fields from upstream-style mapper dictionaries."""
+        if not isinstance(value, Mapping):
+            raise TypeError("mapper config must be a mapping")
+        aliases = {
+            "voxel_size_m": "voxel_size",
+            "map_size": "shape",
+            "map_center": "grid_center",
+            "truncation_distance_m": "truncation_distance",
+            "num_environments": "environments",
+        }
+        fields = cls.__dataclass_fields__
+        normalized = {aliases.get(k, k): v for k, v in value.items()}
+        unknown = set(normalized) - set(fields)
+        if unknown:
+            raise ValueError(f"unsupported mapper config fields: {sorted(unknown)}")
+        for key in ("shape", "grid_center"):
+            if key in normalized:
+                normalized[key] = tuple(normalized[key])
+        return cls(**normalized)
 
 
 @dataclass(frozen=True)
@@ -45,6 +70,24 @@ class CameraObservation:
     depth: torch.Tensor  # [B,C,H,W] or [C,H,W] or [H,W], metres
     intrinsics: torch.Tensor  # [B,C,3,3], broadcast forms accepted
     camera_to_world: torch.Tensor  # [B,C,4,4], broadcast forms accepted
+
+    @classmethod
+    def from_camera_frame(
+        cls, value: Mapping[str, torch.Tensor] | Any
+    ) -> "CameraObservation":
+        """Adapt dict/object camera frames without copying tensor storage."""
+        def field(*names: str) -> torch.Tensor:
+            for name in names:
+                if isinstance(value, Mapping) and name in value:
+                    return value[name]
+                if hasattr(value, name):
+                    return getattr(value, name)
+            raise ValueError(f"camera frame is missing {names[0]}")
+        return cls(
+            field("depth", "depth_image"),
+            field("intrinsics", "projection_matrix"),
+            field("camera_to_world", "pose", "camera_pose"),
+        )
 
 
 @dataclass(frozen=True)
@@ -55,6 +98,35 @@ class DenseMap:
     esdf: torch.Tensor  # metres; positive free, negative occupied
     gradient: torch.Tensor  # [E,nx,ny,nz,3]
     generation: torch.Tensor  # int64 [E]
+
+
+@dataclass(frozen=True)
+class SparseTSDF:
+    block_indices: torch.Tensor  # int64 [K,4]: environment,x,y,z
+    tsdf: torch.Tensor  # [K,B,B,B]
+    weight: torch.Tensor
+    block_size: int
+    generation: torch.Tensor
+
+
+@dataclass(frozen=True)
+class TriangleMesh:
+    vertices: torch.Tensor
+    faces: torch.Tensor
+    environment: int
+
+
+@dataclass(frozen=True)
+class RenderResult:
+    depth: torch.Tensor
+    valid: torch.Tensor
+
+
+@dataclass(frozen=True)
+class PoseRefinementResult:
+    camera_to_world: torch.Tensor
+    loss: torch.Tensor
+    iterations: int
 
 
 def _float_tensor(value: torch.Tensor, name: str) -> torch.Tensor:
@@ -221,6 +293,104 @@ def integrate_depth(
     return DenseMap(tsdf, weight, occupancy, esdf, gradient, generation)
 
 
+def sparse_blocks(state: DenseMap, block_size: int = 8) -> SparseTSDF:
+    """Pack observed blocks in lexicographic order with deterministic padding."""
+    if not isinstance(block_size, int) or block_size < 1:
+        raise ValueError("block_size must be a positive integer")
+    e, nx, ny, nz = state.tsdf.shape
+    indices, values, weights = [], [], []
+    for env in range(e):
+        for x in range(0, nx, block_size):
+            for y in range(0, ny, block_size):
+                for z in range(0, nz, block_size):
+                    w = state.weight[env, x:x + block_size, y:y + block_size, z:z + block_size]
+                    if not bool((w > 0).any().item()):
+                        continue
+                    tpad = state.tsdf.new_ones((block_size,) * 3)
+                    wpad = state.weight.new_zeros((block_size,) * 3)
+                    extent = w.shape
+                    tpad[:extent[0], :extent[1], :extent[2]] = state.tsdf[
+                        env, x:x + block_size, y:y + block_size, z:z + block_size
+                    ]
+                    wpad[:extent[0], :extent[1], :extent[2]] = w
+                    indices.append((env, x // block_size, y // block_size, z // block_size))
+                    values.append(tpad)
+                    weights.append(wpad)
+    index = torch.tensor(indices, device=state.tsdf.device, dtype=torch.int64).reshape(-1, 4)
+    empty_shape = (0, block_size, block_size, block_size)
+    return SparseTSDF(
+        index,
+        torch.stack(values) if values else state.tsdf.new_empty(empty_shape),
+        torch.stack(weights) if weights else state.weight.new_empty(empty_shape),
+        block_size,
+        state.generation.clone(),
+    )
+
+
+def extract_mesh(
+    config: PerceptionConfig, state: DenseMap, environment: int = 0
+) -> TriangleMesh:
+    """Extract a deterministic watertight voxel-surface mesh."""
+    if environment < 0 or environment >= config.environments:
+        raise ValueError("environment is out of range")
+    occupied = state.occupancy[environment]
+    centers = voxel_centers(config, device=occupied.device, dtype=state.tsdf.dtype)
+    directions = ((-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1))
+    # Face corners in a stable outward winding; vertex duplication is intentional.
+    corners = (
+        ((-1,-1,-1),(-1,-1,1),(-1,1,1),(-1,1,-1)),
+        ((1,-1,-1),(1,1,-1),(1,1,1),(1,-1,1)),
+        ((-1,-1,-1),(1,-1,-1),(1,-1,1),(-1,-1,1)),
+        ((-1,1,-1),(-1,1,1),(1,1,1),(1,1,-1)),
+        ((-1,-1,-1),(-1,1,-1),(1,1,-1),(1,-1,-1)),
+        ((-1,-1,1),(1,-1,1),(1,1,1),(-1,1,1)),
+    )
+    vertices, faces = [], []
+    for cell in torch.nonzero(occupied, as_tuple=False).tolist():
+        for face_id, direction in enumerate(directions):
+            neighbor = tuple(cell[i] + direction[i] for i in range(3))
+            inside = all(0 <= neighbor[i] < config.shape[i] for i in range(3))
+            if inside and bool(occupied[neighbor].item()):
+                continue
+            base = len(vertices)
+            center = centers[tuple(cell)]
+            vertices.extend(center + center.new_tensor(c) * (config.voxel_size / 2) for c in corners[face_id])
+            faces.extend(((base, base + 1, base + 2), (base, base + 2, base + 3)))
+    return TriangleMesh(
+        torch.stack(vertices) if vertices else state.tsdf.new_empty((0, 3)),
+        torch.tensor(faces, device=state.tsdf.device, dtype=torch.int64).reshape(-1, 3),
+        environment,
+    )
+
+
+def render_depth(
+    config: PerceptionConfig, state: DenseMap, intrinsics: torch.Tensor,
+    camera_to_world: torch.Tensor, image_size: tuple[int, int], *, environment: int = 0,
+) -> RenderResult:
+    """Render occupied voxel centres with a deterministic nearest-depth z-buffer."""
+    obs = CameraObservation(
+        state.tsdf.new_zeros(image_size), intrinsics, camera_to_world
+    )
+    _, intr, poses = _canonical_observation(obs, 1)
+    h, w = image_size
+    points = voxel_centers(config, device=state.tsdf.device, dtype=state.tsdf.dtype)[
+        state.occupancy[environment]
+    ]
+    depth = state.tsdf.new_full((h * w,), torch.inf)
+    if len(points):
+        local = (points - poses[0, 0, :3, 3]) @ poses[0, 0, :3, :3]
+        z = local[:, 2]
+        u = torch.round(intr[0, 0, 0, 0] * local[:, 0] / z.clamp_min(1e-30) + intr[0, 0, 0, 2]).long()
+        v = torch.round(intr[0, 0, 1, 1] * local[:, 1] / z.clamp_min(1e-30) + intr[0, 0, 1, 2]).long()
+        valid = (z > 0) & (u >= 0) & (u < w) & (v >= 0) & (v < h)
+        linear = v[valid] * w + u[valid]
+        # scatter_reduce is supported natively by the fallback-disabled MPS path.
+        depth = depth.scatter_reduce(0, linear, z[valid], reduce="amin", include_self=True)
+    valid_pixels = torch.isfinite(depth)
+    return RenderResult(torch.where(valid_pixels, depth, torch.zeros_like(depth)).reshape(h, w),
+                        valid_pixels.reshape(h, w))
+
+
 class PerceptionMapper:
     """Mutable multi-environment facade over functional differentiable fusion."""
 
@@ -267,6 +437,65 @@ class PerceptionMapper:
             fields[field] = getattr(self.state, field).index_copy(0, index, getattr(updated, field))
         self.state = DenseMap(**fields)
         return self.state
+
+    def allocate_blocks(self) -> SparseTSDF:
+        return sparse_blocks(self.state, self.config.block_size)
+
+    def extract_mesh(self, environment: int = 0) -> TriangleMesh:
+        return extract_mesh(self.config, self.state, environment)
+
+    def render(
+        self, intrinsics: torch.Tensor, camera_to_world: torch.Tensor,
+        image_size: tuple[int, int], *, environment: int = 0,
+    ) -> RenderResult:
+        return render_depth(self.config, self.state, intrinsics, camera_to_world,
+                            image_size, environment=environment)
+
+    def refine_pose(
+        self, observation: CameraObservation, *, environment: int = 0,
+        iterations: int = 5, learning_rate: float = 0.1,
+    ) -> PoseRefinementResult:
+        """Refine camera z translation against rendered valid depth pixels."""
+        depth, intrinsics, poses = _canonical_observation(observation, 1)
+        if iterations < 0 or not math.isfinite(learning_rate) or learning_rate <= 0:
+            raise ValueError("iterations must be nonnegative and learning_rate positive")
+        pose = poses[0, 0].clone()
+        losses = []
+        for _ in range(iterations):
+            rendered = self.render(intrinsics[0, 0], pose, depth.shape[-2:],
+                                   environment=environment)
+            valid = rendered.valid & torch.isfinite(depth[0, 0]) & (depth[0, 0] > 0)
+            residual = depth[0, 0][valid] - rendered.depth[valid]
+            loss = residual.square().mean() if bool(valid.any().item()) else depth.new_zeros(())
+            losses.append(loss)
+            # Translation along camera z changes rendered depth with derivative -1.
+            if bool(valid.any().item()):
+                pose[:3, 3] = pose[:3, 3] - learning_rate * residual.mean() * pose[:3, 2]
+        final = losses[-1] if losses else depth.new_zeros(())
+        return PoseRefinementResult(pose, final, iterations)
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "format": "curobo-metal-perception-checkpoint",
+            "version": 1,
+            "config": dict(self.config.__dict__),
+            **{field: getattr(self.state, field).clone() for field in
+               ("tsdf", "weight", "occupancy", "esdf", "gradient", "generation")},
+        }
+
+    def load_state_dict(self, checkpoint: Mapping[str, Any]) -> None:
+        if checkpoint.get("format") != "curobo-metal-perception-checkpoint" or checkpoint.get("version") != 1:
+            raise ValueError("unsupported perception checkpoint")
+        if PerceptionConfig.from_mapper_config(checkpoint["config"]) != self.config:
+            raise ValueError("checkpoint configuration does not match mapper")
+        fields = {}
+        for field in ("tsdf", "weight", "occupancy", "esdf", "gradient", "generation"):
+            value = checkpoint[field]
+            expected = getattr(self.state, field)
+            if not isinstance(value, torch.Tensor) or value.shape != expected.shape or value.dtype != expected.dtype:
+                raise ValueError(f"checkpoint field {field} has incompatible shape or dtype")
+            fields[field] = value.to(expected.device).clone()
+        self.state = DenseMap(**fields)
 
     def reset(self, env_indices: torch.Tensor | None = None) -> None:
         fresh = PerceptionMapper(self.config, device=self.state.tsdf.device,

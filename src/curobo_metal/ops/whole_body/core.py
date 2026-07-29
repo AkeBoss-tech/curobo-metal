@@ -40,6 +40,45 @@ class InverseDynamicsResult:
 
 
 @dataclass(frozen=True)
+class WholeBodyState:
+    """Upstream-shaped joint state accepted by the dynamics facade."""
+
+    position: torch.Tensor
+    velocity: torch.Tensor | None = None
+    acceleration: torch.Tensor | None = None
+    joint_names: tuple[str, ...] | None = None
+
+    @classmethod
+    def from_joint_state(cls, state: object) -> "WholeBodyState":
+        """Adapt the package or upstream-style JointState surface."""
+        if not hasattr(state, "position"):
+            raise TypeError("joint state must expose position")
+        names = getattr(state, "joint_names", None)
+        return cls(
+            getattr(state, "position"),
+            getattr(state, "velocity", None),
+            getattr(state, "acceleration", None),
+            None if names is None else tuple(names),
+        )
+
+
+@dataclass(frozen=True)
+class ForwardDynamicsResult:
+    acceleration: torch.Tensor
+    mass_matrix: torch.Tensor
+    bias: torch.Tensor
+    input_was_batched: bool
+
+
+@dataclass(frozen=True)
+class DynamicsRolloutResult:
+    position: torch.Tensor
+    velocity: torch.Tensor
+    acceleration: torch.Tensor
+    torque: torch.Tensor
+
+
+@dataclass(frozen=True)
 class DynamicsCostConfig:
     effort_weight: float = 1.0
     limit_weight: float = 1.0
@@ -93,6 +132,18 @@ class WholeBodyModel:
         self.inertia = torch.stack([tensor(link.inertia) for link in robot.links])
         self.gravity = tensor(robot.gravity)
         self.effort_limits = tensor(robot.effort_limits)
+
+    def inverse_dynamics(
+        self, state: WholeBodyState, *, gravity: torch.Tensor | Sequence[float] | None = None
+    ) -> InverseDynamicsResult:
+        q, qd, qdd = _state_tensors(self, state, require_acceleration=True)
+        return inverse_dynamics(self, q, qd, qdd, gravity=gravity)
+
+    def forward_dynamics(
+        self, state: WholeBodyState, torque: torch.Tensor
+    ) -> ForwardDynamicsResult:
+        q, qd, _ = _state_tensors(self, state, require_acceleration=False)
+        return forward_dynamics(self, q, qd, torque)
 
     @classmethod
     def from_tree_robot(
@@ -149,6 +200,33 @@ def _batch(
     if not bool(torch.isfinite(value).all().item()):
         raise ValueError(f"{name} must contain only finite values")
     return value, was_batched
+
+
+def _state_tensors(
+    model: WholeBodyModel, state: WholeBodyState | object, *, require_acceleration: bool
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if not isinstance(state, WholeBodyState):
+        state = WholeBodyState.from_joint_state(state)
+    q = state.position
+    if state.joint_names is not None:
+        if len(state.joint_names) != model.dof or set(state.joint_names) != set(model.joint_names):
+            raise ValueError("joint_names must be a permutation of model joint_names")
+        order = torch.tensor(
+            [state.joint_names.index(name) for name in model.joint_names],
+            device=q.device,
+        )
+        q = q.index_select(-1, order)
+        qd = None if state.velocity is None else state.velocity.index_select(-1, order)
+        qdd = None if state.acceleration is None else state.acceleration.index_select(-1, order)
+    else:
+        qd, qdd = state.velocity, state.acceleration
+    if qd is None:
+        qd = torch.zeros_like(q)
+    if qdd is None:
+        if require_acceleration:
+            raise ValueError("state.acceleration is required for inverse dynamics")
+        qdd = torch.zeros_like(q)
+    return q, qd, qdd
 
 
 def tree_forward_kinematics(
@@ -397,6 +475,63 @@ def bias_torque(
     compiled = _model_for(model, q)
     q_b, _ = _batch(compiled, q, "q")
     return inverse_dynamics(compiled, q_b, qd, torch.zeros_like(q_b)).torque
+
+
+def forward_dynamics(
+    model: WholeBodyModel | TreeRobot,
+    q: torch.Tensor,
+    qd: torch.Tensor,
+    torque: torch.Tensor,
+) -> ForwardDynamicsResult:
+    """Solve ``M(q) qdd + bias(q, qd) = torque`` on CPU or MPS."""
+    if not isinstance(q, torch.Tensor):
+        raise TypeError("q must be a torch.Tensor")
+    compiled = _model_for(model, q)
+    q_b, was_batched = _batch(compiled, q, "q")
+    qd_b, _ = _batch(compiled, qd, "qd")
+    torque_b, _ = _batch(compiled, torque, "torque")
+    if q_b.shape != qd_b.shape or q_b.shape != torque_b.shape:
+        raise ValueError("q, qd, and torque batch dimensions must match")
+    matrix = mass_matrix(compiled, q_b)
+    bias = bias_torque(compiled, q_b, qd_b)
+    acceleration = torch.linalg.solve(matrix, (torque_b - bias).unsqueeze(-1)).squeeze(-1)
+    return ForwardDynamicsResult(acceleration, matrix, bias, was_batched)
+
+
+def rollout_dynamics(
+    model: WholeBodyModel | TreeRobot,
+    initial: WholeBodyState,
+    torque: torch.Tensor,
+    timestep: float | torch.Tensor,
+) -> DynamicsRolloutResult:
+    """Deterministic semi-implicit Euler rollout for ``[..., T, dof]`` torques."""
+    if not isinstance(torque, torch.Tensor) or torque.ndim < 2:
+        raise ValueError("torque must end in [T, dof]")
+    compiled = _model_for(model, torque)
+    q, qd, _ = _state_tensors(compiled, initial, require_acceleration=False)
+    q_b, _ = _batch(compiled, q, "position")
+    qd_b, _ = _batch(compiled, qd, "velocity")
+    tau = torque if torque.ndim == 3 else torque.unsqueeze(0)
+    if tau.shape[0] != q_b.shape[0] or tau.shape[-1] != compiled.dof:
+        raise ValueError("torque batch and dof must match the initial state")
+    dt = torch.as_tensor(timestep, dtype=compiled.dtype, device=compiled.device)
+    if dt.ndim != 0 or not bool(torch.isfinite(dt).item()) or float(dt) <= 0:
+        raise ValueError("timestep must be a positive finite scalar")
+    positions, velocities, accelerations = [q_b], [qd_b], []
+    for step in range(tau.shape[1]):
+        fd = forward_dynamics(compiled, positions[-1], velocities[-1], tau[:, step])
+        next_velocity = velocities[-1] + fd.acceleration * dt
+        next_position = positions[-1] + next_velocity * dt
+        accelerations.append(fd.acceleration)
+        velocities.append(next_velocity)
+        positions.append(next_position)
+    return DynamicsRolloutResult(
+        torch.stack(positions, 1),
+        torch.stack(velocities, 1),
+        (torch.stack(accelerations, 1) if accelerations
+         else q_b.new_empty((q_b.shape[0], 0, compiled.dof))),
+        tau,
+    )
 
 
 def dynamics_cost(

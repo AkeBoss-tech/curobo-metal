@@ -13,10 +13,13 @@ from curobo_metal.ops.whole_body import (
     WholeBodyModel,
     bias_torque,
     dynamics_cost,
+    forward_dynamics,
     gravity_torque,
     inverse_dynamics,
     mass_matrix,
+    rollout_dynamics,
     tree_forward_kinematics,
+    WholeBodyState,
 )
 from curobo_metal.reference import (
     TreeRobot,
@@ -235,3 +238,25 @@ def test_validation_and_mps_policy() -> None:
         with pytest.raises(TypeError, match="only float32"):
             WholeBodyModel(robot, device="mps", dtype=torch.float64)
         assert os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK", "0") == "0"
+
+
+@pytest.mark.parametrize("device", devices())
+def test_forward_dynamics_state_adapter_and_rollout(device: str) -> None:
+    robot, q_np, qd_np, qdd_np = load("branched_toy.json")
+    model = WholeBodyModel(robot, device=device)
+    q = torch.tensor(q_np[:1], device=device, dtype=torch.float32)
+    qd = torch.tensor(qd_np[:1], device=device, dtype=torch.float32)
+    qdd = torch.tensor(qdd_np[:1], device=device, dtype=torch.float32)
+    tau = inverse_dynamics(model, q, qd, qdd).torque
+    actual = forward_dynamics(model, q, qd, tau)
+    torch.testing.assert_close(actual.acceleration, qdd, atol=2e-4, rtol=2e-4)
+    names = tuple(reversed(model.joint_names))
+    order = torch.tensor([model.joint_names.index(name) for name in names], device=device)
+    state = WholeBodyState(q[:, order], qd[:, order], qdd[:, order], names)
+    torch.testing.assert_close(model.inverse_dynamics(state).torque, tau)
+    rollout = rollout_dynamics(
+        model, WholeBodyState(q, qd), tau[:, None].expand(-1, 3, -1), 0.01
+    )
+    assert rollout.position.shape == (1, 4, model.dof)
+    assert rollout.acceleration.shape == (1, 3, model.dof)
+    assert torch.isfinite(rollout.position).all()

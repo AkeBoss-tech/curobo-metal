@@ -5,12 +5,21 @@ from .core import (
     DenseMap,
     PerceptionConfig,
     PerceptionMapper,
+    PoseRefinementResult,
+    RenderResult,
+    SparseTSDF,
+    TriangleMesh,
     dense_esdf,
     integrate_depth,
+    extract_mesh,
+    render_depth,
+    sparse_blocks,
     voxel_centers,
 )
 
 __all__ = [
     "CameraObservation", "DenseMap", "PerceptionConfig", "PerceptionMapper",
-    "dense_esdf", "integrate_depth", "voxel_centers",
+    "PoseRefinementResult", "RenderResult", "SparseTSDF", "TriangleMesh",
+    "dense_esdf", "integrate_depth", "extract_mesh", "render_depth",
+    "sparse_blocks", "voxel_centers",
 ]

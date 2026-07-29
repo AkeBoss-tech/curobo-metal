@@ -97,6 +97,37 @@ def test_rejected_indexed_update_does_not_mutate_state():
     assert mapper.state is before
 
 
+def test_sparse_mesh_render_checkpoint_and_adapters():
+    cfg = PerceptionConfig.from_mapper_config({
+        "map_size": [3, 3, 5], "voxel_size_m": .25,
+        "map_center": [0, 0, .5], "truncation_distance_m": .25,
+        "depth_min": .1, "depth_max": 2, "block_size": 2,
+    })
+    mapper = PerceptionMapper(cfg)
+    obs = CameraObservation.from_camera_frame({
+        "depth_image": _obs().depth,
+        "projection_matrix": _obs().intrinsics,
+        "pose": _obs().camera_to_world,
+    })
+    mapper.update(obs)
+    sparse = mapper.allocate_blocks()
+    assert sparse.block_indices.shape[1] == 4
+    assert torch.equal(sparse.block_indices, sparse.block_indices.unique(dim=0))
+    mesh = mapper.extract_mesh()
+    assert mesh.vertices.shape[1] == 3 and mesh.faces.shape[1] == 3
+    rendered = mapper.render(obs.intrinsics[0], obs.camera_to_world[0], (3, 3))
+    assert rendered.valid.any()
+    checkpoint = mapper.state_dict()
+    restored = PerceptionMapper(cfg)
+    restored.load_state_dict(checkpoint)
+    torch.testing.assert_close(restored.state.tsdf, mapper.state.tsdf)
+    checkpoint["tsdf"].zero_()
+    assert restored.state.tsdf.count_nonzero() > 0
+    refined = mapper.refine_pose(obs, iterations=2)
+    assert refined.camera_to_world.shape == (4, 4)
+    assert torch.isfinite(refined.loss)
+
+
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
 def test_fallback_disabled_mps_pipeline(monkeypatch):
     monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")
