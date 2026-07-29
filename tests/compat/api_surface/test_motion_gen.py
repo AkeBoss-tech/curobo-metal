@@ -11,7 +11,12 @@ from curobo_metal.api_compat import (
 from curobo_metal.motion_gen import JointState, MotionGenConfig
 
 
-FIXTURE = Path(__file__).parents[2] / "fixtures" / "two_link_curobo_v2.json"
+FIXTURE = (
+    Path(__file__).parents[2]
+    / "fixtures"
+    / "trajectory"
+    / "two_link_obstacle_free.json"
+)
 
 
 def _base(device="cpu"):
