@@ -4,10 +4,44 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import weakref
 
 import torch
 
 from curobo_metal.backend import validate_tensor_device
+from curobo_metal.ops.collision.metal import sphere_cuboid_metal, sphere_sphere_metal
+
+_MPS_VALIDATION_CACHE: dict[int, tuple[weakref.ReferenceType[torch.Tensor], int, set[str]]] = {}
+
+
+def _cached_mps_validation(
+    tensor: torch.Tensor, check: str, validate
+) -> None:
+    """Run synchronization-heavy immutable-input checks once per tensor version."""
+    if tensor.device.type != "mps":
+        validate()
+        return
+    identity = id(tensor)
+    entry = _MPS_VALIDATION_CACHE.get(identity)
+    if (
+        entry is not None
+        and entry[0]() is tensor
+        and entry[1] == tensor._version
+        and check in entry[2]
+    ):
+        return
+    validate()
+    checks = (
+        entry[2]
+        if entry is not None and entry[0]() is tensor and entry[1] == tensor._version
+        else set()
+    )
+    checks.add(check)
+    _MPS_VALIDATION_CACHE[identity] = (
+        weakref.ref(tensor, lambda _ref, key=identity: _MPS_VALIDATION_CACHE.pop(key, None)),
+        tensor._version,
+        checks,
+    )
 
 
 @dataclass(frozen=True)
@@ -45,8 +79,11 @@ def _floating(tensor: torch.Tensor, name: str) -> torch.Tensor:
         raise TypeError(f"{name} must have dtype float32 or float64")
     if tensor.device.type == "mps" and tensor.dtype != torch.float32:
         raise TypeError("MPS collision operations support only float32")
-    if not bool(torch.isfinite(tensor).all().item()):
-        raise ValueError(f"{name} must contain only finite values")
+    def validate_finite():
+        if not bool(torch.isfinite(tensor).all().item()):
+            raise ValueError(f"{name} must contain only finite values")
+
+    _cached_mps_validation(tensor, "finite", validate_finite)
     return tensor
 
 
@@ -108,8 +145,11 @@ def _batched_spheres(spheres: torch.Tensor) -> tuple[torch.Tensor, bool]:
         values = values.unsqueeze(0)
     if values.ndim != 3 or values.shape[-1] != 4:
         raise ValueError("spheres must have shape [S, 4] or [B, S, 4]")
-    if bool((values[..., 3] < 0).any().item()):
-        raise ValueError("sphere radii must be nonnegative")
+    def validate_radii():
+        if bool((values[..., 3] < 0).any().item()):
+            raise ValueError("sphere radii must be nonnegative")
+
+    _cached_mps_validation(spheres, "radii", validate_radii)
     return values, unbatched
 
 
@@ -171,10 +211,13 @@ def sphere_sphere_signed_distance(
     pair_table = _index(pairs, "pairs", values)
     if pair_table.ndim != 2 or pair_table.shape[1] != 2:
         raise ValueError("pairs must have shape [P,2]")
-    if bool(((pair_table < 0) | (pair_table >= values.shape[1])).any().item()):
-        raise ValueError("pairs contains an out-of-range sphere")
-    if bool((pair_table[:, 0] == pair_table[:, 1]).any().item()):
-        raise ValueError("a sphere cannot be paired with itself")
+    def validate_pairs():
+        if bool(((pair_table < 0) | (pair_table >= values.shape[1])).any().item()):
+            raise ValueError("pairs contains an out-of-range sphere")
+        if bool((pair_table[:, 0] == pair_table[:, 1]).any().item()):
+            raise ValueError("a sphere cannot be paired with itself")
+
+    _cached_mps_validation(pair_table, f"pairs-{values.shape[1]}", validate_pairs)
     sphere_enabled = _mask(
         sphere_active, values.shape[1], "sphere_active", values
     )
@@ -184,6 +227,14 @@ def sphere_sphere_signed_distance(
             pair_enabled
             & sphere_enabled[pair_table[:, 0]]
             & sphere_enabled[pair_table[:, 1]]
+        )
+
+    if values.device.type == "mps":
+        distances, gradients, reduced, reduced_gradient, winners = (
+            sphere_sphere_metal(values, pair_table, pair_enabled, pad)
+        )
+        return PairDistanceResult(
+            distances, gradients, reduced, reduced_gradient, winners, unbatched
         )
 
     first, second = pair_table[:, 0], pair_table[:, 1]
@@ -296,32 +347,50 @@ def sphere_cuboid_signed_distance(
         raise ValueError(
             "cuboids require centers [C,3], rotations [C,3,3], half_extents [C,3]"
         )
-    if bool((half < 0).any().item()):
-        raise ValueError("cuboid half extents must be nonnegative")
+    def validate_half():
+        if bool((half < 0).any().item()):
+            raise ValueError("cuboid half extents must be nonnegative")
+
+    _cached_mps_validation(half, "nonnegative", validate_half)
     if cuboids:
         identity = torch.eye(3, dtype=values.dtype, device=values.device)
         tolerance = 1e-5 if values.dtype == torch.float32 else 1e-12
-        if not bool(
-            torch.allclose(
-                rotations @ rotations.transpose(1, 2),
-                identity.expand(cuboids, 3, 3),
-                rtol=0,
-                atol=tolerance,
-            )
-        ) or not bool(
-            torch.allclose(
-                torch.linalg.det(rotations),
-                torch.ones(cuboids, dtype=values.dtype, device=values.device),
-                rtol=0,
-                atol=tolerance,
-            )
-        ):
-            raise ValueError("cuboid rotations must be proper orthonormal matrices")
+        def validate_rotations():
+            if not bool(
+                torch.allclose(
+                    rotations @ rotations.transpose(1, 2),
+                    identity.expand(cuboids, 3, 3),
+                    rtol=0,
+                    atol=tolerance,
+                )
+            ) or not bool(
+                torch.allclose(
+                    torch.linalg.det(rotations),
+                    torch.ones(cuboids, dtype=values.dtype, device=values.device),
+                    rtol=0,
+                    atol=tolerance,
+                )
+            ):
+                raise ValueError("cuboid rotations must be proper orthonormal matrices")
+
+        _cached_mps_validation(rotations, "proper-rotation", validate_rotations)
     pad = _padding(padding)
     sphere_enabled = _mask(
         sphere_active, values.shape[1], "sphere_active", values
     )
     cuboid_enabled = _mask(cuboid_active, cuboids, "cuboid_active", values)
+
+    if values.device.type == "mps" and not any(
+        tensor.requires_grad for tensor in (centers, rotations, half)
+    ):
+        distances, gradients, reduced, reduced_gradient, winners = (
+            sphere_cuboid_metal(
+                values, centers, rotations, half, sphere_enabled, cuboid_enabled, pad
+            )
+        )
+        return CuboidDistanceResult(
+            distances, gradients, reduced, reduced_gradient, winners, unbatched
+        )
 
     offset = values[:, :, None, :3] - centers[None, None, :, :]
     local = torch.einsum("cij,bscj->bsci", rotations.transpose(1, 2), offset)

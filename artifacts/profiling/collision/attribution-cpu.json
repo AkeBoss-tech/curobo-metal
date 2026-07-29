@@ -1,0 +1,129 @@
+{
+  "device": "cpu",
+  "dtype": "float32",
+  "format": "curobo-metal-fused-collision-profile",
+  "rows": [
+    {
+      "batch": 1,
+      "first_call_ms": 0.055708,
+      "operation": "pair_composed_distance_only",
+      "steady_state_median_ms": 0.014625
+    },
+    {
+      "batch": 1,
+      "first_call_ms": 0.039625,
+      "operation": "pair_composed_distance_plus_reduction",
+      "steady_state_median_ms": 0.0165
+    },
+    {
+      "batch": 1,
+      "first_call_ms": 0.330667,
+      "operation": "pair_public_full_result",
+      "steady_state_median_ms": 0.110417
+    },
+    {
+      "batch": 1,
+      "first_call_ms": 1.271167,
+      "operation": "cuboid_composed_clearance_only_axis_aligned",
+      "steady_state_median_ms": 0.0272915
+    },
+    {
+      "batch": 1,
+      "first_call_ms": 0.479333,
+      "operation": "cuboid_public_full_result",
+      "steady_state_median_ms": 0.20985399999999998
+    },
+    {
+      "batch": 64,
+      "first_call_ms": 0.240583,
+      "operation": "pair_composed_distance_only",
+      "steady_state_median_ms": 0.20816649999999998
+    },
+    {
+      "batch": 64,
+      "first_call_ms": 0.255084,
+      "operation": "pair_composed_distance_plus_reduction",
+      "steady_state_median_ms": 0.1766045
+    },
+    {
+      "batch": 64,
+      "first_call_ms": 2.239291,
+      "operation": "pair_public_full_result",
+      "steady_state_median_ms": 2.0030205
+    },
+    {
+      "batch": 64,
+      "first_call_ms": 0.476375,
+      "operation": "cuboid_composed_clearance_only_axis_aligned",
+      "steady_state_median_ms": 0.2751455
+    },
+    {
+      "batch": 64,
+      "first_call_ms": 2.559667,
+      "operation": "cuboid_public_full_result",
+      "steady_state_median_ms": 2.0213745000000003
+    },
+    {
+      "batch": 512,
+      "first_call_ms": 0.678709,
+      "operation": "pair_composed_distance_only",
+      "steady_state_median_ms": 0.884708
+    },
+    {
+      "batch": 512,
+      "first_call_ms": 0.918541,
+      "operation": "pair_composed_distance_plus_reduction",
+      "steady_state_median_ms": 0.9911665000000001
+    },
+    {
+      "batch": 512,
+      "first_call_ms": 15.219375,
+      "operation": "pair_public_full_result",
+      "steady_state_median_ms": 12.412645999999999
+    },
+    {
+      "batch": 512,
+      "first_call_ms": 2.253,
+      "operation": "cuboid_composed_clearance_only_axis_aligned",
+      "steady_state_median_ms": 2.3908955
+    },
+    {
+      "batch": 512,
+      "first_call_ms": 12.671125,
+      "operation": "cuboid_public_full_result",
+      "steady_state_median_ms": 12.7075835
+    },
+    {
+      "batch": 2048,
+      "first_call_ms": 4.01325,
+      "operation": "pair_composed_distance_only",
+      "steady_state_median_ms": 3.3099165
+    },
+    {
+      "batch": 2048,
+      "first_call_ms": 3.154292,
+      "operation": "pair_composed_distance_plus_reduction",
+      "steady_state_median_ms": 3.119687
+    },
+    {
+      "batch": 2048,
+      "first_call_ms": 122.688958,
+      "operation": "pair_public_full_result",
+      "steady_state_median_ms": 55.536729
+    },
+    {
+      "batch": 2048,
+      "first_call_ms": 7.534875,
+      "operation": "cuboid_composed_clearance_only_axis_aligned",
+      "steady_state_median_ms": 5.5269165000000005
+    },
+    {
+      "batch": 2048,
+      "first_call_ms": 36.147958,
+      "operation": "cuboid_public_full_result",
+      "steady_state_median_ms": 35.337083
+    }
+  ],
+  "timing": "first call, warmup, and synchronized steady state separated",
+  "version": 1
+}

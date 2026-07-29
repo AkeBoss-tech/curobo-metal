@@ -210,8 +210,12 @@ def main() -> None:
         "version": 1,
         "device": str(device),
         "dtype": "float32",
-        "implementation": "composed-pytorch",
-        "custom_metal": False,
+        "implementation": (
+            "fused-metal-items-and-reduction"
+            if device.type == "mps"
+            else "composed-pytorch-reference"
+        ),
+        "custom_metal": device.type == "mps",
         "fallback": {
             "environment_value": fallback_value,
             "disabled": fallback_value == "0",
