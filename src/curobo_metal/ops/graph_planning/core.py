@@ -41,6 +41,8 @@ class GraphPlanningProblem:
     edge_step: float = 0.05
     interpolation_step: float = 0.05
     search: str = "astar"
+    sampling: str = "uniform"
+    connection: str = "hybrid"
     shortcut: bool = True
     max_search_expansions: int | None = None
     execution_cache: ExecutionCache | None = None
@@ -70,6 +72,27 @@ class GraphPlanningResult:
 class GraphTrajectoryResult:
     graph: GraphPlanningResult
     trajectory: TrajectoryResult | None
+
+
+class PersistentRoadmap:
+    """Reusable deterministic roadmap state with explicit lifecycle controls."""
+
+    def __init__(self, *, capacity: int | None = None) -> None:
+        self.cache = ExecutionCache(capacity=capacity)
+        self.generation = 0
+
+    def plan(self, problem: GraphPlanningProblem) -> GraphPlanningResult:
+        return plan_graph(replace(problem, execution_cache=self.cache))
+
+    def reset(self) -> None:
+        self.cache.reset()
+        self.generation += 1
+
+    clear = reset
+
+    def update(self, *, capacity: int | None = None) -> None:
+        self.cache.update(capacity=capacity)
+        self.generation += 1
 
 
 def _validate(problem: GraphPlanningProblem) -> tuple[torch.Tensor, torch.Tensor, int, int]:
@@ -118,8 +141,16 @@ def _validate(problem: GraphPlanningProblem) -> tuple[torch.Tensor, torch.Tensor
     ):
         if not math.isfinite(value) or value <= 0:
             raise ValueError(f"{name} must be finite and positive")
-    if problem.search not in ("astar", "dijkstra"):
-        raise ValueError("search must be 'astar' or 'dijkstra'")
+    if problem.search not in ("astar", "dijkstra", "greedy"):
+        raise ValueError("search must be 'astar', 'dijkstra', or 'greedy'")
+    if problem.sampling not in ("uniform", "sobol"):
+        raise ValueError("sampling must be 'uniform' or 'sobol'")
+    if problem.connection not in ("knn", "radius", "hybrid"):
+        raise ValueError("connection must be 'knn', 'radius', or 'hybrid'")
+    if problem.connection == "knn" and problem.k_neighbors is None:
+        raise ValueError("knn connection requires k_neighbors")
+    if problem.connection == "radius" and problem.connection_radius is None:
+        raise ValueError("radius connection requires connection_radius")
     if problem.max_search_expansions is not None and problem.max_search_expansions <= 0:
         raise ValueError("max_search_expansions must be positive or None")
     if not math.isfinite(problem.collision_tolerance) or problem.collision_tolerance < 0:
@@ -172,7 +203,7 @@ def _sample(problem: GraphPlanningProblem, batch_index: int, dof: int) -> torch.
     entry: dict[str, object] | None = None
     if problem.execution_cache is not None:
         entry = problem.execution_cache.acquire((
-            "graph_samples", problem.sample_count, problem.seed, batch_index, dof,
+            "graph_samples", problem.sample_count, problem.seed, batch_index, dof, problem.sampling,
             tuple(problem.lower.shape), str(problem.lower.dtype), problem.lower.device.type,
             tuple(float(x) for x in problem.lower.detach().cpu()),
             tuple(float(x) for x in problem.upper.detach().cpu()),
@@ -180,11 +211,17 @@ def _sample(problem: GraphPlanningProblem, batch_index: int, dof: int) -> torch.
         cached = entry.get("samples")
         if isinstance(cached, torch.Tensor):
             return cached
-    # PCG64 is deliberately generated on CPU to exactly preserve the replay contract.
-    rng = np.random.Generator(np.random.PCG64(np.random.SeedSequence(
-        [problem.seed, batch_index]
-    )))
-    unit = rng.random((problem.sample_count, dof), dtype=np.float64)
+    if problem.sampling == "sobol":
+        engine = torch.quasirandom.SobolEngine(
+            dof, scramble=True, seed=problem.seed + 104729 * batch_index
+        )
+        unit = engine.draw(problem.sample_count, dtype=torch.float64).numpy()
+    else:
+        # PCG64 is deliberately generated on CPU to exactly preserve the replay contract.
+        rng = np.random.Generator(np.random.PCG64(np.random.SeedSequence(
+            [problem.seed, batch_index]
+        )))
+        unit = rng.random((problem.sample_count, dof), dtype=np.float64)
     lower = problem.lower.detach().cpu().double().numpy()
     upper = problem.upper.detach().cpu().double().numpy()
     samples = lower + unit * (upper - lower)
@@ -202,9 +239,9 @@ def _candidate_pairs(nodes_cpu: np.ndarray, problem: GraphPlanningProblem) -> li
             for j in range(nodes_cpu.shape[0]) if j != i
         ]
         candidates.sort(key=lambda item: (item[0], item[1]))
-        if problem.connection_radius is not None:
+        if problem.connection in ("radius", "hybrid") and problem.connection_radius is not None:
             candidates = [item for item in candidates if item[0] <= problem.connection_radius]
-        if problem.k_neighbors is not None:
+        if problem.connection in ("knn", "hybrid") and problem.k_neighbors is not None:
             candidates = candidates[:problem.k_neighbors]
         pairs.update((min(i, j), max(i, j)) for _, j in candidates)
     return sorted(pairs)
@@ -235,7 +272,7 @@ def _extract(
     distance = np.full(nodes.shape[0], np.inf)
     distance[0] = 0
     parent = np.full(nodes.shape[0], -1, dtype=np.int64)
-    heuristic = float(np.linalg.norm(nodes[1] - nodes[0])) if search == "astar" else 0.0
+    heuristic = float(np.linalg.norm(nodes[1] - nodes[0])) if search in ("astar", "greedy") else 0.0
     queue: list[tuple[float, float, int]] = [(heuristic, 0.0, 0)]
     closed = np.zeros(nodes.shape[0], dtype=np.bool_)
     expanded = 0
@@ -257,8 +294,9 @@ def _extract(
             if candidate < distance[neighbor]:
                 distance[neighbor] = candidate
                 parent[neighbor] = current
-                h = float(np.linalg.norm(nodes[1] - nodes[neighbor])) if search == "astar" else 0.0
-                heapq.heappush(queue, (candidate + h, candidate, neighbor))
+                h = float(np.linalg.norm(nodes[1] - nodes[neighbor])) if search in ("astar", "greedy") else 0.0
+                priority = h if search == "greedy" else candidate + h
+                heapq.heappush(queue, (priority, candidate, neighbor))
     return None, expanded, False
 
 

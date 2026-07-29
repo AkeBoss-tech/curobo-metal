@@ -98,15 +98,17 @@ def test_panda_joint_space_and_reachable_pose() -> None:
     assert torch.isfinite(transform).all()
 
 
-def test_config_rejects_unsupported_worlds_and_runtime_mutation() -> None:
+def test_config_rejects_unsupported_worlds_and_supports_runtime_mutation() -> None:
     fixture = FIXTURES / "two_link_obstacle_free.json"
     with pytest.raises(UnsupportedMotionGenFeature, match="primitive cuboids"):
         MotionGenConfig.load_from_robot_config(
             fixture, world={"mesh": [], "local_spheres": [], "link_indices": []}
         )
     planner = _planner("two_link_obstacle_free")
-    with pytest.raises(UnsupportedMotionGenFeature, match="world mutation"):
-        planner.update_world({})
+    generation = planner._graph_cache.generation
+    planner.update_world({})
+    assert planner.config.collision_model is None
+    assert planner._graph_cache.generation == generation + 1
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

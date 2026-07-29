@@ -9,6 +9,7 @@ import torch
 
 from curobo_metal.ops.graph_planning import (
     GraphPlanningProblem,
+    PersistentRoadmap,
     paths_to_trajectory_seeds,
     plan_graph,
 )
@@ -103,6 +104,20 @@ def test_shape_keyed_sample_cache_reuse_and_reset() -> None:
     assert cache.size == 0
     third = plan_graph(problem)
     assert third.status == first.status and cache.misses == 2
+
+
+def test_persistent_roadmap_sobol_greedy_lifecycle() -> None:
+    _, base = _problem("direct.json")
+    roadmap = PersistentRoadmap(capacity=2)
+    problem = GraphPlanningProblem(**{
+        **base.__dict__, "sampling": "sobol", "search": "greedy",
+    })
+    first = roadmap.plan(problem)
+    second = roadmap.plan(problem)
+    assert first.status == second.status
+    assert roadmap.cache.hits == 1
+    roadmap.reset()
+    assert roadmap.generation == 1 and roadmap.cache.size == 0
 
 
 def test_production_fk_and_collision_validate_swept_direct_edge() -> None:

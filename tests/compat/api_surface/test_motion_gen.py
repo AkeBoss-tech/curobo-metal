@@ -47,13 +47,17 @@ def test_compile_wires_supported_fields():
     assert choices.trajectory_optimizer == "es"
 
 
-@pytest.mark.parametrize("kwargs, match", [
-    ({"ik": IKSolverConfig(retract_config=(0.0, 0.0))}, "retract"),
-    ({"trajopt": TrajOptSolverConfig(interpolation_type=InterpolationType.BSPLINE)}, "linear"),
-])
-def test_compile_rejects_precisely(kwargs, match):
-    with pytest.raises(UnsupportedCompatOption, match=match):
-        compile_motion_gen_config(_base(), **kwargs)
+def test_compile_supports_retract_multiseed_and_interpolation_modes():
+    cfg = compile_motion_gen_config(
+        _base(),
+        ik=IKSolverConfig(retract_config=(0.0, 0.0)),
+        trajopt=TrajOptSolverConfig(
+            num_seeds=3, interpolation_type=InterpolationType.BSPLINE,
+        ),
+    )
+    assert cfg.retract_config == (0.0, 0.0)
+    assert cfg.num_trajectory_seeds == 3
+    assert cfg.interpolation_type == "bspline"
 
 
 def test_cpu_warmup_retry_and_graph_lifecycle():

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
-from typing import Callable
+from typing import Callable, Literal
 
 import torch
 
@@ -26,16 +26,21 @@ class ParticleConfig:
     momentum: float = 0.1
     seed: int = 0
     tolerance: float = 1e-7
+    strategy: Literal["cem", "mppi", "random"] = "cem"
+    temperature: float = 1.0
+    covariance: torch.Tensor | None = field(default=None, compare=False, hash=False, repr=False)
+    record_debug: bool = False
 
     def __post_init__(self) -> None:
         if self.iterations <= 0 or self.particles <= 0:
             raise ValueError("particle iterations and count must be positive")
         if not 0 < self.elite_count <= self.particles:
             raise ValueError("elite_count must be in [1, particles]")
-        values = (self.initial_std, self.minimum_std, self.momentum, self.tolerance)
+        values = (self.initial_std, self.minimum_std, self.momentum, self.tolerance, self.temperature)
         if not all(math.isfinite(x) and x >= 0 for x in values):
             raise ValueError("particle scalars must be finite and nonnegative")
-        if self.initial_std == 0 or not 0 <= self.momentum < 1 or self.seed < 0:
+        if (self.initial_std == 0 or not 0 <= self.momentum < 1 or self.seed < 0
+                or self.temperature == 0 or self.strategy not in ("cem", "mppi", "random")):
             raise ValueError("invalid particle scale, momentum, or seed")
 
 
@@ -49,17 +54,24 @@ class LBFGSConfig:
     line_search_steps: int = 12
     line_search_decay: float = 0.5
     c1: float = 1e-4
+    c2: float = 0.9
+    line_search: Literal["armijo", "strong_wolfe", "none"] = "armijo"
+    termination: Literal["either", "gradient", "change", "both"] = "either"
+    record_debug: bool = False
 
     def __post_init__(self) -> None:
         if self.iterations <= 0 or self.history_size < 0 or self.line_search_steps <= 0:
             raise ValueError("iterations/line-search must be positive and history nonnegative")
         values = (
             self.learning_rate, self.tolerance_grad, self.tolerance_change,
-            self.line_search_decay, self.c1,
+            self.line_search_decay, self.c1, self.c2,
         )
         if not all(math.isfinite(x) and x >= 0 for x in values):
             raise ValueError("L-BFGS scalars must be finite and nonnegative")
-        if self.learning_rate == 0 or not 0 < self.line_search_decay < 1 or not 0 < self.c1 < 1:
+        if (self.learning_rate == 0 or not 0 < self.line_search_decay < 1
+                or not 0 < self.c1 < self.c2 < 1
+                or self.line_search not in ("armijo", "strong_wolfe", "none")
+                or self.termination not in ("either", "gradient", "change", "both")):
             raise ValueError("invalid L-BFGS learning rate or line-search parameters")
 
 
@@ -71,6 +83,8 @@ class OptimizerResult:
     failed: torch.Tensor
     iterations: torch.Tensor
     status: tuple[str, ...]
+    final_gradient_norm: torch.Tensor | None = None
+    debug: dict[str, tuple[torch.Tensor, ...]] | None = None
 
 
 @dataclass
@@ -129,6 +143,8 @@ def _flatten(value: torch.Tensor, event_ndim: int) -> tuple[torch.Tensor, tuple[
 def _result(
     flat: torch.Tensor, event: tuple[int, ...], batch: tuple[int, ...], objective: torch.Tensor,
     converged: torch.Tensor, failed: torch.Tensor, iterations: torch.Tensor,
+    *, final_gradient_norm: torch.Tensor | None = None,
+    debug: dict[str, tuple[torch.Tensor, ...]] | None = None,
 ) -> OptimizerResult:
     labels = [
         "nonfinite" if bool(failed[i].item()) else
@@ -138,6 +154,7 @@ def _result(
     return OptimizerResult(
         flat.reshape(batch + event), objective.reshape(batch), converged.reshape(batch),
         failed.reshape(batch), iterations.reshape(batch), tuple(labels),
+        None if final_gradient_norm is None else final_gradient_norm.reshape(batch), debug,
     )
 
 
@@ -169,11 +186,27 @@ def particle_optimize(
     converged = torch.zeros(count, dtype=torch.bool, device=initial.device)
     iterations = torch.zeros(count, dtype=torch.int64, device=initial.device)
     previous = best_value
+    objective_history: list[torch.Tensor] = []
+    scale_history: list[torch.Tensor] = []
+    covariance = config.covariance
+    if covariance is not None:
+        covariance = covariance.to(device=initial.device, dtype=initial.dtype)
+        if covariance.shape == (width,):
+            covariance = torch.diag(covariance)
+        if covariance.shape != (width, width):
+            raise ValueError("covariance must have shape [D] or [D,D]")
+        if not bool(torch.isfinite(covariance).all().item()):
+            raise ValueError("covariance must be finite")
+        factor = torch.linalg.cholesky(covariance)
+    else:
+        factor = None
     for iteration in range(1, config.iterations + 1):
         noise = torch.randn(
             (count, config.particles, width), generator=generator, dtype=initial.dtype,
             device="cpu",
         ).to(initial.device)
+        if factor is not None:
+            noise = noise @ factor.transpose(-1, -2)
         population = mean[:, None] + std[:, None] * noise
         population[:, 0] = best
         shaped = population.reshape(batch_shape + (config.particles,) + event_shape)
@@ -186,8 +219,20 @@ def particle_optimize(
         elite_index = torch.topk(ranked, config.elite_count, largest=False).indices
         elite = torch.gather(population, 1, elite_index[..., None].expand(-1, -1, width))
         elite_values = torch.gather(ranked, 1, elite_index)
-        next_mean = elite.mean(1)
-        next_std = elite.std(1, unbiased=False).clamp_min(config.minimum_std)
+        if config.strategy == "mppi":
+            baseline = ranked.amin(1, keepdim=True)
+            weights = torch.softmax(-(ranked - baseline) / config.temperature, dim=1)
+            weights = torch.where(finite, weights, torch.zeros_like(weights))
+            weights = weights / weights.sum(1, keepdim=True).clamp_min(torch.finfo(weights.dtype).eps)
+            next_mean = (weights[..., None] * population).sum(1)
+            next_std = (
+                weights[..., None] * (population - next_mean[:, None]).square()
+            ).sum(1).sqrt().clamp_min(config.minimum_std)
+        elif config.strategy == "random":
+            next_mean, next_std = mean, std
+        else:
+            next_mean = elite.mean(1)
+            next_std = elite.std(1, unbiased=False).clamp_min(config.minimum_std)
         mean = config.momentum * mean + (1 - config.momentum) * next_mean
         std = config.momentum * std + (1 - config.momentum) * next_std
         chosen = elite_values[:, 0] < best_value
@@ -199,9 +244,15 @@ def particle_optimize(
         converged |= newly
         failed |= ~finite.any(1)
         previous = best_value
+        if config.record_debug:
+            objective_history.append(best_value.detach().clone())
+            scale_history.append(std.detach().clone())
     iterations = torch.where(iterations == 0, torch.full_like(iterations, config.iterations), iterations)
     entry["last_solution"] = best.detach()
-    return _result(best, event_shape, batch_shape, best_value, converged, failed, iterations)
+    debug = None
+    if config.record_debug:
+        debug = {"objective": tuple(objective_history), "scale": tuple(scale_history)}
+    return _result(best, event_shape, batch_shape, best_value, converged, failed, iterations, debug=debug)
 
 
 def lbfgs_optimize(
@@ -234,6 +285,8 @@ def lbfgs_optimize(
     converged = torch.zeros(count, dtype=torch.bool, device=x.device)
     failed = torch.zeros_like(converged)
     iterations = torch.zeros(count, dtype=torch.int64, device=x.device)
+    objective_history: list[torch.Tensor] = []
+    gradient_history: list[torch.Tensor] = []
 
     def value_grad(point: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         leaf = point.requires_grad_(True)
@@ -253,7 +306,8 @@ def lbfgs_optimize(
     failed |= ~torch.isfinite(value) | ~torch.isfinite(gradient).all(1)
     for iteration in range(1, config.iterations + 1):
         grad_norm = torch.linalg.vector_norm(gradient, dim=1)
-        newly = (~failed) & (grad_norm <= config.tolerance_grad)
+        gradient_done = grad_norm <= config.tolerance_grad
+        newly = (~failed) & gradient_done if config.termination in ("either", "gradient") else torch.zeros_like(failed)
         converged |= newly
         iterations = torch.where((iterations == 0) & newly, torch.full_like(iterations, iteration - 1), iterations)
         active = ~(converged | failed)
@@ -279,7 +333,8 @@ def lbfgs_optimize(
         accepted = torch.zeros(count, dtype=torch.bool, device=x.device)
         candidate, candidate_value = x, value
         step = torch.full((count,), config.learning_rate, dtype=x.dtype, device=x.device)
-        for _ in range(config.line_search_steps):
+        search_steps = 1 if config.line_search == "none" else config.line_search_steps
+        for _ in range(search_steps):
             trial = x + step[:, None] * direction
             shaped = trial.reshape(batch_shape + event_shape)
             if projection is not None:
@@ -289,6 +344,12 @@ def lbfgs_optimize(
             armijo = torch.isfinite(trial_value) & (
                 trial_value <= value + config.c1 * step * descent
             )
+            if config.line_search == "none":
+                armijo = torch.isfinite(trial_value)
+            elif config.line_search == "strong_wolfe":
+                _, trial_gradient = value_grad(trial)
+                curvature_ok = (trial_gradient * direction).sum(1).abs() <= config.c2 * descent.abs()
+                armijo &= curvature_ok
             take = active & ~accepted & armijo
             candidate = torch.where(take[:, None], trial, candidate)
             candidate_value = torch.where(take, trial_value, candidate_value)
@@ -311,11 +372,30 @@ def lbfgs_optimize(
                 s_hist.pop(0); y_hist.pop(0); rho_hist.pop(0)
         change = (candidate_value - value).abs()
         x, value, gradient = candidate, next_value, next_gradient
-        newly = active & accepted & (change <= config.tolerance_change)
+        change_done = change <= config.tolerance_change
+        if config.termination == "change":
+            done = change_done
+        elif config.termination == "both":
+            done = change_done & (torch.linalg.vector_norm(next_gradient, dim=1) <= config.tolerance_grad)
+        elif config.termination == "gradient":
+            done = torch.linalg.vector_norm(next_gradient, dim=1) <= config.tolerance_grad
+        else:
+            done = change_done | (torch.linalg.vector_norm(next_gradient, dim=1) <= config.tolerance_grad)
+        newly = active & accepted & done
         converged |= newly
         iterations = torch.where((iterations == 0) & newly, torch.full_like(iterations, iteration), iterations)
         if not differentiable:
             x, value, gradient = x.detach(), value.detach(), gradient.detach()
+        if config.record_debug:
+            objective_history.append(value.detach().clone())
+            gradient_history.append(torch.linalg.vector_norm(gradient.detach(), dim=1))
     iterations = torch.where(iterations == 0, torch.full_like(iterations, config.iterations), iterations)
     entry["last_solution"] = x.detach()
-    return _result(x, event_shape, batch_shape, value, converged, failed, iterations)
+    final_norm = torch.linalg.vector_norm(gradient, dim=1)
+    debug = None
+    if config.record_debug:
+        debug = {"objective": tuple(objective_history), "gradient_norm": tuple(gradient_history)}
+    return _result(
+        x, event_shape, batch_shape, value, converged, failed, iterations,
+        final_gradient_norm=final_norm, debug=debug,
+    )

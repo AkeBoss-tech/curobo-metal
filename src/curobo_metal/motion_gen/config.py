@@ -50,6 +50,9 @@ class MotionGenConfig:
     trajectory_optimizer: str = "adam"
     optimizer_seed: int = 0
     graph_cache_size: int = 1
+    retract_config: tuple[float, ...] | None = None
+    num_trajectory_seeds: int = 1
+    interpolation_type: str = "linear"
 
     @property
     def device(self) -> torch.device:
@@ -145,7 +148,7 @@ class MotionGenConfig:
 def _collision_model(
     raw: Mapping[str, Any] | None, *, device: torch.device, dtype: torch.dtype
 ) -> CollisionModel | None:
-    if raw is None:
+    if raw is None or not raw:
         return None
     unsupported = set(raw) & {"mesh", "meshes", "voxel", "voxels", "esdf", "depth"}
     if unsupported:

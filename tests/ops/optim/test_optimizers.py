@@ -58,6 +58,24 @@ def test_particle_is_deterministic_batched_and_improves() -> None:
     assert first.solution.shape == initial.shape
 
 
+def test_mppi_covariance_debug_and_lbfgs_termination_state() -> None:
+    initial = torch.tensor([[2.0, -1.0]])
+    particle = particle_optimize(
+        sphere, initial,
+        config=ParticleConfig(
+            iterations=4, particles=16, elite_count=4, strategy="mppi",
+            covariance=torch.tensor([1.0, 0.25]), record_debug=True,
+        ),
+    )
+    assert particle.debug is not None and len(particle.debug["objective"]) == 4
+    gradient = lbfgs_optimize(
+        sphere, initial,
+        config=LBFGSConfig(line_search="none", termination="gradient", record_debug=True),
+    )
+    assert gradient.final_gradient_norm is not None
+    assert gradient.debug is not None
+
+
 @pytest.mark.parametrize("solver", ["lbfgs", "particle"])
 def test_empty_batches(solver: str) -> None:
     initial = torch.empty((0, 3))

@@ -27,7 +27,6 @@ def test_signatures_and_serialization_are_stable():
 @pytest.mark.parametrize("call", [
     lambda: CollisionCostConfig(use_sweep=True).validate_production(),
     lambda: CostSet(offset_waypoints=(OffsetWaypoint(1, (0.1,)),)).validate_production(),
-    lambda: MotionGenPlanConfig(partial_ik_opt=True),
 ])
 def test_accepted_objects_never_silently_ignore_unsupported_semantics(call):
     with pytest.raises(UnsupportedCompatOption, match="unsupported|not implemented|requires"):

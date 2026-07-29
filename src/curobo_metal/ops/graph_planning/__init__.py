@@ -4,6 +4,7 @@ from .core import (
     GraphPlanningProblem,
     GraphPlanningResult,
     GraphTrajectoryResult,
+    PersistentRoadmap,
     PlanningMetrics,
     interpolate_edge,
     paths_to_trajectory_seeds,
@@ -13,6 +14,7 @@ from .core import (
 
 __all__ = [
     "GraphPlanningProblem", "GraphPlanningResult", "GraphTrajectoryResult",
+    "PersistentRoadmap",
     "PlanningMetrics", "interpolate_edge", "paths_to_trajectory_seeds",
     "plan_and_optimize", "plan_graph",
 ]

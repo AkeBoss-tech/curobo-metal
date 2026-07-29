@@ -434,8 +434,10 @@ def optimize_trajectory(
     )
 
 
-def interpolate_trajectory(q: torch.Tensor, source_dt: float, target_dt: float) -> torch.Tensor:
-    """Linearly resample a trajectory while preserving its physical duration."""
+def interpolate_trajectory(
+    q: torch.Tensor, source_dt: float, target_dt: float, *, mode: str = "linear"
+) -> torch.Tensor:
+    """Resample a trajectory while preserving duration and endpoints."""
     if source_dt <= 0 or target_dt <= 0:
         raise ValueError("time steps must be positive")
     duration = (q.shape[-2] - 1) * source_dt
@@ -445,7 +447,21 @@ def interpolate_trajectory(q: torch.Tensor, source_dt: float, target_dt: float) 
     fraction = coordinates - low
     fraction[-1] = 1
     shape = (1,) * (q.ndim - 2) + (-1, 1)
-    return (1 - fraction).reshape(shape) * q[..., low, :] + fraction.reshape(shape) * q[..., low + 1, :]
+    if mode == "linear":
+        return (1 - fraction).reshape(shape) * q[..., low, :] + fraction.reshape(shape) * q[..., low + 1, :]
+    if mode not in ("cubic", "bspline"):
+        raise ValueError("interpolation mode must be 'linear', 'cubic', or 'bspline'")
+    before = (low - 1).clamp_min(0)
+    after = (low + 2).clamp_max(q.shape[-2] - 1)
+    p0, p1, p2, p3 = q[..., before, :], q[..., low, :], q[..., low + 1, :], q[..., after, :]
+    t = fraction.reshape(shape)
+    # Catmull-Rom is a local interpolating cubic; the bspline name uses the
+    # same endpoint-preserving portable contract rather than an approximating fit.
+    return 0.5 * (
+        2 * p1 + (-p0 + p2) * t
+        + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t.square()
+        + (-p0 + 3 * p1 - 3 * p2 + p3) * t.pow(3)
+    )
 
 
 def retime_trajectory(

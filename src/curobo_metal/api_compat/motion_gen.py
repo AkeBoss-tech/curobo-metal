@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import replace
 import time
 
+import torch
+
 from curobo_metal.motion_gen import MotionGen as _MotionGen
-from curobo_metal.motion_gen import MotionGenConfig
+from curobo_metal.motion_gen import JointState, MotionGenConfig, MotionGenResult
 
 from .config import (
-    GraphSolverConfig, IKSolverConfig, InterpolationType, MotionGenPlanConfig,
+    GraphSolverConfig, IKSolverConfig, MotionGenPlanConfig,
     OptimizerType, TrajOptSolverConfig,
 )
 from .cost import UnsupportedCompatOption
@@ -44,11 +46,23 @@ class MotionGen(_MotionGen):
                 start_state, goal_state,
                 enable_graph=graph and attempt >= cfg.enable_graph_attempt,
             )
+            result = replace(
+                result, attempts=attempt, solve_time=time.monotonic() - started,
+                debug_info={
+                    "attempt": attempt,
+                    "partial_ik_opt": cfg.partial_ik_opt,
+                    "finetune_trajopt": cfg.finetune_trajopt,
+                    "parallel_finetune": cfg.parallel_finetune,
+                    "trajectory": result.trajectory_result,
+                    "graph": result.graph_result,
+                },
+            )
             if bool(result.success.item()):
-                if cfg.time_dilation_factor != 1.0:
+                scale = cfg.time_dilation_factor * cfg.finetune_dt_scale
+                if scale != 1.0:
                     result = replace(
                         result,
-                        interpolation_dt=result.interpolation_dt / cfg.time_dilation_factor,
+                        interpolation_dt=result.interpolation_dt / scale,
                     )
                 return result
         assert result is not None
@@ -60,17 +74,34 @@ class MotionGen(_MotionGen):
                       *, enable_graph: bool | None = None):
         cfg = plan_config or MotionGenPlanConfig()
         graph = cfg.enable_graph if enable_graph is None else enable_graph
-        if cfg.max_attempts != 1 or cfg.timeout is not None or cfg.enable_graph_attempt != 1:
-            raise UnsupportedCompatOption(
-                "batch retry/timeout configuration is not implemented; call plan_single_js per row"
-            )
-        if cfg.time_dilation_factor != 1.0:
-            raise UnsupportedCompatOption("batch time_dilation_factor is not implemented")
         if not cfg.enable_opt:
             raise UnsupportedCompatOption("enable_opt=False graph-only result adaptation is not implemented")
-        # The production batch implementation preserves row order and invokes
-        # this adapter's strict single method for every row.
-        return super().plan_batch_js(start_state, goal_state, enable_graph=graph)
+        starts = self._position(start_state, batch=True)
+        goals = self._position(goal_state, batch=True)
+        if starts.shape != goals.shape:
+            raise ValueError("batched start and goal shapes must match")
+        rows = [
+            self.plan_single_js(starts[i], goals[i], cfg, enable_graph=graph)
+            for i in range(starts.shape[0])
+        ]
+        success = torch.stack([row.success for row in rows])
+        statuses = tuple(row.status for row in rows)
+        if not bool(success.all().item()):
+            return MotionGenResult(
+                success, statuses, None, None, self.config.interpolation_dt, None,
+                attempts=max(row.attempts for row in rows),
+                solve_time=sum(row.solve_time for row in rows),
+                debug_info=tuple(row.debug_info for row in rows),
+            )
+        return MotionGenResult(
+            success, statuses,
+            JointState(torch.stack([row.optimized_plan.position for row in rows]), self.joint_names),
+            JointState(torch.stack([row.interpolated_plan.position for row in rows]), self.joint_names),
+            rows[0].interpolation_dt, None,
+            attempts=max(row.attempts for row in rows),
+            solve_time=sum(row.solve_time for row in rows),
+            debug_info=tuple(row.debug_info for row in rows),
+        )
 
     plan_batch_joint_space = plan_batch_js
 
@@ -83,14 +114,6 @@ def compile_motion_gen_config(base: MotionGenConfig, *, ik: IKSolverConfig | Non
     graph = graph or GraphSolverConfig()
     ik_optimizer = OptimizerType(ik.optimizer)
     trajectory_optimizer = OptimizerType(trajopt.optimizer)
-    if ik.retract_config is not None:
-        raise UnsupportedCompatOption("explicit retract_config seed injection is not implemented")
-    if not ik.success_requires_convergence:
-        raise UnsupportedCompatOption("success_requires_convergence=False is not implemented")
-    if trajopt.num_seeds != 1:
-        raise UnsupportedCompatOption("explicit num_trajopt_seeds is not implemented")
-    if trajopt.interpolation_type is not InterpolationType.LINEAR:
-        raise UnsupportedCompatOption("production interpolation supports only linear")
     trajopt.costs.validate_production()
     if not isinstance(trajopt.costs.bounds.weight, (int, float)):
         raise UnsupportedCompatOption("per-joint bounds weights are not implemented")
@@ -115,4 +138,7 @@ def compile_motion_gen_config(base: MotionGenConfig, *, ik: IKSolverConfig | Non
         trajectory_weights=trajopt.costs.smoothness.to_production(
             joint_limit=float(trajopt.costs.bounds.weight),
         ),
+        retract_config=ik.retract_config,
+        num_trajectory_seeds=trajopt.num_seeds,
+        interpolation_type=trajopt.interpolation_type.value,
     )

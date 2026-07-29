@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable, Mapping
 
 import torch
 
@@ -27,6 +28,57 @@ class CollisionModel:
     padding: float = 0.0
     activation_distance: float = 0.0
     weight: float = 1.0
+
+
+@dataclass(frozen=True)
+class CostTerm:
+    """Named composable cost with scalar or per-run weights."""
+
+    function: Callable[[torch.Tensor], torch.Tensor]
+    weight: float | torch.Tensor = 1.0
+    enabled: bool = True
+
+    def __call__(self, value: torch.Tensor) -> torch.Tensor:
+        result = self.function(value)
+        if not self.enabled:
+            return result * 0
+        weight = torch.as_tensor(self.weight, device=result.device, dtype=result.dtype)
+        return result * weight
+
+
+@dataclass(frozen=True)
+class CostManager:
+    terms: Mapping[str, CostTerm]
+
+    def evaluate(self, value: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        components = {name: term(value) for name, term in self.terms.items()}
+        if not components:
+            return value.sum(-1) * 0, components
+        iterator = iter(components.values())
+        total = next(iterator)
+        for component in iterator:
+            total = total + component
+        return total, components
+
+
+def waypoint_cost(
+    value: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    offset: int = 0,
+    run_weight: float | torch.Tensor = 1.0,
+) -> torch.Tensor:
+    """Squared waypoint error with deterministic offset and broadcast run weights."""
+    trajectory = _floating(value, "value")
+    goal = _floating(target, "target")
+    if trajectory.ndim < 2 or goal.shape[-1] != trajectory.shape[-1]:
+        raise ValueError("value must end in [T,J] and target in [J] or [W,J]")
+    index = offset if offset >= 0 else trajectory.shape[-2] + offset
+    if index < 0 or index >= trajectory.shape[-2]:
+        raise ValueError("waypoint offset is outside the trajectory")
+    residual = trajectory[..., index, :] - goal
+    weight = torch.as_tensor(run_weight, device=value.device, dtype=value.dtype)
+    return 0.5 * residual.square().sum(-1) * weight
 
 
 def _floating(value: torch.Tensor, name: str) -> torch.Tensor:

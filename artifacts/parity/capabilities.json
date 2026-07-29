@@ -13,11 +13,11 @@
     "evidence_blocked"
   ],
   "summary": {
-    "semantically_equivalent": 4,
-    "partial": 17,
+    "semantically_equivalent": 2,
+    "partial": 11,
     "intentionally_platform_inapplicable": 1,
     "external_integration_only": 1,
-    "evidence_blocked": 2
+    "evidence_blocked": 10
   },
   "capabilities": [
     {
@@ -323,14 +323,10 @@
       "id": "cost.pose_and_composable_costs",
       "area": "cost",
       "capability": "pose_and_composable_costs",
-      "classification": "partial",
-      "boundary": "Pose, bounds, smoothness, and collision-oriented portable costs/config records exist; the full upstream cost-class and rollout contract does not.",
-      "implementable_gaps": [
-        "offset-waypoint and run-weight execution semantics",
-        "remaining upstream cost classes and convergence interfaces",
-        "exact batch/result layouts"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "Portable pose, waypoint/offset, run-weight, bounds, smoothness, collision, and named cost-manager composition are implemented; equivalence to pinned fused CUDA rollout costs requires replay.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay for supported portable cost terms, batches, gradients, and convergence boundaries.",
       "upstream_evidence": {
         "path": "curobo/_src/cost/cost_tool_pose.py",
         "symbol": "ToolPoseCost",
@@ -339,25 +335,22 @@
       "local_evidence": {
         "path": "src/curobo_metal/ops/costs/core.py",
         "symbol": "pose_cost",
-        "line": 134
+        "line": 186
       },
       "test_evidence": [
         "tests/contracts/test_ik.py",
-        "tests/compat/api_surface/test_configs.py"
+        "tests/compat/api_surface/test_configs.py",
+        "tests/ops/costs/test_composition.py"
       ]
     },
     {
       "id": "optim.particle_evolution",
       "area": "optim",
       "capability": "particle_evolution",
-      "classification": "partial",
-      "boundary": "Deterministic batched elite evolution, bounds, seeds, and execution cache exist; upstream MPPI/ES sampling/config/debug behavior is broader.",
-      "implementable_gaps": [
-        "MPPI and remaining sampling strategies",
-        "upstream covariance/noise and debug-record behavior",
-        "config/result adapter completeness"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "Deterministic CEM, MPPI, and random sampling, covariance/noise control, per-seed results, debug histories, and execution state are portable; CUDA numerical equivalence is unverified.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay for sampling streams, covariance, termination, result layouts, and debug traces.",
       "upstream_evidence": {
         "path": "curobo/_src/optim/particle/evolution_strategies.py",
         "symbol": "EvolutionStrategies",
@@ -366,7 +359,7 @@
       "local_evidence": {
         "path": "src/curobo_metal/optim/core.py",
         "symbol": "particle_optimize",
-        "line": 144
+        "line": 161
       },
       "test_evidence": [
         "tests/ops/optim/test_optimizers.py"
@@ -376,13 +369,10 @@
       "id": "optim.lbfgs",
       "area": "optim",
       "capability": "lbfgs",
-      "classification": "partial",
-      "boundary": "Batched limited-memory BFGS with Armijo search and cache lifecycle exists; upstream line-search strategies, CUDA graph capture, and exact state/config surfaces differ.",
-      "implementable_gaps": [
-        "remaining portable line-search strategies and termination modes",
-        "upstream optimizer state/config/result adapters"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "Batched L-BFGS exposes fixed-step, Armijo, and strong-Wolfe searches, selectable termination, gradient/result/debug state, and cache lifecycle; CUDA mechanisms remain out of scope.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay for supported line searches, termination boundaries, and optimizer state/result behavior.",
       "upstream_evidence": {
         "path": "curobo/_src/optim/gradient/lbfgs.py",
         "symbol": "LBFGSOpt",
@@ -391,7 +381,7 @@
       "local_evidence": {
         "path": "src/curobo_metal/optim/core.py",
         "symbol": "lbfgs_optimize",
-        "line": 207
+        "line": 258
       },
       "test_evidence": [
         "tests/ops/optim/test_optimizers.py"
@@ -401,14 +391,10 @@
       "id": "ik.inverse_kinematics",
       "area": "ik",
       "capability": "inverse_kinematics",
-      "classification": "partial",
-      "boundary": "Deterministic batched seeds, pose residuals, limits, and optimizer selection exist; upstream solve modes, seed manager, result/config surface, and collision integration are incomplete.",
-      "implementable_gaps": [
-        "complete solve modes and seed policies",
-        "collision-aware IK integration",
-        "upstream config/result and convergence semantics"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "Single/batch goal and seed modes, deterministic random/retract seeds, optimizer selection, primitive collision integration, convergence statuses, and selected-seed results are implemented.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay for supported solve modes, seeds, collision boundaries, gradients, and result selection.",
       "upstream_evidence": {
         "path": "curobo/_src/solver/solver_ik.py",
         "symbol": "IKSolver",
@@ -428,14 +414,10 @@
       "id": "trajectory.trajectory_optimization",
       "area": "trajectory",
       "capability": "trajectory_optimization",
-      "classification": "partial",
-      "boundary": "Portable trajectory optimization now includes particle and L-BFGS stages, limits, costs, and deterministic seeds; upstream rollout, solve modes, interpolation, and result/config semantics remain broader.",
-      "implementable_gaps": [
-        "upstream rollout/cost-manager composition",
-        "complete solve modes, interpolation, and seed handling",
-        "upstream config/result adapter completeness"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "Portable single/batch and multiseed trajectory optimization composes rollout costs, Adam/particle/L-BFGS modes, linear/cubic/B-spline interpolation, metrics, and selected-seed results.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay for supported rollout costs, solve modes, interpolation, gradients, and result layouts.",
       "upstream_evidence": {
         "path": "curobo/_src/solver/solver_trajopt.py",
         "symbol": "TrajOptSolver",
@@ -455,13 +437,10 @@
       "id": "trajectory.dynamics_aware_bspline",
       "area": "trajectory",
       "capability": "dynamics_aware_bspline",
-      "classification": "partial",
-      "boundary": "B-spline sampling, velocity/acceleration/jerk/torque costs, optimization, and retiming exist; this is a portable contract rather than the upstream fused rollout API.",
-      "implementable_gaps": [
-        "adapter into upstream-style trajectory solver configuration/results",
-        "full collision and task-space rollout composition"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "B-spline sampling, dynamics/task-space/collision rollout composition, optimization, result adaptation, and retiming form a complete portable contract; fused CUDA equivalence is unverified.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay of supported dynamics-aware rollout, optimization, retiming, and result behavior.",
       "upstream_evidence": {
         "path": "curobo/_src/robot/dynamics/dynamics.py",
         "symbol": "Dynamics",
@@ -480,14 +459,10 @@
       "id": "graph.prm_planner",
       "area": "graph",
       "capability": "prm_planner",
-      "classification": "partial",
-      "boundary": "Deterministic sampled graph planning and path shortcutting exist; persistent graph mutation, all sampling/search modes, and upstream result/config behavior do not.",
-      "implementable_gaps": [
-        "persistent graph lifecycle and update API",
-        "remaining sampling/search/connection modes",
-        "upstream config/result adapters"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "Deterministic uniform/Sobol sampling, k-neighbor/radius/hybrid connection, A*/Dijkstra/greedy search, persistent lifecycle, path metrics, and trajectory seed handoff are implemented.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay for supported sampling, connection/search modes, lifecycle, paths, and metrics.",
       "upstream_evidence": {
         "path": "curobo/_src/graph_planner/graph_planner_prm.py",
         "symbol": "PRMGraphPlanner",
@@ -496,7 +471,7 @@
       "local_evidence": {
         "path": "src/curobo_metal/ops/graph_planning/core.py",
         "symbol": "plan_graph",
-        "line": 296
+        "line": 334
       },
       "test_evidence": [
         "tests/contracts/test_graph_planning.py",
@@ -507,14 +482,10 @@
       "id": "motion_generation.motion_gen",
       "area": "motion_generation",
       "capability": "motion_gen",
-      "classification": "partial",
-      "boundary": "Single/batch joint and pose planning, warmup/reset facade, world update, and composed IK/graph/trajectory execution exist; many upstream planning modes and operational semantics remain absent.",
-      "implementable_gaps": [
-        "complete pose/batch solve modes and retry policies",
-        "world/attachment mutation semantics",
-        "interpolation, timing, metrics, and debug-result compatibility"
-      ],
-      "evidence_needed": null,
+      "classification": "evidence_blocked",
+      "boundary": "Portable single/batch joint and pose modes include retries, graph scheduling, retract/multiseed solve configuration, primitive world/attachment mutation, interpolation/retiming, timing, metrics, and debug results.",
+      "implementable_gaps": [],
+      "evidence_needed": "Paired pinned cuRobo CUDA replay for supported MotionGen solve modes, mutation, interpolation, timing, metrics, statuses, and debug results.",
       "upstream_evidence": {
         "path": "curobo/_src/motion/motion_planner.py",
         "symbol": "MotionPlanner",
@@ -535,31 +506,35 @@
       "area": "dynamics",
       "capability": "inverse_dynamics",
       "classification": "evidence_blocked",
-      "boundary": "Differentiable inverse and forward dynamics are production CPU/MPS operations integrated with RobotCfg, named joint-state adapters, and rollout; equivalence is withheld only pending pinned NVIDIA replay.",
-      "implementable_gaps": [],
-      "evidence_needed": "A pinned cuRobo CUDA dynamics replay over identical inertial models, batches, dtypes, outputs, and gradients.",
+      "boundary": "A CPU reference RNEA is contract-tested, but it is not a production Metal operation and has not been replayed against pinned upstream CUDA dynamics.",
+      "implementable_gaps": [
+        "production CPU/MPS dynamics API and integration with RobotCfg"
+      ],
+      "evidence_needed": "A pinned cuRobo CUDA dynamics replay plus a production local backend implementation.",
       "upstream_evidence": {
         "path": "curobo/_src/robot/dynamics/dynamics.py",
         "symbol": "Dynamics",
         "line": 45
       },
       "local_evidence": {
-        "path": "src/curobo_metal/ops/whole_body/core.py",
+        "path": "src/curobo_metal/reference/dynamics.py",
         "symbol": "inverse_dynamics",
         "line": 34
       },
       "test_evidence": [
-        "tests/contracts/test_whole_body_dynamics.py",
-        "tests/ops/whole_body/test_whole_body.py"
+        "tests/contracts/test_whole_body_dynamics.py"
       ]
     },
     {
       "id": "whole_body.kinematics_dynamics",
       "area": "whole_body",
       "capability": "kinematics_dynamics",
-      "classification": "semantically_equivalent",
-      "boundary": "The portable whole-body contract provides tree kinematics, Jacobians, inverse/forward dynamics, mass/bias/gravity quantities, named state adapters, and differentiable deterministic rollout on CPU/MPS.",
-      "implementable_gaps": [],
+      "classification": "partial",
+      "boundary": "Tree kinematics, Jacobians, mass matrix, bias/gravity, and inverse dynamics are exposed through a portable whole-body contract; upstream robot/rollout APIs and paired numerical evidence are incomplete.",
+      "implementable_gaps": [
+        "upstream-compatible robot state/config/result adapters",
+        "remaining dynamics quantities and rollout integration"
+      ],
       "evidence_needed": null,
       "upstream_evidence": {
         "path": "curobo/_src/robot/dynamics/dynamics.py",
@@ -580,9 +555,13 @@
       "id": "perception.depth_esdf_mapping",
       "area": "perception",
       "capability": "depth_esdf_mapping",
-      "classification": "semantically_equivalent",
-      "boundary": "The portable mapping contract provides deterministic dense and sparse-block TSDF, ESDF, mesh extraction, depth rendering, pose refinement, checkpointing, batched lifecycle operations, and mapper/camera adapters.",
-      "implementable_gaps": [],
+      "classification": "partial",
+      "boundary": "Depth integration, deterministic dense ESDF, batched environments, reset, voxel export, and collision query exist; upstream block-hashed TSDF/ESDF mapping is substantially broader.",
+      "implementable_gaps": [
+        "sparse block allocation and TSDF integration",
+        "mesh extraction, rendering, pose refinement, and checkpointing",
+        "upstream camera/mapper configuration adapters"
+      ],
       "evidence_needed": null,
       "upstream_evidence": {
         "path": "curobo/_src/perception/mapper/mapper.py",

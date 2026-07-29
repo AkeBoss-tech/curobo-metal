@@ -2,7 +2,8 @@
 
 This repository is **not a full cuRoboV2 port**. The authoritative
 machine-readable audit is `artifacts/parity/capabilities.json`. It covers the
-production capability surface present on local `main` at `aa1e349` and cites
+production capability surface present on local `main` at `aa1e349` plus the
+Wave 9B portable closure and cites
 the immutable upstream revision
 `8e734f3ced1df898990bcd92de40abce475907db`. The generator rejects any other
 upstream checkout and validates every cited upstream symbol, local symbol, and
@@ -29,23 +30,23 @@ The inventory deliberately separates five conclusions:
 
 | Classification | Count | Result |
 |---|---:|---|
-| semantically equivalent | 4 | Scoped collision primitives, portable whole-body dynamics, and portable perception/mapping contracts |
-| partial | 17 | Configuration/types, Jacobians, checker and mesh/voxel collision, costs, optimizers, IK, trajectory, graph, and motion generation |
+| semantically equivalent | 2 | Scoped sphere-pair and sphere/cuboid signed-distance contracts only |
+| partial | 11 | Configuration/types, Jacobians, checker and mesh/voxel collision, whole-body, and perception |
 | intentionally platform-inapplicable | 1 | CUDA graphs and fused CUDA/Warp execution machinery |
 | external-integration-only | 1 | Isaac/ROS/USD/viewer ecosystem integrations |
-| evidence-blocked | 2 | Forward kinematics and production inverse dynamics |
+| evidence-blocked | 10 | Forward kinematics, costs, optimizers, IK, trajectory, graph, MotionGen, and reference inverse dynamics |
 
 Forward kinematics was previously labeled semantically equivalent. Local
 analytic fixtures and fallback-disabled tests establish internal correctness,
 but are not independent evidence from the pinned NVIDIA implementation. It is
 therefore evidence-blocked until a paired runner produces matching replay
-bundles. Inverse dynamics has the same evidence issue, but no remaining local
-production gap: inverse/forward dynamics, named-state adapters, and rollout now
-share the differentiable CPU/MPS implementation.
+bundles. Inverse dynamics has the same evidence issue and additionally remains
+a CPU reference rather than a production Metal operation.
 
-Semantic-equivalence records remain scoped contracts rather than package-wide
-claims. Robot-scene caches, filtering, aggregation, environment updates, result
-layouts, and swept queries remain partial.
+The two semantic-equivalence records are deliberately smaller than an upstream
+checker API: discrete sphere/sphere and sphere/oriented-cuboid signed distance,
+including tested gradients. Robot-scene caches, filtering, aggregation,
+environment updates, result layouts, and swept queries remain partial.
 
 ## Remaining implementable gaps
 
@@ -54,19 +55,17 @@ remaining portable work groups are:
 
 - finish supported RobotCfg/YAML/XRDF fields, asset/mimic handling, and
   mutation/serialization compatibility;
-- complete portable `DeviceCfg`, `Pose`, `JointState`, solver result, and
-  cost/config adapters;
+- complete portable `DeviceCfg`, `Pose`, `JointState`, and remaining generic
+  solver result adapters;
 - integrate Jacobians with upstream-style buffers/results and finish link and
   whole-body modes;
 - add self-collision filtering/aggregation, full cache/environment mutation,
   exact mesh/voxel boundary and result semantics, and swept collision;
-- add remaining portable particle sampling, line-search, termination, and
-  optimizer state/config behavior;
-- complete IK solve modes/seeds/collision integration and trajectory rollout,
-  solve-mode, interpolation, and result behavior;
-- add persistent graph lifecycle and remaining sampling/search modes;
-- complete MotionGen retries, solve modes, attachment/world mutation,
-  interpolation, timing, metrics, and debug results;
+- promote inverse dynamics to a production CPU/MPS API and finish whole-body
+  adapters/rollout integration;
+- add sparse TSDF/block allocation, mesh extraction, rendering, pose
+  refinement, checkpointing, and mapper/camera adapters.
+
 CUDA graph/kernel ports and Isaac/ROS/USD/viewer adapters are excluded from that
 implementable core-gap list by classification. A paired NVIDIA runner is an
 evidence requirement, not an implementation gap.

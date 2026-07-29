@@ -16,13 +16,18 @@ actually implemented in this repository.
   and `plan_batch`/`plan_batch_pose` are stable entry points.
 - `JointState`, `Pose`, `MotionGenResult`, `MotionGenStatus`, and
   `MotionGenMetrics` are package-owned types. Results expose optimized and
-  interpolated plans plus `get_interpolated_plan()`.
+  interpolated plans, derivatives, solve time, attempt count, graph use,
+  metrics/debug records, and `get_interpolated_plan()`.
 - Joint-space planning performs direct trajectory optimization and
   deterministically retries with graph-derived seeds when enabled. Pose
   planning performs seeded IK before the same joint-space pipeline.
 - Robot spheres, self-pairs, and primitive cuboid worlds compose the
   production FK/collision paths. CPU uses float32 or float64; MPS uses float32.
   Requested devices are validated and never silently replaced.
+- Runtime primitive worlds can be replaced or cleared. Link-local collision
+  spheres can be attached and detached; both operations invalidate optimizer
+  and roadmap state. Retract IK seeds, multiple trajectory seeds, retry/graph
+  attempt policies, and linear/cubic/B-spline interpolation are supported.
 
 The portable config requires `robot`, `lower`, and `upper`. Solver fields such
 as `steps`, `dt`, `interpolation_dt`, seed counts, tolerances, graph parameters,
@@ -45,6 +50,7 @@ per-item success/status without fabricating a partial stacked trajectory.
 The loader does not parse upstream YAML, URDF, USD, or XRDF. Generate or export
 the documented JSON representation outside this package. Mesh/BVH, voxel,
 ESDF, depth-camera, continuous-collision, dynamics, Isaac Sim, Omniverse,
-CUDA Graph, grasp, attachment, and runtime world-mutation APIs are not
-impersonated. They raise `UnsupportedMotionGenFeature` when addressed by this
-surface. There is no CPU fallback for a requested MPS execution.
+CUDA Graph, grasp geometry beyond link-local spheres, and non-primitive runtime
+worlds are not impersonated. There is no CPU fallback for requested MPS
+execution. The portable MotionGen audit record is evidence-blocked pending
+paired pinned CUDA replay; local test success is not a CUDA-equivalence claim.

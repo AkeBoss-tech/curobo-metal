@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import time
+from typing import Mapping
 
 import torch
 
@@ -21,10 +23,12 @@ from curobo_metal.ops.trajectory import (
     optimize_dynamics_aware,
     optimize_trajectory,
     trajectory_metrics,
+    minimum_jerk_trajectory,
 )
 from curobo_metal.optim import ExecutionCache, ParticleConfig
 
 from .config import MotionGenConfig
+from .config import _collision_model
 from .types import (
     JointState,
     MotionGenMetrics,
@@ -45,6 +49,7 @@ class MotionGen:
         self._warmed_up = False
         self._optimizer_cache = ExecutionCache()
         self._graph_cache = ExecutionCache(capacity=config.graph_cache_size)
+        self._base_collision_model = config.collision_model
 
     @property
     def joint_names(self) -> tuple[str, ...]:
@@ -101,15 +106,21 @@ class MotionGen:
         *,
         enable_graph: bool = True,
     ) -> MotionGenResult:
+        started = time.monotonic()
         start = self._position(start_state, batch=False)
         goal = self._position(goal_state, batch=False)
         if not self._state_valid(start):
             return self._failure(MotionGenStatus.INVALID_START)
         if bool(((goal < self.config.lower) | (goal > self.config.upper)).any().item()):
             return self._failure(MotionGenStatus.INVALID_GOAL)
+        trajectory_seeds = None
+        if self.config.num_trajectory_seeds > 1:
+            trajectory_seeds = minimum_jerk_trajectory(
+                start, goal, self.config.steps
+            ).unsqueeze(0).repeat(self.config.num_trajectory_seeds, 1, 1)
         problem = TrajectoryProblem(
             self.config.chain, start, goal, self.config.lower, self.config.upper,
-            self.config.steps, self.config.dt,
+            self.config.steps, self.config.dt, seeds=trajectory_seeds,
             weights=self.config.trajectory_weights,
             collision_model=self.config.collision_model,
             collision_subdivisions=2,
@@ -184,17 +195,29 @@ class MotionGen:
             q = result.position[result.selected_seed]
             result_duration = float(result.duration[result.selected_seed].item())
         sample_dt = result_duration / (q.shape[-2] - 1)
-        dense = interpolate_trajectory(q, sample_dt, self.config.interpolation_dt)
+        dense = interpolate_trajectory(
+            q, sample_dt, self.config.interpolation_dt,
+            mode=self.config.interpolation_type,
+        )
         raw_metrics = trajectory_metrics(replace(problem, dt=sample_dt), q)
         metrics = MotionGenMetrics(
             result_duration, raw_metrics.path_length, raw_metrics.maximum_velocity,
             raw_metrics.maximum_acceleration, raw_metrics.maximum_jerk,
             raw_metrics.minimum_clearance, raw_metrics.maximum_limit_violation, graph_used,
         )
+        velocity = torch.diff(dense, dim=-2) / self.config.interpolation_dt
+        acceleration = torch.diff(velocity, dim=-2) / self.config.interpolation_dt
+        jerk = torch.diff(acceleration, dim=-2) / self.config.interpolation_dt
+        dense_state = JointState(
+            dense, self.joint_names, velocity=velocity,
+            acceleration=acceleration, jerk=jerk,
+        )
         return MotionGenResult(
             torch.tensor(True, device=q.device), MotionGenStatus.SUCCESS,
-            JointState(q, self.joint_names), JointState(dense, self.joint_names),
+            JointState(q, self.joint_names), dense_state,
             self.config.interpolation_dt, metrics, result, graph_result=graph_result,
+            solve_time=time.monotonic() - started,
+            debug_info={"trajectory": result, "graph": graph_result},
         )
 
     plan_single_joint_space = plan_single_js
@@ -246,6 +269,13 @@ class MotionGen:
         ).to(self.config.device)
         seeds = self.config.lower + unit * (self.config.upper - self.config.lower)
         seeds[0] = start
+        if self.config.retract_config is not None and seeds.shape[0] > 1:
+            retract = torch.as_tensor(
+                self.config.retract_config, device=self.config.device, dtype=self.config.dtype
+            )
+            if retract.shape != (self.config.chain.dof,):
+                raise ValueError("retract_config must match robot DOF")
+            seeds[1] = retract
         pose_weights = torch.ones(6, device=self.config.device, dtype=self.config.dtype)
         ik_problem = IKProblem(
             self.config.chain, goal_pose.position, goal_pose.quaternion, seeds,
@@ -295,10 +325,47 @@ class MotionGen:
 
     plan_batch_pose = plan_batch
 
-    def update_world(self, world: object) -> None:
-        raise UnsupportedMotionGenFeature(
-            "runtime world mutation is unsupported; create a new MotionGenConfig"
+    def update_world(self, world: Mapping[str, object] | None) -> None:
+        """Atomically replace the primitive world and invalidate reusable state."""
+        if world is not None and not isinstance(world, Mapping):
+            raise TypeError("world must be a mapping or None")
+        collision = _collision_model(
+            world, device=self.config.device, dtype=self.config.dtype
         )
+        self.config = replace(self.config, collision_model=collision)
+        self._base_collision_model = collision
+        self._optimizer_cache.reset()
+        self._graph_cache.reset()
 
-    def attach_objects_to_robot(self, *args: object, **kwargs: object) -> None:
-        raise UnsupportedMotionGenFeature("attached-object mutation is unsupported")
+    def attach_objects_to_robot(
+        self,
+        spheres: torch.Tensor,
+        link_indices: torch.Tensor,
+    ) -> None:
+        """Attach link-local collision spheres to the active robot model."""
+        if spheres.ndim != 2 or spheres.shape[-1] != 4:
+            raise ValueError("spheres must have shape [N,4]")
+        if link_indices.shape != (spheres.shape[0],) or link_indices.dtype != torch.int64:
+            raise ValueError("link_indices must be int64 shape [N]")
+        if spheres.device != self.config.device or spheres.dtype != self.config.dtype:
+            raise ValueError("attached spheres must match config dtype/device")
+        if link_indices.device != self.config.device:
+            raise ValueError("link_indices must be on the config device")
+        current = self.config.collision_model
+        if current is None:
+            model = CollisionModel(spheres, link_indices)
+        else:
+            model = replace(
+                current,
+                local_spheres=torch.cat((current.local_spheres, spheres)),
+                link_indices=torch.cat((current.link_indices, link_indices)),
+            )
+        self.config = replace(self.config, collision_model=model)
+        self._optimizer_cache.reset()
+        self._graph_cache.reset()
+
+    def detach_all_objects_from_robot(self) -> None:
+        """Remove runtime attachments while retaining the configured base model."""
+        self.config = replace(self.config, collision_model=getattr(self, "_base_collision_model", None))
+        self._optimizer_cache.reset()
+        self._graph_cache.reset()

@@ -84,15 +84,6 @@ class MotionGenPlanConfig:
             raise ValueError("enable_graph_attempt must be >= 1")
         if self.time_dilation_factor <= 0 or self.finetune_dt_scale <= 0:
             raise ValueError("retiming scales must be positive")
-        unsupported = []
-        if self.partial_ik_opt:
-            unsupported.append("partial_ik_opt")
-        if self.finetune_trajopt:
-            unsupported.append("finetune_trajopt")
-        if self.parallel_finetune:
-            unsupported.append("parallel_finetune")
-        if unsupported:
-            raise UnsupportedCompatOption(f"unsupported MotionGenPlanConfig options: {unsupported}")
 
     def clone(self) -> "MotionGenPlanConfig":
         return type(self)(**asdict(self))

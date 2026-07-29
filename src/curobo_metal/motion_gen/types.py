@@ -65,6 +65,19 @@ class MotionGenResult:
     trajectory_result: object | None = None
     ik_result: object | None = None
     graph_result: object | None = None
+    solve_time: float = 0.0
+    attempts: int = 1
+    debug_info: object | None = None
 
     def get_interpolated_plan(self) -> JointState | None:
         return self.interpolated_plan
+
+    @property
+    def motion_time(self) -> float:
+        if self.interpolated_plan is None:
+            return 0.0
+        return max(0, self.interpolated_plan.position.shape[-2] - 1) * self.interpolation_dt
+
+    @property
+    def used_graph(self) -> bool:
+        return bool(self.metrics.graph_used) if self.metrics is not None else False
