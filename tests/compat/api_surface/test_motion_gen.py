@@ -31,7 +31,12 @@ def test_compile_wires_supported_fields():
             steps=8, dt=.1, max_iterations=9, interpolation_dt=.05,
         ),
     )
-    assert (cfg.num_ik_seeds, cfg.max_ik_iterations, cfg.graph_seed) == (3, 7, 11)
+    assert (
+        cfg.num_ik_seeds,
+        cfg.max_ik_iterations,
+        cfg.optimizer_seed,
+        cfg.graph_seed,
+    ) == (3, 7, 11, 0)
     assert (cfg.steps, cfg.dt, cfg.max_trajectory_iterations, cfg.interpolation_dt) == (8, .1, 9, .05)
     choices = compile_motion_gen_config(
         _base(),
