@@ -17,6 +17,7 @@ from curobo_metal.ops.costs import (
 )
 from curobo_metal.ops.ik import IKProblem, solve_ik
 from curobo_metal.ops.kinematics import KinematicChain, forward_kinematics
+from curobo_metal.optim import LBFGSConfig, ParticleConfig
 from curobo_metal.reference import SerialRobot
 
 FIXTURES = Path(__file__).parents[2] / "fixtures"
@@ -172,6 +173,24 @@ def test_unbatched_seed_and_empty_batch_shapes() -> None:
     empty = solve_ik(IKProblem(**{**problem.__dict__, "seeds": problem.seeds[:0]}))
     assert empty.solutions.shape == (0, 2)
     assert empty.selected_seed is None
+
+
+@pytest.mark.parametrize("optimizer", ["lbfgs", "particle", "es"])
+def test_portable_optimizer_choices_on_robotics_fixture(optimizer: str) -> None:
+    base = _case("reachable")
+    options = {
+        "optimizer": optimizer,
+        "max_iterations": 30,
+        "lbfgs": LBFGSConfig(iterations=30),
+        "particle": ParticleConfig(
+            iterations=30, particles=48, elite_count=8, initial_std=.5, seed=5,
+        ),
+    }
+    first = solve_ik(IKProblem(**{**base.__dict__, **options}))
+    second = solve_ik(IKProblem(**{**base.__dict__, **options}))
+    assert first.solutions.shape == base.seeds.shape
+    assert torch.isfinite(first.objective).all()
+    torch.testing.assert_close(first.solutions, second.solutions, rtol=0, atol=0)
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

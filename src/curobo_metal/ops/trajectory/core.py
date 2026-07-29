@@ -8,6 +8,9 @@ from typing import Sequence
 
 import torch
 
+from curobo_metal.optim import (
+    ExecutionCache, LBFGSConfig, ParticleConfig, lbfgs_optimize, particle_optimize,
+)
 from curobo_metal.ops.costs import CollisionModel, robot_collision_cost
 from curobo_metal.ops.kinematics import KinematicChain, forward_kinematics
 
@@ -41,6 +44,11 @@ class TrajectoryProblem:
     max_iterations: int = 200
     gradient_tolerance: float = 1e-7
     learning_rate: float = 0.03
+    optimizer: str = "adam"
+    lbfgs: LBFGSConfig | None = None
+    particle: ParticleConfig | None = None
+    optimizer_cache: ExecutionCache | None = None
+    warm_start: bool = False
 
 
 @dataclass(frozen=True)
@@ -252,6 +260,8 @@ def _validate(problem: TrajectoryProblem) -> tuple[torch.Tensor, torch.Tensor, t
         raise ValueError("solver scalars are invalid")
     if any(not math.isfinite(x) or x < 0 for x in vars(problem.weights).values()):
         raise ValueError("weights must be finite and nonnegative")
+    if problem.optimizer not in ("adam", "lbfgs", "particle", "es"):
+        raise ValueError("optimizer must be 'adam', 'lbfgs', 'particle', or 'es'")
     _models(problem, start.shape[0])
     return start, goal, lower, upper, batched
 
@@ -283,11 +293,17 @@ def optimize_trajectory(
     lo, hi = lower[:, None, None], upper[:, None, None]
 
     def project(value: torch.Tensor) -> torch.Tensor:
-        value = torch.maximum(torch.minimum(value, hi), lo)
+        extra = value.ndim - 4
+        bounds_shape = (batch,) + (1,) * (extra + 2) + (problem.chain.dof,)
+        value = torch.maximum(
+            torch.minimum(value, upper.reshape(bounds_shape)),
+            lower.reshape(bounds_shape),
+        )
         if value.shape[1]:
             middle = value[..., 1:-1, :]
-            first_knot = start[:, None, None].expand(-1, value.shape[1], -1, -1)
-            last_knot = goal[:, None, None].expand(-1, value.shape[1], -1, -1)
+            endpoint_shape = (batch,) + (1,) * (value.ndim - 2) + (problem.chain.dof,)
+            first_knot = value[..., :1, :] * 0 + start.reshape(endpoint_shape)
+            last_knot = value[..., -1:, :] * 0 + goal.reshape(endpoint_shape)
             value = torch.cat((first_knot, middle, last_knot), dim=-2)
         return value
 
@@ -311,34 +327,66 @@ def optimize_trajectory(
             tuple(None for _ in range(batch)), True,
         )
     stationary = torch.zeros((batch, count), dtype=torch.bool, device=q.device)
-    first, second = torch.zeros_like(q), torch.zeros_like(q)
-    beta1, beta2 = 0.9, 0.999
-    iteration = 0
-    for iteration in range(1, problem.max_iterations + 1):
-        q = q.requires_grad_(True)
-        cost = evaluate_trajectory(problem, q)
-        gradient = torch.autograd.grad(
-            cost.value.sum(), q, create_graph=differentiable, retain_graph=differentiable
-        )[0]
-        gradient = torch.cat((torch.zeros_like(gradient[..., :1, :]),
-                              gradient[..., 1:-1, :],
-                              torch.zeros_like(gradient[..., -1:, :])), -2)
-        norm = torch.linalg.vector_norm(gradient.flatten(start_dim=2), dim=-1)
-        newly_stationary = (norm <= problem.gradient_tolerance) & endpoint_feasible[:, None]
-        stationary |= newly_stationary
-        active = endpoint_feasible[:, None] & ~stationary
-        iterations = torch.where(active, torch.full_like(iterations, iteration), iterations)
-        if not bool(active.any().item()):
-            break
-        first = beta1 * first + (1 - beta1) * gradient
-        second = beta2 * second + (1 - beta2) * gradient.square()
-        step = (first / (1 - beta1**iteration)) / (
-            (second / (1 - beta2**iteration)).sqrt() + torch.finfo(q.dtype).eps
-        )
-        candidate = project(q - problem.learning_rate * step)
-        q = torch.where(active[..., None, None], candidate, q)
-        if not differentiable:
-            q = q.detach()
+    if problem.optimizer != "adam":
+        def objective(value: torch.Tensor) -> torch.Tensor:
+            if value.ndim == 4:
+                return evaluate_trajectory(problem, value).value
+            particles = value.shape[2]
+            flattened = value.reshape(batch, count * particles, problem.steps, problem.chain.dof)
+            return evaluate_trajectory(problem, flattened).value.reshape(batch, count, particles)
+
+        if problem.optimizer == "lbfgs":
+            cfg = problem.lbfgs or LBFGSConfig(
+                iterations=problem.max_iterations,
+                learning_rate=min(1.0, problem.learning_rate * 10),
+                tolerance_grad=problem.gradient_tolerance,
+            )
+            optimized = lbfgs_optimize(
+                objective, q, config=cfg, projection=project, event_ndim=2,
+                cache=problem.optimizer_cache, warm_start=problem.warm_start,
+                differentiable=differentiable,
+            )
+        else:
+            cfg = problem.particle or ParticleConfig(
+                iterations=problem.max_iterations, seed=0,
+            )
+            optimized = particle_optimize(
+                objective, q, config=cfg, projection=project, event_ndim=2,
+                cache=problem.optimizer_cache,
+            )
+        q = optimized.solution
+        stationary = optimized.converged
+        iterations = optimized.iterations
+        iteration = int(iterations.max().item())
+    else:
+        iteration = 0
+        first, second = torch.zeros_like(q), torch.zeros_like(q)
+        beta1, beta2 = 0.9, 0.999
+        for iteration in range(1, problem.max_iterations + 1):
+            q = q.requires_grad_(True)
+            cost = evaluate_trajectory(problem, q)
+            gradient = torch.autograd.grad(
+                cost.value.sum(), q, create_graph=differentiable, retain_graph=differentiable
+            )[0]
+            gradient = torch.cat((torch.zeros_like(gradient[..., :1, :]),
+                                  gradient[..., 1:-1, :],
+                                  torch.zeros_like(gradient[..., -1:, :])), -2)
+            norm = torch.linalg.vector_norm(gradient.flatten(start_dim=2), dim=-1)
+            newly_stationary = (norm <= problem.gradient_tolerance) & endpoint_feasible[:, None]
+            stationary |= newly_stationary
+            active = endpoint_feasible[:, None] & ~stationary
+            iterations = torch.where(active, torch.full_like(iterations, iteration), iterations)
+            if not bool(active.any().item()):
+                break
+            first = beta1 * first + (1 - beta1) * gradient
+            second = beta2 * second + (1 - beta2) * gradient.square()
+            step = (first / (1 - beta1**iteration)) / (
+                (second / (1 - beta2**iteration)).sqrt() + torch.finfo(q.dtype).eps
+            )
+            candidate = project(q - problem.learning_rate * step)
+            q = torch.where(active[..., None, None], candidate, q)
+            if not differentiable:
+                q = q.detach()
 
     final = evaluate_trajectory(problem, q)
     endpoint_error = torch.maximum(

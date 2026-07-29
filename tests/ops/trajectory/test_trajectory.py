@@ -23,6 +23,7 @@ from curobo_metal.ops.trajectory import (
     trajectory_metrics,
 )
 from curobo_metal.reference import SerialRobot
+from curobo_metal.optim import LBFGSConfig, ParticleConfig
 
 FIXTURES = Path(__file__).parents[2] / "fixtures" / "trajectory"
 
@@ -157,6 +158,24 @@ def test_evaluation_and_unrolled_optimizer_are_differentiable() -> None:
     assert gradient.shape == seed.shape and torch.isfinite(gradient).all()
     cost = evaluate_trajectory(problem, result.trajectories)
     assert cost.value.shape == (1, 1)
+
+
+@pytest.mark.parametrize("optimizer", ["lbfgs", "particle", "es"])
+def test_portable_optimizer_choices_on_robotics_fixture(optimizer: str) -> None:
+    base = _case("two_link_obstacle_free")
+    options = {
+        "optimizer": optimizer,
+        "max_iterations": 12,
+        "lbfgs": LBFGSConfig(iterations=12),
+        "particle": ParticleConfig(
+            iterations=12, particles=24, elite_count=6, initial_std=.1, seed=9,
+        ),
+    }
+    first = optimize_trajectory(TrajectoryProblem(**{**base.__dict__, **options}))
+    second = optimize_trajectory(TrajectoryProblem(**{**base.__dict__, **options}))
+    assert first.trajectories.shape == (1, base.steps, base.chain.dof)
+    assert torch.isfinite(first.objective).all()
+    torch.testing.assert_close(first.trajectories, second.trajectories, rtol=0, atol=0)
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

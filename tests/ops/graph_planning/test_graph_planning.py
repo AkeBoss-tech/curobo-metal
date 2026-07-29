@@ -14,6 +14,7 @@ from curobo_metal.ops.graph_planning import (
 )
 from curobo_metal.ops.costs import CollisionModel
 from curobo_metal.ops.kinematics import KinematicChain
+from curobo_metal.optim import ExecutionCache
 from curobo_metal.reference import (
     SerialRobot,
     problem_from_graph_dict,
@@ -89,6 +90,19 @@ def test_validation_errors_and_search_limit_status() -> None:
         plan_graph(GraphPlanningProblem(**{
             **base.__dict__, "k_neighbors": None, "connection_radius": None
         }))
+
+
+def test_shape_keyed_sample_cache_reuse_and_reset() -> None:
+    _, base = _problem("two_link_detour.json")
+    cache = ExecutionCache(capacity=2)
+    problem = GraphPlanningProblem(**{**base.__dict__, "execution_cache": cache})
+    first, second = plan_graph(problem), plan_graph(problem)
+    assert first.status == second.status
+    assert cache.misses == 1 and cache.hits == 1 and cache.size == 1
+    cache.reset()
+    assert cache.size == 0
+    third = plan_graph(problem)
+    assert third.status == first.status and cache.misses == 2
 
 
 def test_production_fk_and_collision_validate_swept_direct_edge() -> None:

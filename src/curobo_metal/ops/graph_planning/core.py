@@ -12,6 +12,7 @@ import torch
 
 from curobo_metal.ops.costs import CollisionModel, robot_collision_cost
 from curobo_metal.ops.kinematics import KinematicChain, forward_kinematics
+from curobo_metal.optim import ExecutionCache
 from curobo_metal.ops.trajectory import (
     TrajectoryProblem,
     TrajectoryResult,
@@ -42,6 +43,7 @@ class GraphPlanningProblem:
     search: str = "astar"
     shortcut: bool = True
     max_search_expansions: int | None = None
+    execution_cache: ExecutionCache | None = None
 
 
 @dataclass(frozen=True)
@@ -167,6 +169,17 @@ def interpolate_edge(a: torch.Tensor, b: torch.Tensor, max_step: float) -> torch
 
 
 def _sample(problem: GraphPlanningProblem, batch_index: int, dof: int) -> torch.Tensor:
+    entry: dict[str, object] | None = None
+    if problem.execution_cache is not None:
+        entry = problem.execution_cache.acquire((
+            "graph_samples", problem.sample_count, problem.seed, batch_index, dof,
+            tuple(problem.lower.shape), str(problem.lower.dtype), problem.lower.device.type,
+            tuple(float(x) for x in problem.lower.detach().cpu()),
+            tuple(float(x) for x in problem.upper.detach().cpu()),
+        ))
+        cached = entry.get("samples")
+        if isinstance(cached, torch.Tensor):
+            return cached
     # PCG64 is deliberately generated on CPU to exactly preserve the replay contract.
     rng = np.random.Generator(np.random.PCG64(np.random.SeedSequence(
         [problem.seed, batch_index]
@@ -175,7 +188,10 @@ def _sample(problem: GraphPlanningProblem, batch_index: int, dof: int) -> torch.
     lower = problem.lower.detach().cpu().double().numpy()
     upper = problem.upper.detach().cpu().double().numpy()
     samples = lower + unit * (upper - lower)
-    return torch.as_tensor(samples, dtype=problem.starts.dtype, device=problem.starts.device)
+    result = torch.as_tensor(samples, dtype=problem.starts.dtype, device=problem.starts.device)
+    if entry is not None:
+        entry["samples"] = result
+    return result
 
 
 def _candidate_pairs(nodes_cpu: np.ndarray, problem: GraphPlanningProblem) -> list[tuple[int, int]]:

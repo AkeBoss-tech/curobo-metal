@@ -33,10 +33,16 @@ def test_compile_wires_supported_fields():
     )
     assert (cfg.num_ik_seeds, cfg.max_ik_iterations, cfg.graph_seed) == (3, 7, 11)
     assert (cfg.steps, cfg.dt, cfg.max_trajectory_iterations, cfg.interpolation_dt) == (8, .1, 9, .05)
+    choices = compile_motion_gen_config(
+        _base(),
+        ik=IKSolverConfig(optimizer=OptimizerType.PARTICLE),
+        trajopt=TrajOptSolverConfig(optimizer=OptimizerType.ES),
+    )
+    assert choices.ik_optimizer == "particle"
+    assert choices.trajectory_optimizer == "es"
 
 
 @pytest.mark.parametrize("kwargs, match", [
-    ({"ik": IKSolverConfig(optimizer=OptimizerType.PARTICLE)}, "LBFGS"),
     ({"ik": IKSolverConfig(retract_config=(0.0, 0.0))}, "retract"),
     ({"trajopt": TrajOptSolverConfig(interpolation_type=InterpolationType.BSPLINE)}, "linear"),
 ])

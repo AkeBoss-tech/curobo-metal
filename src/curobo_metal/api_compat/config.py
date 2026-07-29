@@ -55,6 +55,12 @@ class GraphSolverConfig:
     edge_step: float = 0.05
     cache_size: int = 1
 
+    def __post_init__(self) -> None:
+        if self.sample_count < 0 or self.seed < 0 or self.k_neighbors <= 0:
+            raise ValueError("graph counts/seed are invalid")
+        if self.edge_step <= 0 or self.cache_size < 0:
+            raise ValueError("edge_step must be positive and cache_size nonnegative")
+
 
 @dataclass(frozen=True)
 class MotionGenPlanConfig:

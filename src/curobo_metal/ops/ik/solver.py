@@ -7,6 +7,9 @@ import math
 
 import torch
 
+from curobo_metal.optim import (
+    ExecutionCache, LBFGSConfig, ParticleConfig, lbfgs_optimize, particle_optimize,
+)
 from curobo_metal.ops.costs import (
     CollisionModel,
     joint_limit_cost,
@@ -43,6 +46,11 @@ class IKProblem:
     collision_model: CollisionModel | None = None
     collision_tolerance: float = 0.0
     wrap_revolute: bool = False
+    optimizer: str = "adam"
+    lbfgs: LBFGSConfig | None = None
+    particle: ParticleConfig | None = None
+    optimizer_cache: ExecutionCache | None = None
+    warm_start: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,6 +135,8 @@ def _validate(problem: IKProblem) -> tuple[torch.Tensor, torch.Tensor, torch.Ten
         raise ValueError("iterations and solver scalars must be finite and nonnegative")
     if problem.learning_rate == 0:
         raise ValueError("learning_rate must be positive")
+    if problem.optimizer not in ("adam", "lbfgs", "particle", "es"):
+        raise ValueError("optimizer must be 'adam', 'lbfgs', 'particle', or 'es'")
     return position, quaternion, seeds, goals_batched, seeds_batched
 
 
@@ -196,46 +206,81 @@ def solve_ik(problem: IKProblem, *, differentiable: bool = False) -> IKResult:
     success = torch.zeros((goals, count), dtype=torch.bool, device=q.device)
     iterations = torch.zeros((goals, count), dtype=torch.int64, device=q.device)
     stationary = torch.zeros_like(success)
-    beta1, beta2 = 0.9, 0.999
-    first = torch.zeros_like(q)
-    second = torch.zeros_like(q)
+    if problem.optimizer != "adam":
+        def objective(value: torch.Tensor) -> torch.Tensor:
+            if value.ndim == 3:
+                return _evaluate(problem, value, positions, quaternions)[0]
+            particles = value.shape[2]
+            flat_value = value.reshape(goals, count * particles, value.shape[-1])
+            return _evaluate(problem, flat_value, positions, quaternions)[0].reshape(
+                goals, count, particles
+            )
 
-    for iteration in range(1, problem.max_iterations + 1):
-        q = q.requires_grad_(True)
-        objective, residual, collision = _evaluate(problem, q, positions, quaternions)
-        current_success = (
-            (torch.linalg.vector_norm(residual[..., :3], dim=-1) <= problem.position_tolerance)
-            & (torch.linalg.vector_norm(residual[..., 3:], dim=-1) <= problem.rotation_tolerance)
-            & (collision <= problem.collision_tolerance)
-        )
-        newly_done = (~success) & current_success
-        iterations = torch.where(newly_done, torch.full_like(iterations, iteration), iterations)
-        success = success | current_success
-        if bool(success.all().item()):
-            break
-        gradient = torch.autograd.grad(
-            objective.sum(), q, create_graph=differentiable, retain_graph=differentiable
-        )[0]
-        active = ~success
-        gradient_norm = torch.linalg.vector_norm(gradient, dim=-1)
-        became_stationary = active & (gradient_norm <= problem.step_tolerance)
-        stationary = stationary | became_stationary
-        active = active & ~stationary
-        first = beta1 * first + (1 - beta1) * gradient
-        second = beta2 * second + (1 - beta2) * gradient.square()
-        corrected_first = first / (1 - beta1**iteration)
-        corrected_second = second / (1 - beta2**iteration)
-        candidate = _project(
-            problem,
-            q - problem.learning_rate * corrected_first / (
-                corrected_second.sqrt() + torch.finfo(q.dtype).eps
-            ),
-        )
-        q = torch.where(active[..., None], candidate, q)
-        if not differentiable:
-            q = q.detach()
-        if not bool(active.any().item()):
-            break
+        if problem.optimizer == "lbfgs":
+            cfg = problem.lbfgs or LBFGSConfig(
+                iterations=problem.max_iterations,
+                learning_rate=min(1.0, problem.learning_rate * 10),
+                tolerance_grad=problem.step_tolerance,
+            )
+            optimized = lbfgs_optimize(
+                objective, q, config=cfg, projection=lambda x: _project(problem, x),
+                event_ndim=1, cache=problem.optimizer_cache,
+                warm_start=problem.warm_start, differentiable=differentiable,
+            )
+        else:
+            cfg = problem.particle or ParticleConfig(
+                iterations=problem.max_iterations, seed=0,
+            )
+            optimized = particle_optimize(
+                objective, q, config=cfg, projection=lambda x: _project(problem, x),
+                event_ndim=1, cache=problem.optimizer_cache,
+            )
+        q = optimized.solution
+        iterations = optimized.iterations
+        stationary = optimized.converged
+        iteration = int(iterations.max().item())
+    else:
+        iteration = 0
+        beta1, beta2 = 0.9, 0.999
+        first = torch.zeros_like(q)
+        second = torch.zeros_like(q)
+
+        for iteration in range(1, problem.max_iterations + 1):
+            q = q.requires_grad_(True)
+            objective_value, residual, collision = _evaluate(problem, q, positions, quaternions)
+            current_success = (
+                (torch.linalg.vector_norm(residual[..., :3], dim=-1) <= problem.position_tolerance)
+                & (torch.linalg.vector_norm(residual[..., 3:], dim=-1) <= problem.rotation_tolerance)
+                & (collision <= problem.collision_tolerance)
+            )
+            newly_done = (~success) & current_success
+            iterations = torch.where(newly_done, torch.full_like(iterations, iteration), iterations)
+            success = success | current_success
+            if bool(success.all().item()):
+                break
+            gradient = torch.autograd.grad(
+                objective_value.sum(), q, create_graph=differentiable, retain_graph=differentiable
+            )[0]
+            active = ~success
+            gradient_norm = torch.linalg.vector_norm(gradient, dim=-1)
+            became_stationary = active & (gradient_norm <= problem.step_tolerance)
+            stationary = stationary | became_stationary
+            active = active & ~stationary
+            first = beta1 * first + (1 - beta1) * gradient
+            second = beta2 * second + (1 - beta2) * gradient.square()
+            corrected_first = first / (1 - beta1**iteration)
+            corrected_second = second / (1 - beta2**iteration)
+            candidate = _project(
+                problem,
+                q - problem.learning_rate * corrected_first / (
+                    corrected_second.sqrt() + torch.finfo(q.dtype).eps
+                ),
+            )
+            q = torch.where(active[..., None], candidate, q)
+            if not differentiable:
+                q = q.detach()
+            if not bool(active.any().item()):
+                break
 
     final_objective, final_residual, final_collision = _evaluate(
         problem, q, positions, quaternions

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "wave": "8C",
+  "revision_base": "6fcf2c2",
+  "result": "implemented",
+  "optimizers": ["particle", "es", "lbfgs"],
+  "default_preserved": "adam",
+  "contracts": {
+    "batched_per_seed_results": true,
+    "deterministic_explicit_seed": true,
+    "empty_batches": true,
+    "nonfinite_failure": true,
+    "warm_start": true,
+    "reset_update": true,
+    "shape_keyed_cache": true,
+    "cuda_graph_capture": false
+  },
+  "implementation_differences": [
+    "portable Torch cross-entropy evolution",
+    "portable Torch L-BFGS two-loop recursion and Armijo line search",
+    "ordinary execution/sample cache instead of CUDA Graph capture",
+    "ES is routed to particle evolution"
+  ],
+  "verification": {
+    "suite": "tests/ops/optim plus IK/trajectory/graph/api compatibility",
+    "mps": "conditional, PYTORCH_ENABLE_MPS_FALLBACK disabled",
+    "benchmark": "benchmarks/optim/benchmark_optim.py"
+  }
+}

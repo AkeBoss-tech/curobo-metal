@@ -22,6 +22,7 @@ from curobo_metal.ops.trajectory import (
     optimize_trajectory,
     trajectory_metrics,
 )
+from curobo_metal.optim import ExecutionCache, ParticleConfig
 
 from .config import MotionGenConfig
 from .types import (
@@ -42,6 +43,8 @@ class MotionGen:
             raise TypeError("config must be MotionGenConfig")
         self.config = config
         self._warmed_up = False
+        self._optimizer_cache = ExecutionCache()
+        self._graph_cache = ExecutionCache(capacity=config.graph_cache_size)
 
     @property
     def joint_names(self) -> tuple[str, ...]:
@@ -111,6 +114,13 @@ class MotionGen:
             collision_model=self.config.collision_model,
             collision_subdivisions=2,
             max_iterations=self.config.max_trajectory_iterations,
+            optimizer=self.config.trajectory_optimizer,
+            particle=ParticleConfig(
+                iterations=self.config.max_trajectory_iterations,
+                seed=self.config.optimizer_seed,
+            ) if self.config.trajectory_optimizer in ("particle", "es") else None,
+            optimizer_cache=self._optimizer_cache,
+            warm_start=True,
             learning_rate=0.02,
             endpoint_tolerance=1e-5 if self.config.dtype == torch.float32 else 1e-8,
         )
@@ -146,6 +156,7 @@ class MotionGen:
                 k_neighbors=self.config.graph_k_neighbors,
                 edge_step=self.config.graph_edge_step,
                 interpolation_step=self.config.graph_edge_step,
+                execution_cache=self._graph_cache,
             ))
             if bool(graph_result.success[0].item()):
                 seeds = paths_to_trajectory_seeds(graph_result, self.config.steps)[0]

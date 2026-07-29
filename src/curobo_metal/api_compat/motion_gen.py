@@ -9,8 +9,8 @@ from curobo_metal.motion_gen import MotionGen as _MotionGen
 from curobo_metal.motion_gen import MotionGenConfig
 
 from .config import (
-    IKSolverConfig, InterpolationType, MotionGenPlanConfig, OptimizerType,
-    TrajOptSolverConfig,
+    GraphSolverConfig, IKSolverConfig, InterpolationType, MotionGenPlanConfig,
+    OptimizerType, TrajOptSolverConfig,
 )
 from .cost import UnsupportedCompatOption
 
@@ -22,7 +22,9 @@ class MotionGen(_MotionGen):
         return super().warmup(enable_graph=enable_graph, **kwargs)
 
     def reset_graph(self) -> None:
-        """Discard portable graph lifecycle state (graphs are rebuilt per call)."""
+        """Discard portable shape-keyed optimizer and roadmap execution state."""
+        self._graph_cache.reset()
+        self._optimizer_cache.reset()
         self._graph_generation = getattr(self, "_graph_generation", 0) + 1
 
     clear_graph_cache = reset_graph
@@ -74,11 +76,13 @@ class MotionGen(_MotionGen):
 
 
 def compile_motion_gen_config(base: MotionGenConfig, *, ik: IKSolverConfig | None = None,
-                              trajopt: TrajOptSolverConfig | None = None) -> MotionGenConfig:
+                              trajopt: TrajOptSolverConfig | None = None,
+                              graph: GraphSolverConfig | None = None) -> MotionGenConfig:
     ik = ik or IKSolverConfig()
     trajopt = trajopt or TrajOptSolverConfig()
-    if ik.optimizer is not OptimizerType.LBFGS or trajopt.optimizer is not OptimizerType.LBFGS:
-        raise UnsupportedCompatOption("production backend supports only the LBFGS-style optimizer")
+    graph = graph or GraphSolverConfig()
+    ik_optimizer = OptimizerType(ik.optimizer)
+    trajectory_optimizer = OptimizerType(trajopt.optimizer)
     if ik.retract_config is not None:
         raise UnsupportedCompatOption("explicit retract_config seed injection is not implemented")
     if not ik.success_requires_convergence:
@@ -96,7 +100,14 @@ def compile_motion_gen_config(base: MotionGenConfig, *, ik: IKSolverConfig | Non
         max_ik_iterations=ik.max_iterations,
         position_tolerance=ik.position_tolerance,
         rotation_tolerance=ik.rotation_tolerance,
-        graph_seed=ik.random_seed,
+        ik_optimizer=ik_optimizer.value,
+        trajectory_optimizer=trajectory_optimizer.value,
+        optimizer_seed=ik.random_seed,
+        graph_sample_count=graph.sample_count,
+        graph_seed=graph.seed,
+        graph_k_neighbors=graph.k_neighbors,
+        graph_edge_step=graph.edge_step,
+        graph_cache_size=graph.cache_size,
         steps=trajopt.steps,
         dt=trajopt.dt,
         max_trajectory_iterations=trajopt.max_iterations,

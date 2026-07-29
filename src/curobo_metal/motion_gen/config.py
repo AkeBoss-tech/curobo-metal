@@ -46,6 +46,10 @@ class MotionGenConfig:
     dynamics_aware: bool = False
     dynamics_model: WholeBodyModel | None = None
     dynamics_aware_options: Mapping[str, Any] | None = None
+    ik_optimizer: str = "adam"
+    trajectory_optimizer: str = "adam"
+    optimizer_seed: int = 0
+    graph_cache_size: int = 1
 
     @property
     def device(self) -> torch.device:
