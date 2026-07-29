@@ -1,0 +1,25 @@
+{
+  "backend": "pytorch",
+  "cases": {
+    "infeasible": {"cpu_float64": "endpoint_infeasible", "mps_float32": "endpoint_infeasible"},
+    "limit_constrained": {"cpu_float64": "success", "mps_float32": "success"},
+    "panda_obstacle_free": {"cpu_float64": "success", "mps_float32": "success"},
+    "two_link_obstacle_detour": {
+      "cpu_float64": "success",
+      "mps_float32": "success",
+      "requires_collision_free": true
+    },
+    "two_link_obstacle_free": {"cpu_float64": "success", "mps_float32": "success"}
+  },
+  "devices": ["cpu", "mps"],
+  "dtype": {"cpu": ["float32", "float64"], "mps": ["float32"]},
+  "format": "curobo-metal-trajectory-ops-correctness",
+  "metrics": ["success", "status", "endpoint_error", "minimum_clearance", "maximum_limit_violation"],
+  "oracle": "artifacts/correctness/trajectory_reference.json",
+  "verification": {
+    "command": "PYTORCH_ENABLE_MPS_FALLBACK=0 uv run --extra test python -m pytest -q",
+    "passed": 120,
+    "result": "passed"
+  },
+  "version": 1
+}
