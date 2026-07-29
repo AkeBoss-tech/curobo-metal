@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import comb
 from typing import Any
 
 import numpy as np
@@ -147,22 +148,34 @@ def joint_limit_cost(q: Any, lower: Any, upper: Any, *, margin: float = 0.0,
 
 
 def smoothness_cost(q: Any, *, velocity_weight: float = 1.0,
-                    acceleration_weight: float = 0.0) -> ScalarCost:
+                    acceleration_weight: float = 0.0,
+                    jerk_weight: float = 0.0, dt: float = 1.0) -> ScalarCost:
+    """Integral of squared finite-difference derivatives.
+
+    Derivatives use a uniform knot spacing ``dt`` and each squared sample is
+    multiplied by ``dt``.  The historical defaults retain the Wave 3 result.
+    """
     trajectory = _float(q, "q")
     if trajectory.ndim != 2:
         raise ValueError("q must have shape [T, J]")
-    if velocity_weight < 0 or acceleration_weight < 0:
-        raise ValueError("smoothness weights must be nonnegative")
+    weights = (velocity_weight, acceleration_weight, jerk_weight)
+    if (not np.isfinite(dt) or dt <= 0.0
+            or not all(np.isfinite(weight) and weight >= 0.0 for weight in weights)):
+        raise ValueError("dt must be positive and smoothness weights nonnegative")
     gradient = np.zeros_like(trajectory)
-    velocity = np.diff(trajectory, axis=0)
-    value = 0.5 * velocity_weight * float(np.sum(velocity**2))
-    gradient[:-1] -= velocity_weight * velocity
-    gradient[1:] += velocity_weight * velocity
-    acceleration = np.diff(trajectory, n=2, axis=0)
-    value += 0.5 * acceleration_weight * float(np.sum(acceleration**2))
-    gradient[:-2] += acceleration_weight * acceleration
-    gradient[1:-1] -= 2.0 * acceleration_weight * acceleration
-    gradient[2:] += acceleration_weight * acceleration
+    value = 0.0
+    for order, weight in enumerate(weights, start=1):
+        if weight == 0.0 or trajectory.shape[0] <= order:
+            continue
+        difference = np.diff(trajectory, n=order, axis=0)
+        scale = weight * dt ** (1 - 2 * order)
+        value += 0.5 * scale * float(np.sum(difference**2))
+        # D_n^T D_n with coefficients (-1)^(n-k) C(n,k).
+        for offset in range(order + 1):
+            coefficient = (-1) ** (order - offset) * comb(order, offset)
+            gradient[offset:offset + difference.shape[0]] += (
+                scale * coefficient * difference
+            )
     return ScalarCost(value, gradient)
 
 
