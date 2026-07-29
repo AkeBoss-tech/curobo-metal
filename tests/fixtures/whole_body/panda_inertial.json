@@ -1,0 +1,26 @@
+{
+  "format": "curobo-metal-whole-body-case",
+  "version": 1,
+  "robot": {
+    "name": "panda_class_inertial",
+    "gravity": [0.0, 0.0, -9.81],
+    "effort_limits": [87, 87, 87, 87, 12, 12, 12],
+    "end_effectors": ["panda_hand"],
+    "links": [
+      {"name": "panda_link0", "parent": -1, "joint": {"type": "fixed"}},
+      {"name": "panda_link1", "parent": 0, "joint": {"name": "panda_joint1", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [0, 0, 0.333]}}, "inertial": {"mass": 4.97, "com": [0.0039, 0.0021, -0.047], "inertia": [0.703, 0.706, 0.0091, -0.00014, 0.0068, 0.019]}},
+      {"name": "panda_link2", "parent": 1, "joint": {"name": "panda_joint2", "type": "revolute", "axis": [0, 0, 1], "origin": {"rpy": [-1.5707963267948966, 0, 0]}}, "inertial": {"mass": 0.646, "com": [-0.003, -0.0287, 0.0035], "inertia": [0.00796, 0.0281, 0.0259, -0.0039, 0.0007, 0.0008]}},
+      {"name": "panda_link3", "parent": 2, "joint": {"name": "panda_joint3", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [0, -0.316, 0], "rpy": [1.5707963267948966, 0, 0]}}, "inertial": {"mass": 3.23, "com": [0.0275, 0.0393, -0.0665], "inertia": [0.0372, 0.0362, 0.0108, -0.0048, -0.0114, -0.0128]}},
+      {"name": "panda_link4", "parent": 3, "joint": {"name": "panda_joint4", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [0.0825, 0, 0], "rpy": [1.5707963267948966, 0, 0]}}, "inertial": {"mass": 3.59, "com": [-0.053, 0.104, 0.027], "inertia": [0.026, 0.025, 0.012, 0.0078, -0.0013, -0.0003]}},
+      {"name": "panda_link5", "parent": 4, "joint": {"name": "panda_joint5", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [-0.0825, 0.384, 0], "rpy": [-1.5707963267948966, 0, 0]}}, "inertial": {"mass": 1.23, "com": [-0.012, 0.041, -0.038], "inertia": [0.035, 0.029, 0.0086, -0.0024, -0.0042, 0.0094]}},
+      {"name": "panda_link6", "parent": 5, "joint": {"name": "panda_joint6", "type": "revolute", "axis": [0, 0, 1], "origin": {"rpy": [1.5707963267948966, 0, 0]}}, "inertial": {"mass": 1.67, "com": [0.061, -0.012, -0.011], "inertia": [0.00196, 0.00435, 0.00543, 0.0001, -0.0012, -0.0006]}},
+      {"name": "panda_link7", "parent": 6, "joint": {"name": "panda_joint7", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [0.088, 0, 0], "rpy": [1.5707963267948966, 0, 0]}}, "inertial": {"mass": 0.735, "com": [0.0105, -0.0043, 0.0616], "inertia": [0.0125, 0.010, 0.0048, -0.0004, 0.001, -0.001]}},
+      {"name": "panda_hand", "parent": 7, "joint": {"type": "fixed", "origin": {"xyz": [0, 0, 0.107]}}, "inertial": {"mass": 0.73, "com": [0, 0, 0.03], "inertia": [0.001, 0.001, 0.001, 0, 0, 0]}}
+    ]
+  },
+  "inputs": {
+    "q": [[0, -0.7853981633974483, 0, -2.356194490192345, 0, 1.5707963267948966, 0.7853981633974483], [0.2, -0.5, 0.3, -1.8, -0.2, 1.2, 0.5]],
+    "qd": [[0, 0, 0, 0, 0, 0, 0], [0.1, -0.2, 0.15, -0.1, 0.05, 0.2, -0.15]],
+    "qdd": [[0, 0, 0, 0, 0, 0, 0], [-0.2, 0.1, 0.05, 0.15, -0.1, 0.12, 0.08]]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "format": "curobo-metal-whole-body-case",
+  "version": 1,
+  "robot": {
+    "name": "branched_toy",
+    "gravity": [0.0, -9.81, 0.0],
+    "effort_limits": [12.0, 8.0, 5.0],
+    "end_effectors": ["left_tool", "right_tool", "slider"],
+    "links": [
+      {"name": "base", "parent": -1, "joint": {"type": "fixed"}},
+      {"name": "shoulder", "parent": 0, "joint": {"name": "shoulder", "type": "revolute", "axis": [0, 0, 1]}, "inertial": {"mass": 2.0, "com": [0.35, 0, 0], "inertia": [0.02, 0.20, 0.20, 0, 0, 0]}},
+      {"name": "left_tool", "parent": 1, "joint": {"name": "left", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [0.7, 0, 0]}}, "inertial": {"mass": 0.8, "com": [0.2, 0, 0], "inertia": [0.008, 0.04, 0.04, 0, 0, 0]}},
+      {"name": "right_tool", "parent": 1, "joint": {"name": "right_mimic", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [0.5, 0.25, 0]}, "mimic": {"joint": "left", "multiplier": -0.5, "offset": 0.1}}, "inertial": {"mass": 0.6, "com": [0.15, 0, 0], "inertia": [0.006, 0.025, 0.025, 0, 0, 0]}},
+      {"name": "slider", "parent": 0, "joint": {"name": "slide", "type": "prismatic", "axis": [1, 0, 0], "origin": {"xyz": [0, -0.4, 0]}}, "inertial": {"mass": 1.1, "com": [0.1, 0, 0], "inertia": [0.01, 0.02, 0.02, 0, 0, 0]}},
+      {"name": "camera", "parent": 3, "joint": {"type": "fixed", "origin": {"xyz": [0.3, 0, 0.1]}}, "inertial": {"mass": 0.2, "com": [0, 0, 0], "inertia": [0.002, 0.002, 0.002, 0, 0, 0]}}
+    ]
+  },
+  "inputs": {
+    "q": [[0.0, 0.0, 0.0], [0.35, -0.4, 0.2]],
+    "qd": [[0.0, 0.0, 0.0], [0.3, -0.2, 0.15]],
+    "qdd": [[0.0, 0.0, 0.0], [-0.4, 0.25, 0.1]]
+  }
+}

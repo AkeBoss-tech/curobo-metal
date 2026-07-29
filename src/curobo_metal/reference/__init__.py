@@ -13,6 +13,23 @@ from .collision import (
     transform_spheres,
 )
 from .forward_kinematics import FKResult, SerialRobot, forward_kinematics
+from .tree_kinematics import (
+    TreeFKResult,
+    TreeLink,
+    TreeRobot,
+    tree_forward_kinematics,
+)
+from .dynamics import (
+    DynamicsCost,
+    DynamicsDerivatives,
+    DynamicsResult,
+    bias_torque,
+    dynamics_cost,
+    gravity_torque,
+    inverse_dynamics,
+    inverse_dynamics_derivatives,
+    mass_matrix,
+)
 from .costs import (
     CollisionModel,
     ScalarCost,
@@ -90,6 +107,9 @@ __all__ = [
     "CuboidDistanceResult",
     "CollisionModel",
     "FKResult",
+    "DynamicsCost",
+    "DynamicsDerivatives",
+    "DynamicsResult",
     "GRAPH_PLANNING_FORMAT",
     "GRAPH_PLANNING_VERSION",
     "GraphPlanningProblem",
@@ -101,6 +121,9 @@ __all__ = [
     "PairDistanceResult",
     "PlanningMetrics",
     "SerialRobot",
+    "TreeFKResult",
+    "TreeLink",
+    "TreeRobot",
     "ScalarCost",
     "SphereTransformResult",
     "TRAJECTORY_FORMAT",
@@ -111,6 +134,13 @@ __all__ = [
     "TrajectoryWeights",
     "collision_cost",
     "forward_kinematics",
+    "tree_forward_kinematics",
+    "inverse_dynamics",
+    "inverse_dynamics_derivatives",
+    "mass_matrix",
+    "bias_torque",
+    "gravity_torque",
+    "dynamics_cost",
     "endpoint_cost",
     "evaluate_trajectory",
     "interpolated_states",
