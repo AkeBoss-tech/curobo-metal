@@ -114,8 +114,9 @@ unsupported and are never silently discarded:
   fitting;
 - CUDA/PyBind and `cuda-core` backend launches, CUDA Graph capture, Warp
   initialization/launch, Isaac Sim, Omniverse, and USD integration;
-- IK, trajectory optimization, graph planning, motion generation, and solver
-  APIs;
+- Motion generation is provided separately by the Wave 6B portable facade
+  documented in `motion-gen-compatibility.md`; it consumes the production
+  operators rather than extending this configuration-conversion seam;
 - attached-object mutation after conversion, per-environment sphere mutation,
   mesh export, visualization, and asset resolution;
 - joint limits, c-space weights, lock-state reconstruction, inertial data,

@@ -1,0 +1,17 @@
+{
+  "format": "curobo-metal-motion-gen-correctness",
+  "version": 1,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "device_policy": {
+    "cpu": ["float32", "float64"],
+    "mps": ["float32"],
+    "fallback": false
+  },
+  "cases": [
+    {"name": "two_link_obstacle_free", "expected_status": "success"},
+    {"name": "two_link_obstacle_detour", "expected_status": "success", "minimum_clearance": 0.0},
+    {"name": "two_link_unreachable_pose", "expected_status": "ik_failed"},
+    {"name": "two_link_invalid_start", "expected_status": "invalid_start"},
+    {"name": "panda_obstacle_free", "expected_status": "success"}
+  ]
+}
