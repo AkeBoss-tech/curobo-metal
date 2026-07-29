@@ -1,0 +1,373 @@
+{
+  "benchmarks": [
+    {
+      "compile_or_first_call_ms": 85.794542,
+      "dimensions": {
+        "batch": 1,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "transform_spheres",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 2.4114166999999997,
+        "median_ms": 2.554417,
+        "min_ms": 1.27175,
+        "p95_ms": 3.566209,
+        "samples_ms": [
+          2.6515,
+          2.684125,
+          2.519834,
+          3.566209,
+          2.360958,
+          2.706,
+          1.931208,
+          1.833583,
+          2.589,
+          1.27175
+        ],
+        "work_items_per_second_median": 12527.320323972164
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 8.373666
+      }
+    },
+    {
+      "compile_or_first_call_ms": 25.963333,
+      "dimensions": {
+        "batch": 1,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "sphere_sphere",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 2.5362207999999997,
+        "median_ms": 2.4676665,
+        "min_ms": 2.230125,
+        "p95_ms": 3.128542,
+        "samples_ms": [
+          2.782833,
+          2.237459,
+          3.128542,
+          2.66275,
+          2.416667,
+          2.230125,
+          2.385666,
+          2.4895,
+          2.445833,
+          2.582833
+        ],
+        "work_items_per_second_median": 100499.80416721628
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 7.786582
+      }
+    },
+    {
+      "compile_or_first_call_ms": 192.247041,
+      "dimensions": {
+        "batch": 1,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "sphere_cuboid",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 7.2595376,
+        "median_ms": 7.188625,
+        "min_ms": 6.725167,
+        "p95_ms": 8.5375,
+        "samples_ms": [
+          6.725167,
+          7.260208,
+          7.157208,
+          7.073917,
+          8.5375,
+          7.4195,
+          7.333417,
+          6.966,
+          6.902417,
+          7.220042
+        ],
+        "work_items_per_second_median": 71223.63456154689
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 34.809166
+      }
+    },
+    {
+      "compile_or_first_call_ms": 139.550417,
+      "dimensions": {
+        "batch": 64,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "transform_spheres",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 2.3787458,
+        "median_ms": 2.5902295,
+        "min_ms": 1.541333,
+        "p95_ms": 2.69475,
+        "samples_ms": [
+          2.607833,
+          2.677291,
+          2.628333,
+          2.69475,
+          2.169875,
+          1.541333,
+          2.606167,
+          2.574292,
+          2.569375,
+          1.718209
+        ],
+        "work_items_per_second_median": 790663.5300076692
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 8.10625
+      }
+    },
+    {
+      "compile_or_first_call_ms": 72.054625,
+      "dimensions": {
+        "batch": 64,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "sphere_sphere",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 2.9055959000000002,
+        "median_ms": 2.8520415000000003,
+        "min_ms": 2.739834,
+        "p95_ms": 3.605666,
+        "samples_ms": [
+          3.605666,
+          2.870375,
+          2.880667,
+          2.898334,
+          2.792458,
+          2.739834,
+          2.863458,
+          2.775875,
+          2.788667,
+          2.840625
+        ],
+        "work_items_per_second_median": 5565136.411935099
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 12.866001
+      }
+    },
+    {
+      "compile_or_first_call_ms": 408.157708,
+      "dimensions": {
+        "batch": 64,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "sphere_cuboid",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 9.618337499999999,
+        "median_ms": 9.598604,
+        "min_ms": 9.508292,
+        "p95_ms": 9.858292,
+        "samples_ms": [
+          9.7335,
+          9.6075,
+          9.508292,
+          9.553167,
+          9.533708,
+          9.858292,
+          9.654583,
+          9.589708,
+          9.633917,
+          9.510708
+        ],
+        "work_items_per_second_median": 3413829.7610777565
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 29.716333
+      }
+    },
+    {
+      "compile_or_first_call_ms": 15.799958,
+      "dimensions": {
+        "batch": 512,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "transform_spheres",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 3.7773166000000002,
+        "median_ms": 3.754187,
+        "min_ms": 3.724125,
+        "p95_ms": 3.929125,
+        "samples_ms": [
+          3.929125,
+          3.776666,
+          3.755833,
+          3.752541,
+          3.758584,
+          3.724125,
+          3.751792,
+          3.746,
+          3.749125,
+          3.829375
+        ],
+        "work_items_per_second_median": 4364193.8987056315
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 11.488376
+      }
+    },
+    {
+      "compile_or_first_call_ms": 202.522584,
+      "dimensions": {
+        "batch": 512,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "sphere_sphere",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 8.4618626,
+        "median_ms": 8.3476875,
+        "min_ms": 7.701542,
+        "p95_ms": 9.200584,
+        "samples_ms": [
+          9.120042,
+          8.866625,
+          9.200584,
+          8.4755,
+          9.192458,
+          8.219875,
+          7.810417,
+          7.914792,
+          8.116791,
+          7.701542
+        ],
+        "work_items_per_second_median": 15210919.191692311
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 30.164374000000002
+      }
+    },
+    {
+      "compile_or_first_call_ms": 38.305459,
+      "dimensions": {
+        "batch": 512,
+        "cuboids": 16,
+        "pairs": 248,
+        "spheres": 32
+      },
+      "operation": "sphere_cuboid",
+      "steady_state": {
+        "iterations": 10,
+        "mean_ms": 21.6341543,
+        "median_ms": 21.5193335,
+        "min_ms": 21.269125,
+        "p95_ms": 22.309417,
+        "samples_ms": [
+          21.269125,
+          21.436125,
+          21.388833,
+          21.490667,
+          21.437,
+          21.875459,
+          21.657292,
+          22.309417,
+          21.929625,
+          21.548
+        ],
+        "work_items_per_second_median": 12181789.923930498
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 86.471541
+      }
+    }
+  ],
+  "correctness": {
+    "checks": [
+      {
+        "case": "two_spheres_at_contact",
+        "fixture": "minimal.json",
+        "max_absolute_error": 0.0,
+        "operation": "sphere_sphere",
+        "passed": true
+      },
+      {
+        "case": "sphere_box_at_contact",
+        "fixture": "minimal.json",
+        "max_absolute_error": 0.0,
+        "operation": "sphere_cuboid",
+        "passed": true
+      },
+      {
+        "case": "two_link_sphere_transform",
+        "fixture": "minimal.json",
+        "max_absolute_error": 4.768371586472142e-08,
+        "operation": "transform_spheres",
+        "passed": true
+      },
+      {
+        "case": "robot_arm_self_collision",
+        "fixture": "realistic.json",
+        "max_absolute_error": 3.2782554615362614e-08,
+        "operation": "sphere_sphere",
+        "passed": true
+      },
+      {
+        "case": "table_and_rotated_fixture",
+        "fixture": "realistic.json",
+        "max_absolute_error": 4.7762136246021214e-08,
+        "operation": "sphere_cuboid",
+        "passed": true
+      }
+    ],
+    "passed": true
+  },
+  "custom_metal": false,
+  "device": "mps",
+  "dtype": "float32",
+  "environment": {
+    "machine": "arm64",
+    "mps_available": true,
+    "mps_built": true,
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "fallback": {
+    "disabled": true,
+    "environment_value": "0"
+  },
+  "format": "curobo-metal-collision-benchmark",
+  "implementation": "composed-pytorch",
+  "timing_protocol": {
+    "compile_or_first_call_excluded_from_warmup_and_steady_state": true,
+    "device_synchronized_before_and_after_each_sample": true,
+    "warmup_excluded_from_steady_state": true
+  },
+  "version": 1
+}
