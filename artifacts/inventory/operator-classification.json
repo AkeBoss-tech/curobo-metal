@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "classes": [
+    "mps_ready",
+    "expressible_pytorch_mps",
+    "requires_custom_metal_backend",
+    "deferred"
+  ],
+  "operators": [
+    {
+      "id": "api.data_contract",
+      "workload": ["fk", "self_collision", "world_cuboid"],
+      "classification": "mps_ready",
+      "upstream": "JointState, KinematicsState, ToolPose, configuration parsing",
+      "notes": "Python containers and validation; host parsing is outside timed query."
+    },
+    {
+      "id": "kinematics.local_joint_transform",
+      "workload": ["fk"],
+      "classification": "expressible_pytorch_mps",
+      "upstream": "CUDA fused kinematics forward",
+      "notes": "Batched revolute/prismatic transform construction."
+    },
+    {
+      "id": "kinematics.chain_propagation",
+      "workload": ["fk"],
+      "classification": "expressible_pytorch_mps",
+      "optimization_candidate": "requires_custom_metal_backend",
+      "upstream": "CUDA fused kinematics forward",
+      "notes": "Start with topology-ordered batched tensor composition; fuse only after profiling."
+    },
+    {
+      "id": "kinematics.link_pose_extract",
+      "workload": ["fk"],
+      "classification": "expressible_pytorch_mps",
+      "upstream": "CUDA fused kinematics forward",
+      "notes": "Gather selected link transforms and convert rotation to upstream quaternion convention."
+    },
+    {
+      "id": "kinematics.sphere_transform",
+      "workload": ["fk", "self_collision", "world_cuboid"],
+      "classification": "expressible_pytorch_mps",
+      "optimization_candidate": "requires_custom_metal_backend",
+      "upstream": "CUDA fused kinematics forward with environment-indexed sphere data",
+      "notes": "Gather local spheres, rotate/translate centers, preserve radii."
+    },
+    {
+      "id": "kinematics.backward",
+      "workload": ["fk"],
+      "classification": "expressible_pytorch_mps",
+      "optimization_candidate": "requires_custom_metal_backend",
+      "upstream": "CUDA fused kinematics backward",
+      "notes": "Use PyTorch autograd for baseline; only add custom backward if profiling requires it."
+    },
+    {
+      "id": "self_collision.pair_distance",
+      "workload": ["self_collision"],
+      "classification": "expressible_pytorch_mps",
+      "upstream": "CUDA self-collision kernel",
+      "notes": "Configured pair gather, center norm, radii, padding, and activation."
+    },
+    {
+      "id": "self_collision.max_reduction",
+      "workload": ["self_collision"],
+      "classification": "expressible_pytorch_mps",
+      "optimization_candidate": "requires_custom_metal_backend",
+      "upstream": "CUDA block maxima and sparse gradient output",
+      "notes": "Tie-breaking and deterministic reduction are contract risks."
+    },
+    {
+      "id": "world_cuboid.inverse_pose_and_sdf",
+      "workload": ["world_cuboid"],
+      "classification": "expressible_pytorch_mps",
+      "upstream": "Warp generic sphere-obstacle collision kernel",
+      "notes": "Closed-form box SDF and sphere-radius adjustment."
+    },
+    {
+      "id": "world_cuboid.obstacle_reduction",
+      "workload": ["world_cuboid"],
+      "classification": "expressible_pytorch_mps",
+      "optimization_candidate": "requires_custom_metal_backend",
+      "upstream": "Warp 2-D launch and float atomic accumulation",
+      "notes": "Use deterministic tensor reduction first; avoid materializing excessive intermediates."
+    },
+    {
+      "id": "backend.cuda_core_or_pybind",
+      "workload": ["fk", "self_collision"],
+      "classification": "requires_custom_metal_backend",
+      "upstream": "Lazy backend proxy exposing only cuda_core and CUDA pybind implementations",
+      "notes": "MPS needs a backend-neutral dispatch seam; existing backends cannot execute it."
+    },
+    {
+      "id": "runtime.warp_bridge",
+      "workload": ["world_cuboid"],
+      "classification": "deferred",
+      "upstream": "warp-lang, wp.init, wp.from_torch, wp.launch",
+      "notes": "Bypass on Metal path; do not require Warp for primitive collision."
+    },
+    {
+      "id": "runtime.cuda_graph",
+      "workload": [],
+      "classification": "deferred",
+      "upstream": "torch.cuda.CUDAGraph in solver and rollout layers",
+      "notes": "Not reached by direct FK or collision APIs."
+    },
+    {
+      "id": "integration.isaac_omniverse",
+      "workload": [],
+      "classification": "deferred",
+      "upstream": "Examples and USD/Isaac integration",
+      "notes": "No Isaac or omni import in traced runtime files."
+    },
+    {
+      "id": "collision.mesh_voxel_swept",
+      "workload": [],
+      "classification": "deferred",
+      "upstream": "Warp mesh/BVH, voxel/ESDF, and swept-sphere kernels",
+      "notes": "Must raise explicitly when active; never silently omit."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+Toolchain probe captured 2026-07-29 (America/New_York)
+
+uname:
+Darwin Familys-Mac-mini.local 25.2.0 Darwin Kernel Version 25.2.0 arm64
+
+sw_vers:
+ProductName: macOS
+ProductVersion: 26.2
+BuildVersion: 25C56
+
+xcode-select -p:
+/Library/Developer/CommandLineTools
+
+Command Line Tools package:
+package-id: com.apple.pkg.CLTools_Executables
+version: 26.4.0.0.1774242506
+
+xcrun --sdk macosx --show-sdk-path:
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+
+xcrun metal --version:
+xcrun: error: unable to find utility "metal", not a developer tool or in PATH
+
+clang --version:
+Apple clang version 21.0.0 (clang-2100.0.123.102)
+Target: arm64-apple-darwin25.2.0
+
+Initial shell Python:
+Python 3.14.3
+torch: not installed
+
+Isolated spike environment:
+Python 3.12.13
+torch 2.13.0
+MPS built: true
+MPS available: true
+MPS device count: 1
+torch.mps.compile_shader: available

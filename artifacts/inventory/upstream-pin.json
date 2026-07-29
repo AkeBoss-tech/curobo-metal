@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/NVlabs/curobo.git",
+  "revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "resolved_ref": "refs/heads/main",
+  "resolved_at": "2026-07-29",
+  "commit_date": "2026-07-22T22:40:10-07:00",
+  "commit_subject": "Fix mesh SDF gradient sign for query points outside the surface (#701)",
+  "version_context": {
+    "latest_release_tag_seen": "v0.8.0",
+    "latest_release_tag_revision": "4ea77366ca48ee453e7df139e39fa6532af49f3b",
+    "selection": "Current cuRoboV2 main, pinned by immutable SHA"
+  },
+  "license": {
+    "code": "Apache-2.0",
+    "assets": "Per-asset terms; see upstream LICENSE_ASSETS"
+  }
+}

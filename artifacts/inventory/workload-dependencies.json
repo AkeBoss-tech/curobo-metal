@@ -1,0 +1,774 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/NVlabs/curobo.git",
+    "revision": "8e734f3ced1df898990bcd92de40abce475907db",
+    "commit_date": "2026-07-22T22:40:10-07:00",
+    "subject": "Fix mesh SDF gradient sign for query points outside the surface (#701)",
+    "license_spdx": "Apache-2.0"
+  },
+  "scope": {
+    "workloads": [
+      "Kinematics.compute_kinematics (poses and robot spheres)",
+      "RobotSceneCollision.get_self_collision_distance",
+      "RobotSceneCollision.get_collision_distance (discrete primitives)"
+    ],
+    "excluded": [
+      "swept collision",
+      "mesh",
+      "voxel/ESDF",
+      "motion solvers"
+    ]
+  },
+  "pattern_match_counts": {
+    "cuda": 8,
+    "torch": 240,
+    "warp": 171
+  },
+  "files": [
+    {
+      "path": "curobo/kinematics.py",
+      "sha256": "a6f8186a6dbaa4840a8e0c77e86facf6df567668d536cdcb870b6e62ca6fd94e",
+      "imports": [
+        "curobo._src.robot.kinematics.kinematics",
+        "curobo._src.robot.kinematics.kinematics_cfg",
+        "curobo._src.robot.kinematics.kinematics_state"
+      ],
+      "matches": {}
+    },
+    {
+      "path": "curobo/collision_checking.py",
+      "sha256": "db4fb67ad9723b3d5a698ec10e0b799e818ae031b584a22f4805fb32c9692397",
+      "imports": [
+        "curobo._src.collision.collision_robot_scene",
+        "curobo._src.collision.collision_robot_scene_cfg"
+      ],
+      "matches": {
+        "torch": [
+          16,
+          27
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/robot/kinematics/kinematics.py",
+      "sha256": "4e7ebf8728978009cbc33e7034652c2958fc4a17aa312f55faa25c5df09c96f6",
+      "imports": [
+        "__future__",
+        "curobo._src.curobolib.cuda_ops.kinematics",
+        "curobo._src.geom.types",
+        "curobo._src.robot.kinematics.kinematics_cfg",
+        "curobo._src.robot.kinematics.kinematics_state",
+        "curobo._src.robot.types.joint_limits",
+        "curobo._src.robot.types.kinematics_params",
+        "curobo._src.robot.types.self_collision_params",
+        "curobo._src.state.state_joint",
+        "curobo._src.state.state_joint_ops",
+        "curobo._src.types.pose",
+        "curobo._src.types.tool_pose",
+        "curobo._src.util.logging",
+        "torch",
+        "torch.autograd.profiler",
+        "trimesh",
+        "typing"
+      ],
+      "matches": {
+        "torch": [
+          16,
+          17,
+          97,
+          98,
+          104,
+          105,
+          175,
+          210,
+          232,
+          278,
+          294,
+          299,
+          437,
+          481
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/curobolib/cuda_ops/kinematics.py",
+      "sha256": "a34858328d91927fcc0506fc9a9cbe6d1b26d69d0e8b4d888509843cb726e532",
+      "imports": [
+        "curobo._src.curobolib.backends",
+        "curobo._src.curobolib.cuda_ops.tensor_checks",
+        "curobo._src.robot.types.kinematics_params",
+        "curobo._src.types.device_cfg",
+        "curobo._src.util.logging",
+        "torch",
+        "torch.autograd",
+        "typing"
+      ],
+      "matches": {
+        "cuda": [
+          10,
+          160,
+          193,
+          220,
+          325
+        ],
+        "torch": [
+          7,
+          8,
+          33,
+          38,
+          43,
+          48,
+          53,
+          58,
+          65,
+          66,
+          67,
+          68,
+          69,
+          74,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          112,
+          114,
+          269,
+          272,
+          273,
+          274,
+          275,
+          276
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/collision/collision_robot_scene.py",
+      "sha256": "31566c89adc4355d55a0b0af2d476a334c83103bc8ca0ba040b7e5c80a9ea7bf",
+      "imports": [
+        "__future__",
+        "curobo._src.collision.collision_robot_scene_cfg",
+        "curobo._src.curobolib.cuda_ops.tensor_checks",
+        "curobo._src.geom.types",
+        "curobo._src.robot.kinematics.kinematics",
+        "curobo._src.state.state_joint",
+        "curobo._src.types.pose",
+        "curobo._src.util.logging",
+        "curobo._src.util.torch_util",
+        "torch",
+        "typing"
+      ],
+      "matches": {
+        "torch": [
+          12,
+          43,
+          70,
+          107,
+          108,
+          109,
+          127,
+          141,
+          142,
+          143,
+          161,
+          173,
+          184,
+          194,
+          205,
+          206,
+          207,
+          228,
+          233,
+          249,
+          250,
+          251,
+          268,
+          269,
+          270,
+          286,
+          287,
+          318,
+          319,
+          342,
+          343,
+          371,
+          379,
+          380,
+          401,
+          405,
+          406,
+          420,
+          439,
+          444,
+          452,
+          453,
+          480,
+          519,
+          520,
+          539,
+          541
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
+      "sha256": "0536a6bfd227bba69f15f18bf4e2810a61471403c8c5b3ba4711385ed5420548",
+      "imports": [
+        "curobo._src.cost.cost_cspace_cfg",
+        "curobo._src.cost.cost_cspace_position",
+        "curobo._src.cost.cost_cspace_type",
+        "curobo._src.cost.cost_scene_collision",
+        "curobo._src.cost.cost_scene_collision_cfg",
+        "curobo._src.cost.cost_self_collision",
+        "curobo._src.cost.cost_self_collision_cfg",
+        "curobo._src.geom.collision.collision_scene",
+        "curobo._src.geom.types",
+        "curobo._src.robot.kinematics.kinematics",
+        "curobo._src.types.device_cfg",
+        "curobo._src.types.robot",
+        "curobo._src.util.sampling.sample_buffer",
+        "curobo._src.util.warp",
+        "curobo._src.util_file",
+        "dataclasses",
+        "torch",
+        "typing"
+      ],
+      "matches": {
+        "warp": [
+          32,
+          106
+        ],
+        "torch": [
+          11,
+          64
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/cost/cost_scene_collision.py",
+      "sha256": "4761c6ff066212b41f64c7cbda88b55f8c827214c3bf76d12a4d8b2bf5fedbcf",
+      "imports": [
+        "__future__",
+        "curobo._src.cost.cost_base",
+        "curobo._src.cost.cost_scene_collision_cfg",
+        "curobo._src.geom.collision.buffer_collision",
+        "curobo._src.robot.kinematics.kinematics",
+        "curobo._src.util.logging",
+        "curobo._src.util.torch_util",
+        "torch",
+        "typing"
+      ],
+      "matches": {
+        "torch": [
+          10,
+          61,
+          62,
+          63,
+          95,
+          96,
+          97,
+          127,
+          128,
+          129,
+          163,
+          164,
+          200,
+          210,
+          221,
+          223,
+          228,
+          236,
+          238,
+          240
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/cost/cost_self_collision.py",
+      "sha256": "377330b42cfd13c260e6e4bd2addf3e48047d0e4d13a94fe595ca1d1e067682f",
+      "imports": [
+        "__future__",
+        "curobo._src.cost.cost_base",
+        "curobo._src.cost.cost_self_collision_cfg",
+        "curobo._src.curobolib.cuda_ops.geometry",
+        "curobo._src.util.logging",
+        "torch",
+        "typing"
+      ],
+      "matches": {
+        "torch": [
+          10,
+          39,
+          44,
+          51,
+          54,
+          58,
+          64,
+          72,
+          81,
+          83,
+          93,
+          127,
+          128,
+          134,
+          145
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/curobolib/cuda_ops/geometry.py",
+      "sha256": "83a712849039d07ae01182fa33084f0a168e37c83177434eda423b32ae03006f",
+      "imports": [
+        "curobo._src.curobolib.backends",
+        "curobo._src.curobolib.cuda_ops.tensor_checks",
+        "torch",
+        "typing"
+      ],
+      "matches": {
+        "cuda": [
+          9,
+          58
+        ],
+        "torch": [
+          7,
+          17,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          94,
+          95
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/geom/collision/collision_scene.py",
+      "sha256": "49c30c738b1089525ab26fb119727c92974129dc63f5f875c46d7a39b748ad51",
+      "imports": [
+        "__future__",
+        "curobo._src.geom.collision.buffer_collision",
+        "curobo._src.geom.collision.checker_collision",
+        "curobo._src.geom.data.data_scene",
+        "curobo._src.geom.types",
+        "curobo._src.robot.kinematics.kinematics_state",
+        "curobo._src.types.device_cfg",
+        "curobo._src.types.pose",
+        "dataclasses",
+        "torch",
+        "typing"
+      ],
+      "matches": {
+        "torch": [
+          22,
+          166,
+          167,
+          168,
+          170,
+          198,
+          199,
+          200,
+          202,
+          230,
+          231,
+          232,
+          234,
+          236,
+          268,
+          269,
+          270,
+          272,
+          274,
+          308,
+          310,
+          311,
+          312,
+          314,
+          340,
+          342,
+          343,
+          344,
+          346,
+          348,
+          461,
+          462
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/geom/collision/checker_collision.py",
+      "sha256": "8802aef3439af3dd34d2f0f32f08355346d084751b8a47ac815a6ab27a8b2508",
+      "imports": [
+        "__future__",
+        "curobo._src.geom.collision.buffer_collision",
+        "curobo._src.geom.collision.wp_autograd",
+        "curobo._src.geom.data.data_scene",
+        "curobo._src.types.device_cfg",
+        "dataclasses",
+        "torch",
+        "typing"
+      ],
+      "matches": {
+        "torch": [
+          24,
+          61,
+          64,
+          80,
+          82,
+          83,
+          84,
+          86,
+          109,
+          130,
+          132,
+          133,
+          134,
+          136,
+          138,
+          164,
+          187,
+          189,
+          190,
+          191,
+          193,
+          211,
+          213,
+          214,
+          215,
+          217,
+          219
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/geom/collision/wp_autograd.py",
+      "sha256": "58f5cba50c1fab37a2773c59b2696826ab677ec5d23624ebf98f2542a73035a9",
+      "imports": [
+        "__future__",
+        "curobo._src.geom.collision.buffer_collision",
+        "curobo._src.geom.collision.wp_collision_kernel",
+        "curobo._src.geom.collision.wp_speed_metric",
+        "curobo._src.geom.collision.wp_sweep_collision_kernel",
+        "curobo._src.geom.data.data_scene",
+        "curobo._src.util.warp",
+        "torch",
+        "typing",
+        "warp"
+      ],
+      "matches": {
+        "warp": [
+          23,
+          30,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          90,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          183,
+          208
+        ],
+        "torch": [
+          22,
+          37,
+          47,
+          50,
+          51,
+          52,
+          53,
+          56,
+          124,
+          135,
+          138,
+          139,
+          140,
+          141,
+          143,
+          146
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/geom/collision/wp_collision_kernel.py",
+      "sha256": "75c1be11f4511f20b00f6e1875f842aaf6ba7107269e04dd525c06012a7d1183",
+      "imports": [
+        "curobo._src.geom.collision.wp_collision_common",
+        "curobo._src.geom.data.registry",
+        "importlib",
+        "typing",
+        "warp"
+      ],
+      "matches": {
+        "warp": [
+          30,
+          32,
+          37,
+          57,
+          58,
+          59,
+          60,
+          70,
+          75,
+          77,
+          78,
+          79,
+          81,
+          82,
+          84,
+          85,
+          86,
+          87,
+          88,
+          112,
+          124,
+          125,
+          146,
+          156,
+          157,
+          158
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/geom/collision/wp_collision_common.py",
+      "sha256": "a2224c203f82b6fdb8299c5087758113badc4dbda44b7703409a822138f5d297",
+      "imports": [
+        "warp"
+      ],
+      "matches": {
+        "warp": [
+          4,
+          11,
+          12,
+          27,
+          38,
+          46,
+          50,
+          51,
+          52,
+          60,
+          62,
+          63,
+          64,
+          78,
+          84,
+          86,
+          87,
+          88,
+          89,
+          90,
+          93,
+          94,
+          95,
+          96,
+          99,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          123
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/geom/data/data_scene.py",
+      "sha256": "19fe3d31d5f8a209e6e0c76533e454080978f4290727bace37dd2530df1c5468",
+      "imports": [
+        "__future__",
+        "curobo._src.geom.data.data_cuboid",
+        "curobo._src.geom.data.data_mesh",
+        "curobo._src.geom.data.data_voxel",
+        "curobo._src.geom.types",
+        "curobo._src.types.device_cfg",
+        "curobo._src.types.pose",
+        "curobo._src.util.logging",
+        "dataclasses",
+        "typing",
+        "warp"
+      ],
+      "matches": {
+        "warp": [
+          18,
+          489,
+          506,
+          507,
+          508,
+          509
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/geom/data/data_cuboid.py",
+      "sha256": "3bb663f06a142ccbe2a8f094a3f846e088d1c2c83c0ba631441406c8c36d08a3",
+      "imports": [
+        "curobo._src.geom.data.helper_pose",
+        "curobo._src.geom.types",
+        "curobo._src.types.device_cfg",
+        "curobo._src.types.pose",
+        "curobo._src.util.logging",
+        "dataclasses",
+        "torch",
+        "typing",
+        "warp"
+      ],
+      "matches": {
+        "warp": [
+          21,
+          43,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          438,
+          450,
+          451,
+          452,
+          453,
+          468,
+          469,
+          470,
+          484,
+          489,
+          490,
+          491,
+          495,
+          496,
+          504,
+          512,
+          513,
+          514,
+          515,
+          519,
+          539,
+          540,
+          541,
+          544,
+          545,
+          546,
+          548,
+          549,
+          554,
+          555,
+          556,
+          557,
+          558,
+          563,
+          587,
+          588,
+          589,
+          592,
+          593,
+          594,
+          596,
+          597,
+          600,
+          601,
+          602,
+          619,
+          620,
+          624,
+          633
+        ],
+        "torch": [
+          20,
+          83,
+          86,
+          89,
+          92,
+          128,
+          135,
+          142,
+          143,
+          283,
+          356
+        ]
+      }
+    },
+    {
+      "path": "curobo/_src/util/warp.py",
+      "sha256": "4d957be35fcdd6d9d5d3a7c08d7b921c2ab1c465e9378598012533a665d256a6",
+      "imports": [
+        "__future__",
+        "collections.abc",
+        "curobo._src.runtime",
+        "curobo._src.types.device_cfg",
+        "curobo._src.util.logging",
+        "hashlib",
+        "packaging",
+        "torch",
+        "typing",
+        "warp"
+      ],
+      "matches": {
+        "cuda": [
+          163
+        ],
+        "warp": [
+          14,
+          31,
+          34,
+          40,
+          43,
+          59,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          78,
+          81,
+          82,
+          134,
+          136,
+          147,
+          151,
+          152,
+          161,
+          164
+        ],
+        "torch": [
+          13,
+          135,
+          144,
+          154,
+          163
+        ]
+      }
+    }
+  ]
+}

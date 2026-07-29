@@ -1,0 +1,50 @@
+{
+  "artifact_version": 1,
+  "scope": "independent CPU forward-kinematics reference",
+  "oracle": {
+    "implementation": "src/curobo_metal/reference/forward_kinematics.py",
+    "runtime": "NumPy",
+    "evaluation_dtype": "float64",
+    "backend_dependencies": []
+  },
+  "fixtures": [
+    {
+      "path": "tests/fixtures/two_link_planar.json",
+      "sha256": "01b1037ecd0d494020b04cfa0a0420c00748491e5f2f36e8f8f3df4d36e335e5",
+      "batch": 4,
+      "dof": 2,
+      "links": 3
+    },
+    {
+      "path": "tests/fixtures/panda_serial.json",
+      "sha256": "cd99645e524f000d789ab2677da4ff2526b919ee990f349ac6bdf8e1d30c8201",
+      "batch": 3,
+      "dof": 7,
+      "links": 8
+    }
+  ],
+  "validation": {
+    "command": "PYTHONPATH=src python -m pytest",
+    "result": "15 passed",
+    "duration_seconds": 0.09,
+    "python": "3.14.3",
+    "numpy": "2.5.1",
+    "pytest": "9.1.1",
+    "platform": "macOS arm64",
+    "checks": [
+      "checked-in golden replay",
+      "hand-derived planar pose and geometric Jacobian",
+      "central differences for every transform and joint",
+      "vector-Jacobian product finite difference",
+      "rigid-transform invariants",
+      "batching, float32 input, and non-contiguous input",
+      "empty batch and prismatic motion",
+      "invalid inputs and canonical serialization"
+    ]
+  },
+  "limitations": [
+    "Serial chains only; branched kinematic trees are not represented.",
+    "Golden outputs have not yet been replayed on MPS or CUDA.",
+    "The Panda-class fixture validates kinematic dimensions and conventions, not mesh or simulator assets."
+  ]
+}

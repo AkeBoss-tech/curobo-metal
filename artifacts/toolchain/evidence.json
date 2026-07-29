@@ -1,0 +1,30 @@
+{
+  "platform": "macOS-26.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "macos": "26.2",
+  "python": "3.12.13",
+  "torch": "2.13.0",
+  "mps_built": true,
+  "mps_available": true,
+  "mps_device_count": 1,
+  "compile_shader_available": true,
+  "cpu_fallback_environment": "0",
+  "input_device": "mps:0",
+  "output_device": "mps:0",
+  "gradient_device": "mps:0",
+  "forward": [
+    9.0,
+    0.25,
+    0.0,
+    4.0,
+    49.0
+  ],
+  "gradient": [
+    -6.0,
+    -1.0,
+    0.0,
+    4.0,
+    14.0
+  ],
+  "status": "pass"
+}
