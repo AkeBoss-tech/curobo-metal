@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "generated_from": {
+    "repository": "https://github.com/NVlabs/curobo.git",
+    "revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "classification_vocabulary": [
+    "compatible",
+    "semantically_equivalent",
+    "partial",
+    "unsupported",
+    "not_applicable"
+  ],
+  "summary": {
+    "compatible": 0,
+    "semantically_equivalent": 1,
+    "partial": 12,
+    "unsupported": 3,
+    "not_applicable": 1
+  },
+  "capabilities": [
+    {
+      "id": "configuration.robot_config",
+      "area": "configuration",
+      "capability": "robot_config",
+      "classification": "partial",
+      "blocker": "Converted kinematics metadata only; no YAML/URDF/USD/XRDF parser or mutable RobotCfg.",
+      "upstream_evidence": {
+        "path": "curobo/_src/types/robot.py",
+        "symbol": "RobotCfg",
+        "line": 22
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/compat/curobo_v2.py",
+        "symbol": "convert_kinematics_config",
+        "line": 92
+      }
+    },
+    {
+      "id": "kinematics.forward_kinematics",
+      "area": "kinematics",
+      "capability": "forward_kinematics",
+      "classification": "semantically_equivalent",
+      "blocker": "Portable batched poses and spheres; API containers and fused CUDA execution differ.",
+      "upstream_evidence": {
+        "path": "curobo/_src/robot/kinematics/kinematics.py",
+        "symbol": "compute_kinematics",
+        "line": 172
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/kinematics/forward.py",
+        "symbol": "forward_kinematics",
+        "line": 175
+      }
+    },
+    {
+      "id": "kinematics.jacobian",
+      "area": "kinematics",
+      "capability": "jacobian",
+      "classification": "unsupported",
+      "blocker": "No public geometric Jacobian API; gradients exist through PyTorch autograd only.",
+      "upstream_evidence": {
+        "path": "curobo/_src/robot/kinematics/kinematics.py",
+        "symbol": "get_robot_as_spheres",
+        "line": 231
+      },
+      "local_evidence": null
+    },
+    {
+      "id": "collision.self_collision",
+      "area": "collision",
+      "capability": "self_collision",
+      "classification": "partial",
+      "blocker": "Pair primitives exist; upstream cache, pair filtering, max reduction, and RobotSceneCollision wrapper are absent.",
+      "upstream_evidence": {
+        "path": "curobo/_src/collision/collision_robot_scene.py",
+        "symbol": "get_self_collision_distance",
+        "line": 173
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/collision/core.py",
+        "symbol": "sphere_sphere_signed_distance",
+        "line": 200
+      }
+    },
+    {
+      "id": "collision.cuboid_world",
+      "area": "collision",
+      "capability": "cuboid_world",
+      "classification": "partial",
+      "blocker": "Differentiable discrete cuboid query exists without upstream checker/cache/environment API.",
+      "upstream_evidence": {
+        "path": "curobo/_src/collision/collision_robot_scene.py",
+        "symbol": "get_collision_distance",
+        "line": 105
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/collision/core.py",
+        "symbol": "sphere_cuboid_signed_distance",
+        "line": 326
+      }
+    },
+    {
+      "id": "collision.mesh_world",
+      "area": "collision",
+      "capability": "mesh_world",
+      "classification": "partial",
+      "blocker": "Triangle distance is provided; Warp BVH, signed watertight semantics, cache, and swept query parity are absent.",
+      "upstream_evidence": {
+        "path": "curobo/_src/geom/collision/buffer_collision.py",
+        "symbol": "CollisionBuffer",
+        "line": 25
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/world_collision/core.py",
+        "symbol": "mesh_distance",
+        "line": 151
+      }
+    },
+    {
+      "id": "collision.voxel_esdf",
+      "area": "collision",
+      "capability": "voxel_esdf",
+      "classification": "partial",
+      "blocker": "Grid sampling exists; upstream float16 storage, cache/update API, boundary behavior, and Warp kernel are not API-compatible.",
+      "upstream_evidence": {
+        "path": "curobo/_src/geom/collision/buffer_collision.py",
+        "symbol": "CollisionBuffer",
+        "line": 25
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/world_collision/core.py",
+        "symbol": "query_esdf",
+        "line": 338
+      }
+    },
+    {
+      "id": "cost.pose_cost",
+      "area": "cost",
+      "capability": "pose_cost",
+      "classification": "partial",
+      "blocker": "Core differentiable error/cost exists without upstream configuration, convergence, offset-waypoint, or run_weight semantics.",
+      "upstream_evidence": {
+        "path": "curobo/_src/cost/cost_tool_pose.py",
+        "symbol": "ToolPoseCost",
+        "line": 27
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/costs/core.py",
+        "symbol": "pose_cost",
+        "line": 134
+      }
+    },
+    {
+      "id": "cost.bounds_smoothness_collision",
+      "area": "cost",
+      "capability": "bounds_smoothness_collision",
+      "classification": "partial",
+      "blocker": "Representative composable costs exist; not the full upstream cost class/config surface.",
+      "upstream_evidence": {
+        "path": "curobo/_src/cost",
+        "symbol": null,
+        "line": null
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/costs/core.py",
+        "symbol": "smoothness_cost",
+        "line": 173
+      }
+    },
+    {
+      "id": "ik.inverse_kinematics",
+      "area": "ik",
+      "capability": "inverse_kinematics",
+      "classification": "partial",
+      "blocker": "Deterministic batched solver exists; seed policy, CUDA graphs, result types, retract config, and all upstream options differ.",
+      "upstream_evidence": {
+        "path": "curobo/_src/solver/solver_ik.py",
+        "symbol": "IKSolver",
+        "line": 98
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/ik/solver.py",
+        "symbol": "solve_ik",
+        "line": 177
+      }
+    },
+    {
+      "id": "trajectory.trajectory_optimization",
+      "area": "trajectory",
+      "capability": "trajectory_optimization",
+      "classification": "partial",
+      "blocker": "Portable optimizer covers documented contract, not upstream particle/L-BFGS solver stack or CUDA graphs.",
+      "upstream_evidence": {
+        "path": "curobo/_src/solver/solver_trajopt.py",
+        "symbol": "TrajOptSolver",
+        "line": 40
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/trajectory/core.py",
+        "symbol": "optimize_trajectory",
+        "line": 276
+      }
+    },
+    {
+      "id": "motion_generation.motion_gen",
+      "area": "motion_generation",
+      "capability": "motion_gen",
+      "classification": "partial",
+      "blocker": "Local IK/graph/trajectory composition exists, but upstream API, warmup, graph cache, retries, and result semantics differ.",
+      "upstream_evidence": {
+        "path": "curobo/_src/motion/motion_planner.py",
+        "symbol": "MotionPlanner",
+        "line": 44
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/trajectory/motion_generation.py",
+        "symbol": "generate_motion",
+        "line": 22
+      }
+    },
+    {
+      "id": "graph.graph_planner",
+      "area": "graph",
+      "capability": "graph_planner",
+      "classification": "partial",
+      "blocker": "Deterministic geometric planner exists; not upstream CUDA graph planner or its persistent graph representation.",
+      "upstream_evidence": {
+        "path": "curobo/_src/graph_planner/graph_planner_prm.py",
+        "symbol": "PRMGraphPlanner",
+        "line": 39
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/ops/graph_planning/core.py",
+        "symbol": "plan_graph",
+        "line": 280
+      }
+    },
+    {
+      "id": "dynamics.inverse_dynamics",
+      "area": "dynamics",
+      "capability": "inverse_dynamics",
+      "classification": "partial",
+      "blocker": "CPU reference RNEA is not exported as a production Metal op and upstream public parity is not established.",
+      "upstream_evidence": {
+        "path": "curobo/_src/robot/dynamics/dynamics.py",
+        "symbol": null,
+        "line": null
+      },
+      "local_evidence": {
+        "path": "src/curobo_metal/reference/dynamics.py",
+        "symbol": "inverse_dynamics",
+        "line": 34
+      }
+    },
+    {
+      "id": "types.joint_state_pose_results",
+      "area": "types",
+      "capability": "joint_state_pose_results",
+      "classification": "unsupported",
+      "blocker": "No drop-in cuRobo public data-model compatibility layer.",
+      "upstream_evidence": {
+        "path": "curobo/_src/state/state_joint.py",
+        "symbol": "JointState",
+        "line": 66
+      },
+      "local_evidence": null
+    },
+    {
+      "id": "runtime.cuda_graphs_and_cuda_kernels",
+      "area": "runtime",
+      "capability": "cuda_graphs_and_cuda_kernels",
+      "classification": "not_applicable",
+      "blocker": "CUDA implementation mechanisms are intentionally not portable to Metal; observable semantics must be compared instead.",
+      "upstream_evidence": {
+        "path": "curobo/_src/curobolib",
+        "symbol": null,
+        "line": null
+      },
+      "local_evidence": null
+    },
+    {
+      "id": "integration.isaac_ros_usd",
+      "area": "integration",
+      "capability": "isaac_ros_usd",
+      "classification": "unsupported",
+      "blocker": "Isaac Sim, ROS, USD, and visualization integrations are outside this repository.",
+      "upstream_evidence": {
+        "path": "curobo/_src/util/usd_writer.py",
+        "symbol": "UsdWriter",
+        "line": 479
+      },
+      "local_evidence": null
+    }
+  ]
+}

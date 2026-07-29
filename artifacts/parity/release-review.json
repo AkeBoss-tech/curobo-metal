@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "full_port_claim_supported": false,
+  "license": {
+    "project": "Apache-2.0",
+    "license_file_packaged": true,
+    "upstream_code_copied": false
+  },
+  "assets": {
+    "upstream_assets_distributed": false,
+    "reviewed_extensions": [".stl", ".dae", ".obj", ".usd", ".usda", ".usdc"],
+    "finding": "No upstream robot, mesh, or USD assets are tracked."
+  },
+  "release_gates": [
+    "regenerate pinned capability inventory",
+    "run parity test suite",
+    "build and inspect wheel",
+    "install wheel in clean macOS virtual environment",
+    "collect paired CUDA and Metal replay bundles before claiming numerical parity"
+  ]
+}
