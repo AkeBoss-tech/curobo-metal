@@ -20,9 +20,19 @@ This ledger records durable child-thread handoffs and parent integration state.
 | Production trajectory / motion generation | `019fae67-0559-7221-8ef6-37ce743c5832` | complete | `55ab1ab` |
 | Graph-planning contracts/oracle | `019fae63-66e2-7c52-a40c-3593832946cb` | complete | `ad20ebf` |
 | World-collision contracts/oracle | `019fae63-b19f-7ca1-b972-463314f9ac1b` | complete | `1d2da7a` |
-| Production graph planning | `019fafb7-4f64-7b70-b109-9831075d94e7` | active | awaiting verified handoff |
-| Production mesh/voxel/ESDF collision | `019fafb7-84ad-7921-a398-cdfbbdeee073` | active | awaiting verified handoff |
-| Whole-body kinematics/dynamics contracts | `019fafb7-bf20-7600-a526-23b6dcc5d933` | active | awaiting verified handoff |
+| Production graph planning | `019fafb7-4f64-7b70-b109-9831075d94e7` | complete | `55eeebf` |
+| Production mesh/voxel/ESDF collision | `019fafb7-84ad-7921-a398-cdfbbdeee073` | complete | `0cebc77` |
+| Whole-body kinematics/dynamics contracts | `019fafb7-bf20-7600-a526-23b6dcc5d933` | complete | `8d46776` |
+| Production whole-body dynamics | coordinated worktree | complete | `b4a1bc9` |
+| Portable MotionGen facade | coordinated worktree | complete | `32f9548` |
+| API parity/release audit | coordinated worktree | complete | `c703cce` |
+| Config and cuRobo value types | coordinated worktree | complete | `6fcf2c2` |
+| Jacobian and collision-checker APIs | coordinated worktree | complete | `94091f7` |
+| MotionGen API compatibility | coordinated worktree | complete | `2c3c083` + parent fixture fix `cddfe21` |
+| Depth-fused perception/ESDF | coordinated worktree | complete | `9738ec2` |
+| Dynamics-aware B-spline trajectory | coordinated worktree | complete | `5f576e9` |
+| Particle and L-BFGS optimizers | coordinated worktree | complete | `9e401b0` + parent seed fix `f8b69ea` |
+| Final parity re-audit | `019fb01c-e076-7be3-9a49-a0677f096b9a` | active | awaiting verified handoff |
 
-Parent integration suite after the last completed wave: 139 tests passing with
+Parent integration suite after the last completed wave: 258 tests passing with
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
