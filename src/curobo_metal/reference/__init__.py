@@ -68,6 +68,21 @@ from .trajectory import (
     trajectory_collision_cost,
     trajectory_problem_from_dict,
 )
+from .world_collision import (
+    ESDFQueryResult,
+    Mesh,
+    MeshDistanceResult,
+    VoxelGrid,
+    VoxelSampleResult,
+    WORLD_COLLISION_FORMAT,
+    WORLD_COLLISION_VERSION,
+    load_world_collision_case,
+    mesh_distance,
+    query_esdf,
+    sample_voxel_sdf,
+    save_world_collision_case,
+    sphere_world_collision,
+)
 
 __all__ = [
     "COLLISION_FORMAT",
@@ -131,4 +146,17 @@ __all__ = [
     "transform_spheres",
     "trajectory_collision_cost",
     "trajectory_problem_from_dict",
+    "ESDFQueryResult",
+    "Mesh",
+    "MeshDistanceResult",
+    "VoxelGrid",
+    "VoxelSampleResult",
+    "WORLD_COLLISION_FORMAT",
+    "WORLD_COLLISION_VERSION",
+    "load_world_collision_case",
+    "mesh_distance",
+    "query_esdf",
+    "sample_voxel_sdf",
+    "save_world_collision_case",
+    "sphere_world_collision",
 ]
