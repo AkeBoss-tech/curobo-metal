@@ -13,6 +13,7 @@ from curobo_metal.backend import resolve_device
 from curobo_metal.ops.costs import CollisionModel
 from curobo_metal.ops.kinematics import KinematicChain
 from curobo_metal.ops.trajectory import TrajectoryWeights
+from curobo_metal.ops.whole_body import WholeBodyModel
 from curobo_metal.reference import SerialRobot
 
 from .types import UnsupportedMotionGenFeature
@@ -42,6 +43,9 @@ class MotionGenConfig:
     graph_seed: int = 0
     graph_k_neighbors: int = 12
     graph_edge_step: float = 0.05
+    dynamics_aware: bool = False
+    dynamics_model: WholeBodyModel | None = None
+    dynamics_aware_options: Mapping[str, Any] | None = None
 
     @property
     def device(self) -> torch.device:

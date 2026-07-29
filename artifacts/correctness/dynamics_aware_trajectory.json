@@ -1,0 +1,33 @@
+{
+  "batch_size": 1,
+  "correctness": {
+    "basis_partition_max_error": 1.1920928955078125e-07,
+    "finite_objective": true,
+    "maximum_violation": [
+      0.0
+    ],
+    "status": [
+      "SUCCESS"
+    ],
+    "success": [
+      true
+    ]
+  },
+  "device": "cpu",
+  "dtype": "float32",
+  "environment": {
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "fallback_disabled": null,
+  "format": "curobo-metal-dynamics-aware-trajectory",
+  "latency_ms": {
+    "median": 130.225709,
+    "minimum": 130.225709,
+    "samples": [
+      130.225709
+    ]
+  },
+  "version": 1
+}

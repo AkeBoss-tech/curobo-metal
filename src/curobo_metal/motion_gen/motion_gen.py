@@ -15,8 +15,10 @@ from curobo_metal.ops.graph_planning import (
 from curobo_metal.ops.ik import IKProblem, solve_ik
 from curobo_metal.ops.kinematics import forward_kinematics
 from curobo_metal.ops.trajectory import (
+    DynamicsAwareProblem,
     TrajectoryProblem,
     interpolate_trajectory,
+    optimize_dynamics_aware,
     optimize_trajectory,
     trajectory_metrics,
 )
@@ -112,7 +114,28 @@ class MotionGen:
             learning_rate=0.02,
             endpoint_tolerance=1e-5 if self.config.dtype == torch.float32 else 1e-8,
         )
-        result = optimize_trajectory(problem)
+        if self.config.dynamics_aware:
+            if self.config.dynamics_model is None:
+                raise UnsupportedMotionGenFeature(
+                    "dynamics-aware MotionGen requires a WholeBodyModel in dynamics_model"
+                )
+            options = dict(self.config.dynamics_aware_options or {})
+            dynamics_defaults = {
+                "chain": self.config.chain,
+                "collision_model": self.config.collision_model,
+                "max_iterations": self.config.max_trajectory_iterations,
+                "samples": self.config.steps,
+                "duration": self.config.dt * (self.config.steps - 1),
+            }
+            dynamics_defaults.update(options)
+            dynamics_problem = DynamicsAwareProblem(
+                self.config.dynamics_model, start, goal, self.config.lower,
+                self.config.upper, **dynamics_defaults,
+            )
+            result = optimize_dynamics_aware(dynamics_problem)
+        else:
+            dynamics_problem = None
+            result = optimize_trajectory(problem)
         graph_result = None
         graph_used = False
         if result.selected_seed is None and enable_graph:
@@ -126,17 +149,34 @@ class MotionGen:
             ))
             if bool(graph_result.success[0].item()):
                 seeds = paths_to_trajectory_seeds(graph_result, self.config.steps)[0]
-                result = optimize_trajectory(replace(problem, seeds=seeds))
+                if dynamics_problem is None:
+                    result = optimize_trajectory(replace(problem, seeds=seeds))
+                else:
+                    # Graph paths are sampled-state seeds; the dynamics solver uses
+                    # control points, so resample them to its requested count.
+                    indices = torch.linspace(
+                        0, seeds.shape[-2] - 1, dynamics_problem.control_points,
+                        device=seeds.device, dtype=seeds.dtype,
+                    ).round().to(torch.int64)
+                    result = optimize_dynamics_aware(
+                        replace(dynamics_problem, seeds=seeds[..., indices, :])
+                    )
                 graph_used = True
             else:
                 return self._failure(MotionGenStatus.GRAPH_FAILED, graph=graph_result)
         if result.selected_seed is None:
             return self._failure(MotionGenStatus.TRAJECTORY_FAILED, graph=graph_result)
-        q = result.trajectories[result.selected_seed]
-        dense = interpolate_trajectory(q, self.config.dt, self.config.interpolation_dt)
-        raw_metrics = trajectory_metrics(problem, q)
+        if dynamics_problem is None:
+            q = result.trajectories[result.selected_seed]
+            result_duration = self.config.dt * (q.shape[-2] - 1)
+        else:
+            q = result.position[result.selected_seed]
+            result_duration = float(result.duration[result.selected_seed].item())
+        sample_dt = result_duration / (q.shape[-2] - 1)
+        dense = interpolate_trajectory(q, sample_dt, self.config.interpolation_dt)
+        raw_metrics = trajectory_metrics(replace(problem, dt=sample_dt), q)
         metrics = MotionGenMetrics(
-            raw_metrics.duration, raw_metrics.path_length, raw_metrics.maximum_velocity,
+            result_duration, raw_metrics.path_length, raw_metrics.maximum_velocity,
             raw_metrics.maximum_acceleration, raw_metrics.maximum_jerk,
             raw_metrics.minimum_clearance, raw_metrics.maximum_limit_violation, graph_used,
         )
