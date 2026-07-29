@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "wave": "7C",
+  "accepted": {
+    "costs": ["pose", "bounds", "smoothness", "primitive_collision"],
+    "ik": ["num_seeds", "max_iterations", "position_tolerance", "rotation_tolerance", "random_seed"],
+    "trajopt": ["steps", "dt", "max_iterations", "interpolation_dt", "linear_interpolation", "lbfgs"],
+    "motion": ["warmup", "single_joint_space", "batch_joint_space", "single_pose", "batch_pose", "retry", "timeout", "time_dilation", "graph_cache_reset"]
+  },
+  "rejected": {
+    "particle_or_es_optimizer": "production backend implements only LBFGS-style projected optimization",
+    "retract_config": "explicit retract seed injection is not implemented",
+    "success_without_convergence": "IK success requires convergence",
+    "multiple_trajopt_seeds": "explicit trajectory seed-count selection is not implemented",
+    "cubic_or_bspline_interpolation": "production interpolation is linear",
+    "sweep_collision": "requires an upstream sweep kernel",
+    "non_summed_collision": "not implemented",
+    "run_weight": "time-varying run weights are not implemented",
+    "offset_waypoints": "offset waypoint costs are not implemented",
+    "partial_ik_opt": "not implemented",
+    "finetune_trajopt": "not implemented",
+    "parallel_finetune": "not implemented",
+    "graph_only": "graph-only result adaptation is not implemented"
+  }
+}
