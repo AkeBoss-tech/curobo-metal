@@ -1,0 +1,38 @@
+{
+  "format": "curobo-metal-correctness-evidence",
+  "version": 1,
+  "contract": "contracts/ik.md",
+  "reference_modules": [
+    "src/curobo_metal/reference/costs.py",
+    "src/curobo_metal/reference/ik.py"
+  ],
+  "runtime_dependencies": [
+    "numpy"
+  ],
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "fixture_format": "curobo-metal-ik-case",
+  "fixture_version": 1,
+  "cases": {
+    "reachable": {
+      "expected_status": "success",
+      "position_tolerance": 2e-05,
+      "rotation_tolerance": 2e-05
+    },
+    "unreachable": {
+      "expected_status": "infeasible_or_stationary"
+    },
+    "limit_constrained": {
+      "expected_status": "limit_constrained"
+    },
+    "collision_constrained": {
+      "expected_status": "collision_constrained"
+    }
+  },
+  "gradient_check": {
+    "method": "central finite difference",
+    "step": 1e-06,
+    "rtol": 3e-06,
+    "atol": 3e-08
+  },
+  "reproduction": "python -m pytest tests/contracts/test_ik.py"
+}
