@@ -1,0 +1,134 @@
+# cuRobo Metal
+
+An experimental Apple-Silicon compute backend and compatibility layer for
+[cuRoboV2](https://github.com/NVlabs/curobo).
+
+The project currently provides:
+
+- a dependency-free adapter for pinned cuRoboV2 robot configuration data;
+- independent NumPy correctness oracles and canonical replay fixtures;
+- differentiable PyTorch CPU/MPS forward kinematics, collision, costs, IK, and
+  trajectory optimization;
+- runtime-compiled Metal kernels for fused serial-chain kinematics and primitive
+  collision queries;
+- deterministic geometric-planning, mesh, voxel/SDF, ESDF, and whole-body work
+  progressing behind explicit contracts;
+- reproducible correctness, profiling, and benchmark artifacts.
+
+This is not yet a drop-in replacement for every cuRoboV2 feature. See
+[PLAN.md](PLAN.md), [docs/compatibility.md](docs/compatibility.md), and the
+feature-specific documents under `docs/` for supported boundaries.
+
+## Pinned upstream
+
+Compatibility is developed against cuRoboV2 commit:
+
+```text
+8e734f3ced1df898990bcd92de40abce475907db
+```
+
+The repository includes tooling that fetches this exact revision and recomputes
+the Git object ID:
+
+```bash
+tmpdir="$(mktemp -d /tmp/curobo-metal-upstream.XXXXXX)"
+uv run python tools/upstream/manage.py fetch --destination "$tmpdir/curobo"
+uv run python tools/upstream/manage.py verify --source "$tmpdir/curobo"
+uv run python tools/upstream/manage.py audit --source "$tmpdir/curobo"
+```
+
+## Requirements
+
+- Python 3.10–3.13
+- PyTorch 2.13 or newer
+- NumPy 1.24 or newer
+- For GPU execution: Apple Silicon with an MPS-enabled PyTorch build
+
+Metal shaders are compiled through `torch.mps.compile_shader`. A full Xcode
+installation is not required for the current runtime-compiled kernels.
+
+## Install and test
+
+Install the locked development environment with
+[uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync --extra test
+PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
+```
+
+Setting `PYTORCH_ENABLE_MPS_FALLBACK=0` is part of the validation contract. It
+prevents unsupported GPU operations from silently executing on the CPU.
+
+Run focused benchmarks:
+
+```bash
+PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python benchmarks/kinematics/fused_fk.py
+PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python benchmarks/collision/fused_collision.py
+PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python benchmarks/ik/benchmark_ik.py
+PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python benchmarks/trajectory/benchmark_trajectory.py
+```
+
+The benchmark scripts synchronize the MPS device and report compilation/first
+use separately from steady-state latency.
+
+## Architecture
+
+```text
+cuRoboV2 configuration
+          |
+  dependency-free adapter
+          |
+  backend-neutral contracts
+      /              \
+NumPy oracles     PyTorch operators
+                       |
+                CPU or Apple MPS
+                       |
+             fused Metal hot paths
+```
+
+The NumPy implementations are executable specifications, not performance
+backends. Production operators are first implemented with portable PyTorch.
+Profiling evidence determines which launch-heavy paths receive fused Metal
+kernels.
+
+## Current measured highlights
+
+On the development Apple M4 machine:
+
+- fused FK passed its targets with synchronized medians of about 1.6 ms at
+  batch 1,024 and 3.8 ms at batch 8,192;
+- fused sphere-pair collision at batch 512 measured about 1.0 ms versus
+  10.3 ms on CPU;
+- fused sphere-to-cuboid collision at batch 512 measured about 0.33 ms versus
+  9.2 ms on CPU.
+
+These are machine-specific development measurements, not universal performance
+claims. Raw distributions, protocols, and limitations are checked into
+`artifacts/profiling/`.
+
+## Numerical and autodiff boundaries
+
+- Production Metal kernels currently target MPS `float32`.
+- Fused FK currently supports serial chains up to 64 DoF.
+- Custom Metal gradients provide tested first-order autodiff. Higher-order AD,
+  `vmap`, export, and `torch.compile` compatibility are not claimed.
+- Static cuboid worlds use the fused Metal path. Queries requiring gradients
+  with respect to cuboid world parameters use the composed PyTorch path.
+- Tiny batches may remain faster on CPU; benchmarked crossover points are
+  documented rather than hidden.
+
+## Development method
+
+Every feature progresses through:
+
+1. an explicit tensor/numerical contract;
+2. an independent CPU oracle and canonical fixtures;
+3. portable production CPU/MPS operations;
+4. differential, gradient, and fallback-disabled tests;
+5. synchronized profiling;
+6. a fused Metal implementation only when evidence supports it.
+
+See [PLAN.md](PLAN.md) for the complete gated roadmap.
+
