@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "wave": "7A",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "fixtures": {
+    "robot_yaml": "tests/compat/types_config/fixtures/tiny_robot.yml",
+    "robot_urdf": "tests/compat/types_config/fixtures/tiny_tree.urdf",
+    "robot_xrdf": "tests/compat/types_config/fixtures/tiny_robot.xrdf"
+  },
+  "coverage": {
+    "data_models": [
+      "DeviceCfg",
+      "JointState",
+      "Pose",
+      "planning results"
+    ],
+    "loaders": [
+      "YAML mapping",
+      "URDF serial/tree",
+      "XRDF collision spheres",
+      "primitive world"
+    ],
+    "preserved": [
+      "names and order",
+      "fixed and mimic joints",
+      "joint limits",
+      "inertials",
+      "collision spheres"
+    ],
+    "production_adapters": [
+      "SerialRobot",
+      "TreeRobot",
+      "KinematicChain",
+      "WholeBodyModel",
+      "collision tensor inputs"
+    ]
+  },
+  "unsupported": [
+    "USD and Isaac loaders",
+    "non primitive worlds",
+    "planar and floating URDF joints",
+    "branched or mimic conversion to SerialRobot"
+  ],
+  "verification": {
+    "command": "PYTHONPATH=src python -m pytest -q",
+    "result": "201 passed",
+    "targeted_types_config": "11 passed",
+    "mps": "device-transfer test is conditional on torch.backends.mps.is_available"
+  }
+}

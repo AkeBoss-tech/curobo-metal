@@ -1,0 +1,5 @@
+robot_cfg:
+  kinematics:
+    urdf_path: tiny_tree.urdf
+    xrdf_path: tiny_robot.xrdf
+    base_link: base

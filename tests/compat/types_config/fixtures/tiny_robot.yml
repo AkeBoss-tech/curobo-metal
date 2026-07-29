@@ -1,0 +1,23 @@
+robot_cfg:
+  kinematics:
+    name: tiny_tree
+    urdf_path: tiny_tree.urdf
+    base_link: base
+    tool_frames: [tip, finger]
+    collision_link_names: [arm, tip, finger]
+    cspace:
+      joint_names: [shoulder]
+      default_joint_position: [0.25]
+      max_acceleration: 3.0
+      max_jerk: 20.0
+    collision_spheres:
+      arm:
+        - center: [0.1, 0.0, 0.0]
+          radius: 0.08
+      tip:
+        - center: [0.0, 0.0, 0.0]
+          radius: 0.04
+    self_collision_ignore:
+      arm: [tip]
+    self_collision_buffer:
+      finger: 0.01

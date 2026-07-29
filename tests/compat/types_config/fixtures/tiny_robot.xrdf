@@ -1,0 +1,25 @@
+format: xrdf
+format_version: 1.0
+default_joint_positions:
+  shoulder: -0.2
+cspace:
+  joint_names: [shoulder]
+  acceleration_limits: [4.0]
+  jerk_limits: [30.0]
+tool_frames: [tip]
+collision:
+  geometry: tiny_spheres
+self_collision:
+  ignore:
+    arm: [tip]
+  buffer_distance:
+    arm: 0.02
+geometry:
+  tiny_spheres:
+    spheres:
+      arm:
+        - center: [0.0, 0.0, 0.1]
+          radius: 0.09
+      tip:
+        - center: [0.0, 0.0, 0.0]
+          radius: -0.01
