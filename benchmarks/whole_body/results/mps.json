@@ -1,0 +1,235 @@
+{
+  "benchmarks": [
+    {
+      "batch_size": 1,
+      "inverse_dynamics_forward": {
+        "mean_ms": 9.432716600000001,
+        "median_ms": 9.435375,
+        "minimum_ms": 9.068583,
+        "p95_ms": 9.67325,
+        "samples_ms": [
+          9.068583,
+          9.435375,
+          9.67325,
+          9.416708,
+          9.569667
+        ]
+      },
+      "inverse_dynamics_q_backward": {
+        "mean_ms": 15.8479916,
+        "median_ms": 15.618208,
+        "minimum_ms": 15.243041,
+        "p95_ms": 16.589125,
+        "samples_ms": [
+          16.274709,
+          16.589125,
+          15.618208,
+          15.514875,
+          15.243041
+        ]
+      },
+      "mass_matrix_forward": {
+        "mean_ms": 69.9334248,
+        "median_ms": 70.871917,
+        "minimum_ms": 66.770125,
+        "p95_ms": 72.207458,
+        "samples_ms": [
+          66.770125,
+          67.851041,
+          70.871917,
+          72.207458,
+          71.966583
+        ]
+      },
+      "tree_fk_forward": {
+        "mean_ms": 5.6885084,
+        "median_ms": 5.681708,
+        "minimum_ms": 5.613334,
+        "p95_ms": 5.809708,
+        "samples_ms": [
+          5.717,
+          5.620792,
+          5.809708,
+          5.613334,
+          5.681708
+        ]
+      }
+    },
+    {
+      "batch_size": 64,
+      "inverse_dynamics_forward": {
+        "mean_ms": 11.4556416,
+        "median_ms": 11.404125,
+        "minimum_ms": 11.247083,
+        "p95_ms": 11.724583,
+        "samples_ms": [
+          11.312,
+          11.590417,
+          11.404125,
+          11.247083,
+          11.724583
+        ]
+      },
+      "inverse_dynamics_q_backward": {
+        "mean_ms": 16.360775,
+        "median_ms": 16.34225,
+        "minimum_ms": 16.210542,
+        "p95_ms": 16.481791,
+        "samples_ms": [
+          16.34225,
+          16.307875,
+          16.210542,
+          16.481791,
+          16.461417
+        ]
+      },
+      "mass_matrix_forward": {
+        "mean_ms": 84.2054164,
+        "median_ms": 83.931666,
+        "minimum_ms": 82.547625,
+        "p95_ms": 85.501958,
+        "samples_ms": [
+          82.547625,
+          83.931666,
+          85.188875,
+          85.501958,
+          83.856958
+        ]
+      },
+      "tree_fk_forward": {
+        "mean_ms": 7.2936250000000005,
+        "median_ms": 7.272084,
+        "minimum_ms": 7.212458,
+        "p95_ms": 7.451875,
+        "samples_ms": [
+          7.272084,
+          7.451875,
+          7.283333,
+          7.212458,
+          7.248375
+        ]
+      }
+    }
+  ],
+  "correctness": {
+    "cases": {
+      "branched_toy.json": {
+        "checks": {
+          "bias": {
+            "max_absolute_error": 2.2041646019488326e-06,
+            "max_normalized_error": 0.00024009087254593913,
+            "passed": true
+          },
+          "d_tau_d_q": {
+            "max_absolute_error": 6.692437182209687e-07,
+            "max_normalized_error": 9.22220979158235e-05,
+            "passed": true
+          },
+          "d_tau_d_qd": {
+            "max_absolute_error": 1.3436874723993242e-08,
+            "max_normalized_error": 1.6552543908303467e-05,
+            "passed": true
+          },
+          "d_tau_d_qdd": {
+            "max_absolute_error": 2.6757220439321827e-08,
+            "max_normalized_error": 2.9981678798233066e-05,
+            "passed": true
+          },
+          "geometric_jacobian": {
+            "max_absolute_error": 1.7881393421514957e-07,
+            "max_normalized_error": 0.00017881393421514957,
+            "passed": true
+          },
+          "gravity": {
+            "max_absolute_error": 1.2090502181649754e-06,
+            "max_normalized_error": 0.00011901067751411901,
+            "passed": true
+          },
+          "inverse_dynamics": {
+            "max_absolute_error": 2.1997874490864433e-06,
+            "max_normalized_error": 0.0002478423043856316,
+            "passed": true
+          },
+          "mass_matrix": {
+            "max_absolute_error": 1.1569745073103377e-07,
+            "max_normalized_error": 5.58540185852708e-05,
+            "passed": true
+          },
+          "transforms": {
+            "max_absolute_error": 1.0981309384039406e-07,
+            "max_normalized_error": 0.00030570147653774624,
+            "passed": true
+          }
+        },
+        "fixture_sha256": "2189563108479c343e4f563132a2cd783a9cb80d20f01ad9158e09307763092a",
+        "passed": true
+      },
+      "panda_inertial.json": {
+        "checks": {
+          "bias": {
+            "max_absolute_error": 2.126143343161857e-06,
+            "max_normalized_error": 0.000824473339457922,
+            "passed": true
+          },
+          "d_tau_d_q": {
+            "max_absolute_error": 5.636611717818596e-06,
+            "max_normalized_error": 0.0019076891239235025,
+            "passed": true
+          },
+          "d_tau_d_qd": {
+            "max_absolute_error": 8.746098956180504e-08,
+            "max_normalized_error": 8.070299059777202e-05,
+            "passed": true
+          },
+          "d_tau_d_qdd": {
+            "max_absolute_error": 2.6165565714109107e-07,
+            "max_normalized_error": 0.00011652036733802723,
+            "passed": true
+          },
+          "geometric_jacobian": {
+            "max_absolute_error": 1.0970724861891767e-07,
+            "max_normalized_error": 0.00011641448130981493,
+            "passed": true
+          },
+          "gravity": {
+            "max_absolute_error": 2.0553231498965374e-06,
+            "max_normalized_error": 0.000824473339457922,
+            "passed": true
+          },
+          "inverse_dynamics": {
+            "max_absolute_error": 2.0553231498965374e-06,
+            "max_normalized_error": 0.000824473339457922,
+            "passed": true
+          },
+          "mass_matrix": {
+            "max_absolute_error": 2.0375264897509737e-07,
+            "max_normalized_error": 0.00010025213433534697,
+            "passed": true
+          },
+          "transforms": {
+            "max_absolute_error": 6.365262946589345e-08,
+            "max_normalized_error": 0.000307820087052171,
+            "passed": true
+          }
+        },
+        "fixture_sha256": "da6606d7df05acb913740bc1f921b9a1d7dc180576113dcdba5764456c6cc689",
+        "passed": true
+      }
+    },
+    "passed": true
+  },
+  "device": "mps",
+  "dtype": "float32",
+  "environment": {
+    "machine": "arm64",
+    "mps_available": true,
+    "mps_built": true,
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "fallback_disabled": true,
+  "format": "curobo-metal-whole-body-ops",
+  "implementation": "composed-pytorch",
+  "version": 1
+}
