@@ -1,0 +1,37 @@
+{
+  "format": "curobo-metal-jacobian-collision-checker-evidence",
+  "version": 1,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "implementation_base": "c703cce",
+  "jacobian": {
+    "shape": "[B,L,6,J]",
+    "frame": "world/base",
+    "row_order": ["linear", "angular"],
+    "point": "link-frame origin",
+    "serial": true,
+    "tree": true,
+    "autograd": true
+  },
+  "collision_checker": {
+    "cache_types": ["primitive", "mesh", "voxel"],
+    "mutable_generation": true,
+    "environment_indexing": true,
+    "self_pair_filtering": true,
+    "reduction": "maximum nonnegative violation",
+    "queries": ["discrete spheres", "sampled swept spheres", "ESDF"],
+    "empty_world": "zero cost and gradient"
+  },
+  "verification": {
+    "focused_tests": "10 passed",
+    "affected_regression_tests": "55 passed",
+    "full_tests": "200 passed",
+    "cpu_benchmark": {
+      "runtime": "PyTorch 2.13, CPU, float32",
+      "jacobian_batch_256_mean_us": 1523.4104474075139,
+      "primitive_collision_batch_256_spheres_32_mean_us": 53028.98955415003,
+      "iterations": 20,
+      "note": "informational single-process wall-clock microbenchmark"
+    },
+    "mps": "covered when torch.backends.mps.is_available"
+  }
+}
