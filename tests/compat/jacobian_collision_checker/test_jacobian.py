@@ -41,6 +41,21 @@ def test_empty_selection_and_errors() -> None:
         geometric_jacobian(robot, q, links=0, end_effectors=True)
 
 
+def test_upstream_style_jacobian_aliases_and_output_buffer() -> None:
+    robot = SerialRobot.from_dict(
+        json.loads((ROOT / "tests/fixtures/two_link_planar.json").read_text())["robot"]
+    )
+    q = torch.zeros((2, robot.dof), dtype=torch.float64)
+    expected = geometric_jacobian(robot, q, links=-1)
+    buffer = torch.empty_like(expected.jacobian)
+    result = geometric_jacobian(robot, q, links=-1, out=buffer)
+    assert result.jacobian.data_ptr() == buffer.data_ptr()
+    torch.testing.assert_close(result.linear_jacobian, expected.linear)
+    torch.testing.assert_close(result.angular_jacobian, expected.angular)
+    with pytest.raises(ValueError, match="out must have shape"):
+        geometric_jacobian(robot, q, links=-1, out=torch.empty(1))
+
+
 def test_tree_end_effector_jacobian() -> None:
     robot = TreeRobot.from_dict(
         json.loads((ROOT / "tests/fixtures/whole_body/branched_toy.json").read_text())["robot"]

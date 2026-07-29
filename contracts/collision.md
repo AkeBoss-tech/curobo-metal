@@ -106,3 +106,12 @@ float64 device implementation uses `rtol=2e-12, atol=2e-12`; float32 uses
 from nondifferentiable sets. Central differences use step `1e-6`,
 `rtol=3e-6, atol=3e-8`. Boundary tests assert the exact documented value and
 selected subgradient rather than finite differences.
+
+## Portable checker aggregation
+
+The compatibility checker consumes an explicit pair table plus an optional
+sphere-active mask. Its default self-collision output is the maximum
+nonnegative penetration magnitude over active pairs. With
+`sum_distance=True`, it instead sums those magnitudes. Empty or fully filtered
+pair tables return zero. These checker-level reductions do not change the
+signed-clearance convention of the primitive operation above.

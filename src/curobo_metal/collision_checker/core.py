@@ -117,6 +117,31 @@ class WorldCollision:
             environment, slot, Cuboid(center, rotation, half_extents), active=active
         )
 
+    def update_mesh(
+        self, environment: int, slot: int, mesh: object, *, active: bool = True
+    ) -> None:
+        self.mesh_cache.update(environment, slot, mesh, active=active)
+
+    def update_voxel(
+        self, environment: int, slot: int, voxel: object, *, active: bool = True
+    ) -> None:
+        self.voxel_cache.update(environment, slot, voxel, active=active)
+
+    def remove_obstacle(self, kind: str, environment: int, slot: int) -> None:
+        caches = {
+            "primitive": self.primitive_cache,
+            "mesh": self.mesh_cache,
+            "voxel": self.voxel_cache,
+        }
+        if kind not in caches:
+            raise ValueError("kind must be 'primitive', 'mesh', or 'voxel'")
+        caches[kind].remove(environment, slot)
+
+    def clear_cache(self, environment: int | None = None) -> None:
+        self.primitive_cache.clear(environment)
+        self.mesh_cache.clear(environment)
+        self.voxel_cache.clear(environment)
+
     def enable_obstacle(
         self, kind: str, environment: int, slot: int, enabled: bool = True
     ) -> None:
@@ -324,6 +349,11 @@ class RobotCollisionChecker:
         )
         # cuRobo collision distances are nonnegative violation magnitudes and
         # reduce with max; primitive ops expose signed clearance and min.
+        violation = (-result.distances).clamp_min(0)
+        if self.config.sum_distance:
+            return torch.where(
+                torch.isfinite(result.distances), violation, 0
+            ).sum(dim=-1)
         return torch.where(
             torch.isfinite(result.reduced_distance),
             (-result.reduced_distance).clamp_min(0),

@@ -66,6 +66,24 @@ def test_self_pair_filtering_and_max_violation() -> None:
     assert checker.get_self_collision_distance(spheres, sphere_active=active).item() == 0
 
 
+def test_self_collision_sum_and_cache_removal() -> None:
+    checker = RobotCollisionChecker(RobotCollisionCheckerConfig(
+        self_collision_pairs=((0, 1), (0, 2)), sum_distance=True,
+    ))
+    spheres = torch.tensor([
+        [0., 0, 0, 1.], [1., 0, 0, 1.], [-1., 0, 0, 1.],
+    ])
+    assert checker.get_self_collision_distance(spheres).item() == pytest.approx(2.)
+
+    world = _world()
+    generation = world.generation
+    world.remove_obstacle("primitive", 0, 0)
+    assert world.generation != generation
+    assert world.get_sphere_distance(spheres[:1]).distance.item() == 0
+    world.clear_cache()
+    assert not world.primitive_cache.active.any()
+
+
 def test_swept_interpolation_catches_mid_segment_collision() -> None:
     world = _world()
     start = torch.tensor([[-2., 0, 0, .1]], dtype=torch.float64)

@@ -128,6 +128,52 @@ class Pose(Sequence["Pose"]):
             raise ValueError("empty Pose has no vector")
         return torch.cat((self.position, self.quaternion), dim=-1)
 
+    def inverse(self) -> "Pose":
+        """Return the differentiable inverse rigid transform."""
+        if self.position is None or self.quaternion is None:
+            raise ValueError("empty Pose has no inverse")
+        q = self.quaternion / torch.linalg.vector_norm(
+            self.quaternion, dim=-1, keepdim=True
+        )
+        inverse_q = torch.cat((q[..., :1], -q[..., 1:]), dim=-1)
+        inverse_rotation = _quaternion_to_matrix(inverse_q)
+        inverse_position = -(inverse_rotation @ self.position[..., None]).squeeze(-1)
+        return type(self)(inverse_position, inverse_q, inverse_rotation, name=self.name)
+
+    def multiply(self, other: "Pose") -> "Pose":
+        """Compose ``self`` with ``other`` using broadcastable batch dimensions."""
+        if not isinstance(other, Pose):
+            raise TypeError("other must be a Pose")
+        if (
+            self.position is None or self.quaternion is None
+            or other.position is None or other.quaternion is None
+        ):
+            raise ValueError("cannot multiply an empty Pose")
+        if self.device != other.device or self.dtype != other.dtype:
+            raise ValueError("poses must share device and dtype")
+        left_q, right_q = torch.broadcast_tensors(self.quaternion, other.quaternion)
+        left_p, right_p = torch.broadcast_tensors(self.position, other.position)
+        position = left_p + (
+            _quaternion_to_matrix(left_q) @ right_p[..., None]
+        ).squeeze(-1)
+        quaternion = _quaternion_multiply(left_q, right_q)
+        return type(self)(position, quaternion, name=other.name)
+
+    def transform_points(self, points: torch.Tensor) -> torch.Tensor:
+        """Apply the pose to points with standard torch broadcasting."""
+        if self.position is None:
+            raise ValueError("empty Pose cannot transform points")
+        if not isinstance(points, torch.Tensor) or points.shape[-1] != 3:
+            raise ValueError("points must be a tensor ending in dimension 3")
+        if points.device != self.device or points.dtype != self.dtype:
+            raise ValueError("points and pose must share device and dtype")
+        rotation = self.get_rotation()
+        assert rotation is not None
+        return (rotation @ points[..., None]).squeeze(-1) + self.position
+
+    def __mul__(self, other: "Pose") -> "Pose":
+        return self.multiply(other)
+
     def tolist(self, q_xyzw: bool = False) -> list[float]:
         vector = self.get_pose_vector().squeeze().detach().cpu().tolist()
         if q_xyzw:
@@ -156,6 +202,17 @@ def _quaternion_to_matrix(q: torch.Tensor) -> torch.Tensor:
         2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x),
         2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y),
     ), dim=-1).reshape(*q.shape[:-1], 3, 3)
+
+
+def _quaternion_multiply(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+    lw, lx, ly, lz = left.unbind(-1)
+    rw, rx, ry, rz = right.unbind(-1)
+    return torch.stack((
+        lw * rw - lx * rx - ly * ry - lz * rz,
+        lw * rx + lx * rw + ly * rz - lz * ry,
+        lw * ry - lx * rz + ly * rw + lz * rx,
+        lw * rz + lx * ry - ly * rx + lz * rw,
+    ), dim=-1)
 
 
 def _matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:

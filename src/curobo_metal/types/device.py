@@ -37,6 +37,24 @@ class DeviceCfg:
     def to_int8_device(self, value: Any) -> torch.Tensor:
         return torch.as_tensor(value, device=self.device, dtype=torch.int8)
 
+    def to_int32_device(self, value: Any) -> torch.Tensor:
+        return torch.as_tensor(value, device=self.device, dtype=torch.int32)
+
+    def to_int64_device(self, value: Any) -> torch.Tensor:
+        return torch.as_tensor(value, device=self.device, dtype=torch.int64)
+
+    def to_bool_device(self, value: Any) -> torch.Tensor:
+        return torch.as_tensor(value, device=self.device, dtype=torch.bool)
+
+    def clone(self) -> "DeviceCfg":
+        return type(self)(
+            self.device,
+            self.dtype,
+            self.collision_geometry_dtype,
+            self.collision_gradient_dtype,
+            self.collision_distance_dtype,
+        )
+
     def cpu(self) -> "DeviceCfg":
         return type(self)(
             "cpu",

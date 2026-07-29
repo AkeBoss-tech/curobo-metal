@@ -44,6 +44,41 @@ def test_pose_round_trip_wxyz_and_batch_shape() -> None:
     assert pose.to(dtype=torch.float32).dtype == torch.float32
 
 
+def test_pose_algebra_and_joint_state_trajectory_helpers() -> None:
+    cfg = DeviceCfg("cpu", torch.float64)
+    first = Pose.from_list([1, 0, 0, 1, 0, 0, 0], cfg)
+    second = Pose.from_list([0, 2, 0, 1, 0, 0, 0], cfg)
+    composed = first * second
+    torch.testing.assert_close(
+        composed.position, torch.tensor([[1., 2, 0]], dtype=torch.float64)
+    )
+    torch.testing.assert_close(
+        (composed * composed.inverse()).get_matrix(),
+        torch.eye(4, dtype=torch.float64).unsqueeze(0),
+    )
+    point = torch.tensor([[1., 1, 1]], dtype=torch.float64)
+    torch.testing.assert_close(first.transform_points(point), point + first.position)
+
+    position = torch.tensor([[0., 0], [1., 2], [2., 4]], dtype=torch.float64)
+    differentiated = JointState(position, joint_names=["a", "b"]).finite_difference(.5)
+    torch.testing.assert_close(
+        differentiated.velocity,
+        torch.tensor([[2., 4], [2., 4], [2., 4.]], dtype=torch.float64),
+    )
+    integrated = differentiated[0].integrate(.5)
+    torch.testing.assert_close(
+        integrated.position, torch.tensor([1., 2.], dtype=torch.float64)
+    )
+
+
+def test_device_cfg_integer_bool_helpers_and_clone() -> None:
+    cfg = DeviceCfg("cpu", torch.float64)
+    assert cfg.to_int32_device([1]).dtype == torch.int32
+    assert cfg.to_int64_device([1]).dtype == torch.int64
+    assert cfg.to_bool_device([1]).dtype == torch.bool
+    assert cfg.clone() == cfg
+
+
 def test_result_adapter_fields() -> None:
     state = JointState.from_position(torch.zeros(1, 2))
     result = MotionGenResult(True, MotionGenStatus.SUCCESS, state, state, 0.01)

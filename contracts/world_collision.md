@@ -104,3 +104,13 @@ Checked-in oracle values use `rtol=0, atol=1e-13`; finite differences use step
 `1e-6`, `rtol=3e-6, atol=3e-8`. Future float64 device implementations use
 `2e-12` absolute/relative tolerance; float32 uses `rtol=3e-5, atol=3e-6`.
 Nondifferentiable boundary/tie tests assert the selected subgradient directly.
+
+## Portable cache and sweep behavior
+
+The compatibility layer owns fixed-capacity primitive, mesh, and voxel caches
+per environment. Update, enable/disable, remove, and clear operations increment
+their cache generation and become visible to the next query. Swept queries
+linearly interpolate packed spheres over each segment, include both endpoints,
+route every sample through the selected environment, and reduce the maximum
+collision violation over samples. They preserve CPU/MPS autograd behavior and
+never silently copy an unsupported query to CPU when fallback is disabled.

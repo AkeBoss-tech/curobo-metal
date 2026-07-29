@@ -35,6 +35,14 @@ class JacobianResult:
         return self.jacobian[:, :, 3:]
 
     @property
+    def linear_jacobian(self) -> torch.Tensor:
+        return self.linear
+
+    @property
+    def angular_jacobian(self) -> torch.Tensor:
+        return self.angular
+
+    @property
     def end_effector(self) -> torch.Tensor:
         if len(self.link_indices) != 1:
             raise ValueError("end_effector requires exactly one selected link")
@@ -76,6 +84,7 @@ def geometric_jacobian(
     *,
     links: str | int | Sequence[str | int] | None = None,
     end_effectors: bool = False,
+    out: torch.Tensor | None = None,
 ) -> JacobianResult:
     """Return differentiable world-frame link-origin geometric Jacobians.
 
@@ -100,8 +109,16 @@ def geometric_jacobian(
         default = fk.end_effector_indices if end_effectors else range(len(fk.link_names))
     indices = _selection(fk.link_names, links, default)
     index = torch.tensor(indices, dtype=torch.int64, device=q.device)
+    jacobian = fk.geometric_jacobian.index_select(1, index)
+    if out is not None:
+        if out.shape != jacobian.shape:
+            raise ValueError(f"out must have shape {tuple(jacobian.shape)}")
+        if out.device != jacobian.device or out.dtype != jacobian.dtype:
+            raise ValueError("out must share the Jacobian device and dtype")
+        out.copy_(jacobian)
+        jacobian = out
     return JacobianResult(
-        fk.geometric_jacobian.index_select(1, index),
+        jacobian,
         tuple(fk.link_names[i] for i in indices),
         indices,
         fk.input_was_batched,

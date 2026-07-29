@@ -142,7 +142,7 @@ class JointState:
     def __getitem__(self, index: Any) -> "JointState":
         result = self._shape_map(lambda value: value[index])
         if self.dt is not None:
-            result.dt = self.dt[index]
+            result.dt = self.dt if self.dt.ndim == 0 else self.dt[index]
         return result
 
     def __len__(self) -> int:
@@ -174,4 +174,44 @@ class JointState:
         index = torch.tensor(indices, device=self.device)
         output = self._map(lambda value: value.index_select(-1, index))
         output.joint_names = list(joint_names)
+        return output
+
+    def finite_difference(self, dt: float | torch.Tensor) -> "JointState":
+        """Populate trajectory derivatives without detaching the position graph."""
+        if self.position.ndim < 2 or self.position.shape[-2] < 2:
+            raise ValueError("finite_difference requires a trajectory with at least two knots")
+        step = torch.as_tensor(dt, device=self.device, dtype=self.dtype)
+        if bool((step <= 0).any().item()):
+            raise ValueError("dt must be positive")
+
+        def derivative(value: torch.Tensor) -> torch.Tensor:
+            delta = value[..., 1:, :] - value[..., :-1, :]
+            scale = step
+            while scale.ndim < delta.ndim:
+                scale = scale.unsqueeze(-1)
+            interior = delta / scale
+            return torch.cat((interior[..., :1, :], interior), dim=-2)
+
+        velocity = derivative(self.position)
+        acceleration = derivative(velocity)
+        jerk = derivative(acceleration)
+        return type(self)(
+            self.position, velocity, acceleration,
+            None if self.joint_names is None else self.joint_names.copy(), jerk,
+            dt=step, aux_data=dict(self.aux_data), control_space=self.control_space,
+        )
+
+    def integrate(self, dt: float | torch.Tensor) -> "JointState":
+        """Integrate velocity once while preserving all portable state metadata."""
+        if self.velocity is None:
+            raise ValueError("integrate requires velocity")
+        step = torch.as_tensor(dt, device=self.device, dtype=self.dtype)
+        if bool((step <= 0).any().item()):
+            raise ValueError("dt must be positive")
+        scale = step
+        while scale.ndim < self.velocity.ndim:
+            scale = scale.unsqueeze(-1)
+        output = self.clone()
+        output.position = self.position + self.velocity * scale
+        output.dt = step
         return output

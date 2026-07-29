@@ -59,6 +59,7 @@ class WorldCollisionConfig:
 class RobotCollisionCheckerConfig:
     self_collision_pairs: torch.Tensor | Sequence[Sequence[int]] = ()
     self_collision_padding: float = 0.0
+    sum_distance: bool = False
 
     def __post_init__(self) -> None:
         if self.self_collision_padding < 0:
