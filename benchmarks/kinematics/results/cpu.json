@@ -1,0 +1,154 @@
+{
+  "benchmarks": [
+    {
+      "batch_size": 1,
+      "first_call_ms": 0.377125,
+      "steady_state": {
+        "configurations_per_second_median": 3221.2603180994556,
+        "iterations": 20,
+        "mean_ms": 0.31220845,
+        "median_ms": 0.31043750000000003,
+        "min_ms": 0.304625,
+        "p95_ms": 0.319667,
+        "samples_ms": [
+          0.310291,
+          0.31025,
+          0.310125,
+          0.311125,
+          0.329125,
+          0.317,
+          0.318542,
+          0.3155,
+          0.308792,
+          0.3065,
+          0.310584,
+          0.318084,
+          0.319667,
+          0.306166,
+          0.311,
+          0.309125,
+          0.304625,
+          0.309334,
+          0.306875,
+          0.311459
+        ]
+      },
+      "warmup": {
+        "iterations": 5,
+        "total_ms": 1.620458
+      }
+    },
+    {
+      "batch_size": 64,
+      "first_call_ms": 0.687708,
+      "steady_state": {
+        "configurations_per_second_median": 110686.81166638993,
+        "iterations": 20,
+        "mean_ms": 0.5843792,
+        "median_ms": 0.578208,
+        "min_ms": 0.550292,
+        "p95_ms": 0.6205,
+        "samples_ms": [
+          0.600375,
+          0.572334,
+          0.593459,
+          0.568375,
+          0.581916,
+          0.560083,
+          0.578625,
+          0.553083,
+          0.577708,
+          0.550875,
+          0.578834,
+          0.550292,
+          0.577791,
+          0.562,
+          0.6205,
+          0.723542,
+          0.559,
+          0.6105,
+          0.580292,
+          0.588
+        ]
+      },
+      "warmup": {
+        "iterations": 5,
+        "total_ms": 3.326458
+      }
+    },
+    {
+      "batch_size": 1024,
+      "first_call_ms": 3.939292,
+      "steady_state": {
+        "configurations_per_second_median": 297335.8965003942,
+        "iterations": 20,
+        "mean_ms": 3.4937413999999998,
+        "median_ms": 3.4439165000000003,
+        "min_ms": 3.228959,
+        "p95_ms": 3.965,
+        "samples_ms": [
+          3.838041,
+          3.545041,
+          3.428208,
+          3.358208,
+          3.587166,
+          3.488541,
+          3.965,
+          3.452583,
+          3.388667,
+          3.379333,
+          3.276833,
+          3.228959,
+          3.500667,
+          3.392916,
+          4.018791,
+          3.439125,
+          3.448708,
+          3.371042,
+          3.302416,
+          3.464583
+        ]
+      },
+      "warmup": {
+        "iterations": 5,
+        "total_ms": 16.901583
+      }
+    }
+  ],
+  "correctness": {
+    "geometric_jacobian": {
+      "max_absolute_error": 2.06208141784181e-07,
+      "max_normalized_error": 0.0015590301821948069,
+      "passed": true
+    },
+    "passed": true,
+    "transform_jacobian": {
+      "max_absolute_error": 1.868850679764833e-07,
+      "max_normalized_error": 0.002031477994585069,
+      "passed": true
+    },
+    "transforms": {
+      "max_absolute_error": 1.5321245205868195e-07,
+      "max_normalized_error": 0.006408134887947932,
+      "passed": true
+    }
+  },
+  "device": "cpu",
+  "dtype": "float32",
+  "environment": {
+    "machine": "arm64",
+    "mps_available": true,
+    "mps_built": true,
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "fallback": {
+    "disabled": true,
+    "environment_value": "0"
+  },
+  "fixture": "/Users/family/.codex/worktrees/0381/curobo-metal/tests/fixtures/panda_serial.json",
+  "format": "curobo-metal-fk-benchmark",
+  "implementation": "composed-pytorch",
+  "version": 1
+}
