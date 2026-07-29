@@ -60,6 +60,20 @@ class KinematicChain:
         self.q_indices = tuple(joint.q_index for joint in robot.joints)
         self.link_names = tuple(joint.name for joint in robot.joints)
         self.dof = robot.dof
+        if resolved.type == "mps":
+            self._metal_kinds = torch.tensor(
+                [
+                    {"fixed": 0, "revolute": 1, "prismatic": 2}[kind]
+                    for kind in self.kinds
+                ],
+                dtype=torch.int32,
+                device=resolved,
+            )
+            self._metal_q_indices = torch.tensor(
+                [-1 if value is None else value for value in self.q_indices],
+                dtype=torch.int32,
+                device=resolved,
+            )
 
     @classmethod
     def from_serial_robot(
@@ -173,6 +187,23 @@ def forward_kinematics(
     if not isinstance(chain, KinematicChain):
         raise TypeError("chain must be a KinematicChain or SerialRobot")
     configurations, input_was_batched = _validate_q(chain, q)
+    if chain.device.type == "mps":
+        from curobo_metal.ops.kinematics.metal import (
+            fused_forward_kinematics,
+            supports_fused_chain,
+        )
+
+        if supports_fused_chain(chain):
+            transform_tensor, derivative_tensor, geometric = (
+                fused_forward_kinematics(chain, configurations)
+            )
+            return FKResult(
+                transforms=transform_tensor,
+                transform_jacobian=derivative_tensor,
+                geometric_jacobian=geometric,
+                link_names=chain.link_names,
+                input_was_batched=input_was_batched,
+            )
     batch = configurations.shape[0]
     dof = chain.dof
     current = torch.eye(
