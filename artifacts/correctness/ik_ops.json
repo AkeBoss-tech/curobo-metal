@@ -1,0 +1,39 @@
+{
+  "contract": "contracts/ik.md",
+  "format": "curobo-metal-correctness-evidence",
+  "implementation": [
+    "src/curobo_metal/ops/costs/core.py",
+    "src/curobo_metal/ops/ik/solver.py"
+  ],
+  "oracle_fixtures": {
+    "collision_constrained": {
+      "cpu": "collision_constrained",
+      "mps": "collision_constrained"
+    },
+    "limit_constrained": {
+      "cpu": "limit_constrained",
+      "mps": "limit_constrained"
+    },
+    "reachable": {
+      "cpu": "success",
+      "mps": "success"
+    },
+    "unreachable": {
+      "cpu": "infeasible_or_stationary",
+      "mps": "infeasible_or_stationary"
+    }
+  },
+  "production_paths": {
+    "collision": "curobo_metal.ops.collision",
+    "forward_kinematics": "curobo_metal.ops.kinematics"
+  },
+  "results": {
+    "cpu": "benchmarks/ik/results/cpu.json",
+    "mps": "benchmarks/ik/results/mps.json"
+  },
+  "tests": [
+    "tests/ops/ik/test_solver.py",
+    "tests/contracts/test_ik.py"
+  ],
+  "version": 1
+}

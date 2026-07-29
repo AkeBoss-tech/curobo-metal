@@ -1,0 +1,140 @@
+{
+  "cases": [
+    {
+      "case": "reachable",
+      "collision_cost": [
+        0.0
+      ],
+      "collision_free": [
+        true
+      ],
+      "compile_metadata_ms": 15.026542008854449,
+      "position_error": [
+        1.099895507650217e-05
+      ],
+      "rotation_error": [
+        1.767277717590332e-05
+      ],
+      "status": [
+        "success"
+      ],
+      "steady_state_solve_ms": {
+        "median": 870.9837079513818,
+        "minimum": 869.526750058867,
+        "samples": [
+          875.5599169526249,
+          869.526750058867,
+          870.9837079513818
+        ]
+      },
+      "success": [
+        true
+      ],
+      "warmup_solve_ms": 1208.2995839882642
+    },
+    {
+      "case": "unreachable",
+      "collision_cost": [
+        0.0
+      ],
+      "collision_free": [
+        true
+      ],
+      "compile_metadata_ms": 2.509457990527153,
+      "position_error": [
+        1.25
+      ],
+      "rotation_error": [
+        0.0
+      ],
+      "status": [
+        "infeasible_or_stationary"
+      ],
+      "steady_state_solve_ms": {
+        "median": 11.540167033672333,
+        "minimum": 11.447041993960738,
+        "samples": [
+          11.447041993960738,
+          11.624832986854017,
+          11.540167033672333
+        ]
+      },
+      "success": [
+        false
+      ],
+      "warmup_solve_ms": 11.603791965171695
+    },
+    {
+      "case": "limit_constrained",
+      "collision_cost": [
+        0.0
+      ],
+      "collision_free": [
+        true
+      ],
+      "compile_metadata_ms": 2.3747909581288695,
+      "position_error": [
+        0.349096417427063
+      ],
+      "rotation_error": [
+        0.2258259505033493
+      ],
+      "status": [
+        "limit_constrained"
+      ],
+      "steady_state_solve_ms": {
+        "median": 1164.5325830904767,
+        "minimum": 1066.3121670950204,
+        "samples": [
+          1164.5325830904767,
+          1271.6153329238296,
+          1066.3121670950204
+        ]
+      },
+      "success": [
+        false
+      ],
+      "warmup_solve_ms": 1071.0814580088481
+    },
+    {
+      "case": "collision_constrained",
+      "collision_cost": [
+        0.00014675933925900608
+      ],
+      "collision_free": [
+        false
+      ],
+      "compile_metadata_ms": 3.4372080117464066,
+      "position_error": [
+        0.16780255734920502
+      ],
+      "rotation_error": [
+        0.010592347010970116
+      ],
+      "status": [
+        "collision_constrained"
+      ],
+      "steady_state_solve_ms": {
+        "median": 1988.1225409917533,
+        "minimum": 1976.0844160337,
+        "samples": [
+          1993.7140840338543,
+          1976.0844160337,
+          1988.1225409917533
+        ]
+      },
+      "success": [
+        false
+      ],
+      "warmup_solve_ms": 2286.25095798634
+    }
+  ],
+  "device": "mps",
+  "dtype": "float32",
+  "expected_success_rate": 0.25,
+  "format": "curobo-metal-ik-ops-benchmark",
+  "mps_fallback_disabled": true,
+  "repeats": 3,
+  "success_rate": 0.25,
+  "version": 1
+}
