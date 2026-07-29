@@ -1,0 +1,48 @@
+{
+  "cuda_required": false,
+  "device_environment": {
+    "isaacsim_installed": false,
+    "torch_cuda_available": false,
+    "torch_installed": false,
+    "warp_installed": false
+  },
+  "host": {
+    "machine": "arm64",
+    "python": "3.13.9",
+    "system": "Darwin"
+  },
+  "isaac_required": false,
+  "pin_verification": {
+    "commit_subject": "Fix mesh SDF gradient sign for query points outside the surface (#701)",
+    "expected_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+    "recomputed_git_object_sha1": "8e734f3ced1df898990bcd92de40abce475907db",
+    "repository": "https://github.com/NVlabs/curobo.git",
+    "resolved_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "result": "pass",
+  "robot_scene_collision_cfg_initialized": false,
+  "runtime_import": {
+    "forbidden_new_import_roots": [],
+    "module": "curobo_metal.compat",
+    "torch_loaded": false
+  },
+  "schema_version": 1,
+  "static_compat_imports": {
+    "src/curobo_metal/compat/__init__.py": [
+      "curobo_v2"
+    ],
+    "src/curobo_metal/compat/curobo_v2.py": [
+      "__future__",
+      "dataclasses",
+      "numpy",
+      "typing"
+    ]
+  },
+  "targeted_upstream_apis": {
+    "curobo._src.robot.types.kinematics_params.KinematicsParams": "curobo/_src/robot/types/kinematics_params.py",
+    "curobo.kinematics.Kinematics": "curobo/_src/robot/kinematics/kinematics.py",
+    "curobo.kinematics.KinematicsCfg": "curobo/_src/robot/kinematics/kinematics_cfg.py",
+    "curobo.types.robot.RobotCfg": "curobo/_src/types/robot.py"
+  },
+  "warp_required": false
+}

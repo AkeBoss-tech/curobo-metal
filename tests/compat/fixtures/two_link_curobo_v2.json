@@ -1,0 +1,22 @@
+{
+  "base_link": "base_link",
+  "fixed_transforms": [
+    [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]],
+    [[1, 0, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0]],
+    [[1, 0, 0, 0.75], [0, 1, 0, 0], [0, 0, 1, 0]]
+  ],
+  "joint_map": [-1, 0, 1],
+  "joint_map_type": [-1, 5, 5],
+  "joint_names": ["shoulder", "elbow"],
+  "joint_offset_map": [1, 0, 1, 0, -1, 0.25],
+  "link_map": [0, 0, 1],
+  "link_name_to_idx_map": {"base_link": 0, "upper_arm": 1, "tool": 2},
+  "link_sphere_idx_map": [0, 1, 2],
+  "link_spheres": [
+    [[0, 0, 0, 0.2], [0.5, 0, 0, 0.1], [0, 0, 0, 0.05]],
+    [[0, 0, 0, 0.2], [0.6, 0, 0, 0.1], [0, 0, 0, -100]]
+  ],
+  "num_dof": 2,
+  "tool_frame_map": [2],
+  "tool_frames": ["tool"]
+}
