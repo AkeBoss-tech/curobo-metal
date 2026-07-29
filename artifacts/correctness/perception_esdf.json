@@ -1,0 +1,47 @@
+{
+  "artifact": "curobo-metal-perception-esdf-correctness",
+  "contract": "contracts/perception_esdf.md",
+  "fallback_disabled": true,
+  "fixtures": "original analytic arrays generated in tests",
+  "implementations": {
+    "numpy_oracle": "src/curobo_metal/reference/perception.py",
+    "torch_cpu_mps": "src/curobo_metal/ops/perception/core.py"
+  },
+  "operations": [
+    "voxel_centers",
+    "integrate_depth",
+    "dense_esdf",
+    "PerceptionMapper.update",
+    "PerceptionMapper.reset",
+    "PerceptionMapper.query"
+  ],
+  "pinned_upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "test_command": "PYTHONPATH=src PYTORCH_ENABLE_MPS_FALLBACK=0 python -m pytest -q tests/contracts/perception tests/ops/perception",
+  "test_result": {
+    "failed": 0,
+    "passed": 12,
+    "skipped": 0
+  },
+  "tested_devices": {
+    "cpu": {
+      "dtypes": ["float32", "float64"],
+      "passed": true
+    },
+    "mps": {
+      "dtypes": ["float32"],
+      "passed": true
+    }
+  },
+  "validation": [
+    "independent NumPy oracle parity",
+    "analytic planar scene and camera transform",
+    "invalid and empty depth",
+    "multi-camera and environment-batched fusion",
+    "selective update and reset generations",
+    "TSDF depth autograd",
+    "ESDF sign, distance, and diagnostic gradient",
+    "existing world-collision ESDF query integration",
+    "fallback-disabled MPS execution"
+  ],
+  "version": 1
+}

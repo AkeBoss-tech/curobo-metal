@@ -1,0 +1,11 @@
+{
+  "cameras": 1,
+  "device": "cpu",
+  "dtype": "float32",
+  "fallback_disabled": true,
+  "iterations": 5,
+  "query_ms_median": 0.44291606172919273,
+  "query_points": 256,
+  "shape": [8, 8, 8],
+  "update_ms_median": 0.6628329865634441
+}

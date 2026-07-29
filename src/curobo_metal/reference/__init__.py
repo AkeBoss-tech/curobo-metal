@@ -100,6 +100,16 @@ from .world_collision import (
     save_world_collision_case,
     sphere_world_collision,
 )
+from .perception import (
+    CameraObservation,
+    MapState,
+    PerceptionConfig,
+    dense_esdf,
+    empty_state,
+    fuse_sequence,
+    integrate,
+    voxel_centers,
+)
 
 __all__ = [
     "COLLISION_FORMAT",
@@ -189,4 +199,12 @@ __all__ = [
     "sample_voxel_sdf",
     "save_world_collision_case",
     "sphere_world_collision",
+    "CameraObservation",
+    "MapState",
+    "PerceptionConfig",
+    "dense_esdf",
+    "empty_state",
+    "fuse_sequence",
+    "integrate",
+    "voxel_centers",
 ]
