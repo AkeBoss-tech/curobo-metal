@@ -1,0 +1,11 @@
+{
+  "device": "cpu",
+  "dtype": "float64",
+  "fallback_disabled": true,
+  "implementation": "portable-pytorch",
+  "iterations": 10,
+  "measurements": {
+    "esdf_4x256_32cube_forward_ms": 2.37465410027653,
+    "mesh_4x256_2tri_forward_ms": 0.7927624974399805
+  }
+}

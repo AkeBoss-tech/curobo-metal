@@ -1,0 +1,42 @@
+{
+  "artifact": "curobo-metal-world-collision-ops-correctness",
+  "contract": "contracts/world_collision.md",
+  "fallback_disabled": true,
+  "fixtures": [
+    "tests/fixtures/world_collision/analytic_grid.json",
+    "tests/fixtures/world_collision/meshes.json"
+  ],
+  "implementation": "src/curobo_metal/ops/world_collision/core.py",
+  "operations": [
+    "mesh_distance",
+    "sample_voxel_sdf",
+    "query_esdf",
+    "sphere_world_collision"
+  ],
+  "test_command": "PYTORCH_ENABLE_MPS_FALLBACK=0 uv run --with pytest python -m pytest -q",
+  "test_result": {
+    "failed": 0,
+    "passed": 145
+  },
+  "tested_devices": {
+    "cpu": {
+      "dtypes": ["float32", "float64"],
+      "passed": true
+    },
+    "mps": {
+      "dtypes": ["float32"],
+      "passed": true
+    }
+  },
+  "validation": [
+    "independent NumPy oracle parity",
+    "autograd point VJP",
+    "transformed batched environments",
+    "first-index exact ties",
+    "inactive and empty reductions",
+    "strict OOB stencil and boundary derivative",
+    "watertight signed-distance gate",
+    "fallback-disabled MPS execution"
+  ],
+  "version": 1
+}
