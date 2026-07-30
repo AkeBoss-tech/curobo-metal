@@ -31,7 +31,8 @@ def test_public_modules_parse_and_only_approved_robot_assets_are_vendored():
         path
         for path in tracked
         if "/usd/" in path.lower()
-        or "/robot/" in path.lower()
+        or path.startswith("src/curobo/content/assets/robot/")
+        or path.startswith("src/curobo/content/configs/robot/")
         or path.endswith((".stl", ".dae", ".obj"))
     ]
     assert asset_paths

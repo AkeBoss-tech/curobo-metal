@@ -13,7 +13,18 @@ def test_public_types_are_a_module_at_the_pinned_layout() -> None:
     assert curobo.__version__ == "0.0.0"
     assert not hasattr(curobo, "Pose")
     assert types.__file__.endswith("curobo/types.py")
-    assert types.__all__ == ["DeviceCfg", "JointState", "Pose"]
+    assert types.__all__ == [
+        "JointState",
+        "RobotState",
+        "Pose",
+        "ToolPose",
+        "GoalToolPose",
+        "ToolPoseCriteria",
+        "CameraObservation",
+        "LidarObservation",
+        "ContentPath",
+        "DeviceCfg",
+    ]
     with pytest.raises(ModuleNotFoundError, match="not a package"):
         importlib.import_module("curobo.types.math")
 

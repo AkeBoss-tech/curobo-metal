@@ -20,9 +20,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/collision/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.collision",
       "path": "curobo/_src/collision/__init__.py",
@@ -419,10 +419,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 11,
+        "path": "curobo/_src/collision/collision_robot_scene.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.collision.collision_robot_scene",
       "path": "curobo/_src/collision/collision_robot_scene.py",
@@ -1085,10 +1085,10 @@
     },
     {
       "local": {
-        "missing_symbols": 27,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 17,
+        "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.collision.collision_robot_scene_cfg",
       "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
@@ -13113,9 +13113,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/geom/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.geom",
       "path": "curobo/_src/geom/__init__.py",
@@ -13125,9 +13125,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/geom/collision/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.geom.collision",
       "path": "curobo/_src/geom/collision/__init__.py",
@@ -13136,10 +13136,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/geom/collision/buffer_collision.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.geom.collision.buffer_collision",
       "path": "curobo/_src/geom/collision/buffer_collision.py",
@@ -13316,10 +13316,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 11,
+        "path": "curobo/_src/geom/collision/checker_collision.py",
+        "resolved_symbols": 1,
+        "status": "partial"
       },
       "name": "curobo._src.geom.collision.checker_collision",
       "path": "curobo/_src/geom/collision/checker_collision.py",
@@ -13670,10 +13670,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/geom/collision/collision_scene.py",
+        "resolved_symbols": 16,
+        "status": "partial"
       },
       "name": "curobo._src.geom.collision.collision_scene",
       "path": "curobo/_src/geom/collision/collision_scene.py",
@@ -22882,10 +22882,10 @@
     },
     {
       "local": {
-        "missing_symbols": 40,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 24,
+        "path": "curobo/_src/geom/types.py",
+        "resolved_symbols": 16,
+        "status": "partial"
       },
       "name": "curobo._src.geom.types",
       "path": "curobo/_src/geom/types.py",
@@ -66125,9 +66125,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/robot/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.robot",
       "path": "curobo/_src/robot/__init__.py",
@@ -67707,9 +67707,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/robot/kinematics/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.robot.kinematics",
       "path": "curobo/_src/robot/kinematics/__init__.py",
@@ -67718,10 +67718,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 9,
+        "path": "curobo/_src/robot/kinematics/kinematics.py",
+        "resolved_symbols": 12,
+        "status": "partial"
       },
       "name": "curobo._src.robot.kinematics.kinematics",
       "path": "curobo/_src/robot/kinematics/kinematics.py",
@@ -68463,10 +68463,10 @@
     },
     {
       "local": {
-        "missing_symbols": 20,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 10,
+        "path": "curobo/_src/robot/kinematics/kinematics_cfg.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.robot.kinematics.kinematics_cfg",
       "path": "curobo/_src/robot/kinematics/kinematics_cfg.py",
@@ -69034,10 +69034,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/robot/kinematics/kinematics_state.py",
+        "resolved_symbols": 8,
+        "status": "partial"
       },
       "name": "curobo._src.robot.kinematics.kinematics_state",
       "path": "curobo/_src/robot/kinematics/kinematics_state.py",
@@ -70575,9 +70575,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/robot/types/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.robot.types",
       "path": "curobo/_src/robot/types/__init__.py",
@@ -71335,10 +71335,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 9,
+        "path": "curobo/_src/robot/types/kinematics_params.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.robot.types.kinematics_params",
       "path": "curobo/_src/robot/types/kinematics_params.py",
@@ -105680,10 +105680,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/collision_checking.py",
+        "resolved_symbols": 2,
+        "status": "resolved"
       },
       "name": "curobo.collision_checking",
       "path": "curobo/collision_checking.py",
@@ -110925,10 +110925,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/kinematics.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.kinematics",
       "path": "curobo/kinematics.py",
@@ -237998,10 +237998,10 @@
   ],
   "schema_version": 1,
   "summary": {
-    "missing_modules": 565,
+    "missing_modules": 547,
     "modules": 586,
-    "partial_modules": 13,
-    "resolved_modules": 8,
+    "partial_modules": 22,
+    "resolved_modules": 17,
     "symbols": 7182
   },
   "upstream": {
