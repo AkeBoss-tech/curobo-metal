@@ -154,5 +154,69 @@ class JointState(_MetalJointState):
         return torch.cat([x for x in (self.position, self.velocity, self.acceleration, self.jerk)
                           if x is not None], dim=-1)
 
+    def blend(self, coeff, new_state):
+        from .state_joint_ops import blend_joint_states
+        return blend_joint_states(self, new_state, coeff)
+
+    def apply_kernel(self, kernel_mat):
+        from .state_joint_ops import apply_kernel_to_joint_state
+        return apply_kernel_to_joint_state(self, kernel_mat)
+
+    def scale(self, dt):
+        from .state_joint_ops import scale_joint_state
+        return scale_joint_state(self, dt)
+
+    def scale_by_dt(self, dt, new_dt):
+        from .state_joint_ops import scale_joint_state_by_dt
+        return scale_joint_state_by_dt(self, dt, new_dt)
+
+    def scale_time(self, new_dt):
+        from .state_joint_ops import scale_joint_state_time
+        return scale_joint_state_time(self, new_dt)
+
+    def calculate_fd_from_position(self, dt=None):
+        from .state_joint_ops import calculate_fd_from_position
+        return calculate_fd_from_position(self, dt)
+
+    def get_augmented_joint_state(self, joint_names, lock_joints=None):
+        from .state_joint_ops import augment_joint_state
+        return augment_joint_state(self, joint_names, lock_joints)
+
+    def append_joints(self, joint_state):
+        from .state_joint_ops import append_joints_to_state
+        return append_joints_to_state(self, joint_state)
+
+    def gather_by_seed_index(self, idx):
+        from .state_joint_trajectory_ops import gather_joint_state_by_seed
+        return gather_joint_state_by_seed(self, idx)
+
+    def copy_only_index(self, in_joint_state, idx):
+        from .state_joint_trajectory_ops import copy_joint_state_only_index
+        return copy_joint_state_only_index(self, in_joint_state, idx)
+
+    def copy_at_index(self, in_joint_state, idx):
+        from .state_joint_trajectory_ops import copy_joint_state_at_index
+        return copy_joint_state_at_index(self, in_joint_state, idx)
+
+    def copy_at_batch_seed_indices(self, in_joint_state, batch_idx, seed_idx):
+        from .state_joint_trajectory_ops import copy_joint_state_at_batch_seed_indices
+        return copy_joint_state_at_batch_seed_indices(
+            self, in_joint_state, batch_idx, seed_idx
+        )
+
+    def get_trajectory_at_horizon_index(self, horizon_index):
+        from .state_joint_trajectory_ops import get_joint_state_at_horizon_index
+        return get_joint_state_at_horizon_index(self, horizon_index)
+
+    def trim_trajectory(self, start_idx, end_idx=None):
+        from .state_joint_trajectory_ops import trim_joint_state_trajectory
+        return trim_joint_state_trajectory(self, start_idx, end_idx)
+
+    def index_dof(self, idx):
+        from .state_joint_trajectory_ops import index_joint_state_dof
+        if isinstance(idx, int):
+            idx = torch.tensor([idx], device=self.device)
+        return index_joint_state_dof(self, idx)
+
 
 __all__ = ["JointState"]
