@@ -1,12 +1,14 @@
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
 
+from tools.parity.compare_paired import compare_ready, sha256
 from tools.parity.replay_registry import BY_ID, PIN
 from tools.parity.cuda_adapters import ADAPTERS
 
@@ -51,6 +53,86 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "types.joint_state",
     }
     assert set(ADAPTERS) <= set(BY_ID)
+
+
+def _fake_cuda_evidence(root: Path) -> None:
+    for capability in ADAPTERS:
+        source = ARTIFACT / capability
+        folder = root / capability
+        folder.mkdir(parents=True)
+        output = folder / "cuda-outputs.npz"
+        shutil.copyfile(source / "metal-outputs.npz", output)
+        with np.load(output, allow_pickle=False) as data:
+            tensors = {
+                key: {"shape": list(data[key].shape), "dtype": str(data[key].dtype)}
+                for key in sorted(data.files)
+            }
+        metal = json.loads((source / "metal-manifest.json").read_text())
+        case = BY_ID[capability]
+        manifest = {
+            "format": "curobo-metal-paired-replay",
+            "version": 1,
+            "capability": capability,
+            "operation": case.operation,
+            "backend": "cuda",
+            "device": "cuda",
+            "fallback_enabled": False,
+            "upstream_revision": PIN,
+            "input_sha256": metal["input"]["sha256"],
+            "input_tensor_count": 8,
+            "status": "complete",
+            "output": {
+                "file": output.name,
+                "sha256": sha256(output),
+                "tensors": tensors,
+            },
+            "equivalence_claimed": False,
+            "tolerance": {"rtol": case.rtol, "atol": case.atol},
+        }
+        (folder / "cuda-manifest.json").write_text(json.dumps(manifest))
+
+
+def test_paired_verifier_accepts_complete_bound_evidence(tmp_path):
+    _fake_cuda_evidence(tmp_path)
+    report = compare_ready(ARTIFACT, tmp_path)
+    assert report["passed"]
+    assert not report["errors"]
+    assert {row["capability"] for row in report["results"]} == set(ADAPTERS)
+
+
+def test_paired_verifier_reports_numerical_mismatch(tmp_path):
+    _fake_cuda_evidence(tmp_path)
+    capability = "types.pose"
+    folder = tmp_path / capability
+    output = folder / "cuda-outputs.npz"
+    with np.load(output, allow_pickle=False) as data:
+        values = {key: data[key].copy() for key in data.files}
+    values["points"][0, 0] += 1.0
+    np.savez(output, **values)
+    manifest_path = folder / "cuda-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["output"]["sha256"] = sha256(output)
+    manifest_path.write_text(json.dumps(manifest))
+    report = compare_ready(ARTIFACT, tmp_path)
+    result = next(row for row in report["results"] if row["capability"] == capability)
+    assert not report["passed"]
+    assert not result["passed"]
+    assert not result["tensors"]["points"]["passed"]
+
+
+def test_paired_verifier_rejects_input_provenance_tamper(tmp_path):
+    _fake_cuda_evidence(tmp_path)
+    manifest_path = tmp_path / "types.joint_state/cuda-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["input_sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(manifest))
+    report = compare_ready(ARTIFACT, tmp_path)
+    assert not report["passed"]
+    assert any(
+        row["capability"] == "types.joint_state"
+        and "different input" in row["error"]
+        for row in report["errors"]
+    )
 
 
 def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence():

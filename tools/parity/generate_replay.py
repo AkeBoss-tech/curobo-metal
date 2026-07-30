@@ -119,7 +119,9 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         value.sum().backward()
         return {"value": value.detach().cpu().numpy(), "input_gradient": x.grad.cpu().numpy()}
     if case.probe in {"particle", "lbfgs"}:
-        objective = lambda x: ((x - .2) ** 2).sum(-1)
+        def objective(x):
+            return ((x - .2) ** 2).sum(-1)
+
         if case.probe == "particle":
             result = particle_optimize(objective, q, config=ParticleConfig(iterations=3, particles=8, elite_count=2, seed=7))
         else:

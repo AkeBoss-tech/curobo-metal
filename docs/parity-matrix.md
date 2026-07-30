@@ -112,6 +112,24 @@ PYTHONPATH=src python -m tools.parity.run_pinned_cuda \
   --output cuda-replay/kinematics.forward_kinematics
 ```
 
+On an NVIDIA host, run every currently implemented asset-independent adapter
+and immediately verify the outputs against the committed fallback-disabled
+Metal corpus:
+
+```sh
+PYTHONPATH=.:src python -m tools.parity.run_cuda_ready \
+  --upstream /opt/curobo-v2 \
+  --metal-root artifacts/parity/replay \
+  --output cuda-replay
+```
+
+This writes one hashed `cuda-manifest.json` and `cuda-outputs.npz` per ready
+capability, followed by `cuda-replay/paired-report.json`. The command exits
+nonzero if the upstream revision, consumed input hash, output hash, tensor
+schema, registry tolerance, backend provenance, or any numerical comparison
+fails. A report is complete only when all registered real CUDA adapters are
+present and passing.
+
 The CUDA command refuses any checkout other than
 `8e734f3ced1df898990bcd92de40abce475907db` before importing upstream. The clean
 runner has real asset-independent adapters for `DeviceCfg`, `Pose`, and
