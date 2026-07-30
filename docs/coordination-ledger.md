@@ -38,7 +38,7 @@ This ledger records durable child-thread handoffs and parent integration state.
 | Closure: whole-body/perception | `019fb024-9f04-74f0-bf84-99a0220a3e48` | complete | `06ea4b7` |
 | Paired CUDA/Metal replay harness | `019fb06a-4696-7eb0-aa8e-eb3a9f4ff48d` | complete | `c38f392` + parent whitespace fix |
 
-Parent integration suite after the last completed wave: 273 tests passing with
+Parent integration suite after the latest replay-adapter wave: 279 tests passing with
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
 
 The portable implementation and deterministic MPS replay corpus are complete.
@@ -62,3 +62,9 @@ input and Metal output hashes, requires executed invalid-case evidence for every
 ready adapter, records CUDA/GPU runtime provenance, and writes an aggregate
 report. A deterministic self-verifying archive supports transfer to an NVIDIA
 host that cannot clone this repository directly.
+
+A resumed runner audit also checked the alternate saved-host routes. Handoff to
+both `robo` and `amarel` was unavailable, while the two reachable destinations
+resolved to Apple ARM64 macOS systems without NVIDIA tooling or CUDA-enabled
+PyTorch. All standalone examples and the isolated macOS wheel build/import
+smoke pass on the current integration commit.
