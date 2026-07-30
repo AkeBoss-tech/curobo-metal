@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 import torch
 from curobo._src.types.device_cfg import DeviceCfg
 
@@ -65,5 +65,48 @@ class ToolPoseCriteria:
     @staticmethod
     def disabled(): return ToolPoseCriteria([0.] * 6, [0.] * 6)
 
+@dataclass
+class StackedToolPoseCriteria:
+    tool_frames: List[str]
+    terminal_pose_axes_weight_factor: torch.Tensor
+    non_terminal_pose_axes_weight_factor: torch.Tensor
+    terminal_pose_convergence_tolerance: torch.Tensor
+    non_terminal_pose_convergence_tolerance: torch.Tensor
+    project_distance_to_goal: torch.Tensor
+    device_cfg: DeviceCfg = DeviceCfg()
+    _tool_pose_criteria: Optional[Dict[str, ToolPoseCriteria]] = None
 
-__all__ = ["ToolPoseCriteria"]
+    @classmethod
+    def from_tool_pose_criteria(cls, tool_pose_criteria):
+        frames = list(tool_pose_criteria)
+        values = [tool_pose_criteria[name] for name in frames]
+        return cls(
+            frames,
+            torch.stack([x.terminal_pose_axes_weight_factor for x in values]),
+            torch.stack([x.non_terminal_pose_axes_weight_factor for x in values]),
+            torch.stack([x.terminal_pose_convergence_tolerance for x in values]),
+            torch.stack([x.non_terminal_pose_convergence_tolerance for x in values]),
+            torch.stack([x.project_distance_to_goal for x in values]),
+            values[0].device_cfg if values else DeviceCfg(),
+            dict(tool_pose_criteria),
+        )
+
+    def clone(self):
+        return type(self)(
+            self.tool_frames.copy(),
+            self.terminal_pose_axes_weight_factor.clone(),
+            self.non_terminal_pose_axes_weight_factor.clone(),
+            self.terminal_pose_convergence_tolerance.clone(),
+            self.non_terminal_pose_convergence_tolerance.clone(),
+            self.project_distance_to_goal.clone(),
+            self.device_cfg,
+            None if self._tool_pose_criteria is None else
+            {k: v.clone() for k, v in self._tool_pose_criteria.items()},
+        )
+
+    def update_tool_pose_criteria(self, tool_pose_criteria):
+        updated = type(self).from_tool_pose_criteria(tool_pose_criteria)
+        self.__dict__.update(updated.__dict__)
+
+
+__all__ = ["ToolPoseCriteria", "StackedToolPoseCriteria"]
