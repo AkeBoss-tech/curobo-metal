@@ -1,0 +1,1 @@
+"""Foundational internal type implementations."""
