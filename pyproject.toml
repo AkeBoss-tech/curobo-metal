@@ -10,13 +10,22 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.24", "torch>=2.13"]
+dependencies = ["numpy>=1.24", "PyYAML>=6.0", "torch>=2.13"]
 
 [project.optional-dependencies]
 test = ["pytest>=7.4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+curobo = [
+  "content/**/*.dae",
+  "content/**/*.obj",
+  "content/**/*.urdf",
+  "content/**/*.yml",
+  "content/**/LICENSE",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
