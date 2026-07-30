@@ -36,6 +36,7 @@ This ledger records durable child-thread handoffs and parent integration state.
 | Closure: config/types/Jacobian/collision | `019fb024-24ff-7b80-9964-a1dad8658c37` | complete | `0323c18` |
 | Closure: optimizers/solvers/planning | `019fb024-5e32-7db3-b2fb-110888d42d64` | complete | `464aab8` |
 | Closure: whole-body/perception | `019fb024-9f04-74f0-bf84-99a0220a3e48` | complete | `06ea4b7` |
+| Paired CUDA/Metal replay harness | `019fb06a-4696-7eb0-aa8e-eb3a9f4ff48d` | active | awaiting verified handoff |
 
 Parent integration suite after the last completed wave: 268 tests passing with
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
