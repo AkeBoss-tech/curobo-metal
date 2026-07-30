@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "collision.voxel_esdf_query",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "bad_environment",
+    "probe_scope": "voxel",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "voxel_esdf",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "0abd36d17419d84d2e9c29a8551617c726d690e340f7a07e9b8153de98179eee"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 3e-06,
+    "rtol": 3e-05
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

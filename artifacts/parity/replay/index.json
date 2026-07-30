@@ -1,0 +1,102 @@
+{
+  "cases": [
+    {
+      "capability": "configuration.robot_config_and_loaders",
+      "manifest": "configuration.robot_config_and_loaders/metal-manifest.json",
+      "manifest_sha256": "9169c923b42440a1cdc105fe8b80b7522c73e13f0105aa32d9d40b37e8f82cc4"
+    },
+    {
+      "capability": "types.device_cfg",
+      "manifest": "types.device_cfg/metal-manifest.json",
+      "manifest_sha256": "b9fe8a2f5b6e147867d923c4e84677f1166fdb16d3852b1b2e2244e8cc76eba0"
+    },
+    {
+      "capability": "types.pose",
+      "manifest": "types.pose/metal-manifest.json",
+      "manifest_sha256": "7e568acff9727812b87eb226e6d031bdd6d53f2baac263bae4882d3365bc141f"
+    },
+    {
+      "capability": "types.joint_state",
+      "manifest": "types.joint_state/metal-manifest.json",
+      "manifest_sha256": "e0fd1ac8c851d512db05cce3374a59184f2c2c5688c9cd72060202ecfa76c5c7"
+    },
+    {
+      "capability": "types.solver_results",
+      "manifest": "types.solver_results/metal-manifest.json",
+      "manifest_sha256": "5af2f92097f8d99cdcb4707f0cef10ad553864ba95bb59d81026919084a71e41"
+    },
+    {
+      "capability": "kinematics.forward_kinematics",
+      "manifest": "kinematics.forward_kinematics/metal-manifest.json",
+      "manifest_sha256": "15727235cd97cebd6f9c8002b1cc72f201667c6c0139d618a370093dfa92f151"
+    },
+    {
+      "capability": "kinematics.geometric_jacobian",
+      "manifest": "kinematics.geometric_jacobian/metal-manifest.json",
+      "manifest_sha256": "ba78313031cbf3ea90aeed44bdb4568e4710c9876c1d7a93656ffbe3401dac33"
+    },
+    {
+      "capability": "collision.robot_scene",
+      "manifest": "collision.robot_scene/metal-manifest.json",
+      "manifest_sha256": "952ba692213ccc96ccbfd904053b3d628ea9bcad58da192e9587fedb6d122894"
+    },
+    {
+      "capability": "collision.mesh_world",
+      "manifest": "collision.mesh_world/metal-manifest.json",
+      "manifest_sha256": "386c580ec898016fc62a6538af39aabee3d62c8ca71839c351265bddc5b930cd"
+    },
+    {
+      "capability": "collision.voxel_esdf_query",
+      "manifest": "collision.voxel_esdf_query/metal-manifest.json",
+      "manifest_sha256": "6cea4b738b0650ad44e9a70895f876a867d3fb056a7bc65dbc6555e5b0e5a9db"
+    },
+    {
+      "capability": "cost.pose_and_composable_costs",
+      "manifest": "cost.pose_and_composable_costs/metal-manifest.json",
+      "manifest_sha256": "49bc471dea25ca82c6cb33066efe09f7db0ce1d72d4dfd0b3b7f36cd660b6bbe"
+    },
+    {
+      "capability": "optim.particle_evolution",
+      "manifest": "optim.particle_evolution/metal-manifest.json",
+      "manifest_sha256": "96401e7fbfc49e7c71dbe735d7a08b0063114707fe98936c18cab61529c2628e"
+    },
+    {
+      "capability": "optim.lbfgs",
+      "manifest": "optim.lbfgs/metal-manifest.json",
+      "manifest_sha256": "ad808a5044ca39d3645d21f1a792e425f26ef70e7f65ed8a85bc6f05b7abc6e8"
+    },
+    {
+      "capability": "ik.inverse_kinematics",
+      "manifest": "ik.inverse_kinematics/metal-manifest.json",
+      "manifest_sha256": "2f838543d06a689d86f55af34a95bdc1487ad8f1da7b0152ffc39ebf0aefb9d7"
+    },
+    {
+      "capability": "trajectory.trajectory_optimization",
+      "manifest": "trajectory.trajectory_optimization/metal-manifest.json",
+      "manifest_sha256": "763be7e38800e1f7bb62198deaff83b6f6b87df7afe450a2c1fc78d122099fd0"
+    },
+    {
+      "capability": "trajectory.dynamics_aware_bspline",
+      "manifest": "trajectory.dynamics_aware_bspline/metal-manifest.json",
+      "manifest_sha256": "b1686904b8210d56a525ad4bed561531b8fc5eb6a3164e3be2903deac46045da"
+    },
+    {
+      "capability": "graph.prm_planner",
+      "manifest": "graph.prm_planner/metal-manifest.json",
+      "manifest_sha256": "5197a89f3b112c4dc5878dfc13a7b644b4f4d7cf12abc21b4e59b2e75ae9034d"
+    },
+    {
+      "capability": "motion_generation.motion_gen",
+      "manifest": "motion_generation.motion_gen/metal-manifest.json",
+      "manifest_sha256": "5ed02a20a0863a66eeb1e3583cc80e102263bf968237eeddd4a16f99ed3f93a3"
+    },
+    {
+      "capability": "dynamics.inverse_dynamics",
+      "manifest": "dynamics.inverse_dynamics/metal-manifest.json",
+      "manifest_sha256": "bc6ec66d4bf2346579f62d51abf82e9c6b85a0275df7c8d7975432a4a2ead969"
+    }
+  ],
+  "format": "curobo-metal-paired-replay",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

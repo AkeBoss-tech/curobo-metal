@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "graph.prm_planner",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "blocked_endpoints",
+    "probe_scope": "graph",
+    "status": true
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "prm_planner",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "2dc6c7fb2e0c02feb971f8bd0fc9054035fd96514ed086589a8ba54c6cdc8bab"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 0,
+    "rtol": 0
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

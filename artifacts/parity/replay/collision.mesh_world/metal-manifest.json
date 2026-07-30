@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "collision.mesh_world",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "non_watertight_signed",
+    "probe_scope": "mesh",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "mesh_world",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "c4c7c773321fa78aeef60e359a78e6b3cbfdba420a46da9d757f20c565029c29"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 2e-06,
+    "rtol": 2e-05
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

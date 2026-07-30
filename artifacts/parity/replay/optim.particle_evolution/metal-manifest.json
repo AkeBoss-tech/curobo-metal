@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "optim.particle_evolution",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "bad_covariance",
+    "probe_scope": "particle",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "particle_evolution",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "5d17645f7a83edf2c6c626eed3d287a30b3c787f16448a533defed3d24623dc9"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 2e-05,
+    "rtol": 0.0002
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

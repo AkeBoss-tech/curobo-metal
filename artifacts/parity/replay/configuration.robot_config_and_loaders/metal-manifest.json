@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "configuration.robot_config_and_loaders",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "malformed_yaml",
+    "probe_scope": "serialization",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "robot_config",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "a96b16ab9e31f9e9e5e236605f6806466b11991630380c8a09db5931bd1677cf"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 0,
+    "rtol": 0
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "types.pose",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "zero_quaternion",
+    "probe_scope": "pose",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "pose",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "14c871ddf4b96661747a904ecba8ad6cdaadecd50027ad2536033d345977cc7c"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 1e-07,
+    "rtol": 1e-06
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

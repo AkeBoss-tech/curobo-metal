@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "optim.lbfgs",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "nonfinite_objective",
+    "probe_scope": "lbfgs",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "lbfgs",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "43a9752cc0e13dc79c233089f01c1e675a4f37192342a316a6639c39a4f5cd75"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 2e-05,
+    "rtol": 0.0002
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

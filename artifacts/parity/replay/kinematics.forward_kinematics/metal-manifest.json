@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "kinematics.forward_kinematics",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": true,
+    "invalid_case": "wrong_dof",
+    "probe_scope": "fk",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "forward_kinematics",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "1b7e812f6f9c3c91919ebf13082767a310273984cb404303d8dc4ea832b859df"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 8e-05,
+    "rtol": 8e-05
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

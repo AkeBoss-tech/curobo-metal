@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "trajectory.dynamics_aware_bspline",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "too_few_knots",
+    "probe_scope": "bspline",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "dynamics_aware_bspline",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "ea8671adbb0f52564fbcc5f870b8861714b4f8be91109e31cfdac25f2eede079"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 3e-05,
+    "rtol": 0.0003
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

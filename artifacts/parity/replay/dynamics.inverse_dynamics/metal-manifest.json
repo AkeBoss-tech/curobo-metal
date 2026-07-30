@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "dynamics.inverse_dynamics",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "bad_inertia",
+    "probe_scope": "dynamics",
+    "status": true
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "inverse_dynamics",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "266a360b045fd98d92f6848714b3b386024ba177906f0ae66334e273ac5c572e"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 2e-05,
+    "rtol": 0.0002
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

@@ -67,6 +67,14 @@ python3 tools/parity/inventory.py \
 
 ## CUDA-versus-Metal replay
 
+Wave 10 adds a turnkey, registry-driven replay corpus at
+`artifacts/parity/replay/`. It has one fallback-disabled MPS output bundle for
+each of the 19 evidence-blocked records. The committed `index.json` hashes every
+manifest, and every manifest hashes its byte-identical portable input corpus and
+local output. The manifests also record device, runtime, operation, tolerance,
+gradient/status coverage, an invalid or edge case, and explicitly set
+`equivalence_claimed` to false.
+
 Replay bundles contain only JSON plus `allow_pickle=False` NPZ tensors. This
 keeps inputs identical across isolated CUDA and macOS environments and records
 shapes, dtypes, hashes, backend, runtime, operation, case ID, and upstream SHA.
@@ -84,6 +92,40 @@ python -m tools.parity.replay pack --bundle run-metal \
 python -m tools.parity.replay compare run-cuda run-metal \
   --rtol 1e-5 --atol 1e-6
 ```
+
+Regenerate and validate the complete committed corpus on Apple Silicon with
+fallback disabled:
+
+```sh
+PYTORCH_ENABLE_MPS_FALLBACK=0 PYTHONPATH=src python -m tools.parity.generate_replay \
+  --device mps --output artifacts/parity/replay
+PYTHONPATH=src python -m tools.parity.validate_replay artifacts/parity/replay
+```
+
+Run one pinned CUDA-side case using the exact committed input:
+
+```sh
+PYTHONPATH=src python -m tools.parity.run_pinned_cuda \
+  --upstream /opt/curobo-v2 \
+  --input artifacts/parity/replay/kinematics.forward_kinematics/inputs.npz \
+  --capability kinematics.forward_kinematics \
+  --output cuda-replay/kinematics.forward_kinematics
+```
+
+The CUDA command refuses any checkout other than
+`8e734f3ced1df898990bcd92de40abce475907db` before importing upstream. At this
+wave, the clean runner deliberately emits `external_constraint` for all 19
+upstream adapters: robot, world, inertial, and solver surfaces require
+caller-supplied assets and/or CUDA-compiled upstream objects, while type helpers
+import CUDA-bound utilities. The exact per-capability constraint is in
+`tools/parity/replay_registry.py`. No CUDA result is synthesized, and therefore
+these records remain evidence-blocked until real pinned CUDA output is produced.
+
+Per-capability tolerances are likewise registry-owned: exact structural cases
+use zero tolerance; type/pose cases use `1e-6/1e-7`; collision and costs use
+roughly `2e-5/2e-6`; FK/Jacobian use `8e-5` to `1e-4`; and iterative
+optimization, planning, and dynamics use `2e-4` to `5e-4` relative tolerance.
+The validator requires the manifest values to match this registry exactly.
 
 A release comparison must cover supported dtypes and devices, explicit fallback
 behavior, first-order gradients, zero-size and singleton/many batches,

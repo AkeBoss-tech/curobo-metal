@@ -1,0 +1,33 @@
+{
+  "backend": "metal",
+  "capability": "types.joint_state",
+  "device": "mps",
+  "equivalence_claimed": false,
+  "evidence": {
+    "gradient": false,
+    "invalid_case": "name_width_mismatch",
+    "probe_scope": "joint_state",
+    "status": false
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input": {
+    "file": "inputs.npz",
+    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+  },
+  "operation": "joint_state",
+  "output": {
+    "file": "metal-outputs.npz",
+    "sha256": "8d9d88bd97dfb3f8c54e64d5774c6eda3d9c399f1673be5a2dc2456cb55dda07"
+  },
+  "runtime": {
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "tolerance": {
+    "atol": 1e-07,
+    "rtol": 1e-06
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}
