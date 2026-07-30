@@ -45,15 +45,17 @@ def collect(upstream: Path) -> dict[str, Any]:
     actual = revision(upstream)
     if actual != PIN:
         raise RuntimeError(f"refusing upstream revision {actual}; required {PIN}")
-    sys.path.insert(0, str(upstream.resolve()))
     import torch
+
+    if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
+        raise RuntimeError("CUDA device 0 is unavailable")
+
+    sys.path.insert(0, str(upstream.resolve()))
     from curobo._src.robot.kinematics.kinematics import Kinematics
     from curobo._src.types.robot import RobotCfg
     from curobo._src.solver.solver_base_result import BaseSolverResult
     from curobo.types import DeviceCfg, JointState, Pose
 
-    if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
-        raise RuntimeError("CUDA device 0 is unavailable")
     source_root = upstream.resolve()
     for symbol in (DeviceCfg, Pose, JointState, BaseSolverResult, RobotCfg, Kinematics):
         source = Path(inspect.getfile(symbol)).resolve()

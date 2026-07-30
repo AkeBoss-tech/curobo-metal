@@ -38,7 +38,7 @@ This ledger records durable child-thread handoffs and parent integration state.
 | Closure: whole-body/perception | `019fb024-9f04-74f0-bf84-99a0220a3e48` | complete | `06ea4b7` |
 | Paired CUDA/Metal replay harness | `019fb06a-4696-7eb0-aa8e-eb3a9f4ff48d` | complete | `c38f392` + parent whitespace fix |
 
-Parent integration suite after the latest replay-adapter wave: 279 tests passing with
+Parent integration suite after the latest replay-adapter wave: 280 tests passing with
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
 
 The portable implementation and deterministic MPS replay corpus are complete.

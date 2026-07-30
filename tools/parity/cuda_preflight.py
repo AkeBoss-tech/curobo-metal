@@ -14,7 +14,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream", type=Path, required=True)
     args = parser.parse_args()
-    print(json.dumps(collect(args.upstream), indent=2, sort_keys=True))
+    try:
+        runtime = collect(args.upstream)
+    except (RuntimeError, OSError) as error:
+        raise SystemExit(f"CUDA preflight failed: {error}") from error
+    print(json.dumps(runtime, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

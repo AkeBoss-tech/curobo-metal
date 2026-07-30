@@ -8,11 +8,13 @@ import zipfile
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from tools.parity.compare_paired import compare_ready, sha256
 from tools.parity.build_cuda_handoff import build as build_cuda_handoff
 from tools.parity.replay_registry import BY_ID, PIN
 from tools.parity.cuda_adapters import ADAPTERS
+from tools.parity import cuda_runtime
 
 
 ROOT = Path(__file__).parents[2]
@@ -249,6 +251,18 @@ def test_cuda_runner_strictly_refuses_wrong_sha(tmp_path):
     assert result.returncode != 0
     assert f"required {PIN}" in result.stderr
     assert not (tmp_path / "cuda/cuda-manifest.json").exists()
+
+
+def test_cuda_preflight_rejects_missing_device_before_upstream_import(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cuda_runtime, "revision", lambda _path: PIN)
+    original_path = list(sys.path)
+    try:
+        with pytest.raises(RuntimeError, match="CUDA device 0 is unavailable"):
+            cuda_runtime.collect(tmp_path)
+    finally:
+        assert sys.path == original_path
 
 
 def test_generation_refuses_fallback_enabled(tmp_path):
