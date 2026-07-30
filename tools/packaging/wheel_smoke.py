@@ -12,8 +12,15 @@ from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheck
 from curobo.content import get_assets_path, get_robot_path
 from curobo.inverse_kinematics import InverseKinematics, InverseKinematicsCfg
 from curobo.kinematics import Kinematics, KinematicsCfg
+from curobo.motion_planner import MotionPlanner, MotionPlannerCfg
 from curobo.optim import LBFGSOptCfg, MPPICfg
+from curobo.perception import Mapper, MapperCfg
+from curobo.robot_builder import RobotBuilder
+from curobo.robot_parser import UrdfRobotParser
+from curobo._src.robot.loader import KinematicsLoader
 from curobo.rollout import RosenbrockCfg, RosenbrockRollout
+from curobo.scene import Cuboid, Scene
+from curobo.sphere_fit import SphereFitType
 from curobo.trajectory_optimizer import TrajectoryOptimizer, TrajectoryOptimizerCfg
 from curobo.types import DeviceCfg, JointState, Pose
 from curobo.util_file import load_yaml
@@ -64,6 +71,20 @@ def main() -> None:
     assert inverse_kinematics.joint_names == kinematics.joint_names
     assert TrajectoryOptimizer.__name__ == "TrajOptSolver"
     assert TrajectoryOptimizerCfg.__name__ == "TrajOptSolverCfg"
+
+    parser = UrdfRobotParser(str(urdf))
+    assert parser.root_link == "base_link"
+    builder_cfg = RobotBuilder(str(urdf), tool_frames=["panda_hand"]).build()
+    assert KinematicsLoader(builder_cfg).kinematics_config.num_dof == 9
+
+    planner_cfg = MotionPlannerCfg.create(
+        "franka.yml", num_ik_seeds=1, num_trajopt_seeds=1
+    )
+    assert MotionPlanner(planner_cfg).joint_names == kinematics.joint_names
+    assert MapperCfg((0.2, 0.2, 0.2), voxel_size=0.05).grid_shape == (4, 4, 4)
+    assert Mapper.__name__ == "Mapper"
+    assert len(Scene(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1])])) == 1
+    assert SphereFitType.VOXEL.value == "voxel"
 
 
 if __name__ == "__main__":

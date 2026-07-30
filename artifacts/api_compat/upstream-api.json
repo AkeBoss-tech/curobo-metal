@@ -15603,10 +15603,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/geom/cv.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.geom.cv",
       "path": "curobo/_src/geom/cv.py",
@@ -15750,9 +15750,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/geom/data/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.geom.data",
       "path": "curobo/_src/geom/data/__init__.py",
@@ -17522,10 +17522,10 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 14,
+        "path": "curobo/_src/geom/data/data_scene.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.geom.data.data_scene",
       "path": "curobo/_src/geom/data/data_scene.py",
@@ -19536,10 +19536,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/geom/mesh_triangulation.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.geom.mesh_triangulation",
       "path": "curobo/_src/geom/mesh_triangulation.py",
@@ -19685,10 +19685,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/geom/quaternion.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.geom.quaternion",
       "path": "curobo/_src/geom/quaternion.py",
@@ -19817,10 +19817,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/geom/sdf_grid.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.geom.sdf_grid",
       "path": "curobo/_src/geom/sdf_grid.py",
@@ -19977,9 +19977,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/geom/sphere_fit/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.geom.sphere_fit",
       "path": "curobo/_src/geom/sphere_fit/__init__.py",
@@ -20344,10 +20344,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 11,
+        "path": "curobo/_src/geom/sphere_fit/fit_spheres.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.geom.sphere_fit.fit_spheres",
       "path": "curobo/_src/geom/sphere_fit/fit_spheres.py",
@@ -20781,10 +20781,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/geom/sphere_fit/sphere_count.py",
+        "resolved_symbols": 1,
+        "status": "partial"
       },
       "name": "curobo._src.geom.sphere_fit.sphere_count",
       "path": "curobo/_src/geom/sphere_fit/sphere_count.py",
@@ -20833,10 +20833,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/geom/sphere_fit/types.py",
+        "resolved_symbols": 12,
+        "status": "partial"
       },
       "name": "curobo._src.geom.sphere_fit.types",
       "path": "curobo/_src/geom/sphere_fit/types.py",
@@ -21292,10 +21292,10 @@
     },
     {
       "local": {
-        "missing_symbols": 38,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/geom/transform.py",
+        "resolved_symbols": 32,
+        "status": "partial"
       },
       "name": "curobo._src.geom.transform",
       "path": "curobo/_src/geom/transform.py",
@@ -22972,9 +22972,9 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
+        "missing_symbols": 21,
         "path": "curobo/_src/geom/types.py",
-        "resolved_symbols": 16,
+        "resolved_symbols": 19,
         "status": "partial"
       },
       "name": "curobo._src.geom.types",
@@ -28479,9 +28479,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/motion/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.motion",
       "path": "curobo/_src/motion/__init__.py",
@@ -28491,10 +28491,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 13,
+        "path": "curobo/_src/motion/motion_planner.py",
+        "resolved_symbols": 13,
+        "status": "partial"
       },
       "name": "curobo._src.motion.motion_planner",
       "path": "curobo/_src/motion/motion_planner.py",
@@ -29215,10 +29215,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 19,
+        "path": "curobo/_src/motion/motion_planner_batch.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.motion.motion_planner_batch",
       "path": "curobo/_src/motion/motion_planner_batch.py",
@@ -29978,10 +29978,10 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 9,
+        "path": "curobo/_src/motion/motion_planner_cfg.py",
+        "resolved_symbols": 14,
+        "status": "partial"
       },
       "name": "curobo._src.motion.motion_planner_cfg",
       "path": "curobo/_src/motion/motion_planner_cfg.py",
@@ -30327,10 +30327,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/motion/motion_planner_result.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.motion.motion_planner_result",
       "path": "curobo/_src/motion/motion_planner_result.py",
@@ -30514,10 +30514,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/motion/motion_retargeter.py",
+        "resolved_symbols": 11,
+        "status": "partial"
       },
       "name": "curobo._src.motion.motion_retargeter",
       "path": "curobo/_src/motion/motion_retargeter.py",
@@ -30833,10 +30833,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/motion/motion_retargeter_cfg.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo._src.motion.motion_retargeter_cfg",
       "path": "curobo/_src/motion/motion_retargeter_cfg.py",
@@ -31231,10 +31231,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/motion/motion_retargeter_result.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.motion.motion_retargeter_result",
       "path": "curobo/_src/motion/motion_retargeter_result.py",
@@ -48811,9 +48811,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/perception/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.perception",
       "path": "curobo/_src/perception/__init__.py",
@@ -48823,10 +48823,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/perception/filter_depth.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.perception.filter_depth",
       "path": "curobo/_src/perception/filter_depth.py",
@@ -49084,9 +49084,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/perception/mapper/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper",
       "path": "curobo/_src/perception/mapper/__init__.py",
@@ -49096,10 +49096,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/perception/mapper/block_allocation.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.perception.mapper.block_allocation",
       "path": "curobo/_src/perception/mapper/block_allocation.py",
@@ -58230,10 +58230,10 @@
     },
     {
       "local": {
-        "missing_symbols": 29,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 21,
+        "path": "curobo/_src/perception/mapper/mapper.py",
+        "resolved_symbols": 8,
+        "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mapper",
       "path": "curobo/_src/perception/mapper/mapper.py",
@@ -59270,10 +59270,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/perception/mapper/mapper_cfg.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mapper_cfg",
       "path": "curobo/_src/perception/mapper/mapper_cfg.py",
@@ -60582,10 +60582,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/perception/mapper/mesh_extractor.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mesh_extractor",
       "path": "curobo/_src/perception/mapper/mesh_extractor.py",
@@ -61475,10 +61475,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/perception/mapper/renderer.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.perception.mapper.renderer",
       "path": "curobo/_src/perception/mapper/renderer.py",
@@ -61947,10 +61947,10 @@
     },
     {
       "local": {
-        "missing_symbols": 29,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 22,
+        "path": "curobo/_src/perception/mapper/storage.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.perception.mapper.storage",
       "path": "curobo/_src/perception/mapper/storage.py",
@@ -63748,9 +63748,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/perception/pose_estimation/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.perception.pose_estimation",
       "path": "curobo/_src/perception/pose_estimation/__init__.py",
@@ -63760,10 +63760,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/perception/pose_estimation/detection_result.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.pose_estimation.detection_result",
       "path": "curobo/_src/perception/pose_estimation/detection_result.py",
@@ -64140,10 +64140,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 10,
+        "path": "curobo/_src/perception/pose_estimation/mesh_robot.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.mesh_robot",
       "path": "curobo/_src/perception/pose_estimation/mesh_robot.py",
@@ -64606,10 +64606,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 12,
+        "path": "curobo/_src/perception/pose_estimation/pose_detector.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.pose_detector",
       "path": "curobo/_src/perception/pose_estimation/pose_detector.py",
@@ -64794,10 +64794,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/perception/pose_estimation/pose_detector_cfg.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.pose_estimation.pose_detector_cfg",
       "path": "curobo/_src/perception/pose_estimation/pose_detector_cfg.py",
@@ -64921,10 +64921,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 23,
+        "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector.py",
+        "resolved_symbols": 1,
+        "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.sdf_pose_detector",
       "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector.py",
@@ -65280,10 +65280,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector_cfg.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.sdf_pose_detector_cfg",
       "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector_cfg.py",
@@ -65983,10 +65983,10 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 21,
+        "path": "curobo/_src/perception/robot_segmenter.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.perception.robot_segmenter",
       "path": "curobo/_src/perception/robot_segmenter.py",
@@ -66355,9 +66355,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/robot/builder/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.robot.builder",
       "path": "curobo/_src/robot/builder/__init__.py",
@@ -66367,10 +66367,10 @@
     },
     {
       "local": {
-        "missing_symbols": 33,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 24,
+        "path": "curobo/_src/robot/builder/builder_robot.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.robot.builder.builder_robot",
       "path": "curobo/_src/robot/builder/builder_robot.py",
@@ -67126,10 +67126,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 10,
+        "path": "curobo/_src/robot/builder/debugger_robot.py",
+        "resolved_symbols": 11,
+        "status": "partial"
       },
       "name": "curobo._src.robot.builder.debugger_robot",
       "path": "curobo/_src/robot/builder/debugger_robot.py",
@@ -67513,9 +67513,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/robot/dynamics/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.robot.dynamics",
       "path": "curobo/_src/robot/dynamics/__init__.py",
@@ -67525,10 +67525,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/robot/dynamics/dynamics.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.robot.dynamics.dynamics",
       "path": "curobo/_src/robot/dynamics/dynamics.py",
@@ -67832,10 +67832,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/robot/dynamics/dynamics_cfg.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.robot.dynamics.dynamics_cfg",
       "path": "curobo/_src/robot/dynamics/dynamics_cfg.py",
@@ -69107,10 +69107,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/robot/kinematics/kinematics_reducer.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.robot.kinematics.kinematics_reducer",
       "path": "curobo/_src/robot/kinematics/kinematics_reducer.py",
@@ -69454,9 +69454,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/robot/loader/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.robot.loader",
       "path": "curobo/_src/robot/loader/__init__.py",
@@ -69466,10 +69466,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 11,
+        "path": "curobo/_src/robot/loader/kinematics_loader.py",
+        "resolved_symbols": 15,
+        "status": "partial"
       },
       "name": "curobo._src.robot.loader.kinematics_loader",
       "path": "curobo/_src/robot/loader/kinematics_loader.py",
@@ -69793,10 +69793,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 8,
+        "path": "curobo/_src/robot/loader/kinematics_loader_cfg.py",
+        "resolved_symbols": 11,
+        "status": "partial"
       },
       "name": "curobo._src.robot.loader.kinematics_loader_cfg",
       "path": "curobo/_src/robot/loader/kinematics_loader_cfg.py",
@@ -70073,10 +70073,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/robot/loader/util.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.robot.loader.util",
       "path": "curobo/_src/robot/loader/util.py",
@@ -70130,9 +70130,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/robot/parser/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.robot.parser",
       "path": "curobo/_src/robot/parser/__init__.py",
@@ -70142,10 +70142,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/robot/parser/parser_base.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.robot.parser.parser_base",
       "path": "curobo/_src/robot/parser/parser_base.py",
@@ -70434,10 +70434,10 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 10,
+        "path": "curobo/_src/robot/parser/parser_urdf.py",
+        "resolved_symbols": 13,
+        "status": "partial"
       },
       "name": "curobo._src.robot.parser.parser_urdf",
       "path": "curobo/_src/robot/parser/parser_urdf.py",
@@ -70823,10 +70823,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/robot/types/collision_geometry.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.robot.types.collision_geometry",
       "path": "curobo/_src/robot/types/collision_geometry.py",
@@ -70935,10 +70935,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 4,
+        "path": "curobo/_src/robot/types/cspace_params.py",
+        "resolved_symbols": 8,
+        "status": "partial"
       },
       "name": "curobo._src.robot.types.cspace_params",
       "path": "curobo/_src/robot/types/cspace_params.py",
@@ -71213,10 +71213,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/robot/types/joint_limits.py",
+        "resolved_symbols": 8,
+        "status": "partial"
       },
       "name": "curobo._src.robot.types.joint_limits",
       "path": "curobo/_src/robot/types/joint_limits.py",
@@ -71460,10 +71460,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/robot/types/joint_types.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.robot.types.joint_types",
       "path": "curobo/_src/robot/types/joint_types.py",
@@ -72488,10 +72488,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/robot/types/link_params.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.robot.types.link_params",
       "path": "curobo/_src/robot/types/link_params.py",
@@ -72708,10 +72708,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/robot/types/self_collision_params.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.robot.types.self_collision_params",
       "path": "curobo/_src/robot/types/self_collision_params.py",
@@ -77707,10 +77707,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/solver/manager_goal.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.solver.manager_goal",
       "path": "curobo/_src/solver/manager_goal.py",
@@ -78146,10 +78146,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 4,
+        "path": "curobo/_src/solver/manager_seed.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.solver.manager_seed",
       "path": "curobo/_src/solver/manager_seed.py",
@@ -78452,9 +78452,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/solver/seed_ik/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.solver.seed_ik",
       "path": "curobo/_src/solver/seed_ik/__init__.py",
@@ -78464,10 +78464,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 13,
+        "path": "curobo/_src/solver/seed_ik/seed_ik_error_calculator.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_error_calculator",
       "path": "curobo/_src/solver/seed_ik/seed_ik_error_calculator.py",
@@ -78817,10 +78817,10 @@
     },
     {
       "local": {
-        "missing_symbols": 28,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 22,
+        "path": "curobo/_src/solver/seed_ik/seed_ik_solver.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_solver",
       "path": "curobo/_src/solver/seed_ik/seed_ik_solver.py",
@@ -79235,10 +79235,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 4,
+        "path": "curobo/_src/solver/seed_ik/seed_ik_solver_cfg.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_solver_cfg",
       "path": "curobo/_src/solver/seed_ik/seed_ik_solver_cfg.py",
@@ -79518,10 +79518,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/solver/seed_ik/seed_ik_state.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_state",
       "path": "curobo/_src/solver/seed_ik/seed_ik_state.py",
@@ -79655,10 +79655,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/solver/seed_ik/seed_iteration_state_manager.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_iteration_state_manager",
       "path": "curobo/_src/solver/seed_ik/seed_iteration_state_manager.py",
@@ -80427,10 +80427,10 @@
     },
     {
       "local": {
-        "missing_symbols": 31,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 24,
+        "path": "curobo/_src/solver/solver_core.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.solver.solver_core",
       "path": "curobo/_src/solver/solver_core.py",
@@ -81399,9 +81399,9 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
+        "missing_symbols": 13,
         "path": "curobo/_src/solver/solver_core_cfg.py",
-        "resolved_symbols": 8,
+        "resolved_symbols": 17,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_core_cfg",
@@ -83608,10 +83608,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 13,
+        "path": "curobo/_src/solver/solver_mpc.py",
+        "resolved_symbols": 13,
+        "status": "partial"
       },
       "name": "curobo._src.solver.solver_mpc",
       "path": "curobo/_src/solver/solver_mpc.py",
@@ -84991,10 +84991,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/solver/solver_mpc_cfg.py",
+        "resolved_symbols": 12,
+        "status": "partial"
       },
       "name": "curobo._src.solver.solver_mpc_cfg",
       "path": "curobo/_src/solver/solver_mpc_cfg.py",
@@ -85570,10 +85570,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/solver/solver_mpc_result.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.solver.solver_mpc_result",
       "path": "curobo/_src/solver/solver_mpc_result.py",
@@ -96091,10 +96091,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/types/sequence_tool_pose.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.types.sequence_tool_pose",
       "path": "curobo/_src/types/sequence_tool_pose.py",
@@ -105996,10 +105996,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/batch_motion_planner.py",
+        "resolved_symbols": 2,
+        "status": "resolved"
       },
       "name": "curobo.batch_motion_planner",
       "path": "curobo/batch_motion_planner.py",
@@ -111351,10 +111351,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/model_predictive_control.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.model_predictive_control",
       "path": "curobo/model_predictive_control.py",
@@ -111380,10 +111380,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/motion_planner.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.motion_planner",
       "path": "curobo/motion_planner.py",
@@ -111409,10 +111409,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/motion_retargeter.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.motion_retargeter",
       "path": "curobo/motion_retargeter.py",
@@ -111517,10 +111517,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/perception.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.perception",
       "path": "curobo/perception.py",
@@ -111605,10 +111605,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/robot_builder.py",
+        "resolved_symbols": 2,
+        "status": "resolved"
       },
       "name": "curobo.robot_builder",
       "path": "curobo/robot_builder.py",
@@ -111629,10 +111629,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/robot_parser.py",
+        "resolved_symbols": 1,
+        "status": "resolved"
       },
       "name": "curobo.robot_parser",
       "path": "curobo/robot_parser.py",
@@ -111771,10 +111771,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/scene.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.scene",
       "path": "curobo/scene.py",
@@ -111830,10 +111830,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/sphere_fit.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.sphere_fit",
       "path": "curobo/sphere_fit.py",
@@ -238583,18 +238583,18 @@
     }
   ],
   "runtime_summary": {
-    "missing_modules": 238,
+    "missing_modules": 160,
     "modules": 361,
-    "partial_modules": 81,
-    "resolved_modules": 42,
+    "partial_modules": 133,
+    "resolved_modules": 68,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
-    "missing_modules": 463,
+    "missing_modules": 385,
     "modules": 586,
-    "partial_modules": 81,
-    "resolved_modules": 42,
+    "partial_modules": 133,
+    "resolved_modules": 68,
     "symbols": 7182
   },
   "upstream": {
