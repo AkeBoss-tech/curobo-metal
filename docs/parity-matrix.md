@@ -113,13 +113,14 @@ PYTHONPATH=src python -m tools.parity.run_pinned_cuda \
 ```
 
 The CUDA command refuses any checkout other than
-`8e734f3ced1df898990bcd92de40abce475907db` before importing upstream. At this
-wave, the clean runner deliberately emits `external_constraint` for all 19
-upstream adapters: robot, world, inertial, and solver surfaces require
-caller-supplied assets and/or CUDA-compiled upstream objects, while type helpers
-import CUDA-bound utilities. The exact per-capability constraint is in
-`tools/parity/replay_registry.py`. No CUDA result is synthesized, and therefore
-these records remain evidence-blocked until real pinned CUDA output is produced.
+`8e734f3ced1df898990bcd92de40abce475907db` before importing upstream. The clean
+runner has real asset-independent adapters for `DeviceCfg`, `Pose`, and
+`JointState`. On a CUDA host those adapters write hashed upstream output bundles;
+they do not claim equivalence until comparison succeeds. The other 16 cases
+deliberately emit `external_constraint`: robot, world, inertial, and solver
+surfaces still require caller-supplied assets and/or CUDA-compiled upstream
+objects. The exact per-capability constraint is in
+`tools/parity/replay_registry.py`; no CUDA result is synthesized.
 
 Per-capability tolerances are likewise registry-owned: exact structural cases
 use zero tolerance; type/pose cases use `1e-6/1e-7`; collision and costs use

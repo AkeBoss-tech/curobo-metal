@@ -45,5 +45,7 @@ The portable implementation and deterministic MPS replay corpus are complete.
 Paired CUDA equivalence evidence remains externally blocked: three attempts to
 reach the saved `robo` NVIDIA host failed before task execution (SSH hostname
 resolution from the workspace, followed by two Codex SSH path-probe timeouts).
-The replay runner therefore continues to fail closed and makes no CUDA
-equivalence claim.
+The replay runner now has real, asset-independent pinned-upstream CUDA adapters
+for `DeviceCfg`, `Pose`, and `JointState`; the other 16 cases continue to fail
+closed with explicit constraints. No CUDA equivalence claim is made until the
+adapters execute on a reachable NVIDIA host and their outputs pass comparison.

@@ -26,9 +26,9 @@ class Case:
 
 _ROWS = [
     ("configuration.robot_config_and_loaders", "robot_config", 0, 0, "serialization", "malformed_yaml", "requires caller-supplied upstream robot assets and a supported RobotCfg constructor adapter"),
-    ("types.device_cfg", "device_cfg", 0, 0, "device", "unsupported_device", "upstream DeviceCfg defaults to CUDA and requires an NVIDIA runtime"),
-    ("types.pose", "pose", 1e-6, 1e-7, "pose", "zero_quaternion", "upstream Pose imports CUDA-bound tensor utilities in the pinned package"),
-    ("types.joint_state", "joint_state", 1e-6, 1e-7, "joint_state", "name_width_mismatch", "upstream JointState imports CUDA-bound tensor utilities in the pinned package"),
+    ("types.device_cfg", "device_cfg", 0, 0, "device", "unsupported_device", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
+    ("types.pose", "pose", 1e-6, 1e-7, "pose", "zero_quaternion", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
+    ("types.joint_state", "joint_state", 1e-6, 1e-7, "joint_state", "name_width_mismatch", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
     ("types.solver_results", "solver_results", 0, 0, "result", "invalid_status", "result constructors are solver-specific and require upstream solver-owned objects"),
     ("kinematics.forward_kinematics", "forward_kinematics", 8e-5, 8e-5, "fk", "wrong_dof", "requires a compiled upstream CUDA robot model and licensed/caller-provided robot configuration"),
     ("kinematics.geometric_jacobian", "geometric_jacobian", 1e-4, 1e-5, "fk", "invalid_link", "requires a compiled upstream CUDA robot model and caller-provided robot configuration"),

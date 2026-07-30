@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from tools.parity.replay_registry import BY_ID, PIN
+from tools.parity.cuda_adapters import ADAPTERS
 
 
 ROOT = Path(__file__).parents[2]
@@ -41,6 +42,15 @@ def test_inputs_are_identical_and_safe_npz():
         with np.load(path, allow_pickle=False) as data:
             assert {"q", "empty", "invalid_shape", "inertial_case_json"} <= set(data.files)
     assert len(hashes) == 1
+
+
+def test_asset_independent_cuda_adapters_are_explicitly_registered():
+    assert set(ADAPTERS) == {
+        "types.device_cfg",
+        "types.pose",
+        "types.joint_state",
+    }
+    assert set(ADAPTERS) <= set(BY_ID)
 
 
 def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence():
