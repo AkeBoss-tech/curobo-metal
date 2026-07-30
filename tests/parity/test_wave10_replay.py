@@ -4,11 +4,13 @@ import os
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import numpy as np
 
 from tools.parity.compare_paired import compare_ready, sha256
+from tools.parity.build_cuda_handoff import build as build_cuda_handoff
 from tools.parity.replay_registry import BY_ID, PIN
 from tools.parity.cuda_adapters import ADAPTERS
 
@@ -81,6 +83,19 @@ def _fake_cuda_evidence(root: Path) -> None:
             "input_sha256": metal["input"]["sha256"],
             "input_tensor_count": 8,
             "status": "complete",
+            "runtime": {
+                "python": "3.13.9",
+                "platform": "test-linux",
+                "torch": "2.13.0",
+                "torch_cuda": "13.0",
+                "cuda_device_count": 1,
+                "cuda_device_index": 0,
+                "cuda_device_name": "Test GPU",
+                "cuda_capability": [9, 0],
+                "cuda_total_memory": 1,
+                "nvidia_driver": "test",
+                "upstream_revision": PIN,
+            },
             "output": {
                 "file": output.name,
                 "sha256": sha256(output),
@@ -133,6 +148,51 @@ def test_paired_verifier_rejects_input_provenance_tamper(tmp_path):
         and "different input" in row["error"]
         for row in report["errors"]
     )
+
+
+def test_paired_verifier_rejects_incomplete_runtime_provenance(tmp_path):
+    _fake_cuda_evidence(tmp_path)
+    manifest_path = tmp_path / "types.pose/cuda-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["runtime"]["torch_cuda"] = None
+    manifest_path.write_text(json.dumps(manifest))
+    report = compare_ready(ARTIFACT, tmp_path)
+    assert not report["passed"]
+    assert any(
+        row["capability"] == "types.pose"
+        and "runtime provenance" in row["error"]
+        for row in report["errors"]
+    )
+
+
+def test_cuda_handoff_is_deterministic_and_self_verifying(tmp_path):
+    first, second = tmp_path / "first.zip", tmp_path / "second.zip"
+    build_cuda_handoff(first)
+    build_cuda_handoff(second)
+    assert first.read_bytes() == second.read_bytes()
+    extracted = tmp_path / "extracted"
+    with zipfile.ZipFile(first) as archive:
+        archive.extractall(extracted)
+    verified = subprocess.run(
+        [sys.executable, "verify_handoff.py"],
+        cwd=extracted,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert verified.returncode == 0, verified.stderr
+    assert "verified" in verified.stdout
+    target = extracted / "tools/parity/cuda_adapters.py"
+    target.write_text(target.read_text() + "\n# tampered\n")
+    rejected = subprocess.run(
+        [sys.executable, "verify_handoff.py"],
+        cwd=extracted,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert rejected.returncode != 0
+    assert "hash mismatch" in rejected.stderr
 
 
 def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence():

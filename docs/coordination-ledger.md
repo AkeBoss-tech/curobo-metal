@@ -51,4 +51,6 @@ closed with explicit constraints. No CUDA equivalence claim is made until the
 adapters execute on a reachable NVIDIA host and their outputs pass the strict
 paired verifier. The ready-suite command binds CUDA evidence to the exact
 committed input and Metal output hashes, requires executed invalid-case evidence
-for every ready adapter, and writes an aggregate report.
+for every ready adapter, records CUDA/GPU runtime provenance, and writes an
+aggregate report. A deterministic self-verifying archive supports transfer to
+an NVIDIA host that cannot clone this repository directly.

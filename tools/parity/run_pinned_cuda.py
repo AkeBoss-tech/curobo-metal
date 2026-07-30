@@ -12,17 +12,13 @@ import argparse
 import hashlib
 import json
 import sys
-import subprocess
 from pathlib import Path
 
 import numpy as np
 
 from .cuda_adapters import ADAPTERS, run
+from .cuda_runtime import collect as collect_runtime, revision
 from .replay_registry import BY_ID, PIN
-
-
-def revision(path: Path) -> str:
-    return subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
 
 
 def main() -> None:
@@ -44,6 +40,7 @@ def main() -> None:
     if args.capability in ADAPTERS:
         # Import the exact checkout only after its revision has been verified.
         sys.path.insert(0, str(args.upstream))
+        runtime = collect_runtime(args.upstream)
         outputs = run(args.capability, tensors)
         output_path = args.output / "cuda-outputs.npz"
         np.savez(output_path, **outputs)
@@ -54,6 +51,7 @@ def main() -> None:
             "backend": "cuda", "device": "cuda", "fallback_enabled": False,
             "upstream_revision": actual, "input_sha256": input_sha,
             "input_tensor_count": len(tensors), "status": "complete",
+            "runtime": runtime,
             "output": {
                 "file": output_path.name,
                 "sha256": output_sha,

@@ -10,8 +10,8 @@ from pathlib import Path
 
 from .compare_paired import compare_ready
 from .cuda_adapters import ADAPTERS
+from .cuda_runtime import revision
 from .replay_registry import PIN
-from .run_pinned_cuda import revision
 
 
 def main() -> None:

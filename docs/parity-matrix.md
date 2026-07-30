@@ -123,6 +123,21 @@ PYTHONPATH=.:src python -m tools.parity.run_cuda_ready \
   --output cuda-replay
 ```
 
+When the NVIDIA host cannot access this repository directly, build a
+deterministic self-verifying handoff archive:
+
+```sh
+PYTHONPATH=.:src python -m tools.parity.build_cuda_handoff \
+  --output /tmp/curobo-metal-cuda-handoff.zip
+```
+
+After transfer and extraction, `./run-cuda.sh /path/to/pinned/curobo` verifies
+every packaged file before running. The preflight refuses a non-pinned checkout,
+an unavailable CUDA device, or upstream type imports resolving outside that
+checkout. Each successful CUDA manifest records Python, platform, PyTorch,
+CUDA runtime, NVIDIA driver, GPU name, compute capability, device count, and
+device memory.
+
 This writes one hashed `cuda-manifest.json` and `cuda-outputs.npz` per ready
 capability, followed by `cuda-replay/paired-report.json`. The command exits
 nonzero if the upstream revision, consumed input hash, output hash, tensor

@@ -80,6 +80,22 @@ def compare_capability(
         raise ValueError(f"{capability}: candidate side is not CUDA")
     if cuda_manifest.get("status") != "complete":
         raise ValueError(f"{capability}: CUDA replay is not complete")
+    runtime = cuda_manifest.get("runtime")
+    if (
+        not isinstance(runtime, dict)
+        or runtime.get("upstream_revision") != PIN
+        or not isinstance(runtime.get("torch_cuda"), str)
+        or not runtime["torch_cuda"]
+        or not isinstance(runtime.get("cuda_device_name"), str)
+        or not runtime["cuda_device_name"]
+        or runtime.get("cuda_device_count", 0) < 1
+        or not (
+            isinstance(runtime.get("cuda_capability"), list)
+            and len(runtime["cuda_capability"]) == 2
+            and all(isinstance(value, int) for value in runtime["cuda_capability"])
+        )
+    ):
+        raise ValueError(f"{capability}: incomplete CUDA runtime provenance")
 
     input_path = _owned_file(metal_folder, metal_manifest["input"]["file"])
     metal_output = _owned_file(metal_folder, metal_manifest["output"]["file"])
