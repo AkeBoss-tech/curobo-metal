@@ -53,7 +53,10 @@ external assets. Two compiled adapters reuse that robot for forward-kinematics
 position/quaternion/gradient evidence and geometric-Jacobian value evidence;
 an eighth asset-independent adapter exercises the upstream CUDA self-collision
 kernel on an explicit two-sphere pair, including value, input-gradient, and
-invalid-pair evidence. The other 11 cases continue to fail closed with explicit
+invalid-pair evidence. A ninth adapter reuses the serialized robot's inertial
+model for native upstream CUDA RNEA torque and first-order VJP evidence,
+including missing-acceleration rejection. The other 10 cases continue to fail
+closed with explicit
 constraints. No CUDA
 equivalence claim is made until the adapters
 execute on a reachable NVIDIA host and their outputs pass the strict paired

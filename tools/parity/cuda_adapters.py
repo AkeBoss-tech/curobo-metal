@@ -298,9 +298,70 @@ def _robot_scene_collision(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _inverse_dynamics(raw: dict[str, np.ndarray]) -> Output:
+    import torch
+    from curobo._src.robot.dynamics.dynamics import Dynamics
+    from curobo._src.robot.dynamics.dynamics_cfg import DynamicsCfg
+    from curobo._src.types.robot import RobotCfg
+    from curobo.types import DeviceCfg, JointState
+
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "robot.urdf"
+        path.write_bytes(raw["robot_urdf_utf8"].tobytes())
+        robot = RobotCfg.create(
+            _robot_mapping(str(path)),
+            device_cfg,
+            load_collision_spheres=False,
+        )
+        dynamics = Dynamics(
+            DynamicsCfg(
+                kinematics_config=robot.kinematics.kinematics_config,
+                device_cfg=device_cfg,
+            )
+        )
+        q = torch.as_tensor(
+            raw["q"], device="cuda", dtype=torch.float32
+        ).requires_grad_(True)
+        qd = torch.as_tensor(
+            raw["dynamics_velocity"], device="cuda", dtype=torch.float32
+        ).requires_grad_(True)
+        qdd = torch.as_tensor(
+            raw["dynamics_acceleration"], device="cuda", dtype=torch.float32
+        ).requires_grad_(True)
+        dynamics.setup_batch_size(q.shape[0])
+        torque = dynamics.compute_inverse_dynamics(
+            JointState(
+                position=q,
+                velocity=qd,
+                acceleration=qdd,
+                joint_names=robot.kinematics.kinematics_config.joint_names,
+            )
+        )
+        gradients = torch.autograd.grad(torque.sum(), (q, qd, qdd))
+        return {
+            "torque": torque.detach().cpu().numpy(),
+            "position_gradient": gradients[0].detach().cpu().numpy(),
+            "velocity_gradient": gradients[1].detach().cpu().numpy(),
+            "acceleration_gradient": gradients[2].detach().cpu().numpy(),
+            "status_utf8": np.frombuffer(b"success", np.uint8),
+            "invalid_rejected": _invalid_rejected(
+                lambda: dynamics.compute_inverse_dynamics(
+                    JointState(
+                        position=q,
+                        velocity=qd,
+                        acceleration=None,
+                        joint_names=robot.kinematics.kinematics_config.joint_names,
+                    )
+                )
+            ),
+        }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.robot_scene": _robot_scene_collision,
     "configuration.robot_config_and_loaders": _robot_config,
+    "dynamics.inverse_dynamics": _inverse_dynamics,
     "kinematics.forward_kinematics": _forward_kinematics,
     "kinematics.geometric_jacobian": _geometric_jacobian,
     "types.device_cfg": _device_cfg,

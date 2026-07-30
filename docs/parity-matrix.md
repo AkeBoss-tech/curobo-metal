@@ -162,8 +162,11 @@ executes upstream self-collision for an explicit sphere pair and compares
 clearance plus first-order sphere gradients, with an executed invalid-index
 case. On a CUDA host these adapters write hashed
 upstream output bundles; they do not claim equivalence until comparison
-succeeds. The other 11 cases deliberately emit `external_constraint`: world,
-inertial, and solver surfaces still require additional assets or compiled
+succeeds. The same serialized robot now carries explicit mass, center-of-mass,
+and inertia tensors for a native upstream CUDA RNEA adapter that compares
+torques and VJPs with respect to position, velocity, and acceleration. The
+other 10 cases deliberately emit `external_constraint`: world and solver
+surfaces still require additional assets or compiled
 upstream objects. The exact per-capability constraint is in
 `tools/parity/replay_registry.py`; no CUDA result is synthesized.
 

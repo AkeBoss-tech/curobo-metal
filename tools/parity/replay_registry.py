@@ -43,7 +43,7 @@ _ROWS = [
     ("trajectory.dynamics_aware_bspline", "dynamics_aware_bspline", 3e-4, 3e-5, "bspline", "too_few_knots", "requires upstream robot dynamics model and fused CUDA rollout"),
     ("graph.prm_planner", "prm_planner", 0, 0, "graph", "blocked_endpoints", "requires upstream CUDA collision checker and graph buffers"),
     ("motion_generation.motion_gen", "motion_gen", 5e-4, 5e-5, "trajectory", "ik_failed", "requires caller-provided robot/world assets and compiled upstream CUDA IK/graph/trajopt stack"),
-    ("dynamics.inverse_dynamics", "inverse_dynamics", 2e-4, 2e-5, "dynamics", "bad_inertia", "requires a caller-provided inertial robot model compiled by upstream CUDA dynamics"),
+    ("dynamics.inverse_dynamics", "inverse_dynamics", 2e-4, 2e-5, "dynamics", "missing_acceleration", "real native-CUDA RNEA adapter available for the license-clean serialized inertial robot"),
 ]
 
 CASES = tuple(Case(*row) for row in _ROWS)

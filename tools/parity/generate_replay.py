@@ -28,10 +28,9 @@ from curobo_metal.ops.trajectory.dynamics_aware import bspline_matrices
 from curobo_metal.ops.world_collision import Mesh, VoxelGrid, mesh_distance, query_esdf
 from curobo_metal.optim import LBFGSConfig, ParticleConfig, lbfgs_optimize, particle_optimize
 from curobo_metal.reference import SerialRobot
-from curobo_metal.reference import TreeRobot
 from curobo_metal.types import DeviceCfg, JointState, MotionGenStatus, PlanningResult, Pose
 from curobo_metal.ops.collision import sphere_sphere_signed_distance
-from curobo_metal.ops.whole_body import WholeBodyModel, inverse_dynamics
+from curobo_metal.ops.whole_body import inverse_dynamics
 from curobo_metal.config import RobotCfg
 
 from .replay_registry import CASES, PIN, Case
@@ -59,7 +58,21 @@ def save_npz(path: Path, tensors: dict[str, np.ndarray]) -> None:
 def inputs() -> dict[str, np.ndarray]:
     inertial = (ROOT / "tests/fixtures/whole_body/branched_toy.json").read_bytes()
     robot_urdf = b"""<robot name="paired_two_link">
-  <link name="base"/><link name="link1"/><link name="tool"/>
+  <link name="base"/>
+  <link name="link1">
+    <inertial>
+      <origin xyz="0.5 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.08" iyz="0" izz="0.08"/>
+    </inertial>
+  </link>
+  <link name="tool">
+    <inertial>
+      <origin xyz="0.4 0 0"/>
+      <mass value="0.6"/>
+      <inertia ixx="0.006" ixy="0" ixz="0" iyy="0.04" iyz="0" izz="0.04"/>
+    </inertial>
+  </link>
   <joint name="j0" type="revolute">
     <parent link="base"/><child link="link1"/><origin xyz="1 0 0"/>
     <axis xyz="0 0 1"/>
@@ -86,6 +99,8 @@ def inputs() -> dict[str, np.ndarray]:
             [[0.0, 0.0, 0.0, 0.5], [0.75, 0.0, 0.0, 0.5]], np.float32
         ),
         "collision_pairs": np.array([[0, 1]], np.int64),
+        "dynamics_velocity": np.array([[0.1, -0.2], [0.3, 0.15]], np.float32),
+        "dynamics_acceleration": np.array([[0.4, -0.1], [-0.2, 0.5]], np.float32),
     }
 
 
@@ -311,19 +326,30 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         out = interpolate_edge(q[0], q[1], .25)
         return {"path": out.cpu().numpy(), "status_utf8": np.frombuffer(b"success", np.uint8)}
     if case.probe == "dynamics":
-        inertial = json.loads(raw["inertial_case_json"].tobytes().decode())
-        model = WholeBodyModel(TreeRobot.from_dict(inertial["robot"]), device=device)
-        state = inertial["inputs"]
-        position = _tensor(np.asarray(state["q"], np.float32), device).requires_grad_(True)
-        velocity = _tensor(np.asarray(state["qd"], np.float32), device).requires_grad_(True)
-        acceleration = _tensor(np.asarray(state["qdd"], np.float32), device).requires_grad_(True)
-        torque = inverse_dynamics(model, position, velocity, acceleration).torque
-        gradients = torch.autograd.grad(torque.sum(), (position, velocity, acceleration))
-        return {"torque": torque.detach().cpu().numpy(),
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "robot.urdf"
+            path.write_bytes(raw["robot_urdf_utf8"].tobytes())
+            robot = RobotCfg.create(path, device_cfg=DeviceCfg(device))
+            model = robot.to_whole_body_model()
+            position = _tensor(raw["q"], device).requires_grad_(True)
+            velocity = _tensor(raw["dynamics_velocity"], device).requires_grad_(True)
+            acceleration = _tensor(
+                raw["dynamics_acceleration"], device
+            ).requires_grad_(True)
+            torque = inverse_dynamics(model, position, velocity, acceleration).torque
+            gradients = torch.autograd.grad(
+                torque.sum(), (position, velocity, acceleration)
+            )
+            return {
+                "torque": torque.detach().cpu().numpy(),
                 "position_gradient": gradients[0].cpu().numpy(),
                 "velocity_gradient": gradients[1].cpu().numpy(),
                 "acceleration_gradient": gradients[2].cpu().numpy(),
-                "status_utf8": np.frombuffer(b"success", np.uint8)}
+                "status_utf8": np.frombuffer(b"success", np.uint8),
+                "invalid_rejected": _invalid_rejected(
+                    lambda: inverse_dynamics(model, position, velocity, None)
+                ),
+            }
     raise AssertionError(case.probe)
 
 
@@ -351,7 +377,10 @@ def generate(output: Path, device: str) -> None:
             "input": {"file": input_path.name, "sha256": sha(input_path)},
             "output": {"file": output_path.name, "sha256": sha(output_path)},
             "tolerance": {"rtol": case.rtol, "atol": case.atol},
-            "evidence": {"gradient": "input_gradient" in np.load(output_path).files,
+            "evidence": {"gradient": any(
+                             key.endswith("_gradient")
+                             for key in np.load(output_path).files
+                         ),
                          "status": any(k.startswith("status") for k in np.load(output_path).files),
                          "invalid_executed": "invalid_rejected" in np.load(output_path).files,
                          "invalid_case": case.invalid_case,
