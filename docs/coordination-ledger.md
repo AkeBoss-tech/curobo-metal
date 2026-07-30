@@ -36,7 +36,14 @@ This ledger records durable child-thread handoffs and parent integration state.
 | Closure: config/types/Jacobian/collision | `019fb024-24ff-7b80-9964-a1dad8658c37` | complete | `0323c18` |
 | Closure: optimizers/solvers/planning | `019fb024-5e32-7db3-b2fb-110888d42d64` | complete | `464aab8` |
 | Closure: whole-body/perception | `019fb024-9f04-74f0-bf84-99a0220a3e48` | complete | `06ea4b7` |
-| Paired CUDA/Metal replay harness | `019fb06a-4696-7eb0-aa8e-eb3a9f4ff48d` | active | awaiting verified handoff |
+| Paired CUDA/Metal replay harness | `019fb06a-4696-7eb0-aa8e-eb3a9f4ff48d` | complete | `c38f392` + parent whitespace fix |
 
-Parent integration suite after the last completed wave: 268 tests passing with
+Parent integration suite after the last completed wave: 273 tests passing with
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
+
+The portable implementation and deterministic MPS replay corpus are complete.
+Paired CUDA equivalence evidence remains externally blocked: three attempts to
+reach the saved `robo` NVIDIA host failed before task execution (SSH hostname
+resolution from the workspace, followed by two Codex SSH path-probe timeouts).
+The replay runner therefore continues to fail closed and makes no CUDA
+equivalence claim.

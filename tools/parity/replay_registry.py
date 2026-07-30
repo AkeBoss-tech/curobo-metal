@@ -48,4 +48,3 @@ _ROWS = [
 
 CASES = tuple(Case(*row) for row in _ROWS)
 BY_ID = {case.capability: case for case in CASES}
-
