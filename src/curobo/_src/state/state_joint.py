@@ -124,5 +124,35 @@ class JointState(_MetalJointState):
         if self.dt is not None and value.dt is not None:
             self.dt[index] = value.dt
 
+    def reindex(self, joint_names: list[str]):
+        value = self.reorder(joint_names)
+        self.copy_reference(value)
+
+    def stack(self, new_state: "JointState") -> "JointState":
+        return self._combine(new_state, torch.stack)
+
+    def cat(self, other_js: "JointState", dim: int) -> "JointState":
+        return self._combine(other_js, lambda values: torch.cat(values, dim=dim))
+
+    def _combine(self, other: "JointState", operation) -> "JointState":
+        values = {}
+        for field in ("position", "velocity", "acceleration", "jerk"):
+            left, right = getattr(self, field), getattr(other, field)
+            values[field] = None if left is None else operation((left, right))
+        return type(self)(joint_names=self.joint_names, **values)
+
+    def repeat_seeds(self, num_seeds: int) -> "JointState":
+        if num_seeds <= 1:
+            return self.clone()
+        def repeat(value):
+            return value.view(value.shape[0], 1, *value.shape[1:]).repeat(
+                1, num_seeds, *([1] * (value.ndim - 1))
+            ).reshape(value.shape[0] * num_seeds, *value.shape[1:])
+        return self._map(repeat)
+
+    def get_state_tensor(self) -> torch.Tensor:
+        return torch.cat([x for x in (self.position, self.velocity, self.acceleration, self.jerk)
+                          if x is not None], dim=-1)
+
 
 __all__ = ["JointState"]
