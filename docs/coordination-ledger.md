@@ -49,8 +49,10 @@ The replay runner now has real, asset-independent pinned-upstream CUDA adapters
 for `DeviceCfg`, `Pose`, `JointState`, and shared `BaseSolverResult`
 construction/clone behavior. A fifth adapter uses a license-clean serialized
 two-joint URDF to replay `RobotCfg`, cspace, and joint-limit loading without
-external assets; the other 14 cases continue to fail closed with explicit
-constraints. No CUDA equivalence claim is made until the adapters
+external assets. Two compiled adapters reuse that robot for forward-kinematics
+position/quaternion/gradient evidence and geometric-Jacobian value evidence;
+the other 12 cases continue to fail closed with explicit constraints. No CUDA
+equivalence claim is made until the adapters
 execute on a reachable NVIDIA host and their outputs pass the strict paired
 verifier. The ready-suite command binds CUDA evidence to the exact committed
 input and Metal output hashes, requires executed invalid-case evidence for every

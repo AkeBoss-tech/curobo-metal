@@ -177,8 +177,68 @@ def _solver_results(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _kinematics(raw: dict[str, np.ndarray], *, jacobian: bool) -> Output:
+    import torch
+    from curobo._src.robot.kinematics.kinematics import Kinematics
+    from curobo._src.types.robot import RobotCfg
+    from curobo.types import DeviceCfg, JointState
+
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "robot.urdf"
+        path.write_bytes(raw["robot_urdf_utf8"].tobytes())
+        cfg = RobotCfg.create(
+            _robot_mapping(str(path)),
+            DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+            load_collision_spheres=False,
+        )
+        model = Kinematics(
+            cfg.kinematics,
+            compute_jacobian=jacobian,
+            compute_spheres=False,
+        )
+        q = torch.as_tensor(
+            raw["q"], device="cuda", dtype=torch.float32
+        ).requires_grad_(True)
+        state = model.compute_kinematics(
+            JointState.from_position(q, joint_names=model.joint_names)
+        )
+        if not jacobian:
+            position = state.tool_poses.position[:, 0, 0]
+            quaternion = state.tool_poses.quaternion[:, 0, 0]
+            position.sum().backward()
+            return {
+                "tool_position": position.detach().cpu().numpy(),
+                "tool_quaternion": quaternion.detach().cpu().numpy(),
+                "input_gradient": q.grad.cpu().numpy(),
+                "invalid_rejected": _invalid_rejected(
+                    lambda: model.compute_kinematics(
+                        JointState.from_position(
+                            q[:, :1], joint_names=model.joint_names
+                        )
+                    )
+                ),
+            }
+        tool_jacobian = state.tool_jacobians[:, 0, 0]
+        return {
+            "tool_jacobian": tool_jacobian.detach().cpu().numpy(),
+            "invalid_rejected": _invalid_rejected(
+                lambda: state.tool_poses.get_link_pose("missing")
+            ),
+        }
+
+
+def _forward_kinematics(raw: dict[str, np.ndarray]) -> Output:
+    return _kinematics(raw, jacobian=False)
+
+
+def _geometric_jacobian(raw: dict[str, np.ndarray]) -> Output:
+    return _kinematics(raw, jacobian=True)
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "configuration.robot_config_and_loaders": _robot_config,
+    "kinematics.forward_kinematics": _forward_kinematics,
+    "kinematics.geometric_jacobian": _geometric_jacobian,
     "types.device_cfg": _device_cfg,
     "types.pose": _pose,
     "types.joint_state": _joint_state,

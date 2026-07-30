@@ -18,7 +18,11 @@ import numpy as np
 import torch
 
 from curobo_metal.ops.costs import pose_cost
-from curobo_metal.ops.kinematics import KinematicChain, forward_kinematics
+from curobo_metal.ops.kinematics import (
+    KinematicChain,
+    forward_kinematics,
+    geometric_jacobian,
+)
 from curobo_metal.ops.trajectory import minimum_jerk_trajectory
 from curobo_metal.ops.trajectory.dynamics_aware import bspline_matrices
 from curobo_metal.ops.world_collision import Mesh, VoxelGrid, mesh_distance, query_esdf
@@ -230,10 +234,27 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
             {"name": "j0", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [1, 0, 0]}},
             {"name": "j1", "type": "revolute", "axis": [0, 1, 0], "origin": {"xyz": [1, 0, 0]}},
         ]})
+        chain = KinematicChain(robot, device=device)
         x = q.clone().requires_grad_(True)
-        out = forward_kinematics(KinematicChain(robot, device=device), x)
-        out.transforms.sum().backward()
-        return {"transforms": out.transforms.detach().cpu().numpy(), "jacobian": out.geometric_jacobian.detach().cpu().numpy(), "input_gradient": x.grad.cpu().numpy()}
+        out = forward_kinematics(chain, x)
+        if case.operation == "forward_kinematics":
+            tool_pose = Pose.from_matrix(out.transforms[:, -1])
+            tool_pose.position.sum().backward()
+            return {
+                "tool_position": tool_pose.position.detach().cpu().numpy(),
+                "tool_quaternion": tool_pose.quaternion.detach().cpu().numpy(),
+                "input_gradient": x.grad.cpu().numpy(),
+                "invalid_rejected": _invalid_rejected(
+                    lambda: forward_kinematics(chain, x[:, :1])
+                ),
+            }
+        tool_jacobian = out.geometric_jacobian[:, -1]
+        return {
+            "tool_jacobian": tool_jacobian.detach().cpu().numpy(),
+            "invalid_rejected": _invalid_rejected(
+                lambda: geometric_jacobian(chain, x, links="missing")
+            ),
+        }
     if case.probe == "sphere":
         spheres = _tensor(np.array([[0, 0, 0, .5], [.75, 0, 0, .5]], np.float32), device).requires_grad_(True)
         out = sphere_sphere_signed_distance(spheres, _tensor(np.array([[0, 1]], np.int64), device))

@@ -28,12 +28,12 @@
     {
       "capability": "kinematics.forward_kinematics",
       "manifest": "kinematics.forward_kinematics/metal-manifest.json",
-      "manifest_sha256": "b9968887bcaaf09902cc12717665c03404fc404ee7266c9b4cac112e7204cee7"
+      "manifest_sha256": "dff6330c543ddf7aa255edbc9cd8799fda08011f7c42b464789a00b8744bc555"
     },
     {
       "capability": "kinematics.geometric_jacobian",
       "manifest": "kinematics.geometric_jacobian/metal-manifest.json",
-      "manifest_sha256": "fc786e4d759d952f14be691a0c7fdd26b9eba2cd92bc649e6bbca8562ece0760"
+      "manifest_sha256": "e1024d63cdf0afcb3721278000c3694dbb40e2982c56d4fcafdb3a39f3103304"
     },
     {
       "capability": "collision.robot_scene",

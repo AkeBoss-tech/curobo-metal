@@ -57,6 +57,8 @@ def test_inputs_are_identical_and_safe_npz():
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
     assert set(ADAPTERS) == {
         "configuration.robot_config_and_loaders",
+        "kinematics.forward_kinematics",
+        "kinematics.geometric_jacobian",
         "types.device_cfg",
         "types.pose",
         "types.joint_state",

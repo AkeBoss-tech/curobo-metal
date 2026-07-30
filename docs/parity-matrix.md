@@ -152,12 +152,16 @@ The CUDA command refuses any checkout other than
 runner has real asset-independent adapters for `DeviceCfg`, `Pose`, and
 `JointState`, plus the shared `BaseSolverResult` construction and clone surface.
 It also carries a license-clean serialized two-joint URDF and explicit cspace
-configuration for upstream `RobotCfg` construction and limit replay. On a CUDA
-host those adapters write hashed upstream output bundles; they do not claim
-equivalence until comparison succeeds. The other 14 cases deliberately emit
-`external_constraint`: world, inertial, and compiled solver surfaces still
-require caller-supplied assets and/or CUDA-compiled upstream objects. The exact
-per-capability constraint is in
+configuration for upstream `RobotCfg` construction and limit replay. The same
+robot drives compiled upstream CUDA forward kinematics and geometric-Jacobian
+adapters. FK compares tool position, wxyz quaternion, and position-loss input
+gradients; Jacobian compares the world-frame 6-by-DoF tool Jacobian. The
+Jacobian adapter deliberately does not claim dJ/dq because that is higher-order
+AD outside the fused Metal contract. On a CUDA host these adapters write hashed
+upstream output bundles; they do not claim equivalence until comparison
+succeeds. The other 12 cases deliberately emit `external_constraint`: world,
+inertial, and solver surfaces still require additional assets or compiled
+upstream objects. The exact per-capability constraint is in
 `tools/parity/replay_registry.py`; no CUDA result is synthesized.
 
 Per-capability tolerances are likewise registry-owned: exact structural cases

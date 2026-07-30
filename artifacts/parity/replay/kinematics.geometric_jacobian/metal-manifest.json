@@ -4,9 +4,9 @@
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
-    "gradient": true,
+    "gradient": false,
     "invalid_case": "invalid_link",
-    "invalid_executed": false,
+    "invalid_executed": true,
     "probe_scope": "fk",
     "status": false
   },
@@ -19,7 +19,7 @@
   "operation": "geometric_jacobian",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "1b7e812f6f9c3c91919ebf13082767a310273984cb404303d8dc4ea832b859df"
+    "sha256": "520f67597d376108119d1a260cba51e7bae424267230ad32b3574d4a0774d9c7"
   },
   "runtime": {
     "python": "3.13.9",

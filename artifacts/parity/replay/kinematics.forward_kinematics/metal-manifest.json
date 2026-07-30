@@ -6,7 +6,7 @@
   "evidence": {
     "gradient": true,
     "invalid_case": "wrong_dof",
-    "invalid_executed": false,
+    "invalid_executed": true,
     "probe_scope": "fk",
     "status": false
   },
@@ -19,7 +19,7 @@
   "operation": "forward_kinematics",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "1b7e812f6f9c3c91919ebf13082767a310273984cb404303d8dc4ea832b859df"
+    "sha256": "9376e7290b018ab0cb6e982010fe6a4df4abf4e8f260082726961b4c5ea7ff50"
   },
   "runtime": {
     "python": "3.13.9",
