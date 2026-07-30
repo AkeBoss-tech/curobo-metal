@@ -23,7 +23,7 @@
     {
       "capability": "types.solver_results",
       "manifest": "types.solver_results/metal-manifest.json",
-      "manifest_sha256": "d507f52923090b81d457e09070664b649b3d6a2eeec38f9c0069d6a341de2051"
+      "manifest_sha256": "429b9dd67d588143ed76605ca9f3507e8512c05e81fb9c19d9f464d82990f4e1"
     },
     {
       "capability": "kinematics.forward_kinematics",

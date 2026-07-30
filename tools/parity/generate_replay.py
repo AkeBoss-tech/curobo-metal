@@ -79,6 +79,20 @@ def _invalid_rejected(operation) -> np.ndarray:
     return np.array([0], np.int8)
 
 
+def _status_codes(values) -> np.ndarray:
+    mapping = {
+        MotionGenStatus.SUCCESS.value: 0,
+        MotionGenStatus.IK_FAILED.value: 1,
+    }
+    try:
+        return np.asarray(
+            [mapping[value.value if isinstance(value, MotionGenStatus) else value] for value in values],
+            np.int8,
+        )
+    except KeyError as error:
+        raise ValueError(f"unsupported normalized solver status: {error.args[0]}") from error
+
+
 def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
     q = _tensor(raw["q"], device)
     if case.probe == "serialization":
@@ -120,8 +134,25 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
             ),
         }
     if case.probe == "result":
-        result = PlanningResult(True, MotionGenStatus.SUCCESS, JointState.from_position(q, ["j0", "j1"]))
-        return {"success": np.array([bool(result.success)]), "status_utf8": np.frombuffer(str(result.status.value).encode(), np.uint8)}
+        statuses = (MotionGenStatus.SUCCESS, MotionGenStatus.IK_FAILED)
+        result = PlanningResult(
+            torch.tensor([True, False], device=device),
+            statuses,
+            JointState.from_position(q, ["j0", "j1"]),
+            0.125,
+            {"q": q.clone()},
+        )
+        return {
+            "success": result.success.cpu().numpy(),
+            "solution": result.solution.position.cpu().numpy(),
+            "js_position": result.solution.position.cpu().numpy(),
+            "solve_time": np.array([result.solve_time], np.float64),
+            "debug_tensor": result.debug_info["q"].cpu().numpy(),
+            "status_code": _status_codes(statuses),
+            "invalid_rejected": _invalid_rejected(
+                lambda: _status_codes(["invalid_status"])
+            ),
+        }
     if case.probe == "fk":
         robot = SerialRobot.from_dict({"name": "two_link", "joints": [
             {"name": "j0", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [1, 0, 0]}},

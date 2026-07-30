@@ -6,7 +6,7 @@
   "evidence": {
     "gradient": false,
     "invalid_case": "invalid_status",
-    "invalid_executed": false,
+    "invalid_executed": true,
     "probe_scope": "result",
     "status": true
   },
@@ -19,7 +19,7 @@
   "operation": "solver_results",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "a5a804e097a699a455c2c18c2260c13f9b4d6edf8365368fae8dd447826fbf8f"
+    "sha256": "f3338b742018665c0133e1adb7dbd925323f8cec5ebe86237bda2ebae16e605f"
   },
   "runtime": {
     "python": "3.13.9",

@@ -22,6 +22,14 @@ def _invalid_rejected(operation) -> np.ndarray:
     return np.array([0], np.int8)
 
 
+def _status_codes(values) -> np.ndarray:
+    mapping = {"success": 0, "ik_failed": 1}
+    try:
+        return np.asarray([mapping[value] for value in values], np.int8)
+    except KeyError as error:
+        raise ValueError(f"unsupported normalized solver status: {error.args[0]}") from error
+
+
 def _device_cfg(raw: dict[str, np.ndarray]) -> Output:
     import torch
     from curobo.types import DeviceCfg
@@ -79,10 +87,43 @@ def _joint_state(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _solver_results(raw: dict[str, np.ndarray]) -> Output:
+    import torch
+    from curobo._src.solver.solver_base_result import BaseSolverResult
+    from curobo.types import JointState
+
+    solution = torch.as_tensor(raw["q"], device="cuda", dtype=torch.float32)
+    success = torch.tensor([True, False], device="cuda")
+    state = JointState.from_position(solution, ["j0", "j1"])
+    result = BaseSolverResult(
+        success=success,
+        solution=solution,
+        js_solution=state,
+        solve_time=0.125,
+        total_time=0.25,
+        debug_info={"q": solution.clone()},
+        batch_size=2,
+        num_seeds=1,
+    ).clone()
+    statuses = ["success" if value else "ik_failed" for value in success.cpu().tolist()]
+    return {
+        "success": result.success.detach().cpu().numpy(),
+        "solution": result.solution.detach().cpu().numpy(),
+        "js_position": result.js_solution.position.detach().cpu().numpy(),
+        "solve_time": np.array([result.solve_time], np.float64),
+        "debug_tensor": result.debug_info["q"].detach().cpu().numpy(),
+        "status_code": _status_codes(statuses),
+        "invalid_rejected": _invalid_rejected(
+            lambda: _status_codes(["invalid_status"])
+        ),
+    }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "types.device_cfg": _device_cfg,
     "types.pose": _pose,
     "types.joint_state": _joint_state,
+    "types.solver_results": _solver_results,
 }
 
 

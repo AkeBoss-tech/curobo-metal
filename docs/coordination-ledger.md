@@ -46,11 +46,12 @@ Paired CUDA equivalence evidence remains externally blocked: three attempts to
 reach the saved `robo` NVIDIA host failed before task execution (SSH hostname
 resolution from the workspace, followed by two Codex SSH path-probe timeouts).
 The replay runner now has real, asset-independent pinned-upstream CUDA adapters
-for `DeviceCfg`, `Pose`, and `JointState`; the other 16 cases continue to fail
-closed with explicit constraints. No CUDA equivalence claim is made until the
-adapters execute on a reachable NVIDIA host and their outputs pass the strict
-paired verifier. The ready-suite command binds CUDA evidence to the exact
-committed input and Metal output hashes, requires executed invalid-case evidence
-for every ready adapter, records CUDA/GPU runtime provenance, and writes an
-aggregate report. A deterministic self-verifying archive supports transfer to
-an NVIDIA host that cannot clone this repository directly.
+for `DeviceCfg`, `Pose`, `JointState`, and shared `BaseSolverResult`
+construction/clone behavior; the other 15 cases continue to fail closed with
+explicit constraints. No CUDA equivalence claim is made until the adapters
+execute on a reachable NVIDIA host and their outputs pass the strict paired
+verifier. The ready-suite command binds CUDA evidence to the exact committed
+input and Metal output hashes, requires executed invalid-case evidence for every
+ready adapter, records CUDA/GPU runtime provenance, and writes an aggregate
+report. A deterministic self-verifying archive supports transfer to an NVIDIA
+host that cannot clone this repository directly.

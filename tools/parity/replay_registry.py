@@ -29,7 +29,7 @@ _ROWS = [
     ("types.device_cfg", "device_cfg", 0, 0, "device", "unsupported_device", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
     ("types.pose", "pose", 1e-6, 1e-7, "pose", "zero_quaternion", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
     ("types.joint_state", "joint_state", 1e-6, 1e-7, "joint_state", "name_width_mismatch", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
-    ("types.solver_results", "solver_results", 0, 0, "result", "invalid_status", "result constructors are solver-specific and require upstream solver-owned objects"),
+    ("types.solver_results", "solver_results", 0, 0, "result", "invalid_status", "real asset-independent BaseSolverResult CUDA adapter available; execution requires an NVIDIA runtime"),
     ("kinematics.forward_kinematics", "forward_kinematics", 8e-5, 8e-5, "fk", "wrong_dof", "requires a compiled upstream CUDA robot model and licensed/caller-provided robot configuration"),
     ("kinematics.geometric_jacobian", "geometric_jacobian", 1e-4, 1e-5, "fk", "invalid_link", "requires a compiled upstream CUDA robot model and caller-provided robot configuration"),
     ("collision.robot_scene", "robot_scene_collision", 2e-5, 2e-6, "sphere", "bad_pair_index", "requires upstream CUDA collision kernels plus robot/world cache configuration"),

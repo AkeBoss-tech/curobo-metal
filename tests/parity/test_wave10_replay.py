@@ -53,6 +53,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "types.device_cfg",
         "types.pose",
         "types.joint_state",
+        "types.solver_results",
     }
     assert set(ADAPTERS) <= set(BY_ID)
 

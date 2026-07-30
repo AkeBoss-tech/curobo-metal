@@ -143,18 +143,19 @@ capability, followed by `cuda-replay/paired-report.json`. The command exits
 nonzero if the upstream revision, consumed input hash, output hash, tensor
 schema, registry tolerance, backend provenance, or any numerical comparison
 fails. A report is complete only when all registered real CUDA adapters are
-present and passing. For the ready type adapters, the compared output schema
-also includes an executed invalid-case outcome (`invalid_rejected`), so a report
-cannot pass using happy-path values alone.
+present and passing. For the ready type and solver-result adapters, the compared
+output schema also includes an executed invalid-case outcome
+(`invalid_rejected`), so a report cannot pass using happy-path values alone.
 
 The CUDA command refuses any checkout other than
 `8e734f3ced1df898990bcd92de40abce475907db` before importing upstream. The clean
 runner has real asset-independent adapters for `DeviceCfg`, `Pose`, and
-`JointState`. On a CUDA host those adapters write hashed upstream output bundles;
-they do not claim equivalence until comparison succeeds. The other 16 cases
-deliberately emit `external_constraint`: robot, world, inertial, and solver
-surfaces still require caller-supplied assets and/or CUDA-compiled upstream
-objects. The exact per-capability constraint is in
+`JointState`, plus the shared `BaseSolverResult` construction and clone surface.
+On a CUDA host those adapters write hashed upstream output bundles; they do not
+claim equivalence until comparison succeeds. The other 15 cases deliberately
+emit `external_constraint`: robot, world, inertial, and compiled solver surfaces
+still require caller-supplied assets and/or CUDA-compiled upstream objects. The
+exact per-capability constraint is in
 `tools/parity/replay_registry.py`; no CUDA result is synthesized.
 
 Per-capability tolerances are likewise registry-owned: exact structural cases
