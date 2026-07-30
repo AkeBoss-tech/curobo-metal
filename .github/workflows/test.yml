@@ -31,6 +31,13 @@ jobs:
           enable-cache: true
       - run: uv sync --extra test
       - run: PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
+      - name: Test installed wheel namespace and assets
+        run: |
+          uv build --wheel --out-dir dist
+          uv pip install --python .venv/bin/python --reinstall --no-deps dist/*.whl
+          cd /tmp
+          "$GITHUB_WORKSPACE/.venv/bin/python" \
+            "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
 
   macos:
     runs-on: macos-14
@@ -41,3 +48,10 @@ jobs:
           enable-cache: true
       - run: uv sync --extra test
       - run: PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
+      - name: Test installed wheel namespace and assets
+        run: |
+          uv build --wheel --out-dir dist
+          uv pip install --python .venv/bin/python --reinstall --no-deps dist/*.whl
+          cd /tmp
+          "$GITHUB_WORKSPACE/.venv/bin/python" \
+            "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
