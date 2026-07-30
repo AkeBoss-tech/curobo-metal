@@ -35,7 +35,7 @@ _ROWS = [
     ("collision.robot_scene", "robot_scene_collision", 2e-5, 2e-6, "sphere", "bad_pair_index", "real asset-independent CUDA self-collision adapter available; execution requires an NVIDIA runtime"),
     ("collision.mesh_world", "mesh_world", 2e-5, 2e-6, "mesh", "non_watertight_signed", "requires upstream Warp/CUDA mesh acceleration structures; no portable clean-runner constructor"),
     ("collision.voxel_esdf_query", "voxel_esdf", 3e-5, 3e-6, "voxel", "bad_environment", "requires upstream CUDA voxel cache allocation and collision buffers"),
-    ("cost.pose_and_composable_costs", "pose_costs", 2e-5, 2e-6, "cost", "bad_weight_shape", "requires upstream fused CUDA rollout buffers and solver-owned cost configuration"),
+    ("cost.pose_and_composable_costs", "pose_costs", 2e-5, 2e-6, "cost", "invalid_pose_cost_input", "real asset-independent upstream ToolPoseCost CUDA adapter available for position cost and gradient replay"),
     ("optim.particle_evolution", "particle_evolution", 2e-4, 2e-5, "particle", "bad_covariance", "upstream RNG stream and optimizer construction require CUDA rollout objects"),
     ("optim.lbfgs", "lbfgs", 2e-4, 2e-5, "lbfgs", "nonfinite_objective", "upstream LBFGSOpt requires CUDA graph/rollout configuration"),
     ("ik.inverse_kinematics", "inverse_kinematics", 3e-4, 3e-5, "cost", "infeasible_goal", "requires caller-provided robot/world assets and upstream CUDA IK solver compilation"),

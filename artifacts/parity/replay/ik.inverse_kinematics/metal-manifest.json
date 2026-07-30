@@ -6,7 +6,7 @@
   "evidence": {
     "gradient": true,
     "invalid_case": "infeasible_goal",
-    "invalid_executed": false,
+    "invalid_executed": true,
     "probe_scope": "cost",
     "status": false
   },
@@ -14,12 +14,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "52806e8be0733a65535ab465019744425a75c8516e09a26da58626e0d73c5193"
+    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
   },
   "operation": "inverse_kinematics",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "ed255735bbbf9e725657eb720b13aa6964c3551e709fb84bf451e20017dee2e5"
+    "sha256": "253a9aec6191476124f1cf82554c63aaf48d429171f128f0f1934733fc1fea77"
   },
   "runtime": {
     "python": "3.13.9",

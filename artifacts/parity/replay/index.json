@@ -3,97 +3,97 @@
     {
       "capability": "configuration.robot_config_and_loaders",
       "manifest": "configuration.robot_config_and_loaders/metal-manifest.json",
-      "manifest_sha256": "d68f958eaee42b5da1070529b6e59aa4ab362aabad9939eb4b3c3089f8f810e6"
+      "manifest_sha256": "ea7d8b82d04c921f54913d0a6afd0292498c80ecd3f0092477669cf40365906c"
     },
     {
       "capability": "types.device_cfg",
       "manifest": "types.device_cfg/metal-manifest.json",
-      "manifest_sha256": "c21989c8094a3ebffc9c7068fd0037094fafc85dbc9973a56ddda5ef2d34235d"
+      "manifest_sha256": "c21b1063217538a5382c561229a730c9e8ee69ecf296e4380c4f9d28422b9c0d"
     },
     {
       "capability": "types.pose",
       "manifest": "types.pose/metal-manifest.json",
-      "manifest_sha256": "5f08c1c1c0d57a877d212f2071ed84942f7d159ae41b064e68ab06d478198cc0"
+      "manifest_sha256": "558203059f699516fe52f0b8b4dc58e050933f11c27cdcc15cc706c69da47271"
     },
     {
       "capability": "types.joint_state",
       "manifest": "types.joint_state/metal-manifest.json",
-      "manifest_sha256": "ee60d866d01f9a7dac6eab9870ab9e36ade779ff57bd23f71fb67f16f079d603"
+      "manifest_sha256": "71c1a0ea105c1935d23eb6c80cd2049143f03ef06a8565a5a7c221a28a368082"
     },
     {
       "capability": "types.solver_results",
       "manifest": "types.solver_results/metal-manifest.json",
-      "manifest_sha256": "2cb785584adc40a491137541965b3c82c92d34192bb55c808e7a11c81ee6d162"
+      "manifest_sha256": "491d6cc6fa70dbde2a00dece5ff71c70f486b7c65f55c74ffe607592bd258f5d"
     },
     {
       "capability": "kinematics.forward_kinematics",
       "manifest": "kinematics.forward_kinematics/metal-manifest.json",
-      "manifest_sha256": "2f02ae266a9056573d4be91a177549a093b74237191bc41ca2dd9f113ffb0293"
+      "manifest_sha256": "74ac25af1bf9bbe5135bf71ff11a78ece562c18fb966cc1d88d73be2ba7119a0"
     },
     {
       "capability": "kinematics.geometric_jacobian",
       "manifest": "kinematics.geometric_jacobian/metal-manifest.json",
-      "manifest_sha256": "9780e343bfda27a230f7c3d6ae40efc9d591fc79f4eb0cf67281b73d827d2007"
+      "manifest_sha256": "5e461c5555af2546df119715ac867242c945e8f41cb15c14b4282fb65240698a"
     },
     {
       "capability": "collision.robot_scene",
       "manifest": "collision.robot_scene/metal-manifest.json",
-      "manifest_sha256": "2363069599fbda18315708e6fb7597b2e4884cbc2f454bb0987316db732f39eb"
+      "manifest_sha256": "84fa506a4a33713d29277a1757a3c82994048165d8e8258a54019a4804263919"
     },
     {
       "capability": "collision.mesh_world",
       "manifest": "collision.mesh_world/metal-manifest.json",
-      "manifest_sha256": "6b63fff9ecbb45121e79f3667b2b011c95e408fa1c08b33f06faeaa3058d81a3"
+      "manifest_sha256": "c881ed0987271af094f271e57118074aeb4439050ebcde839652ac31fc85a021"
     },
     {
       "capability": "collision.voxel_esdf_query",
       "manifest": "collision.voxel_esdf_query/metal-manifest.json",
-      "manifest_sha256": "5a72b0090881433877b3f72566b3a94ffe25680438c1b4628660efe9625b87e4"
+      "manifest_sha256": "9495a9db11a77b19b64589bf2e220784f5cd97dc33a765ef28c028386511aaa3"
     },
     {
       "capability": "cost.pose_and_composable_costs",
       "manifest": "cost.pose_and_composable_costs/metal-manifest.json",
-      "manifest_sha256": "32554f9e9407fe3bdb0a3bfb22f809afde91c4618378cca0cd2af147d6e7bacf"
+      "manifest_sha256": "04b4d0fb14dcc54593d210efa195b71e5efcdf1a7d694fb5dc3c64fc57888c4e"
     },
     {
       "capability": "optim.particle_evolution",
       "manifest": "optim.particle_evolution/metal-manifest.json",
-      "manifest_sha256": "1055f39f7869b3ad13ffdf1c850bc5c6b1942e4329ff37e7f33a9ba919d7eab2"
+      "manifest_sha256": "429f75d70b4970fb6ff6cac70771fc5c95af5af634f402d5784f277e2a1336c7"
     },
     {
       "capability": "optim.lbfgs",
       "manifest": "optim.lbfgs/metal-manifest.json",
-      "manifest_sha256": "30fde8cada5c9659b4794340a165bfc24e5ce14849323aecddb33b0be0e2cb2f"
+      "manifest_sha256": "5b6c7a0e599d083f801dbe789388dca09dece6243001a9d6dd4e5c0a76249344"
     },
     {
       "capability": "ik.inverse_kinematics",
       "manifest": "ik.inverse_kinematics/metal-manifest.json",
-      "manifest_sha256": "1818733579f99e4535f17e9e0c8d16bcaa7f0c10bd13954e375530c75783118d"
+      "manifest_sha256": "2666c9a534379517c6b129e68648341d579828185117a1d78fb01282063ac4c8"
     },
     {
       "capability": "trajectory.trajectory_optimization",
       "manifest": "trajectory.trajectory_optimization/metal-manifest.json",
-      "manifest_sha256": "2a0c42886d632b4a8f65a876b51534c132586f46334f4e7ec5c480a1c93bf3c6"
+      "manifest_sha256": "622891ffaf2b5374c152fd6284cc9b59e5b8ddba08d089de70769aafc79d75c5"
     },
     {
       "capability": "trajectory.dynamics_aware_bspline",
       "manifest": "trajectory.dynamics_aware_bspline/metal-manifest.json",
-      "manifest_sha256": "88586b99f09701ec6a5a00390e3d1f327819afc7bfe5981a05a827b13ea46bba"
+      "manifest_sha256": "1cc96986b76f0586c4619dbc6b02acf30403b29c0eca852d6fe6a5718a856bb9"
     },
     {
       "capability": "graph.prm_planner",
       "manifest": "graph.prm_planner/metal-manifest.json",
-      "manifest_sha256": "3a940f17024f3c760494f49fe490cd36c0b7d24024842d2058c93dfb4c12fa43"
+      "manifest_sha256": "39f2f7e67f4dc5d4dd7247fb0de97c95b7aad0d03c9ad7625cd503a134cc45aa"
     },
     {
       "capability": "motion_generation.motion_gen",
       "manifest": "motion_generation.motion_gen/metal-manifest.json",
-      "manifest_sha256": "76e25bf4e896be0919bbf21f24363f16867cc823d156809b548912f59bdc53d8"
+      "manifest_sha256": "f826c4a342ca10f19e499e3dac8026078e488ddf8cc5bda16750bce45d94f18e"
     },
     {
       "capability": "dynamics.inverse_dynamics",
       "manifest": "dynamics.inverse_dynamics/metal-manifest.json",
-      "manifest_sha256": "e9d65c7a977e3d36f9a518dd881de4b9e01f4db9bd9d18a0c3782f439628d84f"
+      "manifest_sha256": "7afa2c6ffcebad3d517ef273525cd510c17ecfde61f83d76a99e3ee289dba6c8"
     }
   ],
   "format": "curobo-metal-paired-replay",

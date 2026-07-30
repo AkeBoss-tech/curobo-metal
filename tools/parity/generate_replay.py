@@ -101,6 +101,9 @@ def inputs() -> dict[str, np.ndarray]:
         "collision_pairs": np.array([[0, 1]], np.int64),
         "dynamics_velocity": np.array([[0.1, -0.2], [0.3, 0.15]], np.float32),
         "dynamics_acceleration": np.array([[0.4, -0.1], [-0.2, 0.5]], np.float32),
+        "pose_cost_position": np.array(
+            [[0.1, -0.2, 0.3], [-0.4, 0.2, 0.15]], np.float32
+        ),
     }
 
 
@@ -302,10 +305,17 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         out = query_esdf(_tensor(np.array([[.1, .1, .1], [-.25, .25, .25]], np.float32), device), [[grid]])
         return {"distance": out.distance.cpu().numpy(), "valid": out.valid.cpu().numpy(), "winner": out.winning_grid.cpu().numpy()}
     if case.probe == "cost":
-        x = q.repeat(1, 3).clone().requires_grad_(True)
-        value = pose_cost(x)
+        position = _tensor(raw["pose_cost_position"], device).requires_grad_(True)
+        error = torch.cat((position, torch.zeros_like(position)), dim=-1)
+        value = pose_cost(error)
         value.sum().backward()
-        return {"value": value.detach().cpu().numpy(), "input_gradient": x.grad.cpu().numpy()}
+        return {
+            "value": value.detach().cpu().numpy(),
+            "position_gradient": position.grad.cpu().numpy(),
+            "invalid_rejected": _invalid_rejected(
+                lambda: pose_cost(error, torch.ones(5, device=device))
+            ),
+        }
     if case.probe in {"particle", "lbfgs"}:
         def objective(x):
             return ((x - .2) ** 2).sum(-1)
