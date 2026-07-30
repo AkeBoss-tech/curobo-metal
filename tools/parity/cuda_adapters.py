@@ -235,7 +235,71 @@ def _geometric_jacobian(raw: dict[str, np.ndarray]) -> Output:
     return _kinematics(raw, jacobian=True)
 
 
+def _validated_pairs(raw: np.ndarray, sphere_count: int) -> np.ndarray:
+    pairs = np.asarray(raw)
+    if pairs.ndim != 2 or pairs.shape[1] != 2:
+        raise ValueError("collision pairs must have shape [P,2]")
+    if np.any(pairs < 0) or np.any(pairs >= sphere_count):
+        raise ValueError("collision pair contains an out-of-range sphere")
+    if np.any(pairs[:, 0] == pairs[:, 1]):
+        raise ValueError("collision pair cannot contain the same sphere twice")
+    return pairs
+
+
+def _robot_scene_collision(raw: dict[str, np.ndarray]) -> Output:
+    import torch
+    from curobo._src.cost.cost_self_collision import SelfCollisionCost
+    from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg
+    from curobo._src.robot.types.self_collision_params import (
+        SelfCollisionKinematicsCfg,
+    )
+    from curobo.types import DeviceCfg
+
+    spheres = torch.as_tensor(
+        raw["collision_spheres"], device="cuda", dtype=torch.float32
+    ).reshape(1, 1, -1, 4).requires_grad_(True)
+    pairs_np = _validated_pairs(raw["collision_pairs"], spheres.shape[2])
+    pairs = torch.as_tensor(pairs_np, device="cuda", dtype=torch.int16)
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+    kin_cfg = SelfCollisionKinematicsCfg(
+        num_spheres=spheres.shape[2],
+        sphere_padding=torch.zeros(spheres.shape[2], device="cuda"),
+        collision_pairs=pairs,
+    )
+    cost = SelfCollisionCost(
+        SelfCollisionCostCfg(
+            weight=1.0,
+            device_cfg=device_cfg,
+            self_collision_kin_config=kin_cfg,
+            store_pair_distance=True,
+            use_grad_input=True,
+        )
+    )
+    cost.setup_batch_tensors(1, 1)
+    cost.forward(spheres)
+    pair_measure = cost._pair_distance[0, 0, 0]
+    first, second = int(pairs_np[0, 0]), int(pairs_np[0, 1])
+    radius_sum = spheres[0, 0, first, 3] + spheres[0, 0, second, 3]
+    center_distance = torch.sqrt(
+        torch.clamp(radius_sum.square() - pair_measure, min=0)
+    )
+    clearance = center_distance - radius_sum
+    raw_gradient = cost._out_grad[0, 0].clone()
+    gradient = raw_gradient.clone()
+    gradient[:, :3] = -raw_gradient[:, :3] / center_distance
+    bad_pairs = pairs_np.copy()
+    bad_pairs[0, 1] = spheres.shape[2]
+    return {
+        "distance": clearance.reshape(1, 1).detach().cpu().numpy(),
+        "input_gradient": gradient.detach().cpu().numpy(),
+        "invalid_rejected": _invalid_rejected(
+            lambda: _validated_pairs(bad_pairs, spheres.shape[2])
+        ),
+    }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
+    "collision.robot_scene": _robot_scene_collision,
     "configuration.robot_config_and_loaders": _robot_config,
     "kinematics.forward_kinematics": _forward_kinematics,
     "kinematics.geometric_jacobian": _geometric_jacobian,

@@ -51,7 +51,10 @@ construction/clone behavior. A fifth adapter uses a license-clean serialized
 two-joint URDF to replay `RobotCfg`, cspace, and joint-limit loading without
 external assets. Two compiled adapters reuse that robot for forward-kinematics
 position/quaternion/gradient evidence and geometric-Jacobian value evidence;
-the other 12 cases continue to fail closed with explicit constraints. No CUDA
+an eighth asset-independent adapter exercises the upstream CUDA self-collision
+kernel on an explicit two-sphere pair, including value, input-gradient, and
+invalid-pair evidence. The other 11 cases continue to fail closed with explicit
+constraints. No CUDA
 equivalence claim is made until the adapters
 execute on a reachable NVIDIA host and their outputs pass the strict paired
 verifier. The ready-suite command binds CUDA evidence to the exact committed

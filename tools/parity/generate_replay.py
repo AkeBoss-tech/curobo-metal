@@ -82,6 +82,10 @@ def inputs() -> dict[str, np.ndarray]:
         "empty": np.empty((0, 2), np.float32),
         "inertial_case_json": np.frombuffer(inertial, np.uint8),
         "robot_urdf_utf8": np.frombuffer(robot_urdf, np.uint8),
+        "collision_spheres": np.array(
+            [[0.0, 0.0, 0.0, 0.5], [0.75, 0.0, 0.0, 0.5]], np.float32
+        ),
+        "collision_pairs": np.array([[0, 1]], np.int64),
     }
 
 
@@ -256,10 +260,19 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
             ),
         }
     if case.probe == "sphere":
-        spheres = _tensor(np.array([[0, 0, 0, .5], [.75, 0, 0, .5]], np.float32), device).requires_grad_(True)
-        out = sphere_sphere_signed_distance(spheres, _tensor(np.array([[0, 1]], np.int64), device))
+        spheres = _tensor(raw["collision_spheres"], device).requires_grad_(True)
+        pairs = _tensor(raw["collision_pairs"], device)
+        out = sphere_sphere_signed_distance(spheres, pairs)
         out.distances.sum().backward()
-        return {"distance": out.distances.detach().cpu().numpy(), "input_gradient": spheres.grad.cpu().numpy()}
+        bad_pairs = pairs.clone()
+        bad_pairs[0, 1] = spheres.shape[0]
+        return {
+            "distance": out.distances.detach().cpu().numpy(),
+            "input_gradient": spheres.grad.cpu().numpy(),
+            "invalid_rejected": _invalid_rejected(
+                lambda: sphere_sphere_signed_distance(spheres, bad_pairs)
+            ),
+        }
     if case.probe == "mesh":
         vertices = _tensor(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], np.float32), device)
         mesh = Mesh(vertices, _tensor(np.array([[0, 1, 2]], np.int64), device), False)

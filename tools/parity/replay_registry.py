@@ -32,7 +32,7 @@ _ROWS = [
     ("types.solver_results", "solver_results", 0, 0, "result", "invalid_status", "real asset-independent BaseSolverResult CUDA adapter available; execution requires an NVIDIA runtime"),
     ("kinematics.forward_kinematics", "forward_kinematics", 8e-5, 8e-5, "fk", "wrong_dof", "real compiled CUDA FK adapter available for the license-clean serialized robot"),
     ("kinematics.geometric_jacobian", "geometric_jacobian", 1e-4, 1e-5, "fk", "invalid_link", "real compiled CUDA geometric-Jacobian adapter available for the license-clean serialized robot"),
-    ("collision.robot_scene", "robot_scene_collision", 2e-5, 2e-6, "sphere", "bad_pair_index", "requires upstream CUDA collision kernels plus robot/world cache configuration"),
+    ("collision.robot_scene", "robot_scene_collision", 2e-5, 2e-6, "sphere", "bad_pair_index", "real asset-independent CUDA self-collision adapter available; execution requires an NVIDIA runtime"),
     ("collision.mesh_world", "mesh_world", 2e-5, 2e-6, "mesh", "non_watertight_signed", "requires upstream Warp/CUDA mesh acceleration structures; no portable clean-runner constructor"),
     ("collision.voxel_esdf_query", "voxel_esdf", 3e-5, 3e-6, "voxel", "bad_environment", "requires upstream CUDA voxel cache allocation and collision buffers"),
     ("cost.pose_and_composable_costs", "pose_costs", 2e-5, 2e-6, "cost", "bad_weight_shape", "requires upstream fused CUDA rollout buffers and solver-owned cost configuration"),

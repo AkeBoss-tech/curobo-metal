@@ -6,7 +6,7 @@
   "evidence": {
     "gradient": true,
     "invalid_case": "bad_pair_index",
-    "invalid_executed": false,
+    "invalid_executed": true,
     "probe_scope": "sphere",
     "status": false
   },
@@ -14,12 +14,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "dab0f5c58c8fcdbb29160aada165bb1c20d7f5c617692b41450713eeab8bbb75"
+    "sha256": "545ee19092ad725fd48cdf966aa5c41f44aca00a6ac986763e5e8b102606fbd6"
   },
   "operation": "robot_scene_collision",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "8f689d412ce34a067142d26ddbcacc1a5b55c68db846a9cf1d7ae1722ac12a4e"
+    "sha256": "de2d332bfb09707dfc3feb4739a2c969545cf6323881bb68dd88fba456472896"
   },
   "runtime": {
     "python": "3.13.9",

@@ -56,6 +56,7 @@ def test_inputs_are_identical_and_safe_npz():
 
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
     assert set(ADAPTERS) == {
+        "collision.robot_scene",
         "configuration.robot_config_and_loaders",
         "kinematics.forward_kinematics",
         "kinematics.geometric_jacobian",
@@ -81,6 +82,8 @@ def _fake_cuda_evidence(root: Path) -> None:
             }
         metal = json.loads((source / "metal-manifest.json").read_text())
         case = BY_ID[capability]
+        with np.load(source / "inputs.npz", allow_pickle=False) as inputs:
+            input_tensor_count = len(inputs.files)
         manifest = {
             "format": "curobo-metal-paired-replay",
             "version": 1,
@@ -91,7 +94,7 @@ def _fake_cuda_evidence(root: Path) -> None:
             "fallback_enabled": False,
             "upstream_revision": PIN,
             "input_sha256": metal["input"]["sha256"],
-            "input_tensor_count": 9,
+            "input_tensor_count": input_tensor_count,
             "status": "complete",
             "runtime": {
                 "python": "3.13.9",

@@ -157,9 +157,12 @@ robot drives compiled upstream CUDA forward kinematics and geometric-Jacobian
 adapters. FK compares tool position, wxyz quaternion, and position-loss input
 gradients; Jacobian compares the world-frame 6-by-DoF tool Jacobian. The
 Jacobian adapter deliberately does not claim dJ/dq because that is higher-order
-AD outside the fused Metal contract. On a CUDA host these adapters write hashed
+AD outside the fused Metal contract. An asset-independent robot-scene adapter
+executes upstream self-collision for an explicit sphere pair and compares
+clearance plus first-order sphere gradients, with an executed invalid-index
+case. On a CUDA host these adapters write hashed
 upstream output bundles; they do not claim equivalence until comparison
-succeeds. The other 12 cases deliberately emit `external_constraint`: world,
+succeeds. The other 11 cases deliberately emit `external_constraint`: world,
 inertial, and solver surfaces still require additional assets or compiled
 upstream objects. The exact per-capability constraint is in
 `tools/parity/replay_registry.py`; no CUDA result is synthesized.
