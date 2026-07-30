@@ -25,7 +25,7 @@ class Case:
 
 
 _ROWS = [
-    ("configuration.robot_config_and_loaders", "robot_config", 0, 0, "serialization", "malformed_yaml", "requires caller-supplied upstream robot assets and a supported RobotCfg constructor adapter"),
+    ("configuration.robot_config_and_loaders", "robot_config", 0, 0, "serialization", "malformed_urdf", "real license-clean serialized URDF RobotCfg CUDA adapter available; execution requires an NVIDIA runtime"),
     ("types.device_cfg", "device_cfg", 0, 0, "device", "unsupported_device", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
     ("types.pose", "pose", 1e-6, 1e-7, "pose", "zero_quaternion", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
     ("types.joint_state", "joint_state", 1e-6, 1e-7, "joint_state", "name_width_mismatch", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),

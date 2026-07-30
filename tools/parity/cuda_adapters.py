@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
+from pathlib import Path
+import tempfile
 
 import numpy as np
 
@@ -17,7 +20,7 @@ def _invalid_rejected(operation) -> np.ndarray:
         value = operation()
         if isinstance(value, torch.Tensor) and not bool(torch.isfinite(value).all().item()):
             return np.array([1], np.int8)
-    except (AssertionError, RuntimeError, TypeError, ValueError):
+    except Exception:
         return np.array([1], np.int8)
     return np.array([0], np.int8)
 
@@ -28,6 +31,61 @@ def _status_codes(values) -> np.ndarray:
         return np.asarray([mapping[value] for value in values], np.int8)
     except KeyError as error:
         raise ValueError(f"unsupported normalized solver status: {error.args[0]}") from error
+
+
+def _robot_mapping(urdf_path: str) -> dict:
+    return {
+        "robot_cfg": {
+            "kinematics": {
+                "urdf_path": urdf_path,
+                "base_link": "base",
+                "tool_frames": ["tool"],
+                "cspace": {
+                    "joint_names": ["j0", "j1"],
+                    "default_joint_position": [0.0, 0.0],
+                    "cspace_distance_weight": [1.0, 1.0],
+                    "null_space_weight": [1.0, 1.0],
+                    "max_acceleration": 10.0,
+                    "max_jerk": 500.0,
+                },
+            }
+        }
+    }
+
+
+def _robot_config(raw: dict[str, np.ndarray]) -> Output:
+    import torch
+    from curobo._src.types.robot import RobotCfg
+    from curobo.types import DeviceCfg
+
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "robot.urdf"
+        path.write_bytes(raw["robot_urdf_utf8"].tobytes())
+        cfg = RobotCfg.create(
+            _robot_mapping(str(path)),
+            DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+            load_collision_spheres=False,
+        )
+        params = cfg.kinematics.kinematics_config
+        limits = params.joint_limits
+        malformed = Path(folder) / "malformed.urdf"
+        malformed.write_text("<robot>")
+        return {
+            "joint_names_utf8": np.frombuffer(
+                json.dumps(params.joint_names).encode(), np.uint8
+            ),
+            "retract_config": cfg.cspace.default_joint_position.detach().cpu().numpy(),
+            "position_limits": limits.position.detach().cpu().numpy(),
+            "velocity_limits": limits.velocity[1].detach().cpu().numpy(),
+            "effort_limits": limits.effort[1].detach().cpu().numpy(),
+            "invalid_rejected": _invalid_rejected(
+                lambda: RobotCfg.create(
+                    _robot_mapping(str(malformed)),
+                    DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+                    load_collision_spheres=False,
+                )
+            ),
+        }
 
 
 def _device_cfg(raw: dict[str, np.ndarray]) -> Output:
@@ -120,6 +178,7 @@ def _solver_results(raw: dict[str, np.ndarray]) -> Output:
 
 
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
+    "configuration.robot_config_and_loaders": _robot_config,
     "types.device_cfg": _device_cfg,
     "types.pose": _pose,
     "types.joint_state": _joint_state,

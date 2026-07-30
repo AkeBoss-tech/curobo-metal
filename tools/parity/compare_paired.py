@@ -104,6 +104,9 @@ def compare_capability(
         raise ValueError(f"{capability}: committed input hash mismatch")
     if cuda_manifest.get("input_sha256") != sha256(input_path):
         raise ValueError(f"{capability}: CUDA output consumed a different input")
+    with np.load(input_path, allow_pickle=False) as inputs:
+        if cuda_manifest.get("input_tensor_count") != len(inputs.files):
+            raise ValueError(f"{capability}: CUDA input tensor count mismatch")
     if sha256(metal_output) != metal_manifest["output"]["sha256"]:
         raise ValueError(f"{capability}: committed Metal output hash mismatch")
     if sha256(cuda_output) != cuda_manifest["output"]["sha256"]:

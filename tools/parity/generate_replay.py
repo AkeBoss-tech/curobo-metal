@@ -10,6 +10,7 @@ import json
 import os
 import platform
 import shutil
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from curobo_metal.reference import TreeRobot
 from curobo_metal.types import DeviceCfg, JointState, MotionGenStatus, PlanningResult, Pose
 from curobo_metal.ops.collision import sphere_sphere_signed_distance
 from curobo_metal.ops.whole_body import WholeBodyModel, inverse_dynamics
+from curobo_metal.config import RobotCfg
 
 from .replay_registry import CASES, PIN, Case
 
@@ -52,6 +54,20 @@ def save_npz(path: Path, tensors: dict[str, np.ndarray]) -> None:
 
 def inputs() -> dict[str, np.ndarray]:
     inertial = (ROOT / "tests/fixtures/whole_body/branched_toy.json").read_bytes()
+    robot_urdf = b"""<robot name="paired_two_link">
+  <link name="base"/><link name="link1"/><link name="tool"/>
+  <joint name="j0" type="revolute">
+    <parent link="base"/><child link="link1"/><origin xyz="1 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.5" upper="1.25" velocity="2.5" effort="12"/>
+  </joint>
+  <joint name="j1" type="revolute">
+    <parent link="link1"/><child link="tool"/><origin xyz="1 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.75" upper="2.0" velocity="1.5" effort="8"/>
+  </joint>
+</robot>
+"""
     return {
         "q": np.array([[0.0, 0.25], [-0.5, 0.75]], np.float32),
         "points": np.array([[0.2, 0.2, 0.5], [2.0, 0.0, 0.0]], np.float32),
@@ -61,6 +77,7 @@ def inputs() -> dict[str, np.ndarray]:
         "singleton": np.array([[0.125]], np.float32),
         "empty": np.empty((0, 2), np.float32),
         "inertial_case_json": np.frombuffer(inertial, np.uint8),
+        "robot_urdf_utf8": np.frombuffer(robot_urdf, np.uint8),
     }
 
 
@@ -74,7 +91,7 @@ def _invalid_rejected(operation) -> np.ndarray:
         value = operation()
         if isinstance(value, torch.Tensor) and not bool(torch.isfinite(value).all().item()):
             return np.array([1], np.int8)
-    except (AssertionError, RuntimeError, TypeError, ValueError):
+    except Exception:
         return np.array([1], np.int8)
     return np.array([0], np.int8)
 
@@ -93,11 +110,66 @@ def _status_codes(values) -> np.ndarray:
         raise ValueError(f"unsupported normalized solver status: {error.args[0]}") from error
 
 
+def _robot_mapping(urdf_path: str) -> dict:
+    return {
+        "robot_cfg": {
+            "kinematics": {
+                "urdf_path": urdf_path,
+                "base_link": "base",
+                "tool_frames": ["tool"],
+                "cspace": {
+                    "joint_names": ["j0", "j1"],
+                    "default_joint_position": [0.0, 0.0],
+                    "cspace_distance_weight": [1.0, 1.0],
+                    "null_space_weight": [1.0, 1.0],
+                    "max_acceleration": 10.0,
+                    "max_jerk": 500.0,
+                },
+            }
+        }
+    }
+
+
 def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
     q = _tensor(raw["q"], device)
     if case.probe == "serialization":
-        payload = json.dumps({"joint_names": ["j0", "j1"], "mimic": {"j1": [0.5, 0.1]}}, sort_keys=True)
-        return {"serialized_utf8": np.frombuffer(payload.encode(), np.uint8)}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "robot.urdf"
+            path.write_bytes(raw["robot_urdf_utf8"].tobytes())
+            cfg = RobotCfg.create(
+                _robot_mapping(str(path)),
+                DeviceCfg(device, torch.float32),
+                load_collision_spheres=False,
+            )
+            joints = [joint for joint in cfg.joints if joint.kind != "fixed"]
+            malformed = Path(folder) / "malformed.urdf"
+            malformed.write_text("<robot>")
+            return {
+                "joint_names_utf8": np.frombuffer(
+                    json.dumps(cfg.joint_names).encode(), np.uint8
+                ),
+                "retract_config": cfg.retract_config.cpu().numpy(),
+                "position_limits": np.asarray(
+                    [
+                        [joint.limits.lower for joint in joints],
+                        [joint.limits.upper for joint in joints],
+                    ],
+                    np.float32,
+                ),
+                "velocity_limits": np.asarray(
+                    [joint.limits.velocity for joint in joints], np.float32
+                ),
+                "effort_limits": np.asarray(
+                    [joint.limits.effort for joint in joints], np.float32
+                ),
+                "invalid_rejected": _invalid_rejected(
+                    lambda: RobotCfg.create(
+                        _robot_mapping(str(malformed)),
+                        DeviceCfg(device, torch.float32),
+                        load_collision_spheres=False,
+                    )
+                ),
+            }
     if case.probe == "device":
         cfg = DeviceCfg(device, torch.float32)
         unsupported = "cuda" if device != "cuda" else "mps"

@@ -44,12 +44,19 @@ def test_inputs_are_identical_and_safe_npz():
         path = ARTIFACT / capability / "inputs.npz"
         hashes.add(hashlib.sha256(path.read_bytes()).hexdigest())
         with np.load(path, allow_pickle=False) as data:
-            assert {"q", "empty", "invalid_shape", "inertial_case_json"} <= set(data.files)
+            assert {
+                "q",
+                "empty",
+                "invalid_shape",
+                "inertial_case_json",
+                "robot_urdf_utf8",
+            } <= set(data.files)
     assert len(hashes) == 1
 
 
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
     assert set(ADAPTERS) == {
+        "configuration.robot_config_and_loaders",
         "types.device_cfg",
         "types.pose",
         "types.joint_state",
@@ -82,7 +89,7 @@ def _fake_cuda_evidence(root: Path) -> None:
             "fallback_enabled": False,
             "upstream_revision": PIN,
             "input_sha256": metal["input"]["sha256"],
-            "input_tensor_count": 8,
+            "input_tensor_count": 9,
             "status": "complete",
             "runtime": {
                 "python": "3.13.9",

@@ -14,7 +14,7 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+    "sha256": "dab0f5c58c8fcdbb29160aada165bb1c20d7f5c617692b41450713eeab8bbb75"
   },
   "operation": "motion_gen",
   "output": {

@@ -5,8 +5,8 @@
   "equivalence_claimed": false,
   "evidence": {
     "gradient": false,
-    "invalid_case": "malformed_yaml",
-    "invalid_executed": false,
+    "invalid_case": "malformed_urdf",
+    "invalid_executed": true,
     "probe_scope": "serialization",
     "status": false
   },
@@ -14,12 +14,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "18499d754c42de3fd69b379850ba625c482a7442926ead9104214a8733aa40af"
+    "sha256": "dab0f5c58c8fcdbb29160aada165bb1c20d7f5c617692b41450713eeab8bbb75"
   },
   "operation": "robot_config",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "a96b16ab9e31f9e9e5e236605f6806466b11991630380c8a09db5931bd1677cf"
+    "sha256": "4617dd977f0f1a78cf260304912464ae67d981062c67c8a6ef69a4891c875561"
   },
   "runtime": {
     "python": "3.13.9",
