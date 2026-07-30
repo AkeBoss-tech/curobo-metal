@@ -111,8 +111,6 @@ class Kinematics:
         if idxs_env is not None:
             if idxs_env.ndim != 1 or idxs_env.shape[0] != joint_position.shape[0]:
                 raise ValueError("idxs_env must have shape [batch]")
-            if bool((idxs_env != 0).any().item()):
-                raise ValueError("only sphere environment index 0 is configured")
         batch, horizon, _ = joint_position.shape
         self.update_batch_size(batch, horizon)
         flat = joint_position.reshape(batch * horizon, self.dof)
@@ -129,26 +127,32 @@ class Kinematics:
             jacobian = fk.geometric_jacobian.reshape(
                 batch, horizon, len(self._link_names), 6, self.dof
             )[..., self._tool_indices, :, :]
-        spheres = self._sphere_positions(transforms) if self.compute_spheres else None
+        spheres = self._sphere_positions(transforms, idxs_env) if self.compute_spheres else None
         com = self._center_of_mass(transforms) if self.compute_com else None
         return KinematicsState(poses, jacobian, spheres, com, None)
 
-    def _sphere_positions(self, transforms: torch.Tensor) -> torch.Tensor:
+    def _sphere_positions(
+        self, transforms: torch.Tensor, idxs_env: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         robot = self.config.kinematics_config.robot_cfg
         if not robot.collision_spheres:
             return transforms.new_empty((*transforms.shape[:2], 0, 4))
-        indices = torch.tensor(
-            [self._link_names.index(s.link_name) for s in robot.collision_spheres],
-            device=transforms.device,
-        )
-        local = transforms.new_tensor(
-            [[*sphere.center, 1.0] for sphere in robot.collision_spheres]
+        params = self.config.kinematics_config
+        indices = params.link_sphere_idx_map.to(transforms.device)
+        environments = params.link_spheres.to(transforms)
+        if idxs_env is None:
+            env = torch.zeros(transforms.shape[0], dtype=torch.long, device=transforms.device)
+        else:
+            env = idxs_env.to(device=transforms.device, dtype=torch.long)
+        if bool(((env < 0) | (env >= environments.shape[0])).any().item()):
+            raise ValueError("sphere environment index is out of range")
+        values = environments.index_select(0, env)
+        local = torch.cat(
+            (values[..., :3], torch.ones_like(values[..., :1])), dim=-1
         )
         selected = transforms.index_select(2, indices)
-        xyz = torch.einsum("bhsij,sj->bhsi", selected, local)[..., :3]
-        radius = transforms.new_tensor(
-            [sphere.radius for sphere in robot.collision_spheres]
-        ).view(1, 1, -1, 1).expand(*xyz.shape[:-1], 1)
+        xyz = torch.einsum("bhsij,bsj->bhsi", selected, local)[..., :3]
+        radius = values[:, None, :, 3:].expand(*xyz.shape[:-1], 1)
         return torch.cat((xyz, radius), dim=-1)
 
     def _center_of_mass(self, transforms: torch.Tensor) -> torch.Tensor:

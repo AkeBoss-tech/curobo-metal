@@ -176,6 +176,8 @@ class SceneCfg(Sequence[Obstacle]):
         return SceneCfg(
             cuboid=[Cuboid(name=n, **v) for n, v in raw.get("cuboid", {}).items()],
             sphere=[Sphere(name=n, **v) for n, v in raw.get("sphere", {}).items()],
+            capsule=[Capsule(name=n, **v) for n, v in raw.get("capsule", {}).items()],
+            cylinder=[Cylinder(name=n, **v) for n, v in raw.get("cylinder", {}).items()],
             mesh=[Mesh(name=n, **v) for n, v in raw.get("mesh", {}).items()],
             voxel=[VoxelGrid(name=n, **v) for n, v in raw.get("voxel", {}).items()],
         )
@@ -191,7 +193,10 @@ class SceneCfg(Sequence[Obstacle]):
         return {"cuboid": len(self.cuboid), "mesh": len(self.mesh), "voxel": len(self.voxel)}
 
     def add_obstacle(self, obstacle: Obstacle) -> None:
-        mapping = {Cuboid: self.cuboid, Sphere: self.sphere, Mesh: self.mesh, VoxelGrid: self.voxel}
+        mapping = {
+            Cuboid: self.cuboid, Sphere: self.sphere, Capsule: self.capsule,
+            Cylinder: self.cylinder, Mesh: self.mesh, VoxelGrid: self.voxel,
+        }
         for cls, target in mapping.items():
             if isinstance(obstacle, cls):
                 target.append(obstacle)
@@ -207,7 +212,9 @@ class SceneCfg(Sequence[Obstacle]):
         if obstacle is None:
             return
         self.objects.remove(obstacle)
-        for collection in (self.sphere, self.cuboid, self.mesh, self.voxel):
+        for collection in (
+            self.sphere, self.cuboid, self.capsule, self.cylinder, self.mesh, self.voxel
+        ):
             if obstacle in collection:
                 collection.remove(obstacle)
 

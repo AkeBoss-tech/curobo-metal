@@ -61,7 +61,7 @@ def test_mesh_and_voxel_esdf_paths() -> None:
     assert voxel_result.item() == pytest.approx(.1)
 
 
-def test_swept_detects_between_knots_and_rejects_noop_option() -> None:
+def test_swept_detects_between_knots_and_supports_speed_metric() -> None:
     scene = SceneCfg(cuboid=[Cuboid("thin", [0, 0, 0, 1, 0, 0, 0], dims=[.2, 2, 2])])
     checker = create_scene_collision(SceneCollisionCfg(scene_model=scene))
     spheres = torch.tensor([[[[-1, 0, 0, .2]], [[1, 0, 0, .2]]]])
@@ -70,21 +70,26 @@ def test_swept_detects_between_knots_and_rejects_noop_option() -> None:
         spheres, buffer, torch.tensor(1.), torch.tensor(0.), torch.tensor(1.)
     )
     assert swept.max() > 0
-    with pytest.raises(NotImplementedError, match="speed metric"):
-        checker.get_swept_sphere_distance_raw(
-            spheres, buffer, torch.tensor(1.), torch.tensor(0.), torch.tensor(1.),
-            enable_speed_metric=True,
-        )
+    speed_scaled = checker.get_swept_sphere_distance_raw(
+        spheres, buffer, torch.tensor(1.), torch.tensor(0.), torch.tensor(1.),
+        enable_speed_metric=True,
+    )
+    torch.testing.assert_close(speed_scaled, swept)
 
 
-def test_public_aliases_and_unsupported_obstacle_error() -> None:
+def test_public_aliases_and_analytic_sphere_obstacle() -> None:
     from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
 
     assert RobotCollisionChecker.__name__ == "RobotSceneCollision"
     assert RobotCollisionCheckerCfg.__name__ == "RobotSceneCollisionCfg"
     sphere = __import__("curobo._src.geom.types", fromlist=["Sphere"]).Sphere("s", radius=1)
-    with pytest.raises(NotImplementedError, match="sphere"):
-        create_scene_collision(SceneCollisionCfg(scene_model=SceneCfg(sphere=[sphere])))
+    checker = create_scene_collision(SceneCollisionCfg(scene_model=SceneCfg(sphere=[sphere])))
+    query = torch.tensor([[[[2.0, 0, 0, 0.25]]]])
+    buffer = CollisionBuffer.from_shape(query.shape, DeviceCfg())
+    value = checker.get_sphere_distance_raw(
+        query, buffer, torch.tensor(1.0), torch.tensor(0.0)
+    )
+    torch.testing.assert_close(value, torch.tensor([[[0.75]]]))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

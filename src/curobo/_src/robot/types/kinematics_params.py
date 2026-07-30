@@ -52,15 +52,21 @@ class KinematicsParams:
     @property
     def link_spheres(self) -> torch.Tensor:
         if self._link_spheres is None:
-            spheres, _ = self.robot_cfg.to_collision_inputs()
-            self._link_spheres = spheres.unsqueeze(0)
+            self._link_spheres = self.robot_cfg.device_cfg.to_device([
+                [*sphere.center, sphere.radius]
+                for sphere in self.robot_cfg.collision_spheres
+            ]).reshape(1, -1, 4)
             self.reference_link_spheres = self._link_spheres.clone()
         return self._link_spheres
 
     @property
     def link_sphere_idx_map(self) -> torch.Tensor:
-        _, indices = self.robot_cfg.to_collision_inputs()
-        return indices
+        mapping = self.link_name_to_idx_map
+        return torch.tensor(
+            [mapping[sphere.link_name] for sphere in self.robot_cfg.collision_spheres],
+            dtype=torch.int64,
+            device=self.robot_cfg.device_cfg.device,
+        )
 
     @property
     def link_name_to_idx_map(self) -> dict[str, int]:
