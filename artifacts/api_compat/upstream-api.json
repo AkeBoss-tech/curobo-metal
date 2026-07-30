@@ -8,7 +8,7 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": "curobo_metal/__init__.py",
+        "path": "curobo/__init__.py",
         "resolved_symbols": 0,
         "status": "resolved"
       },
@@ -87564,9 +87564,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/state/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.state",
       "path": "curobo/_src/state/__init__.py",
@@ -87679,10 +87679,10 @@
     },
     {
       "local": {
-        "missing_symbols": 51,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 44,
+        "path": "curobo/_src/state/state_joint.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.state.state_joint",
       "path": "curobo/_src/state/state_joint.py",
@@ -93002,9 +93002,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/types/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.types",
       "path": "curobo/_src/types/__init__.py",
@@ -93014,9 +93014,9 @@
     {
       "local": {
         "missing_symbols": 1,
-        "path": null,
+        "path": "curobo/_src/types/base.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "partial"
       },
       "name": "curobo._src.types.base",
       "path": "curobo/_src/types/base.py",
@@ -93595,10 +93595,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/types/control_space.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.types.control_space",
       "path": "curobo/_src/types/control_space.py",
@@ -93767,10 +93767,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/types/device_cfg.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.types.device_cfg",
       "path": "curobo/_src/types/device_cfg.py",
@@ -94176,9 +94176,9 @@
     {
       "local": {
         "missing_symbols": 1,
-        "path": null,
+        "path": "curobo/_src/types/math.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "partial"
       },
       "name": "curobo._src.types.math",
       "path": "curobo/_src/types/math.py",
@@ -94193,10 +94193,10 @@
     },
     {
       "local": {
-        "missing_symbols": 33,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 27,
+        "path": "curobo/_src/types/pose.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.types.pose",
       "path": "curobo/_src/types/pose.py",
@@ -95553,10 +95553,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 10,
+        "path": "curobo/_src/types/robot.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.types.robot",
       "path": "curobo/_src/types/robot.py",
@@ -96000,10 +96000,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/types/tensor.py",
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo._src.types.tensor",
       "path": "curobo/_src/types/tensor.py",
@@ -105771,10 +105771,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/content/__init__.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.content",
       "path": "curobo/content/__init__.py",
@@ -237876,7 +237876,7 @@
     {
       "local": {
         "missing_symbols": 7,
-        "path": "curobo_metal/types/__init__.py",
+        "path": "curobo/types.py",
         "resolved_symbols": 3,
         "status": "partial"
       },
@@ -237998,10 +237998,10 @@
   ],
   "schema_version": 1,
   "summary": {
-    "missing_modules": 583,
+    "missing_modules": 572,
     "modules": 586,
-    "partial_modules": 2,
-    "resolved_modules": 1,
+    "partial_modules": 8,
+    "resolved_modules": 6,
     "symbols": 7182
   },
   "upstream": {

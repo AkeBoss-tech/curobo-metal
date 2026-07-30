@@ -19,8 +19,21 @@ def test_top_level_import_is_torch_lazy():
     assert result.returncode == 0, result.stderr
 
 
-def test_public_modules_parse_without_generated_or_vendored_assets():
+def test_public_modules_parse_and_only_approved_robot_assets_are_vendored():
     for path in Path("src/curobo_metal").rglob("*.py"):
         ast.parse(path.read_text(), filename=str(path))
     tracked = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
-    assert not any("/usd/" in p.lower() or "/robot/" in p.lower() or p.endswith((".stl", ".dae", ".obj")) for p in tracked)
+    approved_roots = (
+        "src/curobo/content/assets/robot/franka_description/",
+        "src/curobo/content/configs/robot/",
+    )
+    asset_paths = [
+        path
+        for path in tracked
+        if "/usd/" in path.lower()
+        or "/robot/" in path.lower()
+        or path.endswith((".stl", ".dae", ".obj"))
+    ]
+    assert asset_paths
+    assert all(path.startswith(approved_roots) for path in asset_paths)
+    assert f"{approved_roots[0]}LICENSE" in tracked
