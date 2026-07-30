@@ -50,4 +50,5 @@ for `DeviceCfg`, `Pose`, and `JointState`; the other 16 cases continue to fail
 closed with explicit constraints. No CUDA equivalence claim is made until the
 adapters execute on a reachable NVIDIA host and their outputs pass the strict
 paired verifier. The ready-suite command binds CUDA evidence to the exact
-committed input and Metal output hashes and writes an aggregate report.
+committed input and Metal output hashes, requires executed invalid-case evidence
+for every ready adapter, and writes an aggregate report.

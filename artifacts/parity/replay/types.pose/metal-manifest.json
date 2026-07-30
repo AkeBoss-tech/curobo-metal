@@ -6,6 +6,7 @@
   "evidence": {
     "gradient": false,
     "invalid_case": "zero_quaternion",
+    "invalid_executed": true,
     "probe_scope": "pose",
     "status": false
   },
@@ -18,7 +19,7 @@
   "operation": "pose",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "14c871ddf4b96661747a904ecba8ad6cdaadecd50027ad2536033d345977cc7c"
+    "sha256": "fe6b70a60c6ba745044918b08b1ea644ac51bc6a9841f3e1c167840f86ad8c11"
   },
   "runtime": {
     "python": "3.13.9",

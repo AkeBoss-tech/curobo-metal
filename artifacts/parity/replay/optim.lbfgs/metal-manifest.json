@@ -6,6 +6,7 @@
   "evidence": {
     "gradient": false,
     "invalid_case": "nonfinite_objective",
+    "invalid_executed": false,
     "probe_scope": "lbfgs",
     "status": false
   },

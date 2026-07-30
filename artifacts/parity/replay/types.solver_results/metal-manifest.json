@@ -6,6 +6,7 @@
   "evidence": {
     "gradient": false,
     "invalid_case": "invalid_status",
+    "invalid_executed": false,
     "probe_scope": "result",
     "status": true
   },

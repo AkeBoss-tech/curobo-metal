@@ -6,6 +6,7 @@
   "evidence": {
     "gradient": false,
     "invalid_case": "name_width_mismatch",
+    "invalid_executed": true,
     "probe_scope": "joint_state",
     "status": false
   },
@@ -18,7 +19,7 @@
   "operation": "joint_state",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "8d9d88bd97dfb3f8c54e64d5774c6eda3d9c399f1673be5a2dc2456cb55dda07"
+    "sha256": "d1f66cdcfa8c1e2fd404f304d4b8aa666da0421631915985e0e4329dab7145eb"
   },
   "runtime": {
     "python": "3.13.9",

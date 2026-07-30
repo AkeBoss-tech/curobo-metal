@@ -6,6 +6,7 @@
   "evidence": {
     "gradient": false,
     "invalid_case": "unsupported_device",
+    "invalid_executed": true,
     "probe_scope": "device",
     "status": false
   },
@@ -18,7 +19,7 @@
   "operation": "device_cfg",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "9560a9c78aad47cb2981fc86374f5b2c826f8290ff61ad8b15e6a434d51a168d"
+    "sha256": "513dded2c5db6c18f24759b512d620eb8b3a109af5b66dfbe9bf99a0ec5772b8"
   },
   "runtime": {
     "python": "3.13.9",

@@ -10,6 +10,18 @@ import numpy as np
 Output = dict[str, np.ndarray]
 
 
+def _invalid_rejected(operation) -> np.ndarray:
+    import torch
+
+    try:
+        value = operation()
+        if isinstance(value, torch.Tensor) and not bool(torch.isfinite(value).all().item()):
+            return np.array([1], np.int8)
+    except (AssertionError, RuntimeError, TypeError, ValueError):
+        return np.array([1], np.int8)
+    return np.array([0], np.int8)
+
+
 def _device_cfg(raw: dict[str, np.ndarray]) -> Output:
     import torch
     from curobo.types import DeviceCfg
@@ -20,6 +32,11 @@ def _device_cfg(raw: dict[str, np.ndarray]) -> Output:
         "value": value.detach().cpu().numpy(),
         # The portable corpus uses 0 for CPU and 1 for an accelerator.
         "device_code": np.array([1], np.int32),
+        "invalid_rejected": _invalid_rejected(
+            lambda: DeviceCfg(device=torch.device("mps"), dtype=torch.float32)
+            .to_device(raw["singleton"])
+            .cpu()
+        ),
     }
 
 
@@ -33,6 +50,13 @@ def _pose(raw: dict[str, np.ndarray]) -> Output:
     return {
         "matrix": value.get_matrix().detach().cpu().numpy(),
         "points": value.transform_points(points).detach().cpu().numpy(),
+        "invalid_rejected": _invalid_rejected(
+            lambda: Pose(
+                position=torch.zeros((1, 3), device="cuda"),
+                quaternion=torch.zeros((1, 4), device="cuda"),
+                normalize_rotation=True,
+            ).get_matrix()
+        ),
     }
 
 
@@ -49,6 +73,9 @@ def _joint_state(raw: dict[str, np.ndarray]) -> Output:
     return {
         "position": state.position.detach().cpu().numpy(),
         "velocity": state.velocity.detach().cpu().numpy(),
+        "invalid_rejected": _invalid_rejected(
+            lambda: JointState.from_position(position, ["j0"])
+        ),
     }
 
 

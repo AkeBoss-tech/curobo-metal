@@ -110,6 +110,8 @@ def compare_capability(
                 f"{capability}: output keys differ: "
                 f"{sorted(set(metal.files) ^ set(cuda.files))}"
             )
+        if "invalid_rejected" not in metal.files:
+            raise ValueError(f"{capability}: committed invalid-case evidence is missing")
         declared = cuda_manifest["output"].get("tensors")
         actual = {
             key: {"shape": list(cuda[key].shape), "dtype": str(cuda[key].dtype)}

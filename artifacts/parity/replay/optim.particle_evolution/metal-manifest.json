@@ -6,6 +6,7 @@
   "evidence": {
     "gradient": false,
     "invalid_case": "bad_covariance",
+    "invalid_executed": false,
     "probe_scope": "particle",
     "status": false
   },

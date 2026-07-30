@@ -145,6 +145,13 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
         assert manifest["equivalence_claimed"] is False
         assert manifest["upstream_revision"] == PIN
         assert manifest["evidence"]["invalid_case"] == case.invalid_case
+        if capability in ADAPTERS:
+            assert manifest["evidence"]["invalid_executed"] is True
+            with np.load(
+                ARTIFACT / capability / manifest["output"]["file"],
+                allow_pickle=False,
+            ) as output:
+                assert output["invalid_rejected"].shape == (1,)
         gradients += bool(manifest["evidence"]["gradient"])
         statuses += bool(manifest["evidence"]["status"])
     assert gradients >= 4

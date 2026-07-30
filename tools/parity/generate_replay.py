@@ -68,6 +68,17 @@ def _tensor(data, device):
     return torch.as_tensor(data, device=device)
 
 
+def _invalid_rejected(operation) -> np.ndarray:
+    """Normalize an exception or non-finite result into one portable bit."""
+    try:
+        value = operation()
+        if isinstance(value, torch.Tensor) and not bool(torch.isfinite(value).all().item()):
+            return np.array([1], np.int8)
+    except (AssertionError, RuntimeError, TypeError, ValueError):
+        return np.array([1], np.int8)
+    return np.array([0], np.int8)
+
+
 def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
     q = _tensor(raw["q"], device)
     if case.probe == "serialization":
@@ -75,14 +86,39 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         return {"serialized_utf8": np.frombuffer(payload.encode(), np.uint8)}
     if case.probe == "device":
         cfg = DeviceCfg(device, torch.float32)
-        return {"value": cfg.to_device(raw["singleton"]).cpu().numpy(), "device_code": np.array([0 if device == "cpu" else 1], np.int32)}
+        unsupported = "cuda" if device != "cuda" else "mps"
+        return {
+            "value": cfg.to_device(raw["singleton"]).cpu().numpy(),
+            "device_code": np.array([0 if device == "cpu" else 1], np.int32),
+            "invalid_rejected": _invalid_rejected(
+                lambda: DeviceCfg(unsupported, torch.float32)
+                .to_device(raw["singleton"])
+                .cpu()
+            ),
+        }
     if case.probe == "pose":
         value = Pose.from_list(raw["pose"][0].tolist(), DeviceCfg(device, torch.float32))
         points = value.transform_points(_tensor(raw["points"], device))
-        return {"matrix": value.get_matrix().detach().cpu().numpy(), "points": points.detach().cpu().numpy()}
+        return {
+            "matrix": value.get_matrix().detach().cpu().numpy(),
+            "points": points.detach().cpu().numpy(),
+            "invalid_rejected": _invalid_rejected(
+                lambda: Pose(
+                    position=torch.zeros((1, 3), device=device),
+                    quaternion=torch.zeros((1, 4), device=device),
+                    normalize_rotation=True,
+                ).get_matrix()
+            ),
+        }
     if case.probe == "joint_state":
         state = JointState.from_position(q, ["j0", "j1"]).finite_difference(0.25)
-        return {"position": state.position.cpu().numpy(), "velocity": state.velocity.cpu().numpy()}
+        return {
+            "position": state.position.cpu().numpy(),
+            "velocity": state.velocity.cpu().numpy(),
+            "invalid_rejected": _invalid_rejected(
+                lambda: JointState.from_position(q, ["j0"])
+            ),
+        }
     if case.probe == "result":
         result = PlanningResult(True, MotionGenStatus.SUCCESS, JointState.from_position(q, ["j0", "j1"]))
         return {"success": np.array([bool(result.success)]), "status_utf8": np.frombuffer(str(result.status.value).encode(), np.uint8)}
@@ -180,6 +216,7 @@ def generate(output: Path, device: str) -> None:
             "tolerance": {"rtol": case.rtol, "atol": case.atol},
             "evidence": {"gradient": "input_gradient" in np.load(output_path).files,
                          "status": any(k.startswith("status") for k in np.load(output_path).files),
+                         "invalid_executed": "invalid_rejected" in np.load(output_path).files,
                          "invalid_case": case.invalid_case,
                          "probe_scope": case.probe},
             "runtime": {"python": platform.python_version(), "torch": torch.__version__},
