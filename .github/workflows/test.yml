@@ -5,6 +5,23 @@ on:
   pull_request:
 
 jobs:
+  api-inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check pinned cuRobo API inventory
+        run: |
+          upstream_dir="$(mktemp -d)/curobo"
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/NVlabs/curobo.git "$upstream_dir"
+          git -C "$upstream_dir" checkout \
+            8e734f3ced1df898990bcd92de40abce475907db
+          python tools/api_compat/generate.py \
+            --source "$upstream_dir" \
+            --local-root src \
+            --output artifacts/api_compat/upstream-api.json \
+            --check
+
   cpu:
     runs-on: ubuntu-latest
     steps:
