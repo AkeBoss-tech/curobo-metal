@@ -1,0 +1,1 @@
+"""Solver compatibility namespace."""
