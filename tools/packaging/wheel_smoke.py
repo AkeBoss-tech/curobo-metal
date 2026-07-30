@@ -10,7 +10,11 @@ import torch
 import curobo
 from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
 from curobo.content import get_assets_path, get_robot_path
+from curobo.inverse_kinematics import InverseKinematics, InverseKinematicsCfg
 from curobo.kinematics import Kinematics, KinematicsCfg
+from curobo.optim import LBFGSOptCfg, MPPICfg
+from curobo.rollout import RosenbrockCfg, RosenbrockRollout
+from curobo.trajectory_optimizer import TrajectoryOptimizer, TrajectoryOptimizerCfg
 from curobo.types import DeviceCfg, JointState, Pose
 from curobo.util_file import load_yaml
 
@@ -48,6 +52,18 @@ def main() -> None:
     # covered by the source suite because it requires a complete scene config.
     assert RobotCollisionChecker.__name__ == "RobotSceneCollision"
     assert RobotCollisionCheckerCfg.__name__ == "RobotSceneCollisionCfg"
+
+    rollout = RosenbrockRollout(RosenbrockCfg(device_cfg))
+    rollout_cost = rollout.evaluate_action(torch.zeros(1, 1, 2))
+    assert rollout_cost.costs_and_constraints.get_sum_cost().shape == (1, 1)
+    assert LBFGSOptCfg().solver_name == "lbfgs"
+    assert MPPICfg(num_particles=8).num_particles == 8
+
+    ik_cfg = InverseKinematicsCfg.create("franka.yml", num_seeds=1)
+    inverse_kinematics = InverseKinematics(ik_cfg)
+    assert inverse_kinematics.joint_names == kinematics.joint_names
+    assert TrajectoryOptimizer.__name__ == "TrajOptSolver"
+    assert TrajectoryOptimizerCfg.__name__ == "TrajOptSolverCfg"
 
 
 if __name__ == "__main__":
