@@ -8,7 +8,9 @@ from pathlib import Path
 import torch
 
 import curobo
+from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
 from curobo.content import get_assets_path, get_robot_path
+from curobo.kinematics import Kinematics, KinematicsCfg
 from curobo.types import DeviceCfg, JointState, Pose
 from curobo.util_file import load_yaml
 
@@ -28,6 +30,24 @@ def main() -> None:
     state = JointState.from_position(torch.zeros(1, 7))
     assert pose.get_matrix().shape == (1, 4, 4)
     assert state.position.shape == (1, 7)
+
+    kinematics_cfg = KinematicsCfg.from_robot_yaml_file(
+        "franka.yml", device_cfg=device_cfg
+    )
+    kinematics = Kinematics(kinematics_cfg)
+    robot_state = kinematics.compute_kinematics(
+        JointState.from_position(
+            kinematics.default_joint_position,
+            joint_names=kinematics.joint_names,
+        )
+    )
+    assert robot_state.tool_poses.position.shape == (1, 1, 1, 3)
+    assert robot_state.robot_spheres.shape[-2:] == (61, 4)
+
+    # These imports are part of the public drop-in contract. Construction is
+    # covered by the source suite because it requires a complete scene config.
+    assert RobotCollisionChecker.__name__ == "RobotSceneCollision"
+    assert RobotCollisionCheckerCfg.__name__ == "RobotSceneCollisionCfg"
 
 
 if __name__ == "__main__":
