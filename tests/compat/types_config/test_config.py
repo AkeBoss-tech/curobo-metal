@@ -23,6 +23,75 @@ def test_dependency_free_yaml_subset_parser() -> None:
     assert spheres["arm"][0] == {"center": [0.1, 0.0, 0.0], "radius": 0.08}
 
 
+def test_dependency_free_yaml_parser_accepts_indentless_sequences() -> None:
+    value = _parse_yaml(
+        """
+robot_cfg:
+  kinematics:
+    tool_frames:
+    - panda_hand
+    - panda_finger
+    base_link: panda_link0
+"""
+    )
+    assert value["robot_cfg"]["kinematics"] == {
+        "tool_frames": ["panda_hand", "panda_finger"],
+        "base_link": "panda_link0",
+    }
+
+
+def test_curobo_content_asset_root_resolves_from_configs_tree(tmp_path: Path) -> None:
+    content = tmp_path / "content"
+    config = content / "configs/robot/example.yml"
+    urdf = content / "assets/robot/example/robot.urdf"
+    config.parent.mkdir(parents=True)
+    urdf.parent.mkdir(parents=True)
+    urdf.write_text(
+        "<robot name='example'><link name='base'/><link name='tool'/>"
+        "<joint name='joint' type='fixed'><parent link='base'/>"
+        "<child link='tool'/></joint></robot>"
+    )
+    config.write_text(
+        "robot_cfg:\n"
+        "  kinematics:\n"
+        "    urdf_path: robot/example/robot.urdf\n"
+        "    asset_root_path: robot/example\n"
+        "    base_link: base\n"
+        "    tool_frames:\n"
+        "    - tool\n"
+    )
+    robot = RobotCfg.create(config)
+    assert robot.name == "example"
+    assert robot.tool_frames == ["tool"]
+
+
+def test_explicit_urdf_base_selects_descendant_subtree(tmp_path: Path) -> None:
+    urdf = tmp_path / "subtree.urdf"
+    urdf.write_text(
+        "<robot name='subtree'>"
+        "<link name='world'/><link name='base'/><link name='tool'/>"
+        "<joint name='mount' type='fixed'><parent link='world'/>"
+        "<child link='base'/></joint>"
+        "<joint name='arm' type='revolute'><parent link='base'/>"
+        "<child link='tool'/><axis xyz='0 0 1'/>"
+        "<limit lower='-1' upper='1' velocity='2' effort='3'/></joint>"
+        "</robot>"
+    )
+    robot = load_robot_config(
+        {
+            "robot_cfg": {
+                "kinematics": {
+                    "urdf_path": str(urdf),
+                    "base_link": "base",
+                    "tool_frames": ["tool"],
+                }
+            }
+        }
+    )
+    assert [link.name for link in robot.links] == ["base", "tool"]
+    assert [joint.name for joint in robot.joints] == ["arm"]
+
+
 def test_yaml_urdf_preserves_tree_metadata_and_compiles() -> None:
     robot = load_robot_config(FIXTURES / "tiny_robot.yml")
     assert robot.name == "tiny_tree"
@@ -81,8 +150,16 @@ def test_plain_urdf_tree_and_serial_boundary() -> None:
         device_cfg=robot_device(),
     )
     assert robot.device_cfg.dtype == torch.float64
-    with pytest.raises(UnsupportedConfigError, match="one child per link"):
+    with pytest.raises(UnsupportedConfigError, match="exactly one tool frame"):
         robot.to_serial_robot()
+
+
+def test_serial_conversion_selects_single_tool_path_from_tree() -> None:
+    robot = RobotCfg.create(FIXTURES / "tiny_robot.yml")
+    robot.tool_frames = ["tip"]
+    serial = robot.to_serial_robot()
+    assert serial.dof == 1
+    assert [joint.name for joint in serial.joints] == ["arm", "tip"]
 
 
 def robot_device():

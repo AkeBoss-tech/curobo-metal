@@ -38,7 +38,7 @@ This ledger records durable child-thread handoffs and parent integration state.
 | Closure: whole-body/perception | `019fb024-9f04-74f0-bf84-99a0220a3e48` | complete | `06ea4b7` |
 | Paired CUDA/Metal replay harness | `019fb06a-4696-7eb0-aa8e-eb3a9f4ff48d` | complete | `c38f392` + parent whitespace fix |
 
-Parent integration suite after the latest replay-adapter wave: 280 tests passing with
+Parent integration suite after the upstream-example replay wave: 285 tests passing with
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
 
 The portable implementation and deterministic MPS replay corpus are complete.
@@ -73,3 +73,10 @@ both `robo` and `amarel` was unavailable, while the two reachable destinations
 resolved to Apple ARM64 macOS systems without NVIDIA tooling or CUDA-enabled
 PyTorch. All standalone examples and the isolated macOS wheel build/import
 smoke pass on the current integration commit.
+
+The pinned upstream Franka forward-kinematics tutorial workload now runs on
+MPS from the original `franka.yml` and URDF. Loader fixes cover dependency-free
+indentless YAML sequences, cuRobo `content/assets` resolution, explicit URDF
+sub-roots, and single-tool path extraction from branched trees. The recorded
+1,000-configuration replay matches the independent float64 oracle within
+`3.273e-07` for transforms and `5.035e-08` for the loss gradient.

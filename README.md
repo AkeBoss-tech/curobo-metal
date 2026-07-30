@@ -72,6 +72,20 @@ PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python benchmarks/trajectory/benchmark_traj
 The benchmark scripts synchronize the MPS device and report compilation/first
 use separately from steady-state latency.
 
+Replay the pinned upstream forward-kinematics tutorial workload on Apple MPS:
+
+```bash
+PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python \
+  examples/upstream_forward_kinematics_mps.py \
+  /path/to/pinned/curobo/content/configs/robot/franka.yml \
+  --device mps --batch-size 1000
+```
+
+This loads upstream `franka.yml` directly and checks Metal transforms and
+autograd against the independent float64 oracle. See
+[docs/upstream-example-replay.md](docs/upstream-example-replay.md) for the
+recorded result and the exact boundary around the CUDA-hardcoded original.
+
 ## Architecture
 
 ```text
@@ -131,4 +145,3 @@ Every feature progresses through:
 6. a fused Metal implementation only when evidence supports it.
 
 See [PLAN.md](PLAN.md) for the complete gated roadmap.
-

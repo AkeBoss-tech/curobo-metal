@@ -19,6 +19,7 @@ from .robot import (
     LinkConfig,
     RobotCfg,
     UnsupportedConfigError,
+    _topological_links,
 )
 from .world import WorldConfig
 
@@ -169,7 +170,21 @@ def _parse_yaml(text: str) -> Any:
                 index += 1
                 if raw_value:
                     result[key] = _scalar(raw_value)
-                elif index < len(lines) and lines[index][0] > indent:
+                elif index < len(lines) and (
+                    lines[index][0] > indent
+                    or (
+                        lines[index][0] == indent
+                        and lines[index][1].startswith("-")
+                    )
+                ):
+                    # YAML permits an "indentless sequence" directly below a
+                    # mapping key. cuRobo's own robot configs use this form:
+                    #
+                    #   tool_frames:
+                    #   - panda_hand
+                    #
+                    # The recursive list parser stops when the next mapping
+                    # entry at this indentation is reached.
                     result[key], index = block(index, lines[index][0])
                 else:
                     result[key] = None
@@ -322,6 +337,30 @@ def load_urdf(
         if len(roots) != 1:
             raise ValueError(f"{source}: URDF must have exactly one root link")
         base_link = roots[0]
+    elif base_link not in link_names:
+        raise ValueError(f"{source}: base_link {base_link!r} is absent from URDF links")
+    else:
+        # cuRobo robot YAML may deliberately choose a kinematic base below
+        # the physical URDF root (Franka uses ``panda_link0`` below
+        # ``base_link``). Keep exactly that descendant subtree.
+        child_map: dict[str, list[str]] = {}
+        for joint in joints:
+            child_map.setdefault(joint.parent, []).append(joint.child)
+        reachable: set[str] = set()
+        queue = [base_link]
+        while queue:
+            name = queue.pop(0)
+            if name in reachable:
+                raise ValueError(f"{source}: URDF joint graph contains a cycle")
+            reachable.add(name)
+            queue.extend(child_map.get(name, []))
+        links = [link for link in links if link.name in reachable]
+        joints = [
+            joint
+            for joint in joints
+            if joint.parent in reachable and joint.child in reachable
+        ]
+        link_names = [link.name for link in links]
     children = {joint.parent for joint in joints}
     inferred_tools = [name for name in link_names if name not in children]
     result = RobotCfg(
@@ -329,8 +368,10 @@ def load_urdf(
         list(inferred_tools if tool_frames is None else tool_frames),
         links, joints, urdf_path=str(source), source_path=str(source),
     )
-    # Trigger structural validation immediately.
-    result.to_tree_robot()
+    # Validate graph structure without imposing rigid-body inertia constraints.
+    # FK-only upstream assets can contain rounded inertia tensors that are not
+    # positive semidefinite; dynamics compilation performs that stricter check.
+    _topological_links(result.base_link, result.links, result.joints)
     movable = [
         joint for joint in joints
         if joint.kind != "fixed" and joint.mimic_joint is None
@@ -390,6 +431,14 @@ def _resolve_asset(path: str, source: Path | None, asset_root: str | None) -> Pa
     bases = []
     if source is not None:
         bases.append(source.parent)
+        # Pinned cuRobo content paths are rooted at ``content/assets`` while
+        # robot YAML files live under ``content/configs/robot``. For example,
+        # ``franka.yml`` refers to
+        # ``robot/franka_description/franka_panda.urdf``.
+        for parent in source.parents:
+            if parent.name == "content":
+                bases.append(parent / "assets")
+                break
         if asset_root:
             bases.append(source.parent / asset_root)
     for base in bases:

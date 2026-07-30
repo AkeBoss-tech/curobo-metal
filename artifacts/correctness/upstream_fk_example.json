@@ -1,0 +1,47 @@
+{
+  "batch_ms": 3.587084007449448,
+  "batch_size": 1000,
+  "device": "mps",
+  "dof": 7,
+  "dtype": "float32",
+  "format": "curobo-metal-upstream-fk-example",
+  "gradient_max_abs": 5.034637451384327e-08,
+  "loss_gradient": [
+    -7.149019874350127e-13,
+    -0.5636080503463745,
+    5.600914697312387e-13,
+    0.23293401300907135,
+    -9.892676955391977e-13,
+    -0.013192003592848778,
+    0.0
+  ],
+  "passed": true,
+  "robot": "panda",
+  "runtime": {
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "seed": 0,
+  "single_ee_position": [
+    [
+      0.08799999952316284,
+      -7.149019874350127e-13,
+      0.9259999990463257
+    ]
+  ],
+  "single_ee_quaternion_wxyz": [
+    [
+      0.0,
+      0.9238795638084412,
+      0.3826834261417389,
+      0.0
+    ]
+  ],
+  "tool_frames": [
+    "panda_hand"
+  ],
+  "transform_max_abs": 3.273222842770096e-07,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

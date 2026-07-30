@@ -222,23 +222,35 @@ class RobotCfg:
         return TreeRobot.from_dict(self._tree_mapping())
 
     def to_serial_robot(self) -> SerialRobot:
-        tree = self.to_tree_robot()
-        children: dict[int, list[int]] = {}
-        for index, link in enumerate(tree.links):
-            children.setdefault(link.parent, []).append(index)
-        if any(len(value) > 1 for parent, value in children.items() if parent >= 0):
+        if len(self.tool_frames) != 1:
             raise UnsupportedConfigError(
-                "SerialRobot conversion requires one child per link; use to_tree_robot()"
+                "SerialRobot conversion requires exactly one tool frame; "
+                "use to_tree_robot() for multi-effector robots"
             )
-        if any(link.multiplier != 1.0 or link.offset != 0.0 for link in tree.links):
-            raise UnsupportedConfigError(
-                "SerialRobot cannot preserve mimic joints; use to_tree_robot()"
-            )
+        joint_by_child = {joint.child: joint for joint in self.joints}
+        path: list[JointConfig] = []
+        child = self.tool_frames[0]
+        while child != self.base_link:
+            joint = joint_by_child.get(child)
+            if joint is None:
+                raise ValueError(
+                    f"tool frame {self.tool_frames[0]!r} is not a descendant "
+                    f"of base_link {self.base_link!r}"
+                )
+            if joint.mimic_joint is not None:
+                raise UnsupportedConfigError(
+                    "SerialRobot cannot preserve mimic joints; use to_tree_robot()"
+                )
+            path.append(joint)
+            child = joint.parent
+        path.reverse()
         mapping = {"name": self.name, "joints": []}
-        for link in tree.links[1:]:
+        for joint in path:
             mapping["joints"].append({
-                "name": link.name, "type": link.kind, "axis": link.axis.tolist(),
-                "origin": _matrix_origin(link.origin),
+                "name": joint.child,
+                "type": joint.kind,
+                "axis": list(joint.axis),
+                "origin": {"xyz": list(joint.xyz), "rpy": list(joint.rpy)},
             })
         return SerialRobot.from_dict(mapping)
 
