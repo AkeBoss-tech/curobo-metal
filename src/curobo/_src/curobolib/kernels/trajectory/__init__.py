@@ -1,0 +1,1 @@
+"""Trajectory kernel helper namespace."""

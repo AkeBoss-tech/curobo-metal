@@ -1,0 +1,1 @@
+"""B-spline helper namespace."""
