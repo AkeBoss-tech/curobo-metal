@@ -94,6 +94,7 @@ def test_encoding_and_module_order_are_deterministic(tmp_path: Path, monkeypatch
     second = inventory.build_inventory(package.parent, tmp_path / "local")
     assert inventory._encoded(first) == inventory._encoded(second)
     assert [item["name"] for item in first["modules"]] == ["curobo.a", "curobo.z"]
+    assert first["runtime_summary"] == first["summary"]
     json.loads(inventory._encoded(first))
 
 
@@ -112,3 +113,17 @@ def test_local_classification_is_ast_only(tmp_path: Path) -> None:
         "resolved_symbols": 1,
         "missing_symbols": 1,
     }
+
+
+@pytest.mark.parametrize(
+    ("module_name", "surface"),
+    [
+        ("curobo.types", "runtime"),
+        ("curobo.tests", "bundled_test"),
+        ("curobo.tests.test_types", "bundled_test"),
+        ("curobo.examples", "bundled_example"),
+        ("curobo.examples.getting_started.motion_gen", "bundled_example"),
+    ],
+)
+def test_surface_classification(module_name: str, surface: str) -> None:
+    assert inventory.classify_surface(module_name) == surface

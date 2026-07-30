@@ -15,6 +15,7 @@
       "name": "curobo",
       "path": "curobo/__init__.py",
       "sha256": "f1141c8054044fb61d26925cc2ededf58f11c53bde6d36cea02421573e11b872",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -27,6 +28,7 @@
       "name": "curobo._src.collision",
       "path": "curobo/_src/collision/__init__.py",
       "sha256": "dd75dc43ca43f64c790493cff2c1cfed3c26ae466a82069e8ca3a21355a465d7",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -39,6 +41,7 @@
       "name": "curobo._src.collision.attachment_manager",
       "path": "curobo/_src/collision/attachment_manager.py",
       "sha256": "af975bffbf60a3eee3ebeeaa6c008cbc6b54032d0968a5a709f14244185b732d",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -427,6 +430,7 @@
       "name": "curobo._src.collision.collision_robot_scene",
       "path": "curobo/_src/collision/collision_robot_scene.py",
       "sha256": "31566c89adc4355d55a0b0af2d476a334c83103bc8ca0ba040b7e5c80a9ea7bf",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -1093,6 +1097,7 @@
       "name": "curobo._src.collision.collision_robot_scene_cfg",
       "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
       "sha256": "0536a6bfd227bba69f15f18bf4e2810a61471403c8c5b3ba4711385ed5420548",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -1395,6 +1400,7 @@
       "name": "curobo._src.context",
       "path": "curobo/_src/context.py",
       "sha256": "604488bd74d3c87b0e1ecacab6d81112e19cd5bff2540c1db1ff9d1d513aa749",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -1491,6 +1497,7 @@
       "name": "curobo._src.cost",
       "path": "curobo/_src/cost/__init__.py",
       "sha256": "a0dd7a6873621e1f4e4287793eafcd323a0a1f36658216b3f3fd8e02705f37d6",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -1503,6 +1510,7 @@
       "name": "curobo._src.cost.cost_base",
       "path": "curobo/_src/cost/cost_base.py",
       "sha256": "bb0bbbb2f3f88e802cba3e67411f0f2d9e9d55518a872265949d553a6509799f",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -1737,6 +1745,7 @@
       "name": "curobo._src.cost.cost_base_cfg",
       "path": "curobo/_src/cost/cost_base_cfg.py",
       "sha256": "e09163a72b0cb7c95d82a66ea6ea24d4937e481b051a181bc2e40a3f9740af11",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -1856,6 +1865,7 @@
       "name": "curobo._src.cost.cost_cspace_base",
       "path": "curobo/_src/cost/cost_cspace_base.py",
       "sha256": "9e695b57d20597e4ba9bf88001852a40e1393462b1f5778ae6a28c562640f532",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -2075,6 +2085,7 @@
       "name": "curobo._src.cost.cost_cspace_cfg",
       "path": "curobo/_src/cost/cost_cspace_cfg.py",
       "sha256": "993c5bcb17980075cd177abe7e1046c6c37ddd522472702149d81093aef7eb42",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -2314,6 +2325,7 @@
       "name": "curobo._src.cost.cost_cspace_dist",
       "path": "curobo/_src/cost/cost_cspace_dist.py",
       "sha256": "98c64510e100497f6a6afe6715d73bc647cd750691132c006907d90304ec2fc8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -2569,6 +2581,7 @@
       "name": "curobo._src.cost.cost_cspace_dist_cfg",
       "path": "curobo/_src/cost/cost_cspace_dist_cfg.py",
       "sha256": "4c9993e42fd478c9372de1155dbbde0e5405ce9eb9b37b90e3272508caf2bafb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -2765,6 +2778,7 @@
       "name": "curobo._src.cost.cost_cspace_position",
       "path": "curobo/_src/cost/cost_cspace_position.py",
       "sha256": "d072761abf328993f07ac781177c627486efa7db93b8468a45dda108d570af3d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -2942,6 +2956,7 @@
       "name": "curobo._src.cost.cost_cspace_state",
       "path": "curobo/_src/cost/cost_cspace_state.py",
       "sha256": "e77a288b320d1626213a49ed4d181db07a1de1c74e792367ab78814f5a99fa80",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -3119,6 +3134,7 @@
       "name": "curobo._src.cost.cost_cspace_type",
       "path": "curobo/_src/cost/cost_cspace_type.py",
       "sha256": "cc84c1b82f782777ec3efc7462210ab287f1d50e8e981a70b2996f6e5aa855a1",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -3163,6 +3179,7 @@
       "name": "curobo._src.cost.cost_pose_type",
       "path": "curobo/_src/cost/cost_pose_type.py",
       "sha256": "ef03b4938a0a893bfd6a296fc51ff62d62775666a8cc6c9bae3c2625b6326ef7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -3219,6 +3236,7 @@
       "name": "curobo._src.cost.cost_scene_collision",
       "path": "curobo/_src/cost/cost_scene_collision.py",
       "sha256": "4761c6ff066212b41f64c7cbda88b55f8c827214c3bf76d12a4d8b2bf5fedbcf",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -3516,6 +3534,7 @@
       "name": "curobo._src.cost.cost_scene_collision_cfg",
       "path": "curobo/_src/cost/cost_scene_collision_cfg.py",
       "sha256": "11f852e241ebed3ae4dfc550572eac66d5c8eafbd38e8c2c9e3fbc1d05757183",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -3727,6 +3746,7 @@
       "name": "curobo._src.cost.cost_self_collision",
       "path": "curobo/_src/cost/cost_self_collision.py",
       "sha256": "377330b42cfd13c260e6e4bd2addf3e48047d0e4d13a94fe595ca1d1e067682f",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -3910,6 +3930,7 @@
       "name": "curobo._src.cost.cost_self_collision_cfg",
       "path": "curobo/_src/cost/cost_self_collision_cfg.py",
       "sha256": "e165e162744d0b47cadec222d1dc4009dfe06d35169a27806550610b8359ccb8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -3992,6 +4013,7 @@
       "name": "curobo._src.cost.cost_support_polygon",
       "path": "curobo/_src/cost/cost_support_polygon.py",
       "sha256": "e3bd6c004a0111c74a77e4247ee82a72ca34dd88d398d613a2dd2d1e4b26b2bc",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -4129,6 +4151,7 @@
       "name": "curobo._src.cost.cost_support_polygon_cfg",
       "path": "curobo/_src/cost/cost_support_polygon_cfg.py",
       "sha256": "25d72bbd3ae27b1fdaa1045e94c475d2f4cf8e17612a109429b305a41dd8be7b",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -4222,6 +4245,7 @@
       "name": "curobo._src.cost.cost_tool_pose",
       "path": "curobo/_src/cost/cost_tool_pose.py",
       "sha256": "e028bee2262fc2f4096f5f67e54002182067e4e4d2375a5f9ec8708ee18e0c8f",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -4435,6 +4459,7 @@
       "name": "curobo._src.cost.cost_tool_pose_cfg",
       "path": "curobo/_src/cost/cost_tool_pose_cfg.py",
       "sha256": "c0a1974c6fa005065603ee75f99dad1408639e3cbe7552a5682d245b95fb320b",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -4631,6 +4656,7 @@
       "name": "curobo._src.cost.tool_pose_criteria",
       "path": "curobo/_src/cost/tool_pose_criteria.py",
       "sha256": "15667a72850f5bcb77be5cf1280ae338ad967808041c587b16ad7753ffce5de2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -5012,6 +5038,7 @@
       "name": "curobo._src.cost.warp_bound_util",
       "path": "curobo/_src/cost/warp_bound_util.py",
       "sha256": "f9f865231664a5d05cf207729c14446b528cc3821e52ecb85b06d98b14494fa9",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [
@@ -5251,6 +5278,7 @@
       "name": "curobo._src.cost.wp_cspace_position",
       "path": "curobo/_src/cost/wp_cspace_position.py",
       "sha256": "0c386b6f1ddf93645a76f0b0102a7034b84a0c5f4bca2ff7d342fd69756b1abd",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -5629,6 +5657,7 @@
       "name": "curobo._src.cost.wp_cspace_state",
       "path": "curobo/_src/cost/wp_cspace_state.py",
       "sha256": "bd8f6565f365b26f3c6f90f800b6f9970644c0676c5b1adc0437e70e236d7752",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -6113,6 +6142,7 @@
       "name": "curobo._src.cost.wp_tool_pose",
       "path": "curobo/_src/cost/wp_tool_pose.py",
       "sha256": "70aa0c0c370c0e8ead1de87e6223d830a27f34ccf48ba6d3577d20a529377fbc",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -6641,6 +6671,7 @@
       "name": "curobo._src.cost.wp_torch_cspace_dist",
       "path": "curobo/_src/cost/wp_torch_cspace_dist.py",
       "sha256": "f4cdf82e8214d049be867460c9e5aa710b02c19a1be03af7acc46bd0709a65b0",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -6871,6 +6902,7 @@
       "name": "curobo._src.curobolib",
       "path": "curobo/_src/curobolib/__init__.py",
       "sha256": "fca9e9308d7d20c9bce38d266e3fb2548fb74f4244f8272cd01bc340632b2b6a",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -6883,6 +6915,7 @@
       "name": "curobo._src.curobolib.backends",
       "path": "curobo/_src/curobolib/backends/__init__.py",
       "sha256": "667af59278cc90d69288c6c771466ad37f28b92a6ae78febc794b138eaefbdf8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -6956,6 +6989,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/__init__.py",
       "sha256": "10456dc091fbb926398048d136fbe7e4721084afe097993f3fd8f4331ccc2f0b",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -6968,6 +7002,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.dynamics",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/dynamics.py",
       "sha256": "ae54f5d57fd31a5f567c36c83cff4e3489d90dbe98ed250b763ba5a03e5bcc9e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -7297,6 +7332,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.dynamics_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/dynamics_config.py",
       "sha256": "7934ae15cf3f7448bbc3550e6a53a2746323bcf88687d9da6fe4a3196d39049a",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -7523,6 +7559,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.geometry",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/geometry.py",
       "sha256": "dfa6fb07d7c9817d20e48ca49a6c31c84a57e965dec351e8caa3a3973ce5cbe4",
+      "surface": "runtime",
       "symbols": [
         {
           "annotation": null,
@@ -7702,6 +7739,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.geometry_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/geometry_config.py",
       "sha256": "f4331d162f2660c38b36f3ba7a9c157fd46daeac58e9ee178436d4d87ae6f8d8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -7795,6 +7833,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kernel_cache",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kernel_cache.py",
       "sha256": "9bc370ad47eae3743e2b5e675e0dbad0c2e7e23c23f34f8692c206880524e3c5",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -8022,6 +8061,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kernel_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kernel_config.py",
       "sha256": "f3b56f52812105b4014c0ba581b7f8db9f4a67fbd6e3b97b515e2a1bb1acdb2c",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -8138,6 +8178,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kinematics",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kinematics.py",
       "sha256": "80aa33a8318759771d7f4fa805b212e24cd94e4f233229918930091320b8ea67",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -8814,6 +8855,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kinematics_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kinematics_config.py",
       "sha256": "69ae737123fadf6f85c3259f1efc3e84c4e2bdd5b50e0363a553aaa2b26855f5",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -9057,6 +9099,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.launch_helper",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/launch_helper.py",
       "sha256": "71d9e17542edfeb77a16122a0f9c7733844a9eb3c0278d2568768013e2db1100",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -9131,6 +9174,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.optimization",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/optimization.py",
       "sha256": "4ca59397c29ac9b28e066a661f612dfc42b996523b8215fc791d1a938a2b0bff",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -9463,6 +9507,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.optimization_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/optimization_config.py",
       "sha256": "59bac22768586c4aade0d37bf73219d5bf706a52a44d63e2e35788f65542858f",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -9652,6 +9697,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.pba",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/pba.py",
       "sha256": "b07218e01913f39e0ddb744a03ef9cdf3b154b383cb4b6cb223fd3883a761fe8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -9737,6 +9783,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.pba_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/pba_config.py",
       "sha256": "e42cd00614ba1527eef7051d9246adefeee81d4530cd57f5874efd8186532c32",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -9922,6 +9969,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.trajectory",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/trajectory.py",
       "sha256": "f966646272d6442244ec0ca5d6647abafa3dba9e4302119d3a1a2942671cc52c",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -10667,6 +10715,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.trajectory_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/trajectory_config.py",
       "sha256": "7e04efae0d44bd1efb685606981de04ab640745af839b279c5012f3d79b7f7f0",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -11083,6 +11132,7 @@
       "name": "curobo._src.curobolib.backends.cuda_core_backend.util",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/util.py",
       "sha256": "b8458dd6649df02f54b34003b45a4a74eed096406b484cd5d81e5e4a432e115d",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [],
@@ -11119,6 +11169,7 @@
       "name": "curobo._src.curobolib.backends.pybind",
       "path": "curobo/_src/curobolib/backends/pybind/__init__.py",
       "sha256": "651dd5a3e06e695aa69188a18d635b05d848b169a22923ba990131bcf1edfe77",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -11131,6 +11182,7 @@
       "name": "curobo._src.curobolib.cuda_ops",
       "path": "curobo/_src/curobolib/cuda_ops/__init__.py",
       "sha256": "e1d9af0f9ba5460f2f341fd380cb48338b0fb38eb8fa77f0d5626383bc9c529d",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -11143,6 +11195,7 @@
       "name": "curobo._src.curobolib.cuda_ops.dynamics",
       "path": "curobo/_src/curobolib/cuda_ops/dynamics.py",
       "sha256": "aa7c819e826dba891a0c72409dfd2a573a2877d866069c4939d9f538b007e68e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -11441,6 +11494,7 @@
       "name": "curobo._src.curobolib.cuda_ops.geometry",
       "path": "curobo/_src/curobolib/cuda_ops/geometry.py",
       "sha256": "83a712849039d07ae01182fa33084f0a168e37c83177434eda423b32ae03006f",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -11627,6 +11681,7 @@
       "name": "curobo._src.curobolib.cuda_ops.kinematics",
       "path": "curobo/_src/curobolib/cuda_ops/kinematics.py",
       "sha256": "a34858328d91927fcc0506fc9a9cbe6d1b26d69d0e8b4d888509843cb726e532",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -11939,6 +11994,7 @@
       "name": "curobo._src.curobolib.cuda_ops.optimization",
       "path": "curobo/_src/curobolib/cuda_ops/optimization.py",
       "sha256": "56d3665ba15694e587ecd49abbd7bdd23f61ff24bcfb1cf073cbd1ccb64870e3",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -12192,6 +12248,7 @@
       "name": "curobo._src.curobolib.cuda_ops.tensor_checks",
       "path": "curobo/_src/curobolib/cuda_ops/tensor_checks.py",
       "sha256": "33a9543c29c28b58441ad4a2c03e1df77abdb0aadd324750a00242fa39819354",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -12381,6 +12438,7 @@
       "name": "curobo._src.curobolib.cuda_ops.trajectory",
       "path": "curobo/_src/curobolib/cuda_ops/trajectory.py",
       "sha256": "95ac3a41c838b7a502707d8a0a48d6ccc3379164d1c5f947e02415a55bc63c2c",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -13022,6 +13080,7 @@
       "name": "curobo._src.curobolib.kernels.trajectory.bspline.derivations.bspline_boundary_coefficients",
       "path": "curobo/_src/curobolib/kernels/trajectory/bspline/derivations/bspline_boundary_coefficients.py",
       "sha256": "6f33d640e47004811ab64829f5505713b6be2ea39b3c03e03010bc35796263fa",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -13120,6 +13179,7 @@
       "name": "curobo._src.geom",
       "path": "curobo/_src/geom/__init__.py",
       "sha256": "aa8b6c62b9e217c18a99869ddf00db60df068057df0277aa7ff13bd1009084a6",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -13132,6 +13192,7 @@
       "name": "curobo._src.geom.collision",
       "path": "curobo/_src/geom/collision/__init__.py",
       "sha256": "12de4c2fa1e0470e0e8d4b6c35307a4b036a6576c9938b9d764a4a4196344474",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -13144,6 +13205,7 @@
       "name": "curobo._src.geom.collision.buffer_collision",
       "path": "curobo/_src/geom/collision/buffer_collision.py",
       "sha256": "45c9c0e67619fa899c24ea7ca405cd657bb5dddfc197e0c60cc6e02fc63e8932",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -13324,6 +13386,7 @@
       "name": "curobo._src.geom.collision.checker_collision",
       "path": "curobo/_src/geom/collision/checker_collision.py",
       "sha256": "8802aef3439af3dd34d2f0f32f08355346d084751b8a47ac815a6ab27a8b2508",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -13678,6 +13741,7 @@
       "name": "curobo._src.geom.collision.collision_scene",
       "path": "curobo/_src/geom/collision/collision_scene.py",
       "sha256": "49c30c738b1089525ab26fb119727c92974129dc63f5f875c46d7a39b748ad51",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -14536,6 +14600,7 @@
       "name": "curobo._src.geom.collision.wp_autograd",
       "path": "curobo/_src/geom/collision/wp_autograd.py",
       "sha256": "58f5cba50c1fab37a2773c59b2696826ab677ec5d23624ebf98f2542a73035a9",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -14825,6 +14890,7 @@
       "name": "curobo._src.geom.collision.wp_collision_common",
       "path": "curobo/_src/geom/collision/wp_collision_common.py",
       "sha256": "a2224c203f82b6fdb8299c5087758113badc4dbda44b7703409a822138f5d297",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -15029,6 +15095,7 @@
       "name": "curobo._src.geom.collision.wp_collision_kernel",
       "path": "curobo/_src/geom/collision/wp_collision_kernel.py",
       "sha256": "75c1be11f4511f20b00f6e1875f842aaf6ba7107269e04dd525c06012a7d1183",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -15180,6 +15247,7 @@
       "name": "curobo._src.geom.collision.wp_speed_metric",
       "path": "curobo/_src/geom/collision/wp_speed_metric.py",
       "sha256": "bec5341a28b4586638727991e7cfa2e3fd331708c1fde9c05ea3858a24eca755",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [
@@ -15253,6 +15321,7 @@
       "name": "curobo._src.geom.collision.wp_sweep_collision_kernel",
       "path": "curobo/_src/geom/collision/wp_sweep_collision_kernel.py",
       "sha256": "d983eecb00c91f5e201c6cdda7e7288622b8bca3694842ed8e086184f9bbcdef",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -15416,6 +15485,7 @@
       "name": "curobo._src.geom.convex_polygon_helper",
       "path": "curobo/_src/geom/convex_polygon_helper.py",
       "sha256": "8d782a346cccdb46059d47e4173edd29d5ec322a435b8443b1cb3e116f62d635",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -15541,6 +15611,7 @@
       "name": "curobo._src.geom.cv",
       "path": "curobo/_src/geom/cv.py",
       "sha256": "371c9028cf5e51a1a6f240556798af43a45869d94fdd30c593ca35349bdab1fa",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [
@@ -15686,6 +15757,7 @@
       "name": "curobo._src.geom.data",
       "path": "curobo/_src/geom/data/__init__.py",
       "sha256": "57641e23c8f734fa7271057f9d8f8777a6279f86bd37094a5b4ccac39aebc5a2",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -15698,6 +15770,7 @@
       "name": "curobo._src.geom.data.data_cuboid",
       "path": "curobo/_src/geom/data/data_cuboid.py",
       "sha256": "3bb663f06a142ccbe2a8f094a3f846e088d1c2c83c0ba631441406c8c36d08a3",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -16505,6 +16578,7 @@
       "name": "curobo._src.geom.data.data_mesh",
       "path": "curobo/_src/geom/data/data_mesh.py",
       "sha256": "d3b7a914c27c0fbfc11c8cead98d569a1abaf8eeb8c8a4a08da4ac8aac4354b7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -17456,6 +17530,7 @@
       "name": "curobo._src.geom.data.data_scene",
       "path": "curobo/_src/geom/data/data_scene.py",
       "sha256": "19fe3d31d5f8a209e6e0c76533e454080978f4290727bace37dd2530df1c5468",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -18174,6 +18249,7 @@
       "name": "curobo._src.geom.data.data_voxel",
       "path": "curobo/_src/geom/data/data_voxel.py",
       "sha256": "db055fa7429c4e710b7d36305764c19903d6942b700b581a0b8e7531d6b90d0b",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -19304,6 +19380,7 @@
       "name": "curobo._src.geom.data.helper_pose",
       "path": "curobo/_src/geom/data/helper_pose.py",
       "sha256": "47a405c8eaa46a0f95c43bb5cfcd8b64680b6394a8aa62cc7048a4d0f8e01c72",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [
@@ -19447,6 +19524,7 @@
       "name": "curobo._src.geom.data.registry",
       "path": "curobo/_src/geom/data/registry.py",
       "sha256": "efd05b137f04464e88ea0ba480d4215d6eb6cce266db57b4883ba714f4f85267",
+      "surface": "runtime",
       "symbols": [
         {
           "annotation": null,
@@ -19466,6 +19544,7 @@
       "name": "curobo._src.geom.mesh_triangulation",
       "path": "curobo/_src/geom/mesh_triangulation.py",
       "sha256": "ca09a82ee57ab6340a73da07954e3cbff310d3a6efe1f9ec0257354948a7f4c5",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -19614,6 +19693,7 @@
       "name": "curobo._src.geom.quaternion",
       "path": "curobo/_src/geom/quaternion.py",
       "sha256": "9b9958845850877d422a96ec59db9c2ad7e7129aaeb6d48482ff3f08bd06a983",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -19745,6 +19825,7 @@
       "name": "curobo._src.geom.sdf_grid",
       "path": "curobo/_src/geom/sdf_grid.py",
       "sha256": "2c2920a4742117ed912216948eeda5677f25c9981f66aa2e795f0c9fafbaa3d1",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -19903,6 +19984,7 @@
       "name": "curobo._src.geom.sphere_fit",
       "path": "curobo/_src/geom/sphere_fit/__init__.py",
       "sha256": "13e93d89a0d6b102cfc300bc2895b5174cc35d294999adeea7353e5b52498182",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -19915,6 +19997,7 @@
       "name": "curobo._src.geom.sphere_fit.fit_morphit",
       "path": "curobo/_src/geom/sphere_fit/fit_morphit.py",
       "sha256": "cfe92e0502ffc86bdc588c8ea4bca17606a1b178a877e5aedbd1382913ef5058",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -20269,6 +20352,7 @@
       "name": "curobo._src.geom.sphere_fit.fit_spheres",
       "path": "curobo/_src/geom/sphere_fit/fit_spheres.py",
       "sha256": "0ed426564f48dd81a9e037446f580c05cd6c9ed45b1216841a3fd2db49772817",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -20444,6 +20528,7 @@
       "name": "curobo._src.geom.sphere_fit.fit_voxel",
       "path": "curobo/_src/geom/sphere_fit/fit_voxel.py",
       "sha256": "1bec009b1d488612c17a0542c669b938a299361369d942ba1633d7a27b346062",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -20555,6 +20640,7 @@
       "name": "curobo._src.geom.sphere_fit.metrics",
       "path": "curobo/_src/geom/sphere_fit/metrics.py",
       "sha256": "bd36a397b0b99873c61b177494bcfbbe8f10ffe1e6c77d4ee889aada2e1f494e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -20703,6 +20789,7 @@
       "name": "curobo._src.geom.sphere_fit.sphere_count",
       "path": "curobo/_src/geom/sphere_fit/sphere_count.py",
       "sha256": "57030d19eb86148c1f2256453e10827b70aa6102f36877b23faf7515ba8e2956",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -20754,6 +20841,7 @@
       "name": "curobo._src.geom.sphere_fit.types",
       "path": "curobo/_src/geom/sphere_fit/types.py",
       "sha256": "ed2debafff0e3eba62f9f120624246f2a37547375ff123fef1fd83d44af26b4a",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -20989,6 +21077,7 @@
       "name": "curobo._src.geom.sphere_fit.wp_mesh_query",
       "path": "curobo/_src/geom/sphere_fit/wp_mesh_query.py",
       "sha256": "d481f10276eccab4dad4e43543d359005831d4b478c75ddd455196102b7618f6",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -21211,6 +21300,7 @@
       "name": "curobo._src.geom.transform",
       "path": "curobo/_src/geom/transform.py",
       "sha256": "d41a999973e92385bf14fb8740367b4881542c5a54463e7ae911fd5d98a1786e",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -22890,6 +22980,7 @@
       "name": "curobo._src.geom.types",
       "path": "curobo/_src/geom/types.py",
       "sha256": "b68cf243dab0940d7cdf2eb05e8d3ff77a81ad2eaa0241d962672fd3c440fe3e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -24772,6 +24863,7 @@
       "name": "curobo._src.graph_planner",
       "path": "curobo/_src/graph_planner/__init__.py",
       "sha256": "6b62c2a6931e324cbbfaa2b8c631a271fb8edab5540a3d3b4002e7443c316ee3",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -24784,6 +24876,7 @@
       "name": "curobo._src.graph_planner.graph",
       "path": "curobo/_src/graph_planner/graph/__init__.py",
       "sha256": "6b62c2a6931e324cbbfaa2b8c631a271fb8edab5540a3d3b4002e7443c316ee3",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -24796,6 +24889,7 @@
       "name": "curobo._src.graph_planner.graph.connector_linear",
       "path": "curobo/_src/graph_planner/graph/connector_linear.py",
       "sha256": "c8b5602b789d77241ed91ea9cdc8939c14804d1d915ab19dc82f53b2b1bb1fc1",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -24949,6 +25043,7 @@
       "name": "curobo._src.graph_planner.graph.constructor",
       "path": "curobo/_src/graph_planner/graph/constructor.py",
       "sha256": "9971423eff7d9aeebea8d38dc04d4ba7b5bc7b9cee9ab81614afbfbf00192eb1",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -25245,6 +25340,7 @@
       "name": "curobo._src.graph_planner.graph.node_distance",
       "path": "curobo/_src/graph_planner/graph/node_distance.py",
       "sha256": "a3b5cd20572d5ee0bc2f00ab4627f5ef8a37cbe1dabc5b35e12ba79b23d05139",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -25591,6 +25687,7 @@
       "name": "curobo._src.graph_planner.graph.node_manager",
       "path": "curobo/_src/graph_planner/graph/node_manager.py",
       "sha256": "4750a51263a8fe89d087646b0274223ac1f8942a4f624ef44e14797ced454e9e",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -26156,6 +26253,7 @@
       "name": "curobo._src.graph_planner.graph.node_sampling_strategy",
       "path": "curobo/_src/graph_planner/graph/node_sampling_strategy.py",
       "sha256": "658e9ee127890080ef1a0e1f4335fa4b024d79f146714852b7cefdc51aad9dc0",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -26715,6 +26813,7 @@
       "name": "curobo._src.graph_planner.graph_planner_prm",
       "path": "curobo/_src/graph_planner/graph_planner_prm.py",
       "sha256": "57e5d8e343d786ea452dbffdd459240aa9d93c731fb6434c0e70010d97a8391a",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -27398,6 +27497,7 @@
       "name": "curobo._src.graph_planner.graph_planner_prm_cfg",
       "path": "curobo/_src/graph_planner/graph_planner_prm_cfg.py",
       "sha256": "a5ad52372b6320ea51f4c5ae8369d49f7e5662bdd1331cdc7a0f5b6adb5ad1ce",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -27738,6 +27838,7 @@
       "name": "curobo._src.graph_planner.result",
       "path": "curobo/_src/graph_planner/result.py",
       "sha256": "6cfcbb253d1e3e134d42f2fec7d773488a9b82a3ecc8ce3abbb25650461bc2bc",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -27843,6 +27944,7 @@
       "name": "curobo._src.graph_planner.search",
       "path": "curobo/_src/graph_planner/search/__init__.py",
       "sha256": "6b62c2a6931e324cbbfaa2b8c631a271fb8edab5540a3d3b4002e7443c316ee3",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -27855,6 +27957,7 @@
       "name": "curobo._src.graph_planner.search.path_finder_networkx",
       "path": "curobo/_src/graph_planner/search/path_finder_networkx.py",
       "sha256": "84a405699573da0c1d7a439184160df252622801f46a37a665fb2db11ec08372",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -28207,6 +28310,7 @@
       "name": "curobo._src.graph_planner.search.path_pruner",
       "path": "curobo/_src/graph_planner/search/path_pruner.py",
       "sha256": "7fc7a4d9106bf47f1f89f74420e46d6b470381610a5ab3121538e313c68e04de",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -28382,6 +28486,7 @@
       "name": "curobo._src.motion",
       "path": "curobo/_src/motion/__init__.py",
       "sha256": "d7be0adc75ae3b384468beb68bb3273af37951e9c01b6c543d6dd5eb4e660650",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -28394,6 +28499,7 @@
       "name": "curobo._src.motion.motion_planner",
       "path": "curobo/_src/motion/motion_planner.py",
       "sha256": "e865256c6fb1d99394cec242209cda8fe8b9c8a0f5b5503f74978d45401efc9f",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -29117,6 +29223,7 @@
       "name": "curobo._src.motion.motion_planner_batch",
       "path": "curobo/_src/motion/motion_planner_batch.py",
       "sha256": "bee3b22d53a2030fcc9d3135e619f7146e36ed16287a3ab657475b26d28541ac",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -29879,6 +29986,7 @@
       "name": "curobo._src.motion.motion_planner_cfg",
       "path": "curobo/_src/motion/motion_planner_cfg.py",
       "sha256": "5b2bce3a5e84949470ea4d7450ba43fc55fbf8b480d01494d539295530ce70aa",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -30227,6 +30335,7 @@
       "name": "curobo._src.motion.motion_planner_result",
       "path": "curobo/_src/motion/motion_planner_result.py",
       "sha256": "5cc95d98eae0507f729ffc557d3c3b5fb223ccea7056f01dbd4665716b4a8bbf",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -30413,6 +30522,7 @@
       "name": "curobo._src.motion.motion_retargeter",
       "path": "curobo/_src/motion/motion_retargeter.py",
       "sha256": "ba369e5fc47db8d836200141c7d677d3fdd974045b4cd33dc3571bb3dea340bc",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -30731,6 +30841,7 @@
       "name": "curobo._src.motion.motion_retargeter_cfg",
       "path": "curobo/_src/motion/motion_retargeter_cfg.py",
       "sha256": "83e9c8b4e6f16cd6c194d0b8704729defe3e288a914413c8e2c751aee54fde5a",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -31128,6 +31239,7 @@
       "name": "curobo._src.motion.motion_retargeter_result",
       "path": "curobo/_src/motion/motion_retargeter_result.py",
       "sha256": "e3c834ad17951689aec639daa50bd0579e9420d9772f9183d0dcb40d13734371",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -31187,6 +31299,7 @@
       "name": "curobo._src.optim",
       "path": "curobo/_src/optim/__init__.py",
       "sha256": "6f53bff5696a7be5cc67ce1d672052c5ba0cf6a97ad54a55fb67ca568e9ee65f",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -31199,6 +31312,7 @@
       "name": "curobo._src.optim.components",
       "path": "curobo/_src/optim/components/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -31211,6 +31325,7 @@
       "name": "curobo._src.optim.components.action_bounds",
       "path": "curobo/_src/optim/components/action_bounds.py",
       "sha256": "6eb11ed014977ca17816013c825f7d4cef526c125f44c1ef65cd39f778e0a3d5",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -31316,6 +31431,7 @@
       "name": "curobo._src.optim.components.best_tracker",
       "path": "curobo/_src/optim/components/best_tracker.py",
       "sha256": "02697190aef8ec72130f08a6ab1dbbc5f7c9047efdc9852451a70c5f66d44465",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -31542,6 +31658,7 @@
       "name": "curobo._src.optim.components.debug_recorder",
       "path": "curobo/_src/optim/components/debug_recorder.py",
       "sha256": "161cd18f89d6f95210dcf7726f2a139ff1665f5c9824220dbc77cc79407a4706",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -31672,6 +31789,7 @@
       "name": "curobo._src.optim.components.gaussian_distribution",
       "path": "curobo/_src/optim/components/gaussian_distribution.py",
       "sha256": "3c91266ce06e198ee015d7a3b76873f47bdf00bb3c8df1c12acb8cb2c61c9c87",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -32212,6 +32330,7 @@
       "name": "curobo._src.optim.components.gradient_opt_core",
       "path": "curobo/_src/optim/components/gradient_opt_core.py",
       "sha256": "1f580efea18708a53b758eceba119bdb5e8f7db26c11f66da6e3b44dedcdbe9b",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -33066,6 +33185,7 @@
       "name": "curobo._src.optim.components.particle_opt_core",
       "path": "curobo/_src/optim/components/particle_opt_core.py",
       "sha256": "60e56ae1133ba3af14f993d3c4845c6c46cfb82a5150a563c07cd26c666ed3eb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -34041,6 +34161,7 @@
       "name": "curobo._src.optim.components.quasi_newton_buffers",
       "path": "curobo/_src/optim/components/quasi_newton_buffers.py",
       "sha256": "d927b16fff02ac0f3a711222a41c659c8251fa51befdba7a16c30792775a5bbb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -34259,6 +34380,7 @@
       "name": "curobo._src.optim.external",
       "path": "curobo/_src/optim/external/__init__.py",
       "sha256": "e91f6e3d2c889e0014c231dadef36e23e405580a7729287c6a99a5f438e67932",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -34271,6 +34393,7 @@
       "name": "curobo._src.optim.external.scipy_opt",
       "path": "curobo/_src/optim/external/scipy_opt.py",
       "sha256": "04a390770ea04bd7a607649252f07a598f5cd62fc5b44e80b0cec0540988c04a",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -35253,6 +35376,7 @@
       "name": "curobo._src.optim.external.torch_opt",
       "path": "curobo/_src/optim/external/torch_opt.py",
       "sha256": "db26c0915d9a21866a8296087d1182deecc7521374e656bda1ef34837442a480",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -36156,6 +36280,7 @@
       "name": "curobo._src.optim.gradient",
       "path": "curobo/_src/optim/gradient/__init__.py",
       "sha256": "76164cd857ece21950dc9d234775542fac91b812efa6c45b7fc5455868738fff",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -36168,6 +36293,7 @@
       "name": "curobo._src.optim.gradient.conjugate_gradient",
       "path": "curobo/_src/optim/gradient/conjugate_gradient.py",
       "sha256": "5b4c6ce511812926c4bf8ce556b0c2a56ab2d9f585937ba95d822287df962e46",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -37384,6 +37510,7 @@
       "name": "curobo._src.optim.gradient.gradient_descent",
       "path": "curobo/_src/optim/gradient/gradient_descent.py",
       "sha256": "6ea24b3673cadeb89142b27b002d488d1067714db8538331b78ec6785217c120",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -38395,6 +38522,7 @@
       "name": "curobo._src.optim.gradient.lbfgs",
       "path": "curobo/_src/optim/gradient/lbfgs.py",
       "sha256": "8aea8fdb9b82eb6819b9ce8742bfac4ae3cef9707a382270e380f2eacad1337a",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -39616,6 +39744,7 @@
       "name": "curobo._src.optim.gradient.lbfgs_jit_helpers",
       "path": "curobo/_src/optim/gradient/lbfgs_jit_helpers.py",
       "sha256": "1710907144c216a75990b1509e89ea346095c5b1ce4b5523f3a6f3e0154c1ad1",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -39931,6 +40060,7 @@
       "name": "curobo._src.optim.gradient.line_search_context",
       "path": "curobo/_src/optim/gradient/line_search_context.py",
       "sha256": "b8027b471a317e6ba6716f724aab973b0acdf1ad3af476c68a45679de1eccc29",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -40131,6 +40261,7 @@
       "name": "curobo._src.optim.gradient.line_search_result",
       "path": "curobo/_src/optim/gradient/line_search_result.py",
       "sha256": "be78bb76ccdc65fc90e8b91474eb6ea2bb4337656ef85c914470bd3914d910ff",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -40180,6 +40311,7 @@
       "name": "curobo._src.optim.gradient.line_search_state",
       "path": "curobo/_src/optim/gradient/line_search_state.py",
       "sha256": "7dd20d17b23b236da2869582d111f167810875c423688c8157f5eb966669a15f",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -40246,6 +40378,7 @@
       "name": "curobo._src.optim.gradient.line_search_strategy",
       "path": "curobo/_src/optim/gradient/line_search_strategy.py",
       "sha256": "294949d5c5e8183958a634c53774f8e299a8aaf31e1d7bf4a8632d5bfab48f26",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -40839,6 +40972,7 @@
       "name": "curobo._src.optim.gradient.lsr1",
       "path": "curobo/_src/optim/gradient/lsr1.py",
       "sha256": "db57991dda68d206d938c1a94d689dc5e6ba5ecd216aa30c76d488a8fdeba918",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -41771,6 +41905,7 @@
       "name": "curobo._src.optim.gradient.update_best_solution",
       "path": "curobo/_src/optim/gradient/update_best_solution.py",
       "sha256": "1045a9a1430f94a663d0813010071afa67e9f6bccd2218500390a2329a1dd0a7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -41853,6 +41988,7 @@
       "name": "curobo._src.optim.gradient.util",
       "path": "curobo/_src/optim/gradient/util.py",
       "sha256": "5952bc8d516daaa8f9bc704f4efbe277f92a8dab8f256163e2ef36539e400fd7",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -41865,6 +42001,7 @@
       "name": "curobo._src.optim.multi_stage_optimizer",
       "path": "curobo/_src/optim/multi_stage_optimizer.py",
       "sha256": "70ef2c06d090a36407fc8e9a6403053553dac3f1bb751901e10681a6b6c596d2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -42478,6 +42615,7 @@
       "name": "curobo._src.optim.optim_factory",
       "path": "curobo/_src/optim/optim_factory.py",
       "sha256": "58a02a6cd5bf2010eaddfa7e2e62f4115fe9f71e67b73ac45c197468dac413ef",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -42653,6 +42791,7 @@
       "name": "curobo._src.optim.optimization_iteration_state",
       "path": "curobo/_src/optim/optimization_iteration_state.py",
       "sha256": "3a98298960100be2b31430c96401252c730e65f81652110be5428d308893b51e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -42865,6 +43004,7 @@
       "name": "curobo._src.optim.optimizer_protocol",
       "path": "curobo/_src/optim/optimizer_protocol.py",
       "sha256": "e370839695347fff299ecc247c444b5558fc2629a06b1bfaaae43e696b45a8d6",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -43313,6 +43453,7 @@
       "name": "curobo._src.optim.particle",
       "path": "curobo/_src/optim/particle/__init__.py",
       "sha256": "3c058206cb3fd017dfd6f148d0e18607f87129ba9ed20ac2459e6433bb4373ee",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -43325,6 +43466,7 @@
       "name": "curobo._src.optim.particle.evolution_strategies",
       "path": "curobo/_src/optim/particle/evolution_strategies.py",
       "sha256": "ed83eab6e4dcd7a8d2d51f6f939cb234dffb602aa785b52a5704ecc5058932ed",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -44979,6 +45121,7 @@
       "name": "curobo._src.optim.particle.mppi",
       "path": "curobo/_src/optim/particle/mppi.py",
       "sha256": "32c04b87dd3473d3d3073aee34997ff89500fed7dad24175daf8ea96f650fcfa",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -47153,6 +47296,7 @@
       "name": "curobo._src.optim.particle.particle_opt_utils",
       "path": "curobo/_src/optim/particle/particle_opt_utils.py",
       "sha256": "82d73917b0c75260f8513e11a730be58781ab19a06e7e1ac05d4d9464c51208e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -47335,6 +47479,7 @@
       "name": "curobo._src.optim.particle.sample_strategies",
       "path": "curobo/_src/optim/particle/sample_strategies/__init__.py",
       "sha256": "e1210e56afced54a22bb210ea98b6619fcdf31d0893065dfd3e43f001cbecc33",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -47347,6 +47492,7 @@
       "name": "curobo._src.optim.particle.sample_strategies.particle_sampler",
       "path": "curobo/_src/optim/particle/sample_strategies/particle_sampler.py",
       "sha256": "d2d13882f793cc8fb723e1ddeb47b6cfe746834ad54813675a8bf92b6e0d4621",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -47816,6 +47962,7 @@
       "name": "curobo._src.optim.particle.sample_strategies.particle_sampler_cfg",
       "path": "curobo/_src/optim/particle/sample_strategies/particle_sampler_cfg.py",
       "sha256": "62c859021948f2e5c14712c620b0f69aabe5ffaec91780397772dc9137043507",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -47944,6 +48091,7 @@
       "name": "curobo._src.optim.particle.sample_strategies.processor_knot",
       "path": "curobo/_src/optim/particle/sample_strategies/processor_knot.py",
       "sha256": "74c6ea30a8e11b70702f37f9edb08c91a1be6d4e06d2086d930e0a054d8ea6a2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -48096,6 +48244,7 @@
       "name": "curobo._src.optim.particle.sample_strategies.processor_standard",
       "path": "curobo/_src/optim/particle/sample_strategies/processor_standard.py",
       "sha256": "07da970ba6c7956601f645cd9156f171c49b25b43e0be9d69c57b5af28ab6824",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -48210,6 +48359,7 @@
       "name": "curobo._src.optim.particle.sample_strategies.processor_stomp",
       "path": "curobo/_src/optim/particle/sample_strategies/processor_stomp.py",
       "sha256": "2e47d3458fd9a6bb190c319b65da17efcf3635324ef6df098777c290d88a0eef",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -48319,6 +48469,7 @@
       "name": "curobo._src.optim.particle.sample_strategies.stomp_covariance",
       "path": "curobo/_src/optim/particle/sample_strategies/stomp_covariance.py",
       "sha256": "0d89aacf24ee92254166eff0b0ba6308067ba6da926226619745be7ba28cd04d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -48378,6 +48529,7 @@
       "name": "curobo._src.optim.util.levenberg_marquardt_step",
       "path": "curobo/_src/optim/util/levenberg_marquardt_step.py",
       "sha256": "089de2f627c4226babf5bce5e13357b2dbcbb65775247db92b4dc3e817f61629",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -48666,6 +48818,7 @@
       "name": "curobo._src.perception",
       "path": "curobo/_src/perception/__init__.py",
       "sha256": "fce3382a0ae1fba9779e367a041b2f27f64c6f90ff181068f905a3a4fbf19fc0",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -48678,6 +48831,7 @@
       "name": "curobo._src.perception.filter_depth",
       "path": "curobo/_src/perception/filter_depth.py",
       "sha256": "b296644167cfe7801461388afcf1a223ba5290e528d8cbed6c2935bbac25e178",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -48937,6 +49091,7 @@
       "name": "curobo._src.perception.mapper",
       "path": "curobo/_src/perception/mapper/__init__.py",
       "sha256": "c8c8659010c306be5e753fb60e71b10ddb91756d407adc161c38650b58ab5e1f",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -48949,6 +49104,7 @@
       "name": "curobo._src.perception.mapper.block_allocation",
       "path": "curobo/_src/perception/mapper/block_allocation.py",
       "sha256": "216b01fdcd404686d3ad91c25a943af411839ff28549f49a04e3c37abb5eae17",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -49040,6 +49196,7 @@
       "name": "curobo._src.perception.mapper.checkpoint_blocks",
       "path": "curobo/_src/perception/mapper/checkpoint_blocks.py",
       "sha256": "c2d97677e720549256c502907158f8f8c367d6e28ffc1fed4411bc26e7520f1c",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -49882,6 +50039,7 @@
       "name": "curobo._src.perception.mapper.constants",
       "path": "curobo/_src/perception/mapper/constants.py",
       "sha256": "a3578bc9bdd632dab5f192f9e5b6090b89f4db7f491dc19b0c37a8c259cae76b",
+      "surface": "runtime",
       "symbols": [
         {
           "annotation": null,
@@ -50493,6 +50651,7 @@
       "name": "curobo._src.perception.mapper.esdf",
       "path": "curobo/_src/perception/mapper/esdf/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -50505,6 +50664,7 @@
       "name": "curobo._src.perception.mapper.esdf.edt_jump_flooding",
       "path": "curobo/_src/perception/mapper/esdf/edt_jump_flooding.py",
       "sha256": "7035983ec7656a70e75a7f8a238e7c2675c9d8346b4954bb3ab3acf130dfb875",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -50662,6 +50822,7 @@
       "name": "curobo._src.perception.mapper.esdf.edt_parallel_banding",
       "path": "curobo/_src/perception/mapper/esdf/edt_parallel_banding.py",
       "sha256": "4f2dac19035dbfbb7dc3be091c277fe830410a35e1d1b86884054e20f21b3993",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -50777,6 +50938,7 @@
       "name": "curobo._src.perception.mapper.esdf.kernel",
       "path": "curobo/_src/perception/mapper/esdf/kernel/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -50789,6 +50951,7 @@
       "name": "curobo._src.perception.mapper.esdf.kernel.wp_esdf_distance",
       "path": "curobo/_src/perception/mapper/esdf/kernel/wp_esdf_distance.py",
       "sha256": "182c43d3dad0ea96aaf596d69567f0b20c3023fc01ba98907ec8c5b2abdab22d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -50896,6 +51059,7 @@
       "name": "curobo._src.perception.mapper.esdf.kernel.wp_esdf_seed",
       "path": "curobo/_src/perception/mapper/esdf/kernel/wp_esdf_seed.py",
       "sha256": "a3888de05e9e3884d8c3ba2b2f22c746a2ca1561327f33d572ba7d55842070f8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -51038,6 +51202,7 @@
       "name": "curobo._src.perception.mapper.esdf.kernel.wp_jfa",
       "path": "curobo/_src/perception/mapper/esdf/kernel/wp_jfa.py",
       "sha256": "180ca5b6d1728f9292959eb33191e9a21c0583a30d87bc0a34617f36435da7e1",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -51482,6 +51647,7 @@
       "name": "curobo._src.perception.mapper.integrator_esdf",
       "path": "curobo/_src/perception/mapper/integrator_esdf.py",
       "sha256": "1e53cffec215e0848ec424695567d7edcf7625229dc7260d29c2a636a2fa0cf8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -52671,6 +52837,7 @@
       "name": "curobo._src.perception.mapper.integrator_tsdf",
       "path": "curobo/_src/perception/mapper/integrator_tsdf.py",
       "sha256": "399ed156c234e576d42efb08c0c97a4d72a8c69ba58f23d780a18877ca627458",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -53761,6 +53928,7 @@
       "name": "curobo._src.perception.mapper.kernel",
       "path": "curobo/_src/perception/mapper/kernel/__init__.py",
       "sha256": "2543bd1780ee475e58969c3d53d70b48e3db7f41f90f48afa75f648672ddf794",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -53773,6 +53941,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder",
       "path": "curobo/_src/perception/mapper/kernel/builder/__init__.py",
       "sha256": "6cd0df482fa249dffa8dc740db4e8d93260438a2827bf927a2761c4bcbb4fd21",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -53785,6 +53954,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_block_sparse_kernel",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_block_sparse_kernel.py",
       "sha256": "385b43736f3934097b049612c099994173c96c175b499c9ba6eea99e00b90c65",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -54657,6 +54827,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_camera_integrate",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_camera_integrate.py",
       "sha256": "e20acc7ce2269622a39a972047e5d36916f8882bebccc162ae6fd0426e532689",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -54873,6 +55044,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_coord",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_coord.py",
       "sha256": "1fb63d920594c9207fd91175f9011242e35ff74dcb2758c0ed09c14c79c85e1c",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -54941,6 +55113,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_decay",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_decay.py",
       "sha256": "c24ea8099fe7f4d66e48ce3c43bca21c1e34d364f792271a27b90b3562e6bda0",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55043,6 +55216,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_esdf",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_esdf.py",
       "sha256": "859206c712f1e3f27d30f4ee2c9f02186a6bf80740a1414087526017ac872e5c",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55166,6 +55340,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_hash",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_hash.py",
       "sha256": "7569fbf681c93898667649729dcd0e0abe9b1c3e8ea84bae65e40526714b6c26",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55269,6 +55444,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_lidar_integrate",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_lidar_integrate.py",
       "sha256": "c2c469eafbf9d468d3da7b8c26a15dc7e4eab235a94521e61d0ff233bfde97cc",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55461,6 +55637,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_mesh",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_mesh.py",
       "sha256": "14b7264d41269dab9fc21ca3b6f99ff72ee3d4afcb624f4427177df8cfd60bfb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55587,6 +55764,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_raycast",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_raycast.py",
       "sha256": "3c4fb80f16303f9b9294142fe42e3b46a96a1b9c833726d0432dbe37c978dceb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55696,6 +55874,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_rescale",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_rescale.py",
       "sha256": "a0432f617d6903c76ef15b19927aacba1b0fdcedbde99e58bbe3a8b8d696bb83",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55759,6 +55938,7 @@
       "name": "curobo._src.perception.mapper.kernel.builder.builder_stamp",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_stamp.py",
       "sha256": "94da3e778a60ab3b2a66296491633786103b38e97aef74ab907ff1db1df3e93d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -55900,6 +56080,7 @@
       "name": "curobo._src.perception.mapper.kernel.warp_types",
       "path": "curobo/_src/perception/mapper/kernel/warp_types.py",
       "sha256": "22130dab3c4224ba28c4a2fd43749523dffa9dc504c1dc2366d189513211689e",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -56124,6 +56305,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_decay",
       "path": "curobo/_src/perception/mapper/kernel/wp_decay.py",
       "sha256": "e02a95acf204bb149133b5b0af895007f0c3b0bd7c26ba3920713debee7372fa",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -56420,6 +56602,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_filter_depth",
       "path": "curobo/_src/perception/mapper/kernel/wp_filter_depth.py",
       "sha256": "d362a7828e877246efaa1071b3118f998383f4fa776ddaa194dd812c3eda53f1",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [
@@ -56695,6 +56878,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_integrate_camera_project",
       "path": "curobo/_src/perception/mapper/kernel/wp_integrate_camera_project.py",
       "sha256": "8372cb0d3dcb1c6bb15c8b23eb4a010152aeefed7e3c1ef86346d7f5a22b0959",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -56997,6 +57181,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_integrate_common",
       "path": "curobo/_src/perception/mapper/kernel/wp_integrate_common.py",
       "sha256": "653b6b46b419ba977201f309c34e234b643d384d54794a6b5c35494903898dbf",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [
@@ -57128,6 +57313,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_integrate_lidar_project",
       "path": "curobo/_src/perception/mapper/kernel/wp_integrate_lidar_project.py",
       "sha256": "6b577a2176fedbbb3a08320712cbc977dfd1e020b11c8cc7c601803ec4166234",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -57360,6 +57546,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_raycast_pose_refine",
       "path": "curobo/_src/perception/mapper/kernel/wp_raycast_pose_refine.py",
       "sha256": "defbb0bada9dd0900948abd51d16d2420c7214d4255d94698c32c29e83173d6e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -57464,6 +57651,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_stamp_obstacles",
       "path": "curobo/_src/perception/mapper/kernel/wp_stamp_obstacles.py",
       "sha256": "2843165cab91588bd97cb558cfdfbaeea4b0e5f103dd8c97eeeb46431359d743",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -57702,6 +57890,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_tsdf_sample",
       "path": "curobo/_src/perception/mapper/kernel/wp_tsdf_sample.py",
       "sha256": "c3270222cc612ba1dd91f203cf07a804496f0d8127599219393450c73030e9f3",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -57873,6 +58062,7 @@
       "name": "curobo._src.perception.mapper.kernel.wp_voxel_extraction",
       "path": "curobo/_src/perception/mapper/kernel/wp_voxel_extraction.py",
       "sha256": "5797ee833588b8f543cc4655b7cccacceb3ef62bf5abdd9c92d4fd9162e39a95",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -58048,6 +58238,7 @@
       "name": "curobo._src.perception.mapper.mapper",
       "path": "curobo/_src/perception/mapper/mapper.py",
       "sha256": "29795d9b28e5100b2a338cddfd7cb32518211388b837f96ade1f3459e3770e81",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -59087,6 +59278,7 @@
       "name": "curobo._src.perception.mapper.mapper_cfg",
       "path": "curobo/_src/perception/mapper/mapper_cfg.py",
       "sha256": "1d571e59f08028220e395db4bf1d4dd445e335c19a0d57032e815a2615facdc1",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -59591,6 +59783,7 @@
       "name": "curobo._src.perception.mapper.marching_cubes",
       "path": "curobo/_src/perception/mapper/marching_cubes/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -59603,6 +59796,7 @@
       "name": "curobo._src.perception.mapper.marching_cubes.kernel",
       "path": "curobo/_src/perception/mapper/marching_cubes/kernel/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -59615,6 +59809,7 @@
       "name": "curobo._src.perception.mapper.marching_cubes.kernel.wp_mc_common",
       "path": "curobo/_src/perception/mapper/marching_cubes/kernel/wp_mc_common.py",
       "sha256": "934af213a07107076a3ee233250cf19cac1f6e3e99f1ee555b8c0f20bafb1c26",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -59977,6 +60172,7 @@
       "name": "curobo._src.perception.mapper.marching_cubes.kernel.wp_mc_filter",
       "path": "curobo/_src/perception/mapper/marching_cubes/kernel/wp_mc_filter.py",
       "sha256": "bb41939314b0040983b411632fd9c563538e1d697902176da1e9aab5d3c1b479",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -60143,6 +60339,7 @@
       "name": "curobo._src.perception.mapper.marching_cubes.kernel.wp_mc_sampling",
       "path": "curobo/_src/perception/mapper/marching_cubes/kernel/wp_mc_sampling.py",
       "sha256": "1a874513e076ab27be3b69d4350754e35ea9f25197bca8d0ef6d4325e4327088",
+      "surface": "runtime",
       "symbols": [
         {
           "annotation": null,
@@ -60393,6 +60590,7 @@
       "name": "curobo._src.perception.mapper.mesh_extractor",
       "path": "curobo/_src/perception/mapper/mesh_extractor.py",
       "sha256": "a8b1573d8c63ebc0fde251f27c74779c23402cb1bc237623dfae0375fd88de08",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -60477,6 +60675,7 @@
       "name": "curobo._src.perception.mapper.pose_refiner",
       "path": "curobo/_src/perception/mapper/pose_refiner.py",
       "sha256": "efa15702e85089a1ece09d89ca979dd3fd931bdfec3361cc1546f89d6fe69c3e",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -60958,6 +61157,7 @@
       "name": "curobo._src.perception.mapper.projector_texture",
       "path": "curobo/_src/perception/mapper/projector_texture.py",
       "sha256": "65c262ed2dc6465459e0d8e1534af8f7ec87720574b6732f28134bbeb0d60afd",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -61283,6 +61483,7 @@
       "name": "curobo._src.perception.mapper.renderer",
       "path": "curobo/_src/perception/mapper/renderer.py",
       "sha256": "798b96618c010b69e782d20bafc8cf19327413d00b347828cfbcf6662da9f0b0",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -61754,6 +61955,7 @@
       "name": "curobo._src.perception.mapper.storage",
       "path": "curobo/_src/perception/mapper/storage.py",
       "sha256": "7b84111156f88ada5a92ffd5b504fda20e4c910f3da1db152c85f75f167bdfb9",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -62847,6 +63049,7 @@
       "name": "curobo._src.perception.mapper.util",
       "path": "curobo/_src/perception/mapper/util/__init__.py",
       "sha256": "334c776f2b97da93e3daaf06c1c9b07972feb48a565a90b161ce5990dc503e79",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -62859,6 +63062,7 @@
       "name": "curobo._src.perception.mapper.util.utils_coords",
       "path": "curobo/_src/perception/mapper/util/utils_coords.py",
       "sha256": "f3270c2c755a76dccfbd8db8aa570d0c5bc914342f9ddb77cd36debf111e6bb9",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -63080,6 +63284,7 @@
       "name": "curobo._src.perception.mapper.util.utils_quantization",
       "path": "curobo/_src/perception/mapper/util/utils_quantization.py",
       "sha256": "5521f8662bd7177c122d8e47e957f4de12a67fbf91e21dbc6f992aaa60d9fcb5",
+      "surface": "runtime",
       "symbols": [
         {
           "annotation": null,
@@ -63289,6 +63494,7 @@
       "name": "curobo._src.perception.optim_pose_lm",
       "path": "curobo/_src/perception/optim_pose_lm.py",
       "sha256": "186395b2a8720cae48791981a433f2a4bf935c899feaaff40a4e314e59666650",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -63549,6 +63755,7 @@
       "name": "curobo._src.perception.pose_estimation",
       "path": "curobo/_src/perception/pose_estimation/__init__.py",
       "sha256": "440fa15e8454a82e200fc520086dd23c58f72c4e24080f636ef909e55732557e",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -63561,6 +63768,7 @@
       "name": "curobo._src.perception.pose_estimation.detection_result",
       "path": "curobo/_src/perception/pose_estimation/detection_result.py",
       "sha256": "3481e12ca9c65f204bdb166df26bff2734b564cf122010068e6c7a6690a6110a",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -63639,6 +63847,7 @@
       "name": "curobo._src.perception.pose_estimation.geometry",
       "path": "curobo/_src/perception/pose_estimation/geometry.py",
       "sha256": "10bf239105b5eadffa628cbb5ac55eee2eac050e0a008bc2f6c2b5c1f79601c2",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -63939,6 +64148,7 @@
       "name": "curobo._src.perception.pose_estimation.mesh_robot",
       "path": "curobo/_src/perception/pose_estimation/mesh_robot.py",
       "sha256": "2b139696f7498572c323f63f7a9f6ab04b307e2dba1e7809ff90cb1167c354ab",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -64404,6 +64614,7 @@
       "name": "curobo._src.perception.pose_estimation.pose_detector",
       "path": "curobo/_src/perception/pose_estimation/pose_detector.py",
       "sha256": "7d0a85e6702304a54efd7d5f131debdf1920a77c9756e3aa322bba2989a39be0",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -64591,6 +64802,7 @@
       "name": "curobo._src.perception.pose_estimation.pose_detector_cfg",
       "path": "curobo/_src/perception/pose_estimation/pose_detector_cfg.py",
       "sha256": "ad4eecc7ee992359d6916ece40279e6d0dfcf725d3bbc3db220d9455e315dab7",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -64717,6 +64929,7 @@
       "name": "curobo._src.perception.pose_estimation.sdf_pose_detector",
       "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector.py",
       "sha256": "b7b8a0feea95afc3066a515102a8296d447d73f7ccc1cec7957fa397a43fced0",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -65075,6 +65288,7 @@
       "name": "curobo._src.perception.pose_estimation.sdf_pose_detector_cfg",
       "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector_cfg.py",
       "sha256": "a976c9faf5a7f5a57600ce4b51d2f118fdd691780f63c503e83a19399fd60fe1",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -65232,6 +65446,7 @@
       "name": "curobo._src.perception.pose_estimation.util",
       "path": "curobo/_src/perception/pose_estimation/util.py",
       "sha256": "7260fdaa555f8f857317c51896d00fd7198ba3332cefe26a0bb70dcea6eca165",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -65506,6 +65721,7 @@
       "name": "curobo._src.perception.pose_estimation.wp_mesh_sdf_alignment",
       "path": "curobo/_src/perception/pose_estimation/wp_mesh_sdf_alignment.py",
       "sha256": "640f9bfa1e55780670da4237330ab4a53fdf7044b3067bdc3498e1d5e1711377",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -65775,6 +65991,7 @@
       "name": "curobo._src.perception.robot_segmenter",
       "path": "curobo/_src/perception/robot_segmenter.py",
       "sha256": "6e4c5dcd3e375b13d74693efba4d635d675385833ce9a9b98e1ccb7311506e28",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -66132,6 +66349,7 @@
       "name": "curobo._src.robot",
       "path": "curobo/_src/robot/__init__.py",
       "sha256": "36cef47c895c5e187e0428b720bbcd8fec07742ccbaa56b074e2b7afdce053d5",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -66144,6 +66362,7 @@
       "name": "curobo._src.robot.builder",
       "path": "curobo/_src/robot/builder/__init__.py",
       "sha256": "f829adcd237bf94531e29e46f6b51f6671f293e52ed5c050f68c981176dcd03d",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -66156,6 +66375,7 @@
       "name": "curobo._src.robot.builder.builder_robot",
       "path": "curobo/_src/robot/builder/builder_robot.py",
       "sha256": "9f5a3b3a07bc7abb62645ad64fcb9964d961f7c6a01e90e85ad70455e598e795",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -66914,6 +67134,7 @@
       "name": "curobo._src.robot.builder.debugger_robot",
       "path": "curobo/_src/robot/builder/debugger_robot.py",
       "sha256": "24979bf3cbcc614e109ed568c4167e782fa6df464e1910f52ef672ba86322536",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -67299,6 +67520,7 @@
       "name": "curobo._src.robot.dynamics",
       "path": "curobo/_src/robot/dynamics/__init__.py",
       "sha256": "bcd2d07cee584e4e77fa6d200f900b5f81b091065025a82c9e6afc8207693853",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -67311,6 +67533,7 @@
       "name": "curobo._src.robot.dynamics.dynamics",
       "path": "curobo/_src/robot/dynamics/dynamics.py",
       "sha256": "ddefd5dbd42a8c17def873e022d2c13c9bb8a6375849719af7f9c69222f7b470",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -67617,6 +67840,7 @@
       "name": "curobo._src.robot.dynamics.dynamics_cfg",
       "path": "curobo/_src/robot/dynamics/dynamics_cfg.py",
       "sha256": "610433fd247200e2f0ca61007cb9655d96014c0154bbce6fe8480a85856958da",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -67714,6 +67938,7 @@
       "name": "curobo._src.robot.kinematics",
       "path": "curobo/_src/robot/kinematics/__init__.py",
       "sha256": "c8dcefa6eb201f4c07a89ec8cae7dadf51ded2e9a7c5fcc47f587124eb11b660",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -67726,6 +67951,7 @@
       "name": "curobo._src.robot.kinematics.kinematics",
       "path": "curobo/_src/robot/kinematics/kinematics.py",
       "sha256": "4e7ebf8728978009cbc33e7034652c2958fc4a17aa312f55faa25c5df09c96f6",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -68471,6 +68697,7 @@
       "name": "curobo._src.robot.kinematics.kinematics_cfg",
       "path": "curobo/_src/robot/kinematics/kinematics_cfg.py",
       "sha256": "4ba4a4d2de8edf419ba6983e0aa2224b638928ad0fc23556c052e0539933e281",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -68888,6 +69115,7 @@
       "name": "curobo._src.robot.kinematics.kinematics_reducer",
       "path": "curobo/_src/robot/kinematics/kinematics_reducer.py",
       "sha256": "19f3a0aef57fe80d10df15a06781cf2beba8a5e8604f2b930654414c3fa8f27e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -69042,6 +69270,7 @@
       "name": "curobo._src.robot.kinematics.kinematics_state",
       "path": "curobo/_src/robot/kinematics/kinematics_state.py",
       "sha256": "9f3946a875994d77b6d2a0a1e0136ff14e2e43e6191f6b169fbc22fa5369b227",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -69232,6 +69461,7 @@
       "name": "curobo._src.robot.loader",
       "path": "curobo/_src/robot/loader/__init__.py",
       "sha256": "88e7c7159aecd4cc23809c7902cc35d300e073da38746385d64e340eb312acb8",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -69244,6 +69474,7 @@
       "name": "curobo._src.robot.loader.kinematics_loader",
       "path": "curobo/_src/robot/loader/kinematics_loader.py",
       "sha256": "043c22e67a2148532ff3c2f27b05502f3d8c12ea1b627eebc958e09e8ae95f35",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -69570,6 +69801,7 @@
       "name": "curobo._src.robot.loader.kinematics_loader_cfg",
       "path": "curobo/_src/robot/loader/kinematics_loader_cfg.py",
       "sha256": "b0701b2ec636d02e3889b804c459ca8e1c0abf1b61b758aa85825fc5b189d133",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -69849,6 +70081,7 @@
       "name": "curobo._src.robot.loader.util",
       "path": "curobo/_src/robot/loader/util.py",
       "sha256": "afb176ab790590b24511ce974c01d3b15d71906cca6f4370cf49124acd958600",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -69904,6 +70137,7 @@
       "name": "curobo._src.robot.parser",
       "path": "curobo/_src/robot/parser/__init__.py",
       "sha256": "8d966594438c91641573bb0502f934d3b54e1ed7d9cd96ce52ac05127f366515",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -69916,6 +70150,7 @@
       "name": "curobo._src.robot.parser.parser_base",
       "path": "curobo/_src/robot/parser/parser_base.py",
       "sha256": "abb10ca8f3ce9b3affe5012fabb9702d6b1133b671903e755fca22e0a8c19df8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -70207,6 +70442,7 @@
       "name": "curobo._src.robot.parser.parser_urdf",
       "path": "curobo/_src/robot/parser/parser_urdf.py",
       "sha256": "cd59ada4c1cb7f40091701d5b5644edbf6fc416decc42644913da9c31b631acb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -70582,6 +70818,7 @@
       "name": "curobo._src.robot.types",
       "path": "curobo/_src/robot/types/__init__.py",
       "sha256": "207a7c25d5cdae5dbbe56e1e6589d753eb26ed1ea021e801e4a7e937c477f124",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -70594,6 +70831,7 @@
       "name": "curobo._src.robot.types.collision_geometry",
       "path": "curobo/_src/robot/types/collision_geometry.py",
       "sha256": "876207703bc496912d87f456d73a33b14a3d623ba5f9bf753b72997128af0149",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -70705,6 +70943,7 @@
       "name": "curobo._src.robot.types.cspace_params",
       "path": "curobo/_src/robot/types/cspace_params.py",
       "sha256": "99763a4e622a15140c1563d1fe64337b7997c797dbd1d71e87c54644843e8c47",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -70982,6 +71221,7 @@
       "name": "curobo._src.robot.types.joint_limits",
       "path": "curobo/_src/robot/types/joint_limits.py",
       "sha256": "ea1d3cbdbeaa834d982ca1fe3d53a882d60bafc135518482668e5e2917cc7c66",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -71228,6 +71468,7 @@
       "name": "curobo._src.robot.types.joint_types",
       "path": "curobo/_src/robot/types/joint_types.py",
       "sha256": "47f3485a720b6aa5da34b00f13e2cedfa1debd146918becd317f97c3f4132f73",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -71343,6 +71584,7 @@
       "name": "curobo._src.robot.types.kinematics_params",
       "path": "curobo/_src/robot/types/kinematics_params.py",
       "sha256": "876abea5ef4167ccaf6240b86168893364731563a4af220100604fa28a33fd9d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -72254,6 +72496,7 @@
       "name": "curobo._src.robot.types.link_params",
       "path": "curobo/_src/robot/types/link_params.py",
       "sha256": "a86acae1a43b179579a870eaa49d7b1b7f629512f2f235f7b4fa283888efb7df",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -72473,6 +72716,7 @@
       "name": "curobo._src.robot.types.self_collision_params",
       "path": "curobo/_src/robot/types/self_collision_params.py",
       "sha256": "970de953bb12f2854cc7e7354f1241419a5f44192acaf658d31a5d003b72d619",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -72768,6 +73012,7 @@
       "name": "curobo._src.rollout",
       "path": "curobo/_src/rollout/__init__.py",
       "sha256": "4255712ecbfd8f445e9f0197b5023db2623843c82bcefb9347417a8dded88d33",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -72780,6 +73025,7 @@
       "name": "curobo._src.rollout.cost_manager",
       "path": "curobo/_src/rollout/cost_manager/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -72792,6 +73038,7 @@
       "name": "curobo._src.rollout.cost_manager.cost_manager_robot",
       "path": "curobo/_src/rollout/cost_manager/cost_manager_robot.py",
       "sha256": "0d87d02a8f6f11cedc46ecb4426a18277937da0ad8050de2c93b217fbfbf3c99",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -73342,6 +73589,7 @@
       "name": "curobo._src.rollout.cost_manager.cost_manager_robot_cfg",
       "path": "curobo/_src/rollout/cost_manager/cost_manager_robot_cfg.py",
       "sha256": "a2a2765565d2fee08d1ec22f147bf26b17eb332dfbe2cf478fd9f1d952e542c7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -73566,6 +73814,7 @@
       "name": "curobo._src.rollout.goal_registry",
       "path": "curobo/_src/rollout/goal_registry.py",
       "sha256": "fcfac393a7e8d48eef52c4488f69b8e3bb5e8da121acefa321671d6b91fcdc08",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -74017,6 +74266,7 @@
       "name": "curobo._src.rollout.metrics",
       "path": "curobo/_src/rollout/metrics.py",
       "sha256": "84765df88cb2b2233cfdbb062b65cb179e57b783d16616e73d29ce35feda2e6a",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -74906,6 +75156,7 @@
       "name": "curobo._src.rollout.rollout_protocol",
       "path": "curobo/_src/rollout/rollout_protocol.py",
       "sha256": "10b4e5790e3516ffde99bfd3920c41689148e7029fd8b698f6a06ccca863fcc8",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -75329,6 +75580,7 @@
       "name": "curobo._src.rollout.rollout_robot",
       "path": "curobo/_src/rollout/rollout_robot.py",
       "sha256": "f2223fba4be66362e297f411a69f020483ae33b4c832d385f0ba3af9462ec32e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -76345,6 +76597,7 @@
       "name": "curobo._src.rollout.rollout_robot_cfg",
       "path": "curobo/_src/rollout/rollout_robot_cfg.py",
       "sha256": "2f7613b5f6ad3751bbdc86307d0cb0bcd07be468b519278b9633425b1fbb6e03",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -76575,6 +76828,7 @@
       "name": "curobo._src.rollout.rollout_rosenbrock",
       "path": "curobo/_src/rollout/rollout_rosenbrock.py",
       "sha256": "ca12e7d4e1b70df83136321afa2c80dfac9410e496da5ecaa11899a1a3f09586",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -77327,6 +77581,7 @@
       "name": "curobo._src.runtime",
       "path": "curobo/_src/runtime.py",
       "sha256": "a7db5bb2b3ca2c7eed3bfd043fa1436866217253ec39eeea8eb7f688c0ff3be7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -77447,6 +77702,7 @@
       "name": "curobo._src.solver",
       "path": "curobo/_src/solver/__init__.py",
       "sha256": "7c1a4cf193a13597b2c8e01b41be0fe6d2570b2b61acc5721e939c08848c651d",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -77459,6 +77715,7 @@
       "name": "curobo._src.solver.manager_goal",
       "path": "curobo/_src/solver/manager_goal.py",
       "sha256": "0238c601be9f1f68ad819840385b4cbff2e52119b49bc313e32074fd84f3536b",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -77897,6 +78154,7 @@
       "name": "curobo._src.solver.manager_seed",
       "path": "curobo/_src/solver/manager_seed.py",
       "sha256": "271ec8f2d9b13f4962c0e25a5855289aa74651ee894ef6185fac3043a4f213bb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -78201,6 +78459,7 @@
       "name": "curobo._src.solver.seed_ik",
       "path": "curobo/_src/solver/seed_ik/__init__.py",
       "sha256": "13e6d336efc79d5c925d447701624407135c32305a8b46d4c86141e2f7655efc",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -78213,6 +78472,7 @@
       "name": "curobo._src.solver.seed_ik.seed_ik_error_calculator",
       "path": "curobo/_src/solver/seed_ik/seed_ik_error_calculator.py",
       "sha256": "fdff8f75f85778344a00b7c4018685429aa99f8dbf4494c385114948985bb1b0",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -78565,6 +78825,7 @@
       "name": "curobo._src.solver.seed_ik.seed_ik_solver",
       "path": "curobo/_src/solver/seed_ik/seed_ik_solver.py",
       "sha256": "c0f8671c634bfc38da2a809559fc3a28ea0ed990f87196109811c37d0385d122",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -78982,6 +79243,7 @@
       "name": "curobo._src.solver.seed_ik.seed_ik_solver_cfg",
       "path": "curobo/_src/solver/seed_ik/seed_ik_solver_cfg.py",
       "sha256": "960f9c69e54561fd2026b4bc4e6920d9f4ea84ad802c8fc880b8ccc66ca2b3ab",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -79264,6 +79526,7 @@
       "name": "curobo._src.solver.seed_ik.seed_ik_state",
       "path": "curobo/_src/solver/seed_ik/seed_ik_state.py",
       "sha256": "8fb748cf0df330ac1d0734c37f98fe00be6b213d5067f9de6165731f4ac28a6e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -79400,6 +79663,7 @@
       "name": "curobo._src.solver.seed_ik.seed_iteration_state_manager",
       "path": "curobo/_src/solver/seed_ik/seed_iteration_state_manager.py",
       "sha256": "4f803eca5031cc73f4af88bf9eef66ef62ad6d93d49e60d5037a4cb924e24965",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -79570,6 +79834,7 @@
       "name": "curobo._src.solver.solve_mode",
       "path": "curobo/_src/solver/solve_mode.py",
       "sha256": "7cef826ca5d2bad1e22cf37ef1561cb46a5848fe5a72c05758a5e4392b63fc10",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -79653,6 +79918,7 @@
       "name": "curobo._src.solver.solve_state",
       "path": "curobo/_src/solver/solve_state.py",
       "sha256": "09db874343148b8f23845fe706ba5704fd0fcbe4cbe49d6fa881633aa938fbb4",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -79871,6 +80137,7 @@
       "name": "curobo._src.solver.solver_base_result",
       "path": "curobo/_src/solver/solver_base_result.py",
       "sha256": "df1202336b45c6e4294a770271de77b9be4418f2981771715f7b381e3c35eb5d",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -80168,6 +80435,7 @@
       "name": "curobo._src.solver.solver_core",
       "path": "curobo/_src/solver/solver_core.py",
       "sha256": "166ac67ad2e470ac5b262571c51717e2ada0e079bf2bd64989d818a7ac87f3e2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -81139,6 +81407,7 @@
       "name": "curobo._src.solver.solver_core_cfg",
       "path": "curobo/_src/solver/solver_core_cfg.py",
       "sha256": "8155d15c47a8d899798e8553477f82dc8c648429b335dc2c6ae4e92299447569",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -81629,6 +81898,7 @@
       "name": "curobo._src.solver.solver_ik",
       "path": "curobo/_src/solver/solver_ik.py",
       "sha256": "a2f8441ebca3b86bec614fdde84e32e171618430fb2d5bfebdbbcae2b27f2040",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -82705,6 +82975,7 @@
       "name": "curobo._src.solver.solver_ik_cfg",
       "path": "curobo/_src/solver/solver_ik_cfg.py",
       "sha256": "06f284ec5bb586e3a2bda06f10118cd0fe9a451c6c233e8ca2a295f86f372ce0",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -83301,6 +83572,7 @@
       "name": "curobo._src.solver.solver_ik_result",
       "path": "curobo/_src/solver/solver_ik_result.py",
       "sha256": "b34bfdd2c19d7313608387ef2f383f5e8f1e13fa07a354721d0764a48fd51dfb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -83344,6 +83616,7 @@
       "name": "curobo._src.solver.solver_mpc",
       "path": "curobo/_src/solver/solver_mpc.py",
       "sha256": "491a98eca5b44a9fbe3f59c928e2126ac091ae340471db7f93dc0296c1e40092",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -84726,6 +84999,7 @@
       "name": "curobo._src.solver.solver_mpc_cfg",
       "path": "curobo/_src/solver/solver_mpc_cfg.py",
       "sha256": "8db1762a9fbbb226640e40f19e1291cc6aa0bf9e63df832a7780aa99c32a92f2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -85304,6 +85578,7 @@
       "name": "curobo._src.solver.solver_mpc_result",
       "path": "curobo/_src/solver/solver_mpc_result.py",
       "sha256": "99b6bd7398184c50eb2394f06eb5104fb17a50c9a55bf1c0dd566d575e21e3c3",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -85416,6 +85691,7 @@
       "name": "curobo._src.solver.solver_trajopt",
       "path": "curobo/_src/solver/solver_trajopt.py",
       "sha256": "30c0f2b715eb05e62cfc053a5b1c0bb458b152d7a85fb796dc8b908b38311261",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -86740,6 +87016,7 @@
       "name": "curobo._src.solver.solver_trajopt_cfg",
       "path": "curobo/_src/solver/solver_trajopt_cfg.py",
       "sha256": "a1f3dda7013750e3bc78229764f698b4fefbf34ab9f01a524613c7b48dbd7cc2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -87269,6 +87546,7 @@
       "name": "curobo._src.solver.solver_trajopt_result",
       "path": "curobo/_src/solver/solver_trajopt_result.py",
       "sha256": "32ad32838b473e5b6aa43c575bee5cb2d319e4c8a58d10de2cbcee772d5ec0f4",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -87571,6 +87849,7 @@
       "name": "curobo._src.state",
       "path": "curobo/_src/state/__init__.py",
       "sha256": "53fbda2beacc017fed8ad0923a3f6083f7d89b11baaf88e4cb6b7aa18118d7f6",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -87583,6 +87862,7 @@
       "name": "curobo._src.state.filter_coeff",
       "path": "curobo/_src/state/filter_coeff.py",
       "sha256": "f726929b7c961b2bf8cd948b981a7f42061b8bc079e0a986a9d7d046ed5a02fc",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -87644,6 +87924,7 @@
       "name": "curobo._src.state.state_base",
       "path": "curobo/_src/state/state_base.py",
       "sha256": "e80849c8edf534a7ca6033450066d69528d563142b90eda73175e7b1976a7dee",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -87687,6 +87968,7 @@
       "name": "curobo._src.state.state_joint",
       "path": "curobo/_src/state/state_joint.py",
       "sha256": "9e39b456a855e830d722afaeac440c786cb5f8c54be7dc5498a2c6286afe0a65",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -89099,6 +89381,7 @@
       "name": "curobo._src.state.state_joint_jit_helpers",
       "path": "curobo/_src/state/state_joint_jit_helpers.py",
       "sha256": "b3ae58ac88bd7fb6e9da6609d3304bb520b24d3d64b63149bde760a503cc15b7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -89596,6 +89879,7 @@
       "name": "curobo._src.state.state_joint_ops",
       "path": "curobo/_src/state/state_joint_ops.py",
       "sha256": "4d7513a3d66f55de3256f63754e8b8b2a6f0b8c1efbe7427be6595cca82052f9",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -90047,6 +90331,7 @@
       "name": "curobo._src.state.state_joint_trajectory_ops",
       "path": "curobo/_src/state/state_joint_trajectory_ops.py",
       "sha256": "e65303dbb43a2b99c1aa74dbb409fbee35458e116fdf687851b235a0683180c2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -90291,6 +90576,7 @@
       "name": "curobo._src.state.state_robot",
       "path": "curobo/_src/state/state_robot.py",
       "sha256": "a8b0ce7234d4394d4f02017a019c4fd6969d05409b1b2c765a912d20834497f7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -90650,6 +90936,7 @@
       "name": "curobo._src.transition",
       "path": "curobo/_src/transition/__init__.py",
       "sha256": "04a46b90126f49e68d9a54300b7c01daff29e32c27a5e15dbdf7f0e7f0e32139",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -90662,6 +90949,7 @@
       "name": "curobo._src.transition.fns_state_transition",
       "path": "curobo/_src/transition/fns_state_transition.py",
       "sha256": "fe9b122da1d87b9bb80cb416998554931ffe5dadd5903934e46a373d0c5cbfe5",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -91507,6 +91795,7 @@
       "name": "curobo._src.transition.robot_state_transition",
       "path": "curobo/_src/transition/robot_state_transition.py",
       "sha256": "d29eecbf42f377352a6acbe24e749ddcbe64c78915aa9aee8b16419a87159e99",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -92694,6 +92983,7 @@
       "name": "curobo._src.transition.robot_state_transition_cfg",
       "path": "curobo/_src/transition/robot_state_transition_cfg.py",
       "sha256": "9fa51345dc2de47b087fca7a857eae738e5bd823e9cac617433f93e7a4b78797",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -93009,6 +93299,7 @@
       "name": "curobo._src.types",
       "path": "curobo/_src/types/__init__.py",
       "sha256": "6b62c2a6931e324cbbfaa2b8c631a271fb8edab5540a3d3b4002e7443c316ee3",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -93021,6 +93312,7 @@
       "name": "curobo._src.types.base",
       "path": "curobo/_src/types/base.py",
       "sha256": "7ea35ac6efb0746038f7586d911d69206c4c299564ace1b2b291a09140885ba2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -93039,6 +93331,7 @@
       "name": "curobo._src.types.camera",
       "path": "curobo/_src/types/camera.py",
       "sha256": "3c47cbb05084d426803d464fd8b8d94dd0ec3615b2a58695a1408a56e60c0dc5",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -93423,6 +93716,7 @@
       "name": "curobo._src.types.content_path",
       "path": "curobo/_src/types/content_path.py",
       "sha256": "1b7b7a23789f3ab5f7a67eb0a6265aa9ba6da4bfe6057f7685ee723605dfb9cd",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -93603,6 +93897,7 @@
       "name": "curobo._src.types.control_space",
       "path": "curobo/_src/types/control_space.py",
       "sha256": "2a651623c9235b0c04ca37e5cb8472f0b27388957f7ee6c20fb8ff7a1be17016",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [
@@ -93775,6 +94070,7 @@
       "name": "curobo._src.types.device_cfg",
       "path": "curobo/_src/types/device_cfg.py",
       "sha256": "32970cc6e1ee50a8ddbacf75f26d067b7cb2306c56cc17e8d700948f75616699",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -93975,6 +94271,7 @@
       "name": "curobo._src.types.file_path",
       "path": "curobo/_src/types/file_path.py",
       "sha256": "b0dae1c80fb9f7e6dde3c75a978b04e08e094d0a1215dec93e9aa962404a06b0",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -93987,6 +94284,7 @@
       "name": "curobo._src.types.lidar",
       "path": "curobo/_src/types/lidar.py",
       "sha256": "593162430199385ff25574c347dca12768a67530a94be9b12f5dc064ab6c1286",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -94183,6 +94481,7 @@
       "name": "curobo._src.types.math",
       "path": "curobo/_src/types/math.py",
       "sha256": "0d70a4f9f5634c9924dad6403d283575067763da68dff5e9e0172db7bacd8b39",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -94201,6 +94500,7 @@
       "name": "curobo._src.types.pose",
       "path": "curobo/_src/types/pose.py",
       "sha256": "de6aeb4c5ea68c85f9b390df78ed0cc494bde3fa4887c485b3000ccc5799c7e9",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -95561,6 +95861,7 @@
       "name": "curobo._src.types.robot",
       "path": "curobo/_src/types/robot.py",
       "sha256": "4b2bb01a61f36943c0ca74f4084af19ceab1a30442896a6f84ad5aa6c6f72eb4",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -95798,6 +96099,7 @@
       "name": "curobo._src.types.sequence_tool_pose",
       "path": "curobo/_src/types/sequence_tool_pose.py",
       "sha256": "b263fe40e5b6c6f7fc6e962361f53a7835b98f6b034e10d1463a0d5ab099e223",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -96008,6 +96310,7 @@
       "name": "curobo._src.types.tensor",
       "path": "curobo/_src/types/tensor.py",
       "sha256": "5ffeb924d7f98f35fb830bde0eba17078ff5ec84fdcd5216ac6a74eef476f131",
+      "surface": "runtime",
       "symbols": [
         {
           "annotation": null,
@@ -96098,6 +96401,7 @@
       "name": "curobo._src.types.tool_pose",
       "path": "curobo/_src/types/tool_pose.py",
       "sha256": "319e2f82fc4a3ecb89fa3caa7481c41d42743254a97d9826ff9f21ea8ac9855c",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -96863,6 +97167,7 @@
       "name": "curobo._src.util",
       "path": "curobo/_src/util/__init__.py",
       "sha256": "6b62c2a6931e324cbbfaa2b8c631a271fb8edab5540a3d3b4002e7443c316ee3",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -96875,6 +97180,7 @@
       "name": "curobo._src.util.benchmark_metrics",
       "path": "curobo/_src/util/benchmark_metrics.py",
       "sha256": "7977990497021ae324f1e49b7a53ae99d18767551deb57f42c4240c1947bdee4",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -97429,6 +97735,7 @@
       "name": "curobo._src.util.config_io",
       "path": "curobo/_src/util/config_io.py",
       "sha256": "04a3694a807cb8c2776ae68a1b016ea59381ab56324295b558bd10039b3a5a72",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -97774,6 +98081,7 @@
       "name": "curobo._src.util.cuda_event_timer",
       "path": "curobo/_src/util/cuda_event_timer.py",
       "sha256": "8090b88b4bff355aa65590e13462ed33eee64250909a6f07aa1710f316b11c6e",
+      "surface": "runtime",
       "symbols": [
         {
           "bases": [],
@@ -97859,6 +98167,7 @@
       "name": "curobo._src.util.cuda_graph_util",
       "path": "curobo/_src/util/cuda_graph_util.py",
       "sha256": "404358daccb304e8f1632653ec653a6c50b143a25313ecdeac58a3533e805447",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -98098,6 +98407,7 @@
       "name": "curobo._src.util.cuda_stream_util",
       "path": "curobo/_src/util/cuda_stream_util.py",
       "sha256": "bf40307b8738bee5bdbd7ffc90f9bf986f9084d07d593f8347476eba94aa758c",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -98236,6 +98546,7 @@
       "name": "curobo._src.util.error_metrics",
       "path": "curobo/_src/util/error_metrics.py",
       "sha256": "04b6da233efd5e91ff79105e87f228cfcc344666e97adb4251c8ae80abf74c93",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -98310,6 +98621,7 @@
       "name": "curobo._src.util.helpers",
       "path": "curobo/_src/util/helpers.py",
       "sha256": "8745b64c0f4fdf6ad2e9f70e563622ba1ff256ba46c26bd60809413b1ed5f65b",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -98416,6 +98728,7 @@
       "name": "curobo._src.util.logger",
       "path": "curobo/_src/util/logger.py",
       "sha256": "7edcb5f75a8e63c5b5c41846168ca298fd7be567d09a7ecea339c1eb8b99516d",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -98428,6 +98741,7 @@
       "name": "curobo._src.util.logging",
       "path": "curobo/_src/util/logging.py",
       "sha256": "a66a411c060becd4dc86b7d675c94bb303a2c6c5c476bac5b761caab97a8848b",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -98687,6 +99001,7 @@
       "name": "curobo._src.util.python_util",
       "path": "curobo/_src/util/python_util.py",
       "sha256": "6320bc2330751fc29f4ddc42a8a8f1407f83246d353fa7cac4f43761a15287ad",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [],
@@ -98723,6 +99038,7 @@
       "name": "curobo._src.util.sampling",
       "path": "curobo/_src/util/sampling/__init__.py",
       "sha256": "b9f4349c69eff4e8a3423b7e5530669bbc723b36e544073f073b5038f59642c4",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -98735,6 +99051,7 @@
       "name": "curobo._src.util.sampling.sample_buffer",
       "path": "curobo/_src/util/sampling/sample_buffer.py",
       "sha256": "f349dd2dae76fbc41abfc2b78eacb6f9035385cf8063aa81ad691720ed9fdba2",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -99233,6 +99550,7 @@
       "name": "curobo._src.util.sampling.sequencer_base",
       "path": "curobo/_src/util/sampling/sequencer_base.py",
       "sha256": "abc6f974405da0ad1932690a955a08056110161125ef3f11ef879132eaeb8545",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -99367,6 +99685,7 @@
       "name": "curobo._src.util.sampling.sequencer_halton",
       "path": "curobo/_src/util/sampling/sequencer_halton.py",
       "sha256": "71622241212ccdbc45d67a942c9ec20edc84583c6ff42e3476931bb63971d8f7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -99501,6 +99820,7 @@
       "name": "curobo._src.util.sampling.sequencer_random",
       "path": "curobo/_src/util/sampling/sequencer_random.py",
       "sha256": "c7caa8f9d744e37aed821bd8585dc599839d9f60cd1eafb69deef8c50ccb074e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -99624,6 +99944,7 @@
       "name": "curobo._src.util.sampling.sequencer_roberts",
       "path": "curobo/_src/util/sampling/sequencer_roberts.py",
       "sha256": "dc11400589e07b1055aca72c9f0056d06cf2ec7809499e5252dafe7d1c40ad95",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -99747,6 +100068,7 @@
       "name": "curobo._src.util.state_filter",
       "path": "curobo/_src/util/state_filter.py",
       "sha256": "e79978dc964423399c11e64677af953fbc60558a7a089ce002523fe3084b3e75",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -100110,6 +100432,7 @@
       "name": "curobo._src.util.tensor_util",
       "path": "curobo/_src/util/tensor_util.py",
       "sha256": "83d56050915c635c3e3d7658dea67d66d83b1722834308b82c095f4d836d7c40",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -100607,6 +100930,7 @@
       "name": "curobo._src.util.torch_util",
       "path": "curobo/_src/util/torch_util.py",
       "sha256": "0187e14ab1423be13bced907cdb44f5716f03e4a056ab86e09210cef4e2b9e39",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -100812,6 +101136,7 @@
       "name": "curobo._src.util.torch_utils",
       "path": "curobo/_src/util/torch_utils.py",
       "sha256": "b9c7d047ef9bcd39fc6f4858faefdb71717672f99eff2c9b9176a9df767b4a99",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -100830,6 +101155,7 @@
       "name": "curobo._src.util.trajectory",
       "path": "curobo/_src/util/trajectory.py",
       "sha256": "d59bb79bbe1c2e81a0908981de0f3969f5b46e7bf5cfba58b01c949f921826e1",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -101285,6 +101611,7 @@
       "name": "curobo._src.util.trajectory_execution_manager",
       "path": "curobo/_src/util/trajectory_execution_manager.py",
       "sha256": "1d3d5530ffc20fb662e6576da713ac91493d975350a0cc17d60727df3bd85836",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -101642,6 +101969,7 @@
       "name": "curobo._src.util.trajectory_seed_generator",
       "path": "curobo/_src/util/trajectory_seed_generator.py",
       "sha256": "9958bffb3b14959db9f1ea095db716223198afd0a830de03c30da5d88796db20",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -101866,6 +102194,7 @@
       "name": "curobo._src.util.usd_scene_parser",
       "path": "curobo/_src/util/usd_scene_parser.py",
       "sha256": "134eb1d6d3e74e016ff3b1d2205bbb16b0e189a3ce3ace237ff437aa7f1a952d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -102241,6 +102570,7 @@
       "name": "curobo._src.util.usd_util",
       "path": "curobo/_src/util/usd_util.py",
       "sha256": "bbf41ce1b218f570cefdff9c12af79c123fb8ca3921d042b94c44794eb530145",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -102442,6 +102772,7 @@
       "name": "curobo._src.util.usd_writer",
       "path": "curobo/_src/util/usd_writer.py",
       "sha256": "a0ab9dbb822364233861d995d2e04edf9457c1febf42acc56dc2a0247f7f583d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -104345,6 +104676,7 @@
       "name": "curobo._src.util.version",
       "path": "curobo/_src/util/version.py",
       "sha256": "59dd52e80984d84bcc4343ecfd4602295497dc2b0b8d350681d377fcc156806f",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [],
@@ -104368,6 +104700,7 @@
       "name": "curobo._src.util.viser_visualizer",
       "path": "curobo/_src/util/viser_visualizer.py",
       "sha256": "6fe84e12b6bae8428b913c629325db719843140631cbcb4ab0b20e765e32a9d7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105053,6 +105386,7 @@
       "name": "curobo._src.util.warp",
       "path": "curobo/_src/util/warp.py",
       "sha256": "4d957be35fcdd6d9d5d3a7c08d7b921c2ab1c465e9378598012533a665d256a6",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105308,6 +105642,7 @@
       "name": "curobo._src.util.warp_interpolation",
       "path": "curobo/_src/util/warp_interpolation.py",
       "sha256": "3969c46d87222d399588756b0d47295e7e0de2cb7190f1408d2c258408354b21",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105478,6 +105813,7 @@
       "name": "curobo._src.util.xrdf_util",
       "path": "curobo/_src/util/xrdf_util.py",
       "sha256": "beada90d532950cb9cbda1825b887561538756744cb5a96d165a6c75b3bde0fb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105617,6 +105953,7 @@
       "name": "curobo._src.util.xrdf_utils",
       "path": "curobo/_src/util/xrdf_utils.py",
       "sha256": "f33a47c57d23436c863756985a26ae72a91b74b804bbda998490918ed78617ec",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105635,6 +105972,7 @@
       "name": "curobo._src.util_file",
       "path": "curobo/_src/util_file.py",
       "sha256": "73fb2bcd7586d54381ee957727878d34b0da3b187497c9ea74dcecec71dabe32",
+      "surface": "runtime",
       "symbols": []
     },
     {
@@ -105647,6 +105985,7 @@
       "name": "curobo._version",
       "path": "curobo/_version.py",
       "sha256": "39b10c9dfadb96145b6a88ea92c269448c065ebffd4813e62908feab55df53c5",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105665,6 +106004,7 @@
       "name": "curobo.batch_motion_planner",
       "path": "curobo/batch_motion_planner.py",
       "sha256": "75c20c37c5855e7daf8c81b0038bf4b7fe307727f6f1e0c6e1869e7c11e51fdc",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105688,6 +106028,7 @@
       "name": "curobo.collision_checking",
       "path": "curobo/collision_checking.py",
       "sha256": "db4fb67ad9723b3d5a698ec10e0b799e818ae031b584a22f4805fb32c9692397",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105711,6 +106052,7 @@
       "name": "curobo.config_io",
       "path": "curobo/config_io.py",
       "sha256": "ee173c18b7e573f1bf6dde225df0dcdaf40f918009783e6cc450358129f32e1f",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105779,6 +106121,7 @@
       "name": "curobo.content",
       "path": "curobo/content/__init__.py",
       "sha256": "06466f8066cfb04364341bc751fe13752c0edaef7d38adb5a431514ca9ebd937",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -105889,6 +106232,7 @@
       "name": "curobo.examples",
       "path": "curobo/examples/__init__.py",
       "sha256": "cddfd2e722f7382da296d204a9335ed634c0925cc0effe63c6b6ead5b557b607",
+      "surface": "bundled_example",
       "symbols": []
     },
     {
@@ -105901,6 +106245,7 @@
       "name": "curobo.examples.getting_started.build_robot_model",
       "path": "curobo/examples/getting_started/build_robot_model.py",
       "sha256": "44051e0b11d83508ed6b9792002d956773eb417f3fef5971de4cb8ce1b822164",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -106013,6 +106358,7 @@
       "name": "curobo.examples.getting_started.feature_mapping",
       "path": "curobo/examples/getting_started/feature_mapping.py",
       "sha256": "2140fdc2ee008148ecf61ec4d235a51ee881edc1951ed35fa7cc69ce3badbdf2",
+      "surface": "bundled_example",
       "symbols": [
         {
           "bases": [],
@@ -106581,6 +106927,7 @@
       "name": "curobo.examples.getting_started.forward_kinematics",
       "path": "curobo/examples/getting_started/forward_kinematics.py",
       "sha256": "403158552c3544cac6b8183aa2bf26dd31890f57c2478dfc9080d9c14198b7bb",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -106654,6 +107001,7 @@
       "name": "curobo.examples.getting_started.humanoid_retargeting",
       "path": "curobo/examples/getting_started/humanoid_retargeting.py",
       "sha256": "b1f47261523fb2f1189d8f3dd3f01c8f278731c7f7119572278ff5f43a332685",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -106987,6 +107335,7 @@
       "name": "curobo.examples.getting_started.inverse_kinematics",
       "path": "curobo/examples/getting_started/inverse_kinematics.py",
       "sha256": "bca848cbace263652320f431cb36eff95765f0a329d4fbc39b6b1bb9c573a679",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -107189,6 +107538,7 @@
       "name": "curobo.examples.getting_started.motion_planning",
       "path": "curobo/examples/getting_started/motion_planning.py",
       "sha256": "21c5b40d214018d70304b61467de7df0ad3b6d97a1df6c112940eaeda4124228",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -107360,6 +107710,7 @@
       "name": "curobo.examples.getting_started.reactive_control",
       "path": "curobo/examples/getting_started/reactive_control.py",
       "sha256": "7b469525df26159614f8257c56da9cc99c5488f677783a6bb94e9b7fdcc00ff9",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -107498,6 +107849,7 @@
       "name": "curobo.examples.getting_started.volumetric_mapping",
       "path": "curobo/examples/getting_started/volumetric_mapping.py",
       "sha256": "f14ede6ff124a1e0bd3956f1edb58a32ff46deb33aef71f3e5660448977c12bc",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -107834,6 +108186,7 @@
       "name": "curobo.examples.guides.custom_optimization",
       "path": "curobo/examples/guides/custom_optimization.py",
       "sha256": "54ec562355e48a1fea4b087230b78f929dd66c12a6cd2398169f370d9a3b7663",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -108061,6 +108414,7 @@
       "name": "curobo.examples.reference.lidar_volumetric_mapping",
       "path": "curobo/examples/reference/lidar_volumetric_mapping.py",
       "sha256": "13def69188392d80d2bcd8fc892e65bacfdc3badd9f128bf0c2bdedd6852b0f7",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -110240,6 +110594,7 @@
       "name": "curobo.examples.reference.live_volumetric_mapping_mpc",
       "path": "curobo/examples/reference/live_volumetric_mapping_mpc.py",
       "sha256": "03aeb6e68b5b63b7d8cd1713ce435b73c652faa478b8fd62f2d8dad46a5b575c",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -110592,6 +110947,7 @@
       "name": "curobo.examples.reference.robot_pose_calibration",
       "path": "curobo/examples/reference/robot_pose_calibration.py",
       "sha256": "dd975f9ac00595154f9933e86e1f47d8a60e69835a5896b81b05689b29d0c7ec",
+      "surface": "bundled_example",
       "symbols": [
         {
           "kind": "reexport",
@@ -110765,6 +111121,7 @@
       "name": "curobo.examples.reference.sphere_fit_comparison",
       "path": "curobo/examples/reference/sphere_fit_comparison.py",
       "sha256": "71d46bed5d62e3415fe6dffbe09bed93bfd89a9cc85a49f729162ece14ce72a1",
+      "surface": "bundled_example",
       "symbols": [
         {
           "annotation": null,
@@ -110905,6 +111262,7 @@
       "name": "curobo.inverse_kinematics",
       "path": "curobo/inverse_kinematics.py",
       "sha256": "3cd2c9722caee5d777ddea0ab5ecbf26b905a056c8a19c4cf359cfa44a27dc6d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -110933,6 +111291,7 @@
       "name": "curobo.kinematics",
       "path": "curobo/kinematics.py",
       "sha256": "a6f8186a6dbaa4840a8e0c77e86facf6df567668d536cdcb870b6e62ca6fd94e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -110961,6 +111320,7 @@
       "name": "curobo.logging",
       "path": "curobo/logging.py",
       "sha256": "9df1c342e8a487e1d87b51560a32c649ff8622d0d168239045c580a0cf959ad1",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -110999,6 +111359,7 @@
       "name": "curobo.model_predictive_control",
       "path": "curobo/model_predictive_control.py",
       "sha256": "e1279d20af5637f8c100edde286160f5544e3c71cdc197ecf39cb3b58deb39cb",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111027,6 +111388,7 @@
       "name": "curobo.motion_planner",
       "path": "curobo/motion_planner.py",
       "sha256": "af8f510c2217374deff557b582bfa80db961fc2b8170c6683d67d8b431dcd67e",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111055,6 +111417,7 @@
       "name": "curobo.motion_retargeter",
       "path": "curobo/motion_retargeter.py",
       "sha256": "570701d98dcf9901275234a0bdced3bf2d3737e9c6ac97232ea5718c9d861f19",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111093,6 +111456,7 @@
       "name": "curobo.optim",
       "path": "curobo/optim.py",
       "sha256": "a6b2c3d7563297055620ef55b262f8319ee38186186253641a0516dd7df3db92",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111161,6 +111525,7 @@
       "name": "curobo.perception",
       "path": "curobo/perception.py",
       "sha256": "188eb3b9ca466430247eca4425ea74e5a017abb3b5cd658a1b2578dee8b14472",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111229,6 +111594,7 @@
       "name": "curobo.profiling",
       "path": "curobo/profiling.py",
       "sha256": "12e9394d80ba778f4b740b9f558e37049949062c011003c3e43ffe95d07eddbe",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111247,6 +111613,7 @@
       "name": "curobo.robot_builder",
       "path": "curobo/robot_builder.py",
       "sha256": "a62f54c1ae4e3499b140954ac5fe2e56228a2f03ec6fe66faa7a159ca0520e27",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111270,6 +111637,7 @@
       "name": "curobo.robot_parser",
       "path": "curobo/robot_parser.py",
       "sha256": "ad601b389ebe708e92c31cff49ebbc03a2cdf9a072f4e856c0319cf6c2e2cb97",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111288,6 +111656,7 @@
       "name": "curobo.rollout",
       "path": "curobo/rollout.py",
       "sha256": "f27c2e210247514fc4b8e43b7c6fdcc33f8dbd56ef32c277fafbc108a745e6d7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111311,6 +111680,7 @@
       "name": "curobo.runtime",
       "path": "curobo/runtime.py",
       "sha256": "abf67e595ef919efbe4ed82afff5d832772b5693340544c00657e3d591d42cb0",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111409,6 +111779,7 @@
       "name": "curobo.scene",
       "path": "curobo/scene.py",
       "sha256": "179d568123e9bc70bacf1583dfedaaefd978a8a9f2470ecc60911b3f7752344d",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111467,6 +111838,7 @@
       "name": "curobo.sphere_fit",
       "path": "curobo/sphere_fit.py",
       "sha256": "412cc725a2084cadfa21bdbef5d61953ffd4aacf2117a717dbfbe57400fbb701",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -111505,6 +111877,7 @@
       "name": "curobo.tests",
       "path": "curobo/tests/__init__.py",
       "sha256": "b369f9eb57d7402ee123c4bdf2954a9f81204259f17e88c594ce269d486cebbb",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -111517,6 +111890,7 @@
       "name": "curobo.tests._src",
       "path": "curobo/tests/_src/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -111529,6 +111903,7 @@
       "name": "curobo.tests._src.collision",
       "path": "curobo/tests/_src/collision/__init__.py",
       "sha256": "099a820c601e44e96f6fe758d2129f4b3b2211c3441207321fb22c31067bb00d",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -111541,6 +111916,7 @@
       "name": "curobo.tests._src.collision.test_attachment_manager",
       "path": "curobo/tests/_src/collision/test_attachment_manager.py",
       "sha256": "2dbc715bc5862eebc388aeab465c9c01315ec3010584df525c5fac5ce5f131e9",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -112584,6 +112960,7 @@
       "name": "curobo.tests._src.collision.test_collision_robot_scene",
       "path": "curobo/tests/_src/collision/test_collision_robot_scene.py",
       "sha256": "d03fed342db41b55c32916b502797ae809c0a2cdd079034e840e1d26aeae2b4e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -112976,6 +113353,7 @@
       "name": "curobo.tests._src.collision.test_mesh_collision_sdf",
       "path": "curobo/tests/_src/collision/test_mesh_collision_sdf.py",
       "sha256": "139f2126de8a683cb56c420358cd334cc61c0fe97adc5feae92b28037024c67a",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -113048,6 +113426,7 @@
       "name": "curobo.tests._src.cost",
       "path": "curobo/tests/_src/cost/__init__.py",
       "sha256": "11ccf0c15962ef67836b7f71a4fd16d1dd72cec93499a9b6b58f7062d60f0a19",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -113060,6 +113439,7 @@
       "name": "curobo.tests._src.cost.test_cost_base",
       "path": "curobo/tests/_src/cost/test_cost_base.py",
       "sha256": "0611b58486ab10ac847da2f8b7b1051f27ae3092fbd59dd91b8d327cc4efe6c5",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -113716,6 +114096,7 @@
       "name": "curobo.tests._src.cost.test_cost_cspace",
       "path": "curobo/tests/_src/cost/test_cost_cspace.py",
       "sha256": "2850f3fdce2f7e1752184f0ec52dc08731693471de8c90eb545423ca939491f5",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -114771,6 +115152,7 @@
       "name": "curobo.tests._src.cost.test_cost_scene_collision",
       "path": "curobo/tests/_src/cost/test_cost_scene_collision.py",
       "sha256": "8b0c76386f13fc88e169a95f1859631c20e2e0929b0bd759d085bac0e9ed5ffb",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -115604,6 +115986,7 @@
       "name": "curobo.tests._src.cost.test_cost_self_collision",
       "path": "curobo/tests/_src/cost/test_cost_self_collision.py",
       "sha256": "ce0b05f6d448d5054d8640ac4211a35c4a51245cf47807a7b37abf70e144e57f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -116422,6 +116805,7 @@
       "name": "curobo.tests._src.cost.test_cost_support_polygon",
       "path": "curobo/tests/_src/cost/test_cost_support_polygon.py",
       "sha256": "f5bfabad891c6319fcd097d83724336bad32b434f88aa0b6d61589c9e049af46",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -117006,6 +117390,7 @@
       "name": "curobo.tests._src.cost.test_cost_tool_pose",
       "path": "curobo/tests/_src/cost/test_cost_tool_pose.py",
       "sha256": "1e1a1f1435a844b9940d23ad200ac451e30ef54169924551f50c38c641c41055",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -117495,6 +117880,7 @@
       "name": "curobo.tests._src.cost.test_cost_types",
       "path": "curobo/tests/_src/cost/test_cost_types.py",
       "sha256": "3590caab49515e3f6620ff80b2d10530629edd0014adabe2186e3c3766f2eca1",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -117904,6 +118290,7 @@
       "name": "curobo.tests._src.curobolib",
       "path": "curobo/tests/_src/curobolib/__init__.py",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -117916,6 +118303,7 @@
       "name": "curobo.tests._src.curobolib.cuda_ops",
       "path": "curobo/tests/_src/curobolib/cuda_ops/__init__.py",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -117928,6 +118316,7 @@
       "name": "curobo.tests._src.curobolib.cuda_ops.test_tensor_checks",
       "path": "curobo/tests/_src/curobolib/cuda_ops/test_tensor_checks.py",
       "sha256": "2b096793f0b17b42d0548d217a6772d5364fde995c223bc8152decfbc8b58300",
+      "surface": "bundled_test",
       "symbols": [
         {
           "annotation": null,
@@ -118433,6 +118822,7 @@
       "name": "curobo.tests._src.geom",
       "path": "curobo/tests/_src/geom/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -118445,6 +118835,7 @@
       "name": "curobo.tests._src.geom.sdf",
       "path": "curobo/tests/_src/geom/sdf/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -118457,6 +118848,7 @@
       "name": "curobo.tests._src.geom.sdf.test_sdf_grid",
       "path": "curobo/tests/_src/geom/sdf/test_sdf_grid.py",
       "sha256": "a63f36d8e7c3e3665ba0618d62b992d93237e84e619ba5ccfc1b815cc34a21f2",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -118839,6 +119231,7 @@
       "name": "curobo.tests._src.geom.sdf.test_voxel_collision",
       "path": "curobo/tests/_src/geom/sdf/test_voxel_collision.py",
       "sha256": "99001ae738b3476ce319f03fe8c4152b4c91abfd4e90fda1a4d16f02b43e3669",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -119994,6 +120387,7 @@
       "name": "curobo.tests._src.geom.test_convex_polygon_helper",
       "path": "curobo/tests/_src/geom/test_convex_polygon_helper.py",
       "sha256": "8413b7901b295d797e72094fac93d6fa1cf4c3460ac703eb27dd19eafe59047d",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -120287,6 +120681,7 @@
       "name": "curobo.tests._src.geom.test_cv",
       "path": "curobo/tests/_src/geom/test_cv.py",
       "sha256": "7fce64a94bec6acc5869cfa546017245b4d8870d76b60bdf5758024b4c68f925",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -120793,6 +121188,7 @@
       "name": "curobo.tests._src.geom.test_data_scene",
       "path": "curobo/tests/_src/geom/test_data_scene.py",
       "sha256": "0e45079d81e7224891afba244998a737f1012fe60d054b72d13bf46c875fd160",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -120836,6 +121232,7 @@
       "name": "curobo.tests._src.geom.test_geom_types",
       "path": "curobo/tests/_src/geom/test_geom_types.py",
       "sha256": "2335998ebbc91db52f7347781dc54f5b962e506dbfa29486229d94c2a010b954",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -120908,6 +121305,7 @@
       "name": "curobo.tests._src.geom.test_mesh_triangulation",
       "path": "curobo/tests/_src/geom/test_mesh_triangulation.py",
       "sha256": "0dbfdc46ba85d282d8b17f56e02fbe220ec80c19b7707b33b1d0f9c5ca73f63f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -120996,6 +121394,7 @@
       "name": "curobo.tests._src.geom.test_pose",
       "path": "curobo/tests/_src/geom/test_pose.py",
       "sha256": "b491a7fbc9861ff04747f627071415d03ac44fdbb0e76b7b36d6cf0f05539391",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -121187,6 +121586,7 @@
       "name": "curobo.tests._src.geom.test_quaternion",
       "path": "curobo/tests/_src/geom/test_quaternion.py",
       "sha256": "44632e59d53dd711a2fa3896bc4b206efa9188fe9f2a87f1d10150f818a72ec2",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -121406,6 +121806,7 @@
       "name": "curobo.tests._src.geom.test_sphere_fit",
       "path": "curobo/tests/_src/geom/test_sphere_fit.py",
       "sha256": "e45a4d0d441d559fe63bc90ed9fefef5037f41d4229b80d3566937e43c657f9b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -122414,6 +122815,7 @@
       "name": "curobo.tests._src.geom.test_transform",
       "path": "curobo/tests/_src/geom/test_transform.py",
       "sha256": "efecccc50b5274a39af9e8b472325062e66a685eaac474bf04ad8f163dfbe573",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -122788,6 +123190,7 @@
       "name": "curobo.tests._src.geom.test_types",
       "path": "curobo/tests/_src/geom/test_types.py",
       "sha256": "6d811855a215b80b8072df87fe43299f290ec4703bf86fd39758b2818b964cff",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -124078,6 +124481,7 @@
       "name": "curobo.tests._src.graph_planner",
       "path": "curobo/tests/_src/graph_planner/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -124090,6 +124494,7 @@
       "name": "curobo.tests._src.graph_planner.test_constructor",
       "path": "curobo/tests/_src/graph_planner/test_constructor.py",
       "sha256": "e2851f6bcdce446000102731eec7d9d6a577ff6416fa22dd1447f0189b44a8fd",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -124893,6 +125298,7 @@
       "name": "curobo.tests._src.graph_planner.test_graph_planner_batch_seed",
       "path": "curobo/tests/_src/graph_planner/test_graph_planner_batch_seed.py",
       "sha256": "5854877f169ef34f522eaae66ae85953c13fb8992d6076ba89ebae184c2dcb11",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -125080,6 +125486,7 @@
       "name": "curobo.tests._src.graph_planner.test_graph_planner_prm",
       "path": "curobo/tests/_src/graph_planner/test_graph_planner_prm.py",
       "sha256": "0fe6e7aa2517dd2c3098bf174e3b1f906afc148e2264ad03e51771bd80f5df9c",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -125468,6 +125875,7 @@
       "name": "curobo.tests._src.graph_planner.test_node_manager",
       "path": "curobo/tests/_src/graph_planner/test_node_manager.py",
       "sha256": "2a8246aa8a2aee467557caa53bff7f484477ebacbea1a22bee9776b853e0feac",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -126496,6 +126904,7 @@
       "name": "curobo.tests._src.graph_planner.test_node_sampling_strategy",
       "path": "curobo/tests/_src/graph_planner/test_node_sampling_strategy.py",
       "sha256": "cc9154a4e30686c0eabd36aaa7ba2344519d76e6b137110fb74fabb5b584f75f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -127649,6 +128058,7 @@
       "name": "curobo.tests._src.graph_planner.test_path_finder_networkx",
       "path": "curobo/tests/_src/graph_planner/test_path_finder_networkx.py",
       "sha256": "150923725d1bbfe4563fbe88fc095a24df7d83b80874b773fdec001b778d5f10",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -128296,6 +128706,7 @@
       "name": "curobo.tests._src.motion",
       "path": "curobo/tests/_src/motion/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -128308,6 +128719,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner",
       "path": "curobo/tests/_src/motion/test_motion_planner.py",
       "sha256": "33c7b5bfa68bb8d1c147fe7c01a201e31ec357cbd3fb191849354bcf0e57b685",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -130986,6 +131398,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner_batch",
       "path": "curobo/tests/_src/motion/test_motion_planner_batch.py",
       "sha256": "420401940769784e13e6e2b734ee78781e7c87f55c1238672811e65551028d01",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -131590,6 +132003,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner_cfg",
       "path": "curobo/tests/_src/motion/test_motion_planner_cfg.py",
       "sha256": "924d29e5a752d8834410e3387c59d68c876c29c3eccd87f55edc486281b5ff0a",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -132461,6 +132875,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner_esdf",
       "path": "curobo/tests/_src/motion/test_motion_planner_esdf.py",
       "sha256": "4fae93bf8d26973ef23035210f9bf5525a5fa1513720aae1f21a508b42114183",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -133901,6 +134316,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner_grasp_goalset",
       "path": "curobo/tests/_src/motion/test_motion_planner_grasp_goalset.py",
       "sha256": "22385bdf2302829b79e3f96ceb3e11c1f73f0b161b7b27e01253b25912808601",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -134059,6 +134475,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner_num_envs",
       "path": "curobo/tests/_src/motion/test_motion_planner_num_envs.py",
       "sha256": "e207102e757baaf29e3a9ca2c46fc35a06b5f22d4a32e68f492ffd6142e5231d",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -134286,6 +134703,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner_result",
       "path": "curobo/tests/_src/motion/test_motion_planner_result.py",
       "sha256": "667e3fe9b73639a1b121bb758e2a761f5d786c5874bd0a77a542acc070c59d3e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -134781,6 +135199,7 @@
       "name": "curobo.tests._src.motion.test_motion_planner_shared_kinematics",
       "path": "curobo/tests/_src/motion/test_motion_planner_shared_kinematics.py",
       "sha256": "12c095035b6db15f1728c68e065fafa303bf2759281d283b6311ad1543876a13",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -134977,6 +135396,7 @@
       "name": "curobo.tests._src.motion.test_motion_retargeter",
       "path": "curobo/tests/_src/motion/test_motion_retargeter.py",
       "sha256": "363b1ac4c202a6142bf2b577f437c85d220160dcaf286cc70669646b83f0cfaf",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -135391,6 +135811,7 @@
       "name": "curobo.tests._src.motion.test_motion_retargeter_cfg",
       "path": "curobo/tests/_src/motion/test_motion_retargeter_cfg.py",
       "sha256": "07234d180fb6d78febda20a98e68242a79f2b31a271945c3bbc8288c93ba63d7",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -135584,6 +136005,7 @@
       "name": "curobo.tests._src.motion.test_motion_retargeter_lock_joints",
       "path": "curobo/tests/_src/motion/test_motion_retargeter_lock_joints.py",
       "sha256": "c1cc9d0bc427482fa1c60eda37fc8f468d6f2e6365df61425e32d0066a808954",
+      "surface": "bundled_test",
       "symbols": [
         {
           "annotation": null,
@@ -135789,6 +136211,7 @@
       "name": "curobo.tests._src.optim",
       "path": "curobo/tests/_src/optim/__init__.py",
       "sha256": "987fd03bfc407148edd9138620dcab5b3921aa3cb5d8c86a0a50a90432128ae2",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -135801,6 +136224,7 @@
       "name": "curobo.tests._src.optim.external",
       "path": "curobo/tests/_src/optim/external/__init__.py",
       "sha256": "bf18f172fce923b583fc8beb5d5f9628631753990704dde960dde17c6cd5cb76",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -135813,6 +136237,7 @@
       "name": "curobo.tests._src.optim.external.test_scipy_opt",
       "path": "curobo/tests/_src/optim/external/test_scipy_opt.py",
       "sha256": "686e88d0c2ad278401a3ac5e3fda93379852b48b14405c9e0baea710652eaab0",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -137096,6 +137521,7 @@
       "name": "curobo.tests._src.optim.external.test_torch_opt",
       "path": "curobo/tests/_src/optim/external/test_torch_opt.py",
       "sha256": "d8b22f4cdc48c69e65aa7cd17982ac5c0339193206d49e216c372fd76229a471",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -138372,6 +138798,7 @@
       "name": "curobo.tests._src.optim.gradient.test_conjugate_gradient",
       "path": "curobo/tests/_src/optim/gradient/test_conjugate_gradient.py",
       "sha256": "94745debfeeb3904f5d2462141bef2fd497d2c07364ea2370ddbcb0081e75410",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -139663,6 +140090,7 @@
       "name": "curobo.tests._src.optim.gradient.test_lbfgs",
       "path": "curobo/tests/_src/optim/gradient/test_lbfgs.py",
       "sha256": "b36e4f30c376a2fa350368d132793cc661548b939eaa5d409236e5f75c861be2",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -140518,6 +140946,7 @@
       "name": "curobo.tests._src.optim.gradient.test_lsr1",
       "path": "curobo/tests/_src/optim/gradient/test_lsr1.py",
       "sha256": "b2270ca066bba9f04055c25f29a976eef22c98af06f6b328f99a9543fdf8716c",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -141700,6 +142129,7 @@
       "name": "curobo.tests._src.optim.particle.sample_strategies",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/__init__.py",
       "sha256": "656370763617eef6e8176501c6f12aade8ac87ad595ed6df596d69e85c720021",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -141712,6 +142142,7 @@
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_particle_sampler.py",
       "sha256": "58d020165fee1695b3efd72468b079baace011abdd59fb4292ad45707d9abc5e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -143293,6 +143724,7 @@
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_particle_sampler_cfg.py",
       "sha256": "e1a4d6a6f82a0d695dff785b7a45bba5f8941a4a40dc29c97423cfae82f5bcfa",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -143788,6 +144220,7 @@
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_processor_knot",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_knot.py",
       "sha256": "433f82873063833e294dcfba305656a5f09e2d96c694b8f5b10c4f1e942fb368",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -144412,6 +144845,7 @@
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_processor_standard",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_standard.py",
       "sha256": "c186087be849d6ac03c02187e286a089ad21f73d9652431ac2f8483c4c953a56",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -144957,6 +145391,7 @@
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_processor_stomp",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_stomp.py",
       "sha256": "025088d5ba3a094898dcbdba2426996502010335f70058824e672ac4ed23c45b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -145686,6 +146121,7 @@
       "name": "curobo.tests._src.optim.particle.test_mppi",
       "path": "curobo/tests/_src/optim/particle/test_mppi.py",
       "sha256": "fc75e34793f2a82341e447dd6dd4912fdd49a28a0820fd3dfb8a972a1290c606",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -147602,6 +148038,7 @@
       "name": "curobo.tests._src.optim.particle.test_parallel_optimizers",
       "path": "curobo/tests/_src/optim/particle/test_parallel_optimizers.py",
       "sha256": "5bc5c89872d0772a19bba99273c31108e5f561a8e2e489b94a7e65ea657c23d8",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -149591,6 +150028,7 @@
       "name": "curobo.tests._src.optim.test_multi_stage_optimizer",
       "path": "curobo/tests/_src/optim/test_multi_stage_optimizer.py",
       "sha256": "6770f6902f46b70736d75974fd09ea113e7fe16052d343f70f29d34e98f7b69e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -150720,6 +151158,7 @@
       "name": "curobo.tests._src.optim.test_optim_factory",
       "path": "curobo/tests/_src/optim/test_optim_factory.py",
       "sha256": "d4726e6430d212e159a9498b1e663c40e1715dbc1c75ca66cab03c3111ec6556",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -152210,6 +152649,7 @@
       "name": "curobo.tests._src.optim.test_optimizer_cuda_graph",
       "path": "curobo/tests/_src/optim/test_optimizer_cuda_graph.py",
       "sha256": "24f8fc899471644f339b9f8acb79f1582730d800b6b728f2e84178a6b931f40e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -153297,6 +153737,7 @@
       "name": "curobo.tests._src.perception",
       "path": "curobo/tests/_src/perception/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -153309,6 +153750,7 @@
       "name": "curobo.tests._src.perception.mapper",
       "path": "curobo/tests/_src/perception/mapper/__init__.py",
       "sha256": "de27c045fae0d1b7e628cbdf1fe3c01132d072d25e8d275e5d7bf971514974fb",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -153321,6 +153763,7 @@
       "name": "curobo.tests._src.perception.mapper.conftest",
       "path": "curobo/tests/_src/perception/mapper/conftest.py",
       "sha256": "5073f50f492cacc070cbaac0199ccfe409a1afd33fe0f68ddb7fb51b1b02fb78",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -153405,6 +153848,7 @@
       "name": "curobo.tests._src.perception.mapper.test_block_checkpoint",
       "path": "curobo/tests/_src/perception/mapper/test_block_checkpoint.py",
       "sha256": "f360901ce8ffe04927e4f5766dd9597b1a1497a0140ae88e49af5b1ab4c78623",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -153879,6 +154323,7 @@
       "name": "curobo.tests._src.perception.mapper.test_block_decay",
       "path": "curobo/tests/_src/perception/mapper/test_block_decay.py",
       "sha256": "100c489afc95c646cd67163ce748556c9035e1c8c7ec94f64beac6e89e68bc17",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -154230,6 +154675,7 @@
       "name": "curobo.tests._src.perception.mapper.test_block_hash",
       "path": "curobo/tests/_src/perception/mapper/test_block_hash.py",
       "sha256": "6af1e407a3cdb66868fca87204338918433e4722457a3334f43b47f45ea3675c",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -155120,6 +155566,7 @@
       "name": "curobo.tests._src.perception.mapper.test_block_integrate",
       "path": "curobo/tests/_src/perception/mapper/test_block_integrate.py",
       "sha256": "1def29a82a0ed35a0ceed3a2118bfb32260f0f7e2e9da1de64db43d594ad4013",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -155571,6 +156018,7 @@
       "name": "curobo.tests._src.perception.mapper.test_block_marching_cubes",
       "path": "curobo/tests/_src/perception/mapper/test_block_marching_cubes.py",
       "sha256": "439bc507b6d381dcd23b206257dd9e2638ee5751e6b98ded2ff2adaaeeb3c6fd",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -155974,6 +156422,7 @@
       "name": "curobo.tests._src.perception.mapper.test_builder",
       "path": "curobo/tests/_src/perception/mapper/test_builder.py",
       "sha256": "371193efb0fb6c9f26ad8dcd01c71445e4c53181437d2224ad4d4f41cb1dfc6b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -156595,6 +157044,7 @@
       "name": "curobo.tests._src.perception.mapper.test_comparison",
       "path": "curobo/tests/_src/perception/mapper/test_comparison.py",
       "sha256": "30d6470c540e443653a7b97e45860ec8ff921d1499c2e111ef75292cb9834c25",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -156907,6 +157357,7 @@
       "name": "curobo.tests._src.perception.mapper.test_feature_grid",
       "path": "curobo/tests/_src/perception/mapper/test_feature_grid.py",
       "sha256": "01cde094a3fe0b28d161b9181dfb4f118657d6deb0ce56b0f5223c46a030bc25",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -157153,6 +157604,7 @@
       "name": "curobo.tests._src.perception.mapper.test_feature_matching",
       "path": "curobo/tests/_src/perception/mapper/test_feature_matching.py",
       "sha256": "43dfc0aeee4829c26232a2845ac505a60b07be97ad4b6d0f4be3cf8483a4f88b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -157812,6 +158264,7 @@
       "name": "curobo.tests._src.perception.mapper.test_generated_observation_correctness",
       "path": "curobo/tests/_src/perception/mapper/test_generated_observation_correctness.py",
       "sha256": "b54ce45f08c927f54dbb61423729702bb8f8fc97d6268dda666f52b617c0742e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -158205,6 +158658,7 @@
       "name": "curobo.tests._src.perception.mapper.test_integrator",
       "path": "curobo/tests/_src/perception/mapper/test_integrator.py",
       "sha256": "4a6a7fba0ed9fdfb3133e7c179568c047e9ba34aedbd6d46e7b7bae26a4f6bdf",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -158729,6 +159183,7 @@
       "name": "curobo.tests._src.perception.mapper.test_lidar_projection",
       "path": "curobo/tests/_src/perception/mapper/test_lidar_projection.py",
       "sha256": "6ed072b81e6fc6cd321512e3eab705b26bcd41434ea86c8788f4f0884986e403",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -158896,6 +159351,7 @@
       "name": "curobo.tests._src.perception.mapper.test_multi_camera",
       "path": "curobo/tests/_src/perception/mapper/test_multi_camera.py",
       "sha256": "fd35ba8f89f76bbed29f081cb70439748c6333862f3b22cc8cd09cabe3a8590b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -159450,6 +159906,7 @@
       "name": "curobo.tests._src.perception.mapper.test_occupied_voxel_texture",
       "path": "curobo/tests/_src/perception/mapper/test_occupied_voxel_texture.py",
       "sha256": "02e6c247612b7774550762d5df6fcb81af0d7a07cb7d3b2ef40aac45609fea6f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -159623,6 +160080,7 @@
       "name": "curobo.tests._src.perception.mapper.test_renderer",
       "path": "curobo/tests/_src/perception/mapper/test_renderer.py",
       "sha256": "d337d205bc34f3a454e183fc750c7736407b425af02acea0c0fbe52fa5d90ff1",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -159878,6 +160336,7 @@
       "name": "curobo.tests._src.perception.mapper.test_texture_visibility",
       "path": "curobo/tests/_src/perception/mapper/test_texture_visibility.py",
       "sha256": "d84a62179d754478ce251ee8f0576cddb55e289f83e1640703ef258813f93dad",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -160030,6 +160489,7 @@
       "name": "curobo.tests._src.perception.test_detection_result",
       "path": "curobo/tests/_src/perception/test_detection_result.py",
       "sha256": "249ed0777463ec3d3fa84bcb485c9eb6d58129ff4971d46c24d102d1247321f7",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -160366,6 +160826,7 @@
       "name": "curobo.tests._src.perception.test_filter_depth",
       "path": "curobo/tests/_src/perception/test_filter_depth.py",
       "sha256": "22b7a5039b8fb9983cf751b8486003a14dd5330abd17a68a47111aea61f25c3c",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -161418,6 +161879,7 @@
       "name": "curobo.tests._src.perception.test_geometry",
       "path": "curobo/tests/_src/perception/test_geometry.py",
       "sha256": "e3d329dcf32244ed10dcd57bd90687de85d3761506f6ffa1f51942663cf71825",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -162427,6 +162889,7 @@
       "name": "curobo.tests._src.perception.test_mesh_robot",
       "path": "curobo/tests/_src/perception/test_mesh_robot.py",
       "sha256": "53a125678da578f14c4ccc0c3954647789fa06794ecb250b33839945923f4062",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -163470,6 +163933,7 @@
       "name": "curobo.tests._src.perception.test_pose_detector",
       "path": "curobo/tests/_src/perception/test_pose_detector.py",
       "sha256": "daaaff26daeccf4bf1e5e4d53408758ad7e2e620a6c562338b437d19f3330cad",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -164442,6 +164906,7 @@
       "name": "curobo.tests._src.perception.test_pose_detector_cfg",
       "path": "curobo/tests/_src/perception/test_pose_detector_cfg.py",
       "sha256": "018f090cbe2c4affa9fbda700660ea520bd7d2de12f40f35a85ae09fe2ab4884",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -164915,6 +165380,7 @@
       "name": "curobo.tests._src.perception.test_sdf_cuda_graph",
       "path": "curobo/tests/_src/perception/test_sdf_cuda_graph.py",
       "sha256": "cbcb6cc46d345d55cd0a4112163a81e6bd6298f4e79e2b95ce379234b53a835d",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -165141,6 +165607,7 @@
       "name": "curobo.tests._src.perception.test_sdf_pose_detector",
       "path": "curobo/tests/_src/perception/test_sdf_pose_detector.py",
       "sha256": "fa188065c4d058c8bf3469c0e1559dcfc84d4298b2510a568ddeb8a40ba65298",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -165724,6 +166191,7 @@
       "name": "curobo.tests._src.perception.test_util",
       "path": "curobo/tests/_src/perception/test_util.py",
       "sha256": "57f0ee4a88ac0213760a369446aabb24df4f7f8b30d5ca60a0c8d189bfc740bc",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -166709,6 +167177,7 @@
       "name": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment",
       "path": "curobo/tests/_src/perception/test_wp_mesh_sdf_alignment.py",
       "sha256": "c30a50adbaa34d3f6ca5602bbc3e70290960b5c72a642f27518becb6bb033f83",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -167244,6 +167713,7 @@
       "name": "curobo.tests._src.robot",
       "path": "curobo/tests/_src/robot/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -167256,6 +167726,7 @@
       "name": "curobo.tests._src.robot.builder",
       "path": "curobo/tests/_src/robot/builder/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -167268,6 +167739,7 @@
       "name": "curobo.tests._src.robot.builder.test_builder_robot",
       "path": "curobo/tests/_src/robot/builder/test_builder_robot.py",
       "sha256": "29ed22099c5bffd5cc7ea96d01aa70ca7ec3866af0983360781db9e6adfaa3ee",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -168874,6 +169346,7 @@
       "name": "curobo.tests._src.robot.builder.test_debugger_robot",
       "path": "curobo/tests/_src/robot/builder/test_debugger_robot.py",
       "sha256": "6b027c7b0b54acecef562f312199e1a1d6a8237e2ae81c93ab9d43e8aaa4d554",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -170131,6 +170604,7 @@
       "name": "curobo.tests._src.robot.dynamics",
       "path": "curobo/tests/_src/robot/dynamics/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -170143,6 +170617,7 @@
       "name": "curobo.tests._src.robot.dynamics.rnea_numpy_reference",
       "path": "curobo/tests/_src/robot/dynamics/rnea_numpy_reference.py",
       "sha256": "0004b5c713ce9d5c173725f7812291525222ad4d2b0889982eac98d3f20328da",
+      "surface": "bundled_test",
       "symbols": [
         {
           "annotation": null,
@@ -170814,6 +171289,7 @@
       "name": "curobo.tests._src.robot.dynamics.test_rnea_cuda",
       "path": "curobo/tests/_src/robot/dynamics/test_rnea_cuda.py",
       "sha256": "7da2bad44089880e2db38c1288474df4c5be9a0ddc02b7661a99deec82c830f4",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -171243,6 +171719,7 @@
       "name": "curobo.tests._src.robot.dynamics.test_rnea_reference",
       "path": "curobo/tests/_src/robot/dynamics/test_rnea_reference.py",
       "sha256": "bed03a5d74d2db0dbd58fdac9c24e309322d3f355dd6ecd9edf9854cfbe88134",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -172142,6 +172619,7 @@
       "name": "curobo.tests._src.robot.kinematics",
       "path": "curobo/tests/_src/robot/kinematics/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -172154,6 +172632,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_extra_links_insert",
       "path": "curobo/tests/_src/robot/kinematics/test_extra_links_insert.py",
       "sha256": "39b90288f4fb48364334746ba9b8dced57cfd5c4bad2eba69ebdedb0b990613d",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -172244,6 +172723,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_jacobian_gradcheck",
       "path": "curobo/tests/_src/robot/kinematics/test_jacobian_gradcheck.py",
       "sha256": "06cc33b92dcfc219ee07450f8c58eff6d6c2fbf98bacdaa995791deed80050fb",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -172383,6 +172863,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_kinematics",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics.py",
       "sha256": "3356fd0d79197b2bcd568943d79ee84ff6fbe263fee0db483a76b2961069c31a",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -172566,6 +173047,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_cfg",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_cfg.py",
       "sha256": "043237cd15801e23db6d09c67fcb6faf2011c4c9c791adb09d95d6c8276229d4",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -172801,6 +173283,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_com",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_com.py",
       "sha256": "82193c6b1dcd881ee3f1d862269b97359b3c7687004e3bca36bd100f9db93e95",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -172897,6 +173380,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_extended",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_extended.py",
       "sha256": "08ca175b7ea26fb568ef70ddb13eeb49c99a2e820d2ca295af68b392f6655992",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -173835,6 +174319,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_multi_env_spheres",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_multi_env_spheres.py",
       "sha256": "3687ba56e644c1170ce179315a7025927112c8326d930752a0e800284d7b0c3f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -174034,6 +174519,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_reducer",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_reducer.py",
       "sha256": "54a278cdd58541399e30a47232392cd8d950ea41779ae669e550d0d26db3238d",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -174264,6 +174750,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_state",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_state.py",
       "sha256": "0ee1a1ced462b2a7872928e43abb96e53eee9d8a9aa5ca38858950fe370202e8",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -174493,6 +174980,7 @@
       "name": "curobo.tests._src.robot.kinematics.test_mimic_joint",
       "path": "curobo/tests/_src/robot/kinematics/test_mimic_joint.py",
       "sha256": "66863e3a3e9f4df3924ccc190170b4dd27fbaf7a5863a59dc09197bbdc461e88",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -174531,6 +175019,7 @@
       "name": "curobo.tests._src.robot.loader",
       "path": "curobo/tests/_src/robot/loader/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -174543,6 +175032,7 @@
       "name": "curobo.tests._src.robot.loader.test_kinematics_loader",
       "path": "curobo/tests/_src/robot/loader/test_kinematics_loader.py",
       "sha256": "235d26f3d7de5f73351a4cda3957468dc205edc65a7e2f510fa90a9a26078544",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -174733,6 +175223,7 @@
       "name": "curobo.tests._src.robot.loader.test_util",
       "path": "curobo/tests/_src/robot/loader/test_util.py",
       "sha256": "d7eac4cc28dce3bfd46115e83d9a27dba36a7b3803841d9de1426284c3c40a8b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -174917,6 +175408,7 @@
       "name": "curobo.tests._src.robot.parser",
       "path": "curobo/tests/_src/robot/parser/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -174929,6 +175421,7 @@
       "name": "curobo.tests._src.robot.parser.test_parser_urdf",
       "path": "curobo/tests/_src/robot/parser/test_parser_urdf.py",
       "sha256": "1019b5eb43cb6b8f1b44acb1707a95b6fed3642210be47fe4d45de253a10731f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -176034,6 +176527,7 @@
       "name": "curobo.tests._src.robot.types",
       "path": "curobo/tests/_src/robot/types/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -176046,6 +176540,7 @@
       "name": "curobo.tests._src.robot.types.test_joint_limits",
       "path": "curobo/tests/_src/robot/types/test_joint_limits.py",
       "sha256": "2576e25980ee7817cc33b6b61b8da0b69bde6c93290ae349b3c1046ee441d77e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -176330,6 +176825,7 @@
       "name": "curobo.tests._src.robot.types.test_kinematics_params",
       "path": "curobo/tests/_src/robot/types/test_kinematics_params.py",
       "sha256": "5aba3df060034107efed89e5f3fa96419b598bc0de2654740831f9cc8c707be5",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -177328,6 +177824,7 @@
       "name": "curobo.tests._src.robot.types.test_types",
       "path": "curobo/tests/_src/robot/types/test_types.py",
       "sha256": "099c30f07fbedc1ead04af0b9a87c5f60bc1af15bec95586b860fb71067380d2",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -178745,6 +179242,7 @@
       "name": "curobo.tests._src.rollout",
       "path": "curobo/tests/_src/rollout/__init__.py",
       "sha256": "0c9ed60deb0f106b850ce1ceb8f344d829986dd6c562d2474db27c22e5cf3701",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -178757,6 +179255,7 @@
       "name": "curobo.tests._src.rollout.cost_manager",
       "path": "curobo/tests/_src/rollout/cost_manager/__init__.py",
       "sha256": "734acac0da621207ac741670fece1b4ca6e86e7ef0b61d1febeb9450700e4530",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -178769,6 +179268,7 @@
       "name": "curobo.tests._src.rollout.cost_manager.test_cost_manager_integration",
       "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_integration.py",
       "sha256": "28d66ad2c1acd4ba487d842a2a3febbe955bf3a219d425ae04957f4909f483c3",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -179032,6 +179532,7 @@
       "name": "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot",
       "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_robot.py",
       "sha256": "8de1083c75e514a18a7cd012ea41616807c3b91ab7600bde763b808b9e9de488",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -180118,6 +180619,7 @@
       "name": "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot_cfg",
       "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_robot_cfg.py",
       "sha256": "79c10bf48f32001443b79450849507776efc633012ac38b158e9d5b1a0484c9d",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -180668,6 +181170,7 @@
       "name": "curobo.tests._src.rollout.cost_manager.test_multi_env_idxs_env",
       "path": "curobo/tests/_src/rollout/cost_manager/test_multi_env_idxs_env.py",
       "sha256": "12c60f1d0255e1d193e0821cc729e2bd3e3a541a283d7c62bf7a10f27deb46d8",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -180845,6 +181348,7 @@
       "name": "curobo.tests._src.rollout.test_goal_registry",
       "path": "curobo/tests/_src/rollout/test_goal_registry.py",
       "sha256": "461fc60739ddb82908759c5d10835e942d99b23d8e6e72185ad6628c68850253",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -182438,6 +182942,7 @@
       "name": "curobo.tests._src.rollout.test_metrics",
       "path": "curobo/tests/_src/rollout/test_metrics.py",
       "sha256": "abaa95c749d061f463a61415e49d4b1e309536a514441b3edd7e51583280912c",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -183662,6 +184167,7 @@
       "name": "curobo.tests._src.rollout.test_rollout_protocol",
       "path": "curobo/tests/_src/rollout/test_rollout_protocol.py",
       "sha256": "449f78036fd538888d9ab08e23ba88864f2810740b4aa9421734988c039389a0",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -184120,6 +184626,7 @@
       "name": "curobo.tests._src.rollout.test_rollout_robot",
       "path": "curobo/tests/_src/rollout/test_rollout_robot.py",
       "sha256": "72db6c1c418c53016af1826cc2acfb5a76fbd822d82743f467e0376baeeac067",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -185589,6 +186096,7 @@
       "name": "curobo.tests._src.rollout.test_rollout_robot_cfg",
       "path": "curobo/tests/_src/rollout/test_rollout_robot_cfg.py",
       "sha256": "86f25dbe122279a024c88e0dda84a0c5174da81ce60b361652f543464adec6a9",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -186193,6 +186701,7 @@
       "name": "curobo.tests._src.rollout.test_rollout_rosenbrock",
       "path": "curobo/tests/_src/rollout/test_rollout_rosenbrock.py",
       "sha256": "9696710399dc601b56aa3cdf83b029281941f48a7fd4c60606a8d91441b57b71",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -186962,6 +187471,7 @@
       "name": "curobo.tests._src.solver",
       "path": "curobo/tests/_src/solver/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -186974,6 +187484,7 @@
       "name": "curobo.tests._src.solver.seed_ik",
       "path": "curobo/tests/_src/solver/seed_ik/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -186986,6 +187497,7 @@
       "name": "curobo.tests._src.solver.seed_ik.test_seed_ik_solver",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_solver.py",
       "sha256": "39aaad029843255b16b299aabee3d746d7c976a0f8864dc5dbcfa91cf72be766",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -188674,6 +189186,7 @@
       "name": "curobo.tests._src.solver.seed_ik.test_seed_ik_solver_cfg",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_solver_cfg.py",
       "sha256": "59b2c87f39f8542e76a71833d08f2537b8e99c88c5d85c47c45fbdaf92fc7656",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -189473,6 +189986,7 @@
       "name": "curobo.tests._src.solver.seed_ik.test_seed_ik_state",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_state.py",
       "sha256": "ae9a99a9e56dae10e4eed3ee2ab814cfd5a6343494a7d913599ac05898924ab2",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -190195,6 +190709,7 @@
       "name": "curobo.tests._src.solver.seed_ik.test_seed_iteration_state_manager",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_iteration_state_manager.py",
       "sha256": "50b9270188d63f296e76b2063156310bd5e811fff9fb4c45c54374bb5e7345ab",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -190833,6 +191348,7 @@
       "name": "curobo.tests._src.solver.test_copy_at_batch_indices",
       "path": "curobo/tests/_src/solver/test_copy_at_batch_indices.py",
       "sha256": "9e2caa6ee4ca352a5baf95305f7ed8a793ac72498d3d94a45137eaea14a6e49e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -191014,6 +191530,7 @@
       "name": "curobo.tests._src.solver.test_manager_goal",
       "path": "curobo/tests/_src/solver/test_manager_goal.py",
       "sha256": "4607717050e37fd8adb76cbf98b1910d83587142de672e668a48427ef3468de4",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -192576,6 +193093,7 @@
       "name": "curobo.tests._src.solver.test_manager_seed",
       "path": "curobo/tests/_src/solver/test_manager_seed.py",
       "sha256": "0ae0b4f1fbebc51ca725d2541be2fffef9f70cc5005977cd0e662abbad873639",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -193349,6 +193867,7 @@
       "name": "curobo.tests._src.solver.test_solve_mode",
       "path": "curobo/tests/_src/solver/test_solve_mode.py",
       "sha256": "edf71088bd3fcc280f33b0ab27adfeea5f3b3ac598e08cd3710fb4a7e5fe2872",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -193748,6 +194267,7 @@
       "name": "curobo.tests._src.solver.test_solve_state",
       "path": "curobo/tests/_src/solver/test_solve_state.py",
       "sha256": "4104e27f308d7b09520ac4ee93fd368e1c7aa4b5099f0df50a165db431bf2627",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -194256,6 +194776,7 @@
       "name": "curobo.tests._src.solver.test_solver_base_cfg",
       "path": "curobo/tests/_src/solver/test_solver_base_cfg.py",
       "sha256": "ed31cb5e81b5dceae8906bf4b36d2da049b6a3a8c2e3d6e3c9c51069315045f2",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -194874,6 +195395,7 @@
       "name": "curobo.tests._src.solver.test_solver_base_result",
       "path": "curobo/tests/_src/solver/test_solver_base_result.py",
       "sha256": "311b719803101eb0d76c8bbc5fe336fb1d706295001aff023a5b7f19680c2af9",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -195286,6 +195808,7 @@
       "name": "curobo.tests._src.solver.test_solver_ik",
       "path": "curobo/tests/_src/solver/test_solver_ik.py",
       "sha256": "50e1aa64921608593e7bff99dc56f7cf53039db17ab59cda4f724bfc5fbc2d9a",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -196406,6 +196929,7 @@
       "name": "curobo.tests._src.solver.test_solver_ik_cfg",
       "path": "curobo/tests/_src/solver/test_solver_ik_cfg.py",
       "sha256": "0d5b08f57e4d110344cd49b66fcb8b9e719493c89d0d814d76d09061d0ccfc31",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -197198,6 +197722,7 @@
       "name": "curobo.tests._src.solver.test_solver_mpc",
       "path": "curobo/tests/_src/solver/test_solver_mpc.py",
       "sha256": "d90e0f28dbc6822f4dcfaa223150a9df1e61b315eceeb4b185a4fb2fa8860db7",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -198638,6 +199163,7 @@
       "name": "curobo.tests._src.solver.test_solver_mpc_cfg",
       "path": "curobo/tests/_src/solver/test_solver_mpc_cfg.py",
       "sha256": "f312d2d8ef300f6c5d2177427b0502cac14ab80f72a93d68735a1ce5078aa710",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -199480,6 +200006,7 @@
       "name": "curobo.tests._src.solver.test_solver_mpc_result",
       "path": "curobo/tests/_src/solver/test_solver_mpc_result.py",
       "sha256": "84fbbea17c74855eea89ff8f925f65402a919b685d5d4abeacc3d14e9b589fa9",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -200137,6 +200664,7 @@
       "name": "curobo.tests._src.solver.test_solver_trajopt",
       "path": "curobo/tests/_src/solver/test_solver_trajopt.py",
       "sha256": "d5751ec90a9244d9914f35aa5762c21bb3add4528fb3cb4fc42da954374e7880",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -201825,6 +202353,7 @@
       "name": "curobo.tests._src.solver.test_solver_trajopt_cfg",
       "path": "curobo/tests/_src/solver/test_solver_trajopt_cfg.py",
       "sha256": "342d493f581084f161f6399a15c5b6414b4a712a3ab39e87491f920b3cc5ef2d",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -202684,6 +203213,7 @@
       "name": "curobo.tests._src.solver.test_solver_trajopt_result",
       "path": "curobo/tests/_src/solver/test_solver_trajopt_result.py",
       "sha256": "c689116c101aec7ca9c2d0e2bd79c50a0babc6f6495b74885968062bf4a55d11",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -203336,6 +203866,7 @@
       "name": "curobo.tests._src.state",
       "path": "curobo/tests/_src/state/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -203348,6 +203879,7 @@
       "name": "curobo.tests._src.state.test_filter_coeff",
       "path": "curobo/tests/_src/state/test_filter_coeff.py",
       "sha256": "c6d48c61b3ed45954bdfa87c7105e848452e1c787c670b47430b0b0377acd7c7",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -203480,6 +204012,7 @@
       "name": "curobo.tests._src.state.test_state_base",
       "path": "curobo/tests/_src/state/test_state_base.py",
       "sha256": "38f9afd1163837fabb826272f739e9dd9c191d44aa567e7c48674b31ae798c7b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -203549,6 +204082,7 @@
       "name": "curobo.tests._src.state.test_state_joint",
       "path": "curobo/tests/_src/state/test_state_joint.py",
       "sha256": "6090e0b7dd6ad285ceb847cf61ea234f4e43eefbafdcf4e7a8b0b9af82165e2e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -206340,6 +206874,7 @@
       "name": "curobo.tests._src.state.test_state_robot",
       "path": "curobo/tests/_src/state/test_state_robot.py",
       "sha256": "68dc23ec695ec7b8d36b43a4f02909c4a80a41438743aed98e39b2ece6c2ce90",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -207050,6 +207585,7 @@
       "name": "curobo.tests._src.state.test_state_robot_extended",
       "path": "curobo/tests/_src/state/test_state_robot_extended.py",
       "sha256": "5c72d51d31f08243a756633e5738b01479818e6a9ee8b9f5e9c851efb357c721",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -207598,6 +208134,7 @@
       "name": "curobo.tests._src.transition",
       "path": "curobo/tests/_src/transition/__init__.py",
       "sha256": "992f09b1a390d78587d33901b5b238c6eb7c6cd636400a999e21b184a81b6109",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -207610,6 +208147,7 @@
       "name": "curobo.tests._src.transition.test_fns_state_transition",
       "path": "curobo/tests/_src/transition/test_fns_state_transition.py",
       "sha256": "da19ff8fb8ff6904c144d3dc9b668e4fcfea1d78caa2ecd81fe608e9e7d1a565",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -208286,6 +208824,7 @@
       "name": "curobo.tests._src.transition.test_robot_state_transition",
       "path": "curobo/tests/_src/transition/test_robot_state_transition.py",
       "sha256": "2111dbfbd4280784da95971307ae6d2c328d181a5f91cd300c5a8fa782fc44a5",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -210955,6 +211494,7 @@
       "name": "curobo.tests._src.transition.test_robot_state_transition_cfg",
       "path": "curobo/tests/_src/transition/test_robot_state_transition_cfg.py",
       "sha256": "af46acdaf5977e4d73f6e11a6cfaa5d031443897fbd5d7cffa608a0b6debd0dc",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -211788,6 +212328,7 @@
       "name": "curobo.tests._src.transition.test_transition_error_handling",
       "path": "curobo/tests/_src/transition/test_transition_error_handling.py",
       "sha256": "eb1412989b66662f03ce5387432a224316488b4701cb30e7fb84f61dbce1f0ff",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -212727,6 +213268,7 @@
       "name": "curobo.tests._src.transition.test_transition_gradients",
       "path": "curobo/tests/_src/transition/test_transition_gradients.py",
       "sha256": "dfa2a0bc4dd0adccc0fe63aeba3cdd9ac2f53de015695cbd84090db1a25b4f40",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -213677,6 +214219,7 @@
       "name": "curobo.tests._src.types",
       "path": "curobo/tests/_src/types/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -213689,6 +214232,7 @@
       "name": "curobo.tests._src.types.test_camera",
       "path": "curobo/tests/_src/types/test_camera.py",
       "sha256": "bf6cc69e182ddd53204a17a11217dc601b9a69d1cfcb9243bb32287b968d0835",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -214625,6 +215169,7 @@
       "name": "curobo.tests._src.types.test_content_path",
       "path": "curobo/tests/_src/types/test_content_path.py",
       "sha256": "53851b1bf83e6bef4197af2023c78e204d9171d39086ca29dab049ebc3b6b3a4",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -215122,6 +215667,7 @@
       "name": "curobo.tests._src.types.test_control_space",
       "path": "curobo/tests/_src/types/test_control_space.py",
       "sha256": "f15e9a53852fe1159966c960cd0e91ba5aac0436789e4705d0c20ca76a3a5ae0",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -215475,6 +216021,7 @@
       "name": "curobo.tests._src.types.test_device_cfg",
       "path": "curobo/tests/_src/types/test_device_cfg.py",
       "sha256": "0f6088b56b6d06920a59bf57a8eed8a1eb2b078d3d356f859b7b212c4d4f2bed",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -215815,6 +216362,7 @@
       "name": "curobo.tests._src.types.test_pose",
       "path": "curobo/tests/_src/types/test_pose.py",
       "sha256": "88973a7008ea812c663624a73d19ab412c664a45c905a60fd54bcca35d0e5869",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -217736,6 +218284,7 @@
       "name": "curobo.tests._src.types.test_robot_config",
       "path": "curobo/tests/_src/types/test_robot_config.py",
       "sha256": "801d4b80d9dffb5b08afec75b579891d48af2d5d725c60ec79ffc131bcfb6873",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -218073,6 +218622,7 @@
       "name": "curobo.tests._src.types.test_sequence_tool_pose",
       "path": "curobo/tests/_src/types/test_sequence_tool_pose.py",
       "sha256": "194a2d430e940ff388f5cb8cf516b9ef7a2f1b43d2bbb8fed5215c5d70da30b8",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -218339,6 +218889,7 @@
       "name": "curobo.tests._src.types.test_tool_pose",
       "path": "curobo/tests/_src/types/test_tool_pose.py",
       "sha256": "3d1007fbc2ee6cf5b45b7225d4068dd918ca42dffc44085692dbb14ef340a961",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -220012,6 +220563,7 @@
       "name": "curobo.tests._src.util",
       "path": "curobo/tests/_src/util/__init__.py",
       "sha256": "a5d75d789fc4ab1dc760d544482924c43ac4a61215c5cdd0788953b7dcf9bfda",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -220024,6 +220576,7 @@
       "name": "curobo.tests._src.util.sampling",
       "path": "curobo/tests/_src/util/sampling/__init__.py",
       "sha256": "dcc1775f1324735cd67a5ce7953cfdb996a8c4a69f972aff05ac4d168776f095",
+      "surface": "bundled_test",
       "symbols": []
     },
     {
@@ -220036,6 +220589,7 @@
       "name": "curobo.tests._src.util.sampling.test_sample_buffer",
       "path": "curobo/tests/_src/util/sampling/test_sample_buffer.py",
       "sha256": "1e3525e5a17865e0a35932510db9b604cae9374550d7c9556926b16f8f37d6fc",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -220977,6 +221531,7 @@
       "name": "curobo.tests._src.util.sampling.test_sequencer_base",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_base.py",
       "sha256": "2f28d63ef17ac9fd7ccdff6172146126738a8977fdfacee408cb27ff47cc5605",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -221270,6 +221825,7 @@
       "name": "curobo.tests._src.util.sampling.test_sequencer_halton",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_halton.py",
       "sha256": "bcd8916db47148840606afcbcf0d75f24718caceebb91e2521c20e9455fb47d5",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -221577,6 +222133,7 @@
       "name": "curobo.tests._src.util.sampling.test_sequencer_random",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_random.py",
       "sha256": "013651da3ab4e84e1893560bca38ebb78c66f0df8651524c85fa48549f868865",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -221918,6 +222475,7 @@
       "name": "curobo.tests._src.util.sampling.test_sequencer_roberts",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_roberts.py",
       "sha256": "eebb79a3439d9ec32e62987b6cfa09a81df53b2b3db7a7935242f329cc0728ae",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -222373,6 +222931,7 @@
       "name": "curobo.tests._src.util.test_benchmark_metrics",
       "path": "curobo/tests/_src/util/test_benchmark_metrics.py",
       "sha256": "b3ec8ad6e5a8720819880b0052cc3a6684c64de399fadb95f4c2ceee4e85252a",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -222493,6 +223052,7 @@
       "name": "curobo.tests._src.util.test_config_io",
       "path": "curobo/tests/_src/util/test_config_io.py",
       "sha256": "c68ed8353fcd3ec50953c4db3eecf3c6d98a0577217c5311eacb6feb58572dfa",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -223191,6 +223751,7 @@
       "name": "curobo.tests._src.util.test_cuda_graph_util",
       "path": "curobo/tests/_src/util/test_cuda_graph_util.py",
       "sha256": "c6eda4fd386ea247620b69e1d7d1f4d417de2b69066a91dfd99963b82842d5e8",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -223892,6 +224453,7 @@
       "name": "curobo.tests._src.util.test_cuda_stream_util",
       "path": "curobo/tests/_src/util/test_cuda_stream_util.py",
       "sha256": "aa75054a1d0abda9fe50abbefa2a38835f98d9e8ec12e187f76df0f773ae4324",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -224394,6 +224956,7 @@
       "name": "curobo.tests._src.util.test_error_metrics",
       "path": "curobo/tests/_src/util/test_error_metrics.py",
       "sha256": "b299a34df102ca8d944b8fd8b29aeb2d2f7d1b512e8cc466b18630f0e3a62edf",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -224582,6 +225145,7 @@
       "name": "curobo.tests._src.util.test_helpers",
       "path": "curobo/tests/_src/util/test_helpers.py",
       "sha256": "1bb011a9f58f58b03cd604554ca2c60f25b0c0975a74a1d1153dab32a580f010",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -224860,6 +225424,7 @@
       "name": "curobo.tests._src.util.test_interpolation",
       "path": "curobo/tests/_src/util/test_interpolation.py",
       "sha256": "7e14c034205d15d9f4c1aaf8a8b54b8c6a879fa976c72643f29c7e7298b4338f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -224908,6 +225473,7 @@
       "name": "curobo.tests._src.util.test_logging",
       "path": "curobo/tests/_src/util/test_logging.py",
       "sha256": "455be4fec6bbde8d013e8e3b6cd144b2f57a383f7dfed8caae1831e9a7db2aca",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -225253,6 +225819,7 @@
       "name": "curobo.tests._src.util.test_python_util",
       "path": "curobo/tests/_src/util/test_python_util.py",
       "sha256": "a9d6f4cedad8910cb5f64f7e606ec7ffb7fd6235e99b9a9375d97f4af4d3f409",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -225351,6 +225918,7 @@
       "name": "curobo.tests._src.util.test_state_filter",
       "path": "curobo/tests/_src/util/test_state_filter.py",
       "sha256": "8674ea50be999fd103183adbadc94456183407f299fa0ed609e1c7924afb12f2",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -225760,6 +226328,7 @@
       "name": "curobo.tests._src.util.test_tensor_util",
       "path": "curobo/tests/_src/util/test_tensor_util.py",
       "sha256": "871e094ef717a2653ea780f79787d11507a8cbd0a7d09bf4527b774c4c5a8a40",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -226502,6 +227071,7 @@
       "name": "curobo.tests._src.util.test_torch_util",
       "path": "curobo/tests/_src/util/test_torch_util.py",
       "sha256": "f081a571ead04944e383fa18e0c369a0da47019e5f94fc72c31f427e603b669f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -227044,6 +227614,7 @@
       "name": "curobo.tests._src.util.test_trajectory",
       "path": "curobo/tests/_src/util/test_trajectory.py",
       "sha256": "ef9de2e9fd1ccf559e1e7efa9c897dcb1e861897d96ae3b74b7b6984c35c7baa",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -228559,6 +229130,7 @@
       "name": "curobo.tests._src.util.test_trajectory_execution_manager",
       "path": "curobo/tests/_src/util/test_trajectory_execution_manager.py",
       "sha256": "baaf0b519ea8144e65e242b8f2b47ff39ab8e17368b9880f1562dab7f33be9d3",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -229485,6 +230057,7 @@
       "name": "curobo.tests._src.util.test_trajectory_seed_generator",
       "path": "curobo/tests/_src/util/test_trajectory_seed_generator.py",
       "sha256": "5701fe734d72392260f685d94a5457d5e2690f0528eecc46e0120e4c790780e0",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -230812,6 +231385,7 @@
       "name": "curobo.tests._src.util.test_usd_scene_parser",
       "path": "curobo/tests/_src/util/test_usd_scene_parser.py",
       "sha256": "3ff12e58927ca7116501fea09c20987be6084cebad82e541fe555adcd51a0e4b",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -231440,6 +232014,7 @@
       "name": "curobo.tests._src.util.test_usd_writer",
       "path": "curobo/tests/_src/util/test_usd_writer.py",
       "sha256": "c313f1f177d9aebf289baca8eda7bb59ae8c3c12d2cd379a8fde68b688d8711c",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -234647,6 +235222,7 @@
       "name": "curobo.tests._src.util.test_usd_writer_robot",
       "path": "curobo/tests/_src/util/test_usd_writer_robot.py",
       "sha256": "2be6d0cc05cb1b69f02d7bcd6aa8e1127dc0fbe259429305783b9ec4081ae8ab",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -235811,6 +236387,7 @@
       "name": "curobo.tests._src.util.test_version",
       "path": "curobo/tests/_src/util/test_version.py",
       "sha256": "3f0d6085599fd6c5da3ee3f835dfa92b15de9cb0dc60d3bd968f2c6a76018f51",
+      "surface": "bundled_test",
       "symbols": [
         {
           "bases": [],
@@ -235962,6 +236539,7 @@
       "name": "curobo.tests._src.util.test_viser_visualizer",
       "path": "curobo/tests/_src/util/test_viser_visualizer.py",
       "sha256": "fa651db9562b69a1746d7c070aa90fa80b047f9bee2d1d2851dcebff2c9d8b29",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -236484,6 +237062,7 @@
       "name": "curobo.tests._src.util.test_warp",
       "path": "curobo/tests/_src/util/test_warp.py",
       "sha256": "f5e24411a85f2322ebc82b67973ea62145dc70e7e4b3d4de2eb8238546d5c54e",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -236638,6 +237217,7 @@
       "name": "curobo.tests._src.util.test_xrdf_util",
       "path": "curobo/tests/_src/util/test_xrdf_util.py",
       "sha256": "3c02692e775ce0097952e4e5524e496c6302b64d9a0bf43ab3f3a6f07402e8d4",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -237636,6 +238216,7 @@
       "name": "curobo.tests.conftest",
       "path": "curobo/tests/conftest.py",
       "sha256": "cd9d99c1b8f1095a99fd3044e55d3e44feed0341ae9122d99507726e5d3a093f",
+      "surface": "bundled_test",
       "symbols": [
         {
           "decorators": [
@@ -237774,6 +238355,7 @@
       "name": "curobo.tests.test_curobo_version",
       "path": "curobo/tests/test_curobo_version.py",
       "sha256": "999b25f52de7d100fe4848fed764497ee0fe56dcadd2bbc973208b3470733033",
+      "surface": "bundled_test",
       "symbols": [
         {
           "kind": "reexport",
@@ -237802,6 +238384,7 @@
       "name": "curobo.tests.test_examples",
       "path": "curobo/tests/test_examples.py",
       "sha256": "ab7ffaed9d384b8c685f21aa5228ebdddd108d3c99876c2d430b86d491020efb",
+      "surface": "bundled_test",
       "symbols": [
         {
           "annotation": null,
@@ -237855,6 +238438,7 @@
       "name": "curobo.trajectory_optimizer",
       "path": "curobo/trajectory_optimizer.py",
       "sha256": "164d33c88bbdee35164ea3734df675a2cd668eac041d403c86ccd33699752ef7",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -237883,6 +238467,7 @@
       "name": "curobo.types",
       "path": "curobo/types.py",
       "sha256": "0eebf1cced0e6d942187b75245a9576055631d5fdfe4dfcdf823db6b6e363260",
+      "surface": "runtime",
       "symbols": [
         {
           "kind": "reexport",
@@ -237946,6 +238531,7 @@
       "name": "curobo.viewer",
       "path": "curobo/viewer.py",
       "sha256": "a71e1d9ea9e21e6bb4f64177eaeaba6baa61bfe8cc60dbfbc238723c77555a28",
+      "surface": "runtime",
       "symbols": [
         {
           "decorators": [],
@@ -237996,7 +238582,14 @@
       ]
     }
   ],
-  "schema_version": 1,
+  "runtime_summary": {
+    "missing_modules": 322,
+    "modules": 361,
+    "partial_modules": 22,
+    "resolved_modules": 17,
+    "symbols": 3872
+  },
+  "schema_version": 2,
   "summary": {
     "missing_modules": 547,
     "modules": 586,

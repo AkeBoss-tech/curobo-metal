@@ -14,7 +14,7 @@ from typing import Any, Iterable
 
 PINNED_REVISION = "8e734f3ced1df898990bcd92de40abce475907db"
 UPSTREAM_REPOSITORY = "https://github.com/NVlabs/curobo.git"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _git(source: Path, *args: str) -> str:
@@ -227,6 +227,25 @@ def classify_local(module: dict[str, Any], local_root: Path) -> dict[str, Any]:
     }
 
 
+def classify_surface(module_name: str) -> str:
+    """Separate downstream runtime API from upstream's bundled validation code."""
+    if module_name == "curobo.tests" or module_name.startswith("curobo.tests."):
+        return "bundled_test"
+    if module_name == "curobo.examples" or module_name.startswith("curobo.examples."):
+        return "bundled_example"
+    return "runtime"
+
+
+def _counts(modules: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "modules": len(modules),
+        "symbols": sum(len(item["symbols"]) for item in modules),
+        "resolved_modules": sum(item["local"]["status"] == "resolved" for item in modules),
+        "partial_modules": sum(item["local"]["status"] == "partial" for item in modules),
+        "missing_modules": sum(item["local"]["status"] == "missing_module" for item in modules),
+    }
+
+
 def build_inventory(source: Path, local_root: Path) -> dict[str, Any]:
     source = source.resolve()
     verify_revision(source)
@@ -238,19 +257,16 @@ def build_inventory(source: Path, local_root: Path) -> dict[str, Any]:
         for path in sorted(package.rglob("*.py"), key=lambda item: item.relative_to(package).as_posix())
     ]
     for module in modules:
+        module["surface"] = classify_surface(module["name"])
         module["local"] = classify_local(module, local_root.resolve())
-    counts = {
-        "modules": len(modules),
-        "symbols": sum(len(item["symbols"]) for item in modules),
-        "resolved_modules": sum(item["local"]["status"] == "resolved" for item in modules),
-        "partial_modules": sum(item["local"]["status"] == "partial" for item in modules),
-        "missing_modules": sum(item["local"]["status"] == "missing_module" for item in modules),
-    }
+    counts = _counts(modules)
+    runtime_counts = _counts([item for item in modules if item["surface"] == "runtime"])
     return {
         "schema_version": SCHEMA_VERSION,
         "upstream": {"repository": UPSTREAM_REPOSITORY, "revision": PINNED_REVISION},
         "method": {"parser": "python-ast", "imports_executed": False, "public_rule": "names not beginning with underscore"},
         "summary": counts,
+        "runtime_summary": runtime_counts,
         "modules": modules,
     }
 
@@ -280,7 +296,8 @@ def main(argv: list[str] | None = None) -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(encoded, encoding="utf-8")
     if args.require_compatible and (
-        inventory["summary"]["partial_modules"] or inventory["summary"]["missing_modules"]
+        inventory["runtime_summary"]["partial_modules"]
+        or inventory["runtime_summary"]["missing_modules"]
     ):
         print("API compatibility gate failed: unresolved upstream modules remain", file=sys.stderr)
         return 1
