@@ -1,7 +1,7 @@
 # cuRobo Metal
 
-An experimental Apple-Silicon compute backend and compatibility layer for
-[cuRoboV2](https://github.com/NVlabs/curobo).
+An Apple-Silicon compute backend being developed into a drop-in Python
+replacement for pinned [cuRoboV2](https://github.com/NVlabs/curobo).
 
 The project currently provides:
 
@@ -15,9 +15,12 @@ The project currently provides:
   progressing behind explicit contracts;
 - reproducible correctness, profiling, and benchmark artifacts.
 
-This is not yet a drop-in replacement for every cuRoboV2 feature. See
-[PLAN.md](PLAN.md), [docs/compatibility.md](docs/compatibility.md), and the
-feature-specific documents under `docs/` for supported boundaries.
+The target distribution is installed as `curobo-metal` and exposes the original
+`curobo` Python namespace, so applications ultimately change only their
+dependency. That namespace and its complete behavioral gates are under active
+implementation; the current release is not yet drop-in complete. See
+[PLAN.md](PLAN.md), [docs/dropin-roadmap.md](docs/dropin-roadmap.md), and
+[docs/compatibility.md](docs/compatibility.md).
 
 ## Pinned upstream
 

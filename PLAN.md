@@ -2,18 +2,25 @@
 
 ## Objective
 
-Prove that a useful, cuRobo-compatible robotics workload can run correctly and
-faster than CPU on Apple Silicon, then grow that proof into a maintainable Metal
-backend.
+Deliver `curobo-metal` as a drop-in Python replacement for pinned cuRoboV2 on
+Apple Silicon:
 
-The first success criterion is deliberately narrower than "port cuRobo":
+```text
+pip install curobo-metal
+import curobo
+```
 
-> On a pinned cuRoboV2 revision, run batched forward kinematics and sphere
-> collision queries on an Apple GPU, match trusted reference outputs within
-> documented tolerances, and beat the optimized CPU baseline on representative
-> batch sizes.
+Applications must retain their existing `curobo.*` imports, call signatures,
+configuration files, result types, mutation semantics, and error behavior.
+Portable numerical behavior must be backed by identical-input CUDA-versus-Metal
+replay. CUDA implementation mechanisms and unavailable external ecosystems
+must be classified explicitly rather than silently approximated.
 
-Full motion-generation parity is a later decision, not an initial promise.
+The earlier correctness-first Metal workload milestones are complete and remain
+the computational foundation. The active program is now compatibility-first:
+inventory the complete pinned Python surface, install the real `curobo`
+namespace, adapt it to the production Metal backend, and run upstream tests and
+examples without source edits.
 
 ## Core Technical Choice
 
