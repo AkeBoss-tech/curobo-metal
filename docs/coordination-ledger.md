@@ -33,9 +33,9 @@ This ledger records durable child-thread handoffs and parent integration state.
 | Dynamics-aware B-spline trajectory | coordinated worktree | complete | `5f576e9` |
 | Particle and L-BFGS optimizers | coordinated worktree | complete | `9e401b0` + parent seed fix `f8b69ea` |
 | Final parity re-audit | `019fb01c-e076-7be3-9a49-a0677f096b9a` | complete | `aa1e349` |
-| Closure: config/types/Jacobian/collision | `019fb024-24ff-7b80-9964-a1dad8658c37` | active | awaiting verified handoff |
-| Closure: optimizers/solvers/planning | `019fb024-5e32-7db3-b2fb-110888d42d64` | active | awaiting verified handoff |
-| Closure: whole-body/perception | `019fb024-9f04-74f0-bf84-99a0220a3e48` | active | awaiting verified handoff |
+| Closure: config/types/Jacobian/collision | `019fb024-24ff-7b80-9964-a1dad8658c37` | complete | `0323c18` |
+| Closure: optimizers/solvers/planning | `019fb024-5e32-7db3-b2fb-110888d42d64` | complete | `464aab8` |
+| Closure: whole-body/perception | `019fb024-9f04-74f0-bf84-99a0220a3e48` | complete | `06ea4b7` |
 
-Parent integration suite after the last completed wave: 258 tests passing with
+Parent integration suite after the last completed wave: 268 tests passing with
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.

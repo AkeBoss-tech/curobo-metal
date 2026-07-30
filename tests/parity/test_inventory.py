@@ -33,9 +33,11 @@ def test_no_full_port_classification_exists():
         "evidence_blocked",
     }
     classifications = {item["classification"] for item in data["capabilities"]}
-    assert classifications == allowed
+    assert classifications <= allowed
+    assert "partial" not in classifications
     assert set(data["classification_vocabulary"]) == allowed
-    assert data["summary"]["partial"] > data["summary"]["semantically_equivalent"]
+    assert data["summary"]["partial"] == 0
+    assert data["summary"]["evidence_blocked"] > 0
 
 
 def test_equivalence_and_blocked_claims_carry_the_required_evidence():
