@@ -62,6 +62,40 @@ class Sphere(Obstacle):
 
 
 @dataclass
+class Capsule(Obstacle):
+    radius: float = 0.0
+    base: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    tip: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.radius < 0 or len(self.base) != 3 or len(self.tip) != 3:
+            raise ValueError("Capsule requires a nonnegative radius and 3D base/tip")
+
+
+@dataclass
+class Cylinder(Obstacle):
+    radius: float = 0.0
+    height: float = 0.0
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.radius < 0 or self.height < 0:
+            raise ValueError("Cylinder radius and height must be nonnegative")
+
+
+@dataclass
+class PointCloud(Obstacle):
+    points: Any = None
+    points_features: Any = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.points is None:
+            raise ValueError("PointCloud requires points")
+
+
+@dataclass
 class Mesh(Obstacle):
     file_path: Optional[str] = None
     file_string: Optional[str] = None
@@ -180,4 +214,7 @@ class SceneCfg(Sequence[Obstacle]):
 
 WorldConfig = SceneCfg
 
-__all__ = ["Cuboid", "Material", "Mesh", "Obstacle", "SceneCfg", "Sphere", "VoxelGrid", "WorldConfig"]
+__all__ = [
+    "Capsule", "Cuboid", "Cylinder", "Material", "Mesh", "Obstacle",
+    "PointCloud", "SceneCfg", "Sphere", "VoxelGrid", "WorldConfig",
+]
