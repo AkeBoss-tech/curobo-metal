@@ -1,0 +1,4 @@
+from curobo._src.perception.mapper._portable import unsupported_kernel
+
+seed_esdf_sites_from_block_sparse_warp = unsupported_kernel
+seed_esdf_sites_gather_warp = unsupported_kernel
