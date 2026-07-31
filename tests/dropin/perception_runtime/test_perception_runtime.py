@@ -1,4 +1,5 @@
 import importlib
+import json
 from pathlib import Path
 
 import pytest
@@ -27,16 +28,23 @@ from curobo._src.types.camera import CameraObservation
 from curobo._src.types.pose import Pose
 
 
-PINNED = Path("/private/tmp/curobo-v2.I6yhKu/curobo/_src/perception/mapper")
+API_INVENTORY = (
+    Path(__file__).resolve().parents[3]
+    / "artifacts"
+    / "api_compat"
+    / "upstream-api.json"
+)
 
 
 def test_every_pinned_mapper_module_imports_without_warp():
-    for source in PINNED.rglob("*.py"):
-        relative = source.relative_to(PINNED.parent.parent.parent).with_suffix("")
-        parts = list(relative.parts)
-        if parts[-1] == "__init__":
-            parts.pop()
-        importlib.import_module(".".join(("curobo", *parts)))
+    inventory = json.loads(API_INVENTORY.read_text())
+    mapper_modules = (
+        module["name"]
+        for module in inventory["modules"]
+        if module["name"].startswith("curobo._src.perception.mapper")
+    )
+    for module_name in mapper_modules:
+        importlib.import_module(module_name)
     for name in (
         "optim_pose_lm",
         "pose_estimation.geometry",

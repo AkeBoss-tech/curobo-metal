@@ -20,6 +20,11 @@ from curobo.robot_parser import UrdfRobotParser
 from curobo._src.robot.loader import KinematicsLoader
 from curobo._src.collision.attachment_manager import AttachmentManager
 from curobo._src.curobolib.cuda_ops.tensor_checks import check_float32_tensors
+from curobo._src.geom.convex_polygon_helper import ConvexPolygon2DHelper
+from curobo._src.optim.gradient.gradient_descent import GradientDescentOpt
+from curobo._src.perception.mapper.integrator_esdf import (
+    BlockSparseESDFIntegratorCfg,
+)
 from curobo._src.util.cuda_graph_util import create_graph_executor
 from curobo._src.util.sampling.sequencer_halton import HaltonSequencer
 from curobo.rollout import RosenbrockCfg, RosenbrockRollout
@@ -100,6 +105,9 @@ def main() -> None:
     sequence.reset()
     assert (first == sequence.random(3)).all()
     assert AttachmentManager.__name__ == "AttachmentManager"
+    assert ConvexPolygon2DHelper.__name__ == "ConvexPolygon2DHelper"
+    assert GradientDescentOpt.__name__ == "GradientDescentOpt"
+    assert BlockSparseESDFIntegratorCfg(voxel_size=0.05).voxel_size == 0.05
 
 
 if __name__ == "__main__":
