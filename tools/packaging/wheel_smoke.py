@@ -18,6 +18,10 @@ from curobo.perception import Mapper, MapperCfg
 from curobo.robot_builder import RobotBuilder
 from curobo.robot_parser import UrdfRobotParser
 from curobo._src.robot.loader import KinematicsLoader
+from curobo._src.collision.attachment_manager import AttachmentManager
+from curobo._src.curobolib.cuda_ops.tensor_checks import check_float32_tensors
+from curobo._src.util.cuda_graph_util import create_graph_executor
+from curobo._src.util.sampling.sequencer_halton import HaltonSequencer
 from curobo.rollout import RosenbrockCfg, RosenbrockRollout
 from curobo.scene import Cuboid, Scene
 from curobo.sphere_fit import SphereFitType
@@ -85,6 +89,17 @@ def main() -> None:
     assert Mapper.__name__ == "Mapper"
     assert len(Scene(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1])])) == 1
     assert SphereFitType.VOXEL.value == "voxel"
+
+    check_float32_tensors(torch.device("cpu"), state=state.position)
+    graph_executor = create_graph_executor(
+        lambda value: value.square(), "cpu", use_cuda_graph=True
+    )
+    assert graph_executor(torch.tensor([2.0])).item() == 4.0
+    sequence = HaltonSequencer(2, seed=7)
+    first = sequence.random(3)
+    sequence.reset()
+    assert (first == sequence.random(3)).all()
+    assert AttachmentManager.__name__ == "AttachmentManager"
 
 
 if __name__ == "__main__":

@@ -33,10 +33,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/collision/attachment_manager.py",
+        "resolved_symbols": 15,
+        "status": "partial"
       },
       "name": "curobo._src.collision.attachment_manager",
       "path": "curobo/_src/collision/attachment_manager.py",
@@ -422,9 +422,9 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
+        "missing_symbols": 8,
         "path": "curobo/_src/collision/collision_robot_scene.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.collision.collision_robot_scene",
@@ -1089,9 +1089,9 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
+        "missing_symbols": 15,
         "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
-        "resolved_symbols": 10,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.collision.collision_robot_scene_cfg",
@@ -6895,9 +6895,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/curobolib/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.curobolib",
       "path": "curobo/_src/curobolib/__init__.py",
@@ -6907,10 +6907,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 7,
+        "path": "curobo/_src/curobolib/backends/__init__.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends",
       "path": "curobo/_src/curobolib/backends/__init__.py",
@@ -6982,9 +6982,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/__init__.py",
@@ -6994,10 +6994,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 4,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/dynamics.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.dynamics",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/dynamics.py",
@@ -7324,10 +7324,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/dynamics_config.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.dynamics_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/dynamics_config.py",
@@ -7551,10 +7551,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/geometry.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.geometry",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/geometry.py",
@@ -7731,10 +7731,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/geometry_config.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.geometry_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/geometry_config.py",
@@ -7825,10 +7825,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 10,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/kernel_cache.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kernel_cache",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kernel_cache.py",
@@ -8053,10 +8053,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/kernel_config.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kernel_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kernel_config.py",
@@ -8170,10 +8170,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/kinematics.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kinematics",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kinematics.py",
@@ -8847,10 +8847,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/kinematics_config.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.kinematics_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/kinematics_config.py",
@@ -9091,10 +9091,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/launch_helper.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.launch_helper",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/launch_helper.py",
@@ -9166,10 +9166,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/optimization.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.optimization",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/optimization.py",
@@ -9499,10 +9499,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 4,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/optimization_config.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.optimization_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/optimization_config.py",
@@ -9689,10 +9689,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/pba.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.pba",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/pba.py",
@@ -9775,10 +9775,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/pba_config.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.pba_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/pba_config.py",
@@ -9961,10 +9961,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/trajectory.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.trajectory",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/trajectory.py",
@@ -10707,10 +10707,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/trajectory_config.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.trajectory_config",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/trajectory_config.py",
@@ -11124,10 +11124,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/curobolib/backends/cuda_core_backend/util.py",
+        "resolved_symbols": 1,
+        "status": "resolved"
       },
       "name": "curobo._src.curobolib.backends.cuda_core_backend.util",
       "path": "curobo/_src/curobolib/backends/cuda_core_backend/util.py",
@@ -11162,9 +11162,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/curobolib/backends/pybind/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.curobolib.backends.pybind",
       "path": "curobo/_src/curobolib/backends/pybind/__init__.py",
@@ -11175,9 +11175,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/curobolib/cuda_ops/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.curobolib.cuda_ops",
       "path": "curobo/_src/curobolib/cuda_ops/__init__.py",
@@ -11187,10 +11187,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/curobolib/cuda_ops/dynamics.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.cuda_ops.dynamics",
       "path": "curobo/_src/curobolib/cuda_ops/dynamics.py",
@@ -11486,10 +11486,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/curobolib/cuda_ops/geometry.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.cuda_ops.geometry",
       "path": "curobo/_src/curobolib/cuda_ops/geometry.py",
@@ -11673,10 +11673,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 12,
+        "path": "curobo/_src/curobolib/cuda_ops/kinematics.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.cuda_ops.kinematics",
       "path": "curobo/_src/curobolib/cuda_ops/kinematics.py",
@@ -11986,10 +11986,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 7,
+        "path": "curobo/_src/curobolib/cuda_ops/optimization.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.cuda_ops.optimization",
       "path": "curobo/_src/curobolib/cuda_ops/optimization.py",
@@ -12240,10 +12240,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/curobolib/cuda_ops/tensor_checks.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.cuda_ops.tensor_checks",
       "path": "curobo/_src/curobolib/cuda_ops/tensor_checks.py",
@@ -12430,10 +12430,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/curobolib/cuda_ops/trajectory.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.cuda_ops.trajectory",
       "path": "curobo/_src/curobolib/cuda_ops/trajectory.py",
@@ -13072,10 +13072,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/curobolib/kernels/trajectory/bspline/derivations/bspline_boundary_coefficients.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo._src.curobolib.kernels.trajectory.bspline.derivations.bspline_boundary_coefficients",
       "path": "curobo/_src/curobolib/kernels/trajectory/bspline/derivations/bspline_boundary_coefficients.py",
@@ -13378,9 +13378,9 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
+        "missing_symbols": 3,
         "path": "curobo/_src/geom/collision/checker_collision.py",
-        "resolved_symbols": 1,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.geom.collision.checker_collision",
@@ -14592,10 +14592,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/geom/collision/wp_autograd.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.geom.collision.wp_autograd",
       "path": "curobo/_src/geom/collision/wp_autograd.py",
@@ -14882,10 +14882,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/geom/collision/wp_collision_common.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo._src.geom.collision.wp_collision_common",
       "path": "curobo/_src/geom/collision/wp_collision_common.py",
@@ -15087,10 +15087,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 10,
+        "path": "curobo/_src/geom/collision/wp_collision_kernel.py",
+        "resolved_symbols": 1,
+        "status": "partial"
       },
       "name": "curobo._src.geom.collision.wp_collision_kernel",
       "path": "curobo/_src/geom/collision/wp_collision_kernel.py",
@@ -15239,10 +15239,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/geom/collision/wp_speed_metric.py",
+        "resolved_symbols": 1,
+        "status": "partial"
       },
       "name": "curobo._src.geom.collision.wp_speed_metric",
       "path": "curobo/_src/geom/collision/wp_speed_metric.py",
@@ -15313,10 +15313,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 11,
+        "path": "curobo/_src/geom/collision/wp_sweep_collision_kernel.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.geom.collision.wp_sweep_collision_kernel",
       "path": "curobo/_src/geom/collision/wp_sweep_collision_kernel.py",
@@ -87854,10 +87854,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/state/filter_coeff.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.state.filter_coeff",
       "path": "curobo/_src/state/filter_coeff.py",
@@ -87916,10 +87916,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 2,
+        "path": "curobo/_src/state/state_base.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo._src.state.state_base",
       "path": "curobo/_src/state/state_base.py",
@@ -89373,10 +89373,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/state/state_joint_jit_helpers.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.state.state_joint_jit_helpers",
       "path": "curobo/_src/state/state_joint_jit_helpers.py",
@@ -89871,10 +89871,10 @@
     },
     {
       "local": {
-        "missing_symbols": 28,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 9,
+        "path": "curobo/_src/state/state_joint_ops.py",
+        "resolved_symbols": 19,
+        "status": "partial"
       },
       "name": "curobo._src.state.state_joint_ops",
       "path": "curobo/_src/state/state_joint_ops.py",
@@ -90323,10 +90323,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 7,
+        "path": "curobo/_src/state/state_joint_trajectory_ops.py",
+        "resolved_symbols": 8,
+        "status": "partial"
       },
       "name": "curobo._src.state.state_joint_trajectory_ops",
       "path": "curobo/_src/state/state_joint_trajectory_ops.py",
@@ -90929,9 +90929,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/transition/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.transition",
       "path": "curobo/_src/transition/__init__.py",
@@ -90941,10 +90941,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 9,
+        "path": "curobo/_src/transition/fns_state_transition.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.transition.fns_state_transition",
       "path": "curobo/_src/transition/fns_state_transition.py",
@@ -91787,10 +91787,10 @@
     },
     {
       "local": {
-        "missing_symbols": 25,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 15,
+        "path": "curobo/_src/transition/robot_state_transition.py",
+        "resolved_symbols": 10,
+        "status": "partial"
       },
       "name": "curobo._src.transition.robot_state_transition",
       "path": "curobo/_src/transition/robot_state_transition.py",
@@ -92975,10 +92975,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/transition/robot_state_transition_cfg.py",
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.transition.robot_state_transition_cfg",
       "path": "curobo/_src/transition/robot_state_transition_cfg.py",
@@ -94264,9 +94264,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/types/file_path.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.types.file_path",
       "path": "curobo/_src/types/file_path.py",
@@ -98073,10 +98073,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/util/cuda_event_timer.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.util.cuda_event_timer",
       "path": "curobo/_src/util/cuda_event_timer.py",
@@ -98159,10 +98159,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 8,
+        "path": "curobo/_src/util/cuda_graph_util.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.util.cuda_graph_util",
       "path": "curobo/_src/util/cuda_graph_util.py",
@@ -98399,10 +98399,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/util/cuda_stream_util.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.util.cuda_stream_util",
       "path": "curobo/_src/util/cuda_stream_util.py",
@@ -98613,10 +98613,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 5,
+        "path": "curobo/_src/util/helpers.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.util.helpers",
       "path": "curobo/_src/util/helpers.py",
@@ -98993,10 +98993,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/util/python_util.py",
+        "resolved_symbols": 1,
+        "status": "resolved"
       },
       "name": "curobo._src.util.python_util",
       "path": "curobo/_src/util/python_util.py",
@@ -99031,9 +99031,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/_src/util/sampling/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo._src.util.sampling",
       "path": "curobo/_src/util/sampling/__init__.py",
@@ -99043,10 +99043,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/util/sampling/sample_buffer.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.util.sampling.sample_buffer",
       "path": "curobo/_src/util/sampling/sample_buffer.py",
@@ -99542,10 +99542,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/util/sampling/sequencer_base.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.util.sampling.sequencer_base",
       "path": "curobo/_src/util/sampling/sequencer_base.py",
@@ -99677,10 +99677,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 1,
+        "path": "curobo/_src/util/sampling/sequencer_halton.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo._src.util.sampling.sequencer_halton",
       "path": "curobo/_src/util/sampling/sequencer_halton.py",
@@ -99812,10 +99812,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/util/sampling/sequencer_random.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo._src.util.sampling.sequencer_random",
       "path": "curobo/_src/util/sampling/sequencer_random.py",
@@ -99936,10 +99936,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/_src/util/sampling/sequencer_roberts.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo._src.util.sampling.sequencer_roberts",
       "path": "curobo/_src/util/sampling/sequencer_roberts.py",
@@ -100060,10 +100060,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/util/state_filter.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo._src.util.state_filter",
       "path": "curobo/_src/util/state_filter.py",
@@ -100424,10 +100424,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 6,
+        "path": "curobo/_src/util/tensor_util.py",
+        "resolved_symbols": 18,
+        "status": "partial"
       },
       "name": "curobo._src.util.tensor_util",
       "path": "curobo/_src/util/tensor_util.py",
@@ -100922,10 +100922,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 3,
+        "path": "curobo/_src/util/torch_util.py",
+        "resolved_symbols": 15,
+        "status": "partial"
       },
       "name": "curobo._src.util.torch_util",
       "path": "curobo/_src/util/torch_util.py",
@@ -101129,9 +101129,9 @@
     {
       "local": {
         "missing_symbols": 1,
-        "path": null,
+        "path": "curobo/_src/util/torch_utils.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "partial"
       },
       "name": "curobo._src.util.torch_utils",
       "path": "curobo/_src/util/torch_utils.py",
@@ -105378,10 +105378,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 8,
+        "path": "curobo/_src/util/warp.py",
+        "resolved_symbols": 14,
+        "status": "partial"
       },
       "name": "curobo._src.util.warp",
       "path": "curobo/_src/util/warp.py",
@@ -238583,18 +238583,18 @@
     }
   ],
   "runtime_summary": {
-    "missing_modules": 160,
+    "missing_modules": 100,
     "modules": 361,
-    "partial_modules": 133,
-    "resolved_modules": 68,
+    "partial_modules": 182,
+    "resolved_modules": 79,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
-    "missing_modules": 385,
+    "missing_modules": 325,
     "modules": 586,
-    "partial_modules": 133,
-    "resolved_modules": 68,
+    "partial_modules": 182,
+    "resolved_modules": 79,
     "symbols": 7182
   },
   "upstream": {
