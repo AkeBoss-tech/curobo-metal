@@ -1,76 +1,198 @@
-"""Portable cost aggregation and rollout result models."""
+"""Portable rollout cost aggregation and result value objects.
+
+The CUDA implementation stores these values in optimizer-owned buffers.  The
+Metal backend keeps the same public, batch/seed-aware value semantics with
+ordinary PyTorch tensors, so the objects remain differentiable on both CPU and
+MPS without exposing CUDA graph or packed-buffer ABI details.
+"""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple, Union
+
 import torch
+
 from curobo._src.state.state_joint import JointState
 
 
+TensorOrBool = Union[torch.Tensor, bool]
+
+
 class CostCollectionSum(torch.autograd.Function):
-    """Compatibility autograd helper for callers that precompute VJPs.
+    """Compatibility VJP helper used by a few optimizer internals.
 
-    Normal portable aggregation follows standard PyTorch autograd.  This
-    helper retains the V2 callable contract for optimizer internals that pass
-    explicit gradients alongside values.
+    The first half of the arguments are values and the second half are their
+    already-computed VJPs.  Normal portable aggregation uses normal PyTorch
+    autograd; this narrow helper deliberately retains V2's explicit-gradient
+    contract without any CUDA extension.
     """
-    @staticmethod
-    def forward(ctx, *values):
-        count = len(values) // 2
-        ctx.gradients = values[count:]
-        return _sum(list(values[:count]), True)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def forward(ctx, *values: torch.Tensor) -> torch.Tensor:
+        if not values or len(values) % 2:
+            raise ValueError("CostCollectionSum expects value/VJP tensor pairs")
+        count = len(values) // 2
+        ctx.gradients = tuple(values[count:])
+        return _sum(list(values[:count]), sum_horizon=True)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        # V2's caller supplies the exact VJPs, so grad_output is intentionally
+        # not multiplied into them.  The trailing VJP inputs are constants.
         return tuple(ctx.gradients) + tuple(None for _ in ctx.gradients)
 
 
-def _sum(values, sum_horizon):
+def _sum(values: Sequence[torch.Tensor], sum_horizon: bool) -> Optional[torch.Tensor]:
+    """Sum component axes and, optionally, the final horizon axis.
+
+    Values normally have ``[..., horizon, component]`` shape.  The leading
+    dimensions may be either ``[batch]`` or ``[batch, seed]``; reducing the
+    *last* dimension after component reduction therefore preserves both
+    layouts.  Rank-one and rank-two values are accepted for scalar/legacy
+    terms by treating their final axis as a single component.
+    """
     if not values:
         return None
-    normalized = [v if v.ndim >= 3 else v.unsqueeze(-1) for v in values]
-    result = torch.cat(normalized, dim=-1).sum(-1)
-    # Keep the final singleton dimension.  Solver code treats both horizon
-    # reductions and individual scalar costs uniformly as ``[..., 1]``.
-    return result.sum(1, keepdim=True) if sum_horizon and result.ndim > 1 else result
+    if any(not isinstance(value, torch.Tensor) for value in values):
+        raise TypeError("cost collection values must be torch tensors")
+    if any(value.ndim == 0 for value in values):
+        raise ValueError("cost collection values must include a batch dimension")
+    normalized = [value if value.ndim >= 3 else value.unsqueeze(-1) for value in values]
+    result = torch.cat(normalized, dim=-1).sum(dim=-1)
+    return result.sum(dim=-1, keepdim=True) if sum_horizon else result
+
+
+def _clone(value: Any) -> Any:
+    return None if value is None else value.clone() if hasattr(value, "clone") else value
+
+
+def _index(value: Any, index: Any) -> Any:
+    if value is None:
+        return None
+    try:
+        return value[index]
+    except (IndexError, KeyError, TypeError):
+        # Debug metadata and scalar values are intentionally shared exactly as
+        # the CUDA value objects do; they are not rollout buffers.
+        return value
+
+
+def _copy_indexed(target: Any, source: Any, batch_idx: Any, seed_idx: Any) -> None:
+    """Copy a pair of indexed batch/seed slices through state-aware helpers."""
+    if target is None or source is None:
+        return
+    copy = getattr(target, "copy_at_batch_seed_indices", None)
+    if callable(copy):
+        copy(source, batch_idx, seed_idx)
+    else:
+        target[batch_idx, seed_idx] = source[batch_idx, seed_idx]
+
+
+def _copy_only_index(target: Any, source: Any, index: Any) -> None:
+    if target is None or source is None:
+        return
+    copy = getattr(target, "copy_only_index", None)
+    if callable(copy):
+        copy(source, index)
+    else:
+        target[index] = source[index]
 
 
 @dataclass
 class CostCollection:
     values: List[torch.Tensor] = field(default_factory=list)
     names: List[str] = field(default_factory=list)
-    weights: List[torch.Tensor] = field(default_factory=list)
-    sq_weights: List[torch.Tensor] = field(default_factory=list)
+    # Lists are aligned with ``values`` for terms added through ``add``.  The
+    # optional element retains compatibility with older manually-built lists.
+    weights: List[Optional[torch.Tensor]] = field(default_factory=list)
+    sq_weights: List[Optional[torch.Tensor]] = field(default_factory=list)
 
-    def add(self, value, name, weight=None, sq_weight=None):
-        self.values.append(value); self.names.append(name)
-        if weight is not None: self.weights.append(weight)
-        if sq_weight is not None: self.sq_weights.append(sq_weight)
+    def __post_init__(self) -> None:
+        if len(self.values) != len(self.names):
+            raise ValueError("CostCollection values and names must have equal length")
+        if len(self.weights) > len(self.values) or len(self.sq_weights) > len(self.values):
+            raise ValueError("CostCollection metadata cannot exceed the value count")
 
-    def get_sum(self, sum_horizon=True):
+    def add(
+        self,
+        value: torch.Tensor,
+        name: str,
+        weight: Optional[torch.Tensor] = None,
+        sq_weight: Optional[torch.Tensor] = None,
+    ) -> None:
+        if not isinstance(value, torch.Tensor):
+            raise TypeError("value must be a torch.Tensor")
+        if not isinstance(name, str) or not name:
+            raise ValueError("cost name must be a non-empty string")
+        # Normalize older manually-built collections before extending them.
+        self.weights.extend([None] * (len(self.values) - len(self.weights)))
+        self.sq_weights.extend([None] * (len(self.values) - len(self.sq_weights)))
+        self.values.append(value)
+        self.names.append(name)
+        self.weights.append(weight)
+        self.sq_weights.append(sq_weight)
+
+    def get_sum(self, sum_horizon: bool = True) -> Optional[torch.Tensor]:
         return _sum(self.values, sum_horizon)
 
-    def is_empty(self): return not self.values
-    def clone(self):
-        return type(self)([x.clone() for x in self.values], self.names.copy(),
-                          [x.clone() for x in self.weights],
-                          [x.clone() for x in self.sq_weights])
-    def merge(self, other):
-        self.values.extend(other.values); self.names.extend(other.names)
-        self.weights.extend(other.weights); self.sq_weights.extend(other.sq_weights)
-    def copy_at_batch_seed_indices(self, other, batch_idx, seed_idx):
-        for a, b in zip(self.values, other.values):
-            a[batch_idx, seed_idx] = b[batch_idx, seed_idx]
-        for a, b in zip(self.weights, other.weights):
-            a[batch_idx, seed_idx] = b[batch_idx, seed_idx]
-        for a, b in zip(self.sq_weights, other.sq_weights):
-            # Squared weights may be seed-independent [B, ...].
-            if a.ndim > 1:
-                a[batch_idx] = b[batch_idx]
+    def is_empty(self) -> bool:
+        return not self.values
+
+    def clone(self) -> "CostCollection":
+        return type(self)(
+            [_clone(value) for value in self.values],
+            self.names.copy(),
+            [_clone(weight) for weight in self.weights],
+            [_clone(weight) for weight in self.sq_weights],
+        )
+
+    def __getitem__(self, index: Any) -> "CostCollection":
+        return type(self)(
+            [_index(value, index) for value in self.values],
+            self.names.copy(),
+            [_index(weight, index) for weight in self.weights],
+            [_index(weight, index) for weight in self.sq_weights],
+        )
+
+    def get_only_batch_seed_indices(self, batch_idx: Any, seed_idx: Any) -> "CostCollection":
+        return type(self)(
+            [_index(value, (batch_idx, seed_idx)) for value in self.values],
+            self.names.copy(),
+            [_index(weight, (batch_idx, seed_idx)) for weight in self.weights],
+            [_index(weight, batch_idx) for weight in self.sq_weights],
+        )
+
+    def merge(self, other: "CostCollection") -> "CostCollection":
+        if not isinstance(other, CostCollection):
+            raise TypeError("can only merge another CostCollection")
+        self.values.extend(other.values)
+        self.names.extend(other.names)
+        self.weights.extend(other.weights)
+        self.sq_weights.extend(other.sq_weights)
         return self
-    def copy_only_index(self, other, index):
-        for a, b in zip(self.values, other.values): a[index] = b[index]
-        for a, b in zip(self.weights, other.weights): a[index] = b[index]
+
+    def copy_at_batch_seed_indices(self, other: "CostCollection", batch_idx: Any, seed_idx: Any):
+        if len(self.values) != len(other.values):
+            raise ValueError("cannot copy cost collections with different term counts")
+        for target, source in zip(self.values, other.values):
+            target[batch_idx, seed_idx] = source[batch_idx, seed_idx]
+        for target, source in zip(self.weights, other.weights):
+            _copy_indexed(target, source, batch_idx, seed_idx)
+        # Squared weights are normally seed-independent [batch, ...].
+        for target, source in zip(self.sq_weights, other.sq_weights):
+            _copy_only_index(target, source, batch_idx)
+        return self
+
+    def copy_only_index(self, other: "CostCollection", index: Any):
+        if len(self.values) != len(other.values):
+            raise ValueError("cannot copy cost collections with different term counts")
+        for target, source in zip(self.values, other.values):
+            target[index] = source[index]
+        for target, source in zip(self.weights, other.weights):
+            _copy_only_index(target, source, index)
+        for target, source in zip(self.sq_weights, other.sq_weights):
+            _copy_only_index(target, source, index)
         return self
 
 
@@ -81,46 +203,85 @@ class CostsAndConstraints:
     hybrid_costs_constraints: CostCollection = field(default_factory=CostCollection)
     _grad_out_values: List[torch.Tensor] = field(default_factory=list)
 
-    def _selected(self, collection, include_all, names):
-        if include_all: return collection.values
-        return [collection.values[collection.names.index(n)] for n in names if n in collection.names]
-    def get_sum_cost(self, sum_horizon=False, include_all_hybrid=True, include_from_hybrid=[]):
-        return _sum(self.costs.values + self._selected(self.hybrid_costs_constraints,
-                    include_all_hybrid, include_from_hybrid), sum_horizon)
-    def get_sum_constraint(self, sum_horizon=False, include_all_hybrid=True, include_from_hybrid=[]):
-        return _sum(self.constraints.values + self._selected(self.hybrid_costs_constraints,
-                    include_all_hybrid, include_from_hybrid), sum_horizon)
-    def get_sum_cost_and_constraint(self, sum_horizon=False, include_all_hybrid=True):
-        values = self.costs.values + self.constraints.values
-        if include_all_hybrid: values += self.hybrid_costs_constraints.values
+    @staticmethod
+    def _selected(collection: CostCollection, include_all: bool, names: Sequence[str]):
+        if include_all:
+            return collection.values
+        return [collection.values[collection.names.index(name)] for name in names if name in collection.names]
+
+    def get_sum_cost(
+        self, sum_horizon: bool = False, include_all_hybrid: bool = True,
+        include_from_hybrid: Sequence[str] = (),
+    ) -> Optional[torch.Tensor]:
+        values = self.costs.values + self._selected(
+            self.hybrid_costs_constraints, include_all_hybrid, include_from_hybrid
+        )
         return _sum(values, sum_horizon)
-    def get_list_costs_and_constraints(self):
+
+    def get_sum_constraint(
+        self, sum_horizon: bool = False, include_all_hybrid: bool = True,
+        include_from_hybrid: Sequence[str] = (),
+    ) -> Optional[torch.Tensor]:
+        values = self.constraints.values + self._selected(
+            self.hybrid_costs_constraints, include_all_hybrid, include_from_hybrid
+        )
+        return _sum(values, sum_horizon)
+
+    def get_sum_cost_and_constraint(
+        self, sum_horizon: bool = False, include_all_hybrid: bool = True,
+    ) -> Optional[torch.Tensor]:
+        values = self.costs.values + self.constraints.values
+        if include_all_hybrid:
+            values += self.hybrid_costs_constraints.values
+        return _sum(values, sum_horizon)
+
+    def get_list_costs_and_constraints(self) -> List[torch.Tensor]:
         return self.costs.values + self.constraints.values + self.hybrid_costs_constraints.values
-    def get_feasible(self, sum_horizon=False, include_all_hybrid=True, include_from_hybrid=[]):
+
+    def get_feasible(
+        self, sum_horizon: bool = False, include_all_hybrid: bool = True,
+        include_from_hybrid: Sequence[str] = (),
+    ) -> TensorOrBool:
         value = self.get_sum_constraint(sum_horizon, include_all_hybrid, include_from_hybrid)
         return True if value is None else value <= 0
-    def clone(self):
-        return type(self)(self.costs.clone(), self.constraints.clone(),
-                          self.hybrid_costs_constraints.clone())
+
+    def clone(self) -> "CostsAndConstraints":
+        return type(self)(
+            self.costs.clone(), self.constraints.clone(), self.hybrid_costs_constraints.clone(),
+            [_clone(value) for value in self._grad_out_values],
+        )
+
+    def __getitem__(self, index: Any) -> "CostsAndConstraints":
+        return type(self)(
+            self.costs[index], self.constraints[index], self.hybrid_costs_constraints[index],
+            [_index(value, index) for value in self._grad_out_values],
+        )
+
+    def get_only_batch_seed_indices(self, batch_idx: Any, seed_idx: Any) -> "CostsAndConstraints":
+        return type(self)(
+            self.costs.get_only_batch_seed_indices(batch_idx, seed_idx),
+            self.constraints.get_only_batch_seed_indices(batch_idx, seed_idx),
+            self.hybrid_costs_constraints.get_only_batch_seed_indices(batch_idx, seed_idx),
+            [_index(value, (batch_idx, seed_idx)) for value in self._grad_out_values],
+        )
+
     def get_constraint_weights(self) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
-        collections = (self.constraints, self.hybrid_costs_constraints)
         weights: List[torch.Tensor] = []
         sq_weights: List[torch.Tensor] = []
-        for collection in collections:
+        for collection in (self.constraints, self.hybrid_costs_constraints):
             for index, weight in enumerate(collection.weights):
                 if weight is not None:
                     weights.append(weight)
-                    sq_weights.append(
-                        collection.sq_weights[index]
-                        if index < len(collection.sq_weights)
-                        else torch.ones_like(weight)
-                    )
+                    sq_weight = collection.sq_weights[index] if index < len(collection.sq_weights) else None
+                    sq_weights.append(torch.ones_like(weight) if sq_weight is None else sq_weight)
         return weights, sq_weights
-    def copy_at_batch_seed_indices(self, other, batch_idx, seed_idx):
+
+    def copy_at_batch_seed_indices(self, other: "CostsAndConstraints", batch_idx: Any, seed_idx: Any):
         for name in ("costs", "constraints", "hybrid_costs_constraints"):
             getattr(self, name).copy_at_batch_seed_indices(getattr(other, name), batch_idx, seed_idx)
         return self
-    def copy_only_index(self, other, index):
+
+    def copy_only_index(self, other: "CostsAndConstraints", index: Any):
         for name in ("costs", "constraints", "hybrid_costs_constraints"):
             getattr(self, name).copy_only_index(getattr(other, name), index)
         return self
@@ -132,69 +293,66 @@ class RolloutResult(Sequence):
     costs_and_constraints: Optional[CostsAndConstraints] = None
     state: Optional[JointState] = None
     debug: Optional[Any] = None
-    def __getitem__(self, idx):
-        return type(self)(None if self.actions is None else self.actions[idx],
-                          None if self.costs_and_constraints is None else self.costs_and_constraints.clone(),
-                          None if self.state is None else self.state[idx], self.debug)
-    def __len__(self): return -1 if self.actions is None else len(self.actions)
+
+    def __getitem__(self, index: Any):
+        return type(self)(
+            _index(self.actions, index), _index(self.costs_and_constraints, index),
+            _index(self.state, index), _index(self.debug, index),
+        )
+
+    def __len__(self) -> int:
+        return -1 if self.actions is None else len(self.actions)
+
     def clone(self):
-        return type(self)(None if self.actions is None else self.actions.clone(),
-                          None if self.costs_and_constraints is None else self.costs_and_constraints.clone(),
-                          None if self.state is None else self.state.clone(), self.debug)
+        return type(self)(
+            _clone(self.actions), _clone(self.costs_and_constraints), _clone(self.state), _clone(self.debug)
+        )
 
 
 @dataclass
 class RolloutMetrics(RolloutResult):
-    feasible: Optional[torch.Tensor | bool] = None
-    convergence: CostCollection = field(default_factory=CostCollection)
+    feasible: Optional[TensorOrBool] = None
+    convergence: Optional[CostCollection] = field(default_factory=CostCollection)
 
-    def clone(self):
+    def clone(self, **kwargs):
         return type(self)(
-            None if self.actions is None else self.actions.clone(),
-            None if self.costs_and_constraints is None else self.costs_and_constraints.clone(),
-            None if self.state is None else self.state.clone(), self.debug,
-            self.feasible.clone() if hasattr(self.feasible, "clone") else self.feasible,
-            self.convergence.clone(),
+            _clone(self.actions), _clone(self.costs_and_constraints), _clone(self.state), _clone(self.debug),
+            _clone(self.feasible), _clone(self.convergence),
         )
 
-    def __getitem__(self, idx):
-        result = self.clone()
-        if result.actions is not None:
-            result.actions = result.actions[idx]
-        if result.state is not None:
-            result.state = result.state[idx]
-        if isinstance(result.feasible, torch.Tensor):
-            result.feasible = result.feasible[idx]
-        return result
+    def __getitem__(self, index: Any):
+        return type(self)(
+            _index(self.actions, index), _index(self.costs_and_constraints, index),
+            _index(self.state, index), _index(self.debug, index), _index(self.feasible, index),
+            _index(self.convergence, index),
+        )
 
-    def get_only_batch_seed_indices(self, batch_idx, seed_idx):
-        result = self.clone()
-        if result.actions is not None:
-            result.actions = result.actions[batch_idx, seed_idx]
-        if result.state is not None:
-            result.state = result.state[batch_idx, seed_idx]
-        if hasattr(result.feasible, "__getitem__"):
-            result.feasible = result.feasible[batch_idx, seed_idx]
-        return result
+    def get_only_batch_seed_indices(self, batch_idx: Any, seed_idx: Any):
+        cc = None if self.costs_and_constraints is None else self.costs_and_constraints.get_only_batch_seed_indices(batch_idx, seed_idx)
+        convergence = None if self.convergence is None else self.convergence.get_only_batch_seed_indices(batch_idx, seed_idx)
+        return type(self)(
+            _index(self.actions, (batch_idx, seed_idx)), cc, _index(self.state, (batch_idx, seed_idx)),
+            self.debug, _index(self.feasible, (batch_idx, seed_idx)), convergence,
+        )
 
-    def copy_at_batch_seed_indices(self, other, batch_idx, seed_idx):
-        if self.actions is not None and other.actions is not None:
-            self.actions[batch_idx, seed_idx] = other.actions[batch_idx, seed_idx]
-        if self.state is not None and other.state is not None:
-            self.state.position[batch_idx, seed_idx] = other.state.position[batch_idx, seed_idx]
-        if hasattr(self.feasible, "__setitem__") and hasattr(other.feasible, "__getitem__"):
-            self.feasible[batch_idx, seed_idx] = other.feasible[batch_idx, seed_idx]
+    def copy_at_batch_seed_indices(self, other: "RolloutMetrics", batch_idx: Any, seed_idx: Any):
+        _copy_indexed(self.actions, other.actions, batch_idx, seed_idx)
+        _copy_indexed(self.state, other.state, batch_idx, seed_idx)
+        _copy_indexed(self.feasible, other.feasible, batch_idx, seed_idx)
+        if self.convergence is not None and other.convergence is not None:
+            self.convergence.copy_at_batch_seed_indices(other.convergence, batch_idx, seed_idx)
         if self.costs_and_constraints is not None and other.costs_and_constraints is not None:
             self.costs_and_constraints.copy_at_batch_seed_indices(other.costs_and_constraints, batch_idx, seed_idx)
         return self
 
-    def copy_only_index(self, other, index):
-        if self.actions is not None and other.actions is not None:
-            self.actions[index] = other.actions[index]
-        if self.state is not None and other.state is not None:
-            self.state.position[index] = other.state.position[index]
-        if hasattr(self.feasible, "__setitem__") and hasattr(other.feasible, "__getitem__"):
-            self.feasible[index] = other.feasible[index]
+    def copy_only_index(self, other: "RolloutMetrics", index: Any):
+        _copy_only_index(self.actions, other.actions, index)
+        _copy_only_index(self.state, other.state, index)
+        _copy_only_index(self.feasible, other.feasible, index)
+        if self.convergence is not None and other.convergence is not None:
+            self.convergence.copy_only_index(other.convergence, index)
+        if self.costs_and_constraints is not None and other.costs_and_constraints is not None:
+            self.costs_and_constraints.copy_only_index(other.costs_and_constraints, index)
         return self
 
 
