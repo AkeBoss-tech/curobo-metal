@@ -33,6 +33,61 @@ def test_execution_lifecycle_preserves_pinned_buffers_and_terminal_action():
         manager.get_next_command()
 
 
+def test_execution_queue_peek_reset_clear_and_validation_are_transactional():
+    state = JointState.from_position(torch.arange(24.0).reshape(1, 6, 4))
+    actions = torch.arange(12.0).reshape(1, 3, 4)
+    manager = TrajectoryExecutionManager(3, command_start_idx=2)
+    manager.update_state_action_buffers(state, actions)
+
+    # Previewing must neither alter queue progress nor detach the state view.
+    preview = manager.peek_next_command()
+    torch.testing.assert_close(preview.position, state.position[:, 2])
+    assert manager.command_index == 0
+    assert manager.remaining_commands == 3
+    torch.testing.assert_close(manager.get_next_command().position, preview.position)
+    assert manager.command_index == 1 and manager.remaining_commands == 2
+
+    manager.reset_command_index()
+    assert manager.command_index == 0 and manager.remaining_commands == 3
+    manager.clear_buffers()
+    assert manager.command_index == 0 and manager.remaining_commands == 0
+    assert not manager.has_valid_next_command()
+
+    # Failed updates must not replace an executable queue.
+    manager.update_state_action_buffers(state, actions)
+    bad_actions = torch.zeros(2, 3, 4)
+    with pytest.raises(ValueError, match="leading dimensions"):
+        manager.update_state_action_buffers(state, bad_actions)
+    assert manager.get_action_buffer() is actions
+    torch.testing.assert_close(manager.peek_next_command().position, state.position[:, 2])
+
+
+def test_execution_window_is_horizon_limited_and_keeps_position_autograd():
+    positions = torch.arange(8.0, requires_grad=True).reshape(1, 2, 4)
+    positions.retain_grad()
+    state = JointState.from_position(positions)
+    action = torch.ones(1, 1, 4)
+    manager = TrajectoryExecutionManager(5, command_start_idx=1)
+    manager.update_state_action_buffers(state, action)
+    assert manager.remaining_commands == 1
+    command = manager.get_next_command()
+    command.position.sum().backward()
+    torch.testing.assert_close(positions.grad[:, 1], torch.ones(1, 4))
+    assert manager.remaining_commands == 0
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+def test_execution_queue_stays_on_mps_without_fallback():
+    state = JointState.from_position(torch.arange(24.0, device="mps").reshape(1, 6, 4))
+    actions = torch.ones(1, 2, 4, device="mps")
+    manager = TrajectoryExecutionManager(2, command_start_idx=1)
+    manager.update_state_action_buffers(state, actions)
+    assert manager.peek_next_command().position.device.type == "mps"
+    torch.testing.assert_close(manager.get_next_command().position.cpu(), torch.arange(4.0, 8.0).reshape(1, 4))
+    shifted = manager.get_shifteaction_dim_buffer()
+    assert shifted.device.type == "mps"
+
+
 def test_seed_helpers_are_deterministic_differentiable_and_stop_motion():
     cfg = DeviceCfg()
     generator = TrajectorySeedGenerator(6, 2, cfg)
