@@ -16570,9 +16570,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 14,
         "path": "curobo/_src/geom/data/data_mesh.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 13,
         "status": "partial"
       },
       "name": "curobo._src.geom.data.data_mesh",
@@ -22972,9 +22972,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 14,
         "path": "curobo/_src/geom/types.py",
-        "resolved_symbols": 25,
+        "resolved_symbols": 26,
         "status": "partial"
       },
       "name": "curobo._src.geom.types",
@@ -61149,9 +61149,9 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
+        "missing_symbols": 3,
         "path": "curobo/_src/perception/mapper/projector_texture.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 16,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.projector_texture",
