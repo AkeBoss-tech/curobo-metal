@@ -26805,9 +26805,9 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
+        "missing_symbols": 20,
         "path": "curobo/_src/graph_planner/graph_planner_prm.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 10,
         "status": "partial"
       },
       "name": "curobo._src.graph_planner.graph_planner_prm",
