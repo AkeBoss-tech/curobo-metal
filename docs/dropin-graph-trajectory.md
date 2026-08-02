@@ -44,3 +44,13 @@ B-spline-knot kernels remain explicit unavailable boundaries. The historical
 portable interpolation; it is not claimed to reproduce the CUDA spline kernel.
 Sampled edge checks are deterministic but are not a continuous collision
 certificate.
+
+`GraphNodeManager` maintains the pinned action-plus-index node rows on CPU or
+MPS: initial vertices have stable indices, exact/similarity duplicates map back
+to the first compatible roadmap vertex, candidate batches preserve that mapping,
+and registered paired edges retain their weighted connection records.  Its
+materialized `ConnectedGraph` contains action-only nodes, action endpoint
+pairs, connectivity triples, optional rollout states, and shortest-path debug
+distances.  The raw CUDA graph/rollout buffers, Warp neighbour kernels, and
+analytic CCD remain unavailable; graph connectivity uses the portable path
+finder and its sampled checks.
