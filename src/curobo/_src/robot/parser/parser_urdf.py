@@ -11,6 +11,8 @@ import numpy as np
 
 from curobo._src.geom.types import Mesh, Obstacle, Sphere
 from curobo._src.robot.types import JointType, LinkParams
+from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.types.pose import Pose
 from curobo_metal.config.loaders import load_urdf
 
 from .parser_base import RobotParser

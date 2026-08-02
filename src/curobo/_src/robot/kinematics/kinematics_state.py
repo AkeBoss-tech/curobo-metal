@@ -8,6 +8,7 @@ from typing import List, Optional, Union
 import torch
 
 from curobo._src.types.pose import Pose
+from curobo._src.robot.types.collision_geometry import RobotCollisionGeometry
 
 
 class ToolPose(Pose):
@@ -88,4 +89,3 @@ class KinematicsState:
             None if self.robot_com is None else self.robot_com[idx],
             self.robot_collision_geometry,
         )
-

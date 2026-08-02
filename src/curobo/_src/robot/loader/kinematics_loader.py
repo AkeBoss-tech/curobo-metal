@@ -8,9 +8,11 @@ import torch
 
 from curobo._src.robot.parser import UrdfRobotParser
 from curobo._src.robot.types import (
-    JointLimits, KinematicsParams, LinkParams, SelfCollisionKinematicsCfg,
+    CSpaceParams, JointLimits, KinematicsParams, LinkParams, SelfCollisionKinematicsCfg,
 )
 from curobo._src.types.pose import Pose
+from curobo._src.state.state_joint import JointState
+from curobo._src.robot.types.joint_types import JointType
 from curobo_metal.config.loaders import load_urdf
 from curobo_metal.config.robot import JointConfig, JointLimits as ScalarJointLimits, LinkConfig
 
@@ -46,8 +48,27 @@ class KinematicsLoader(KinematicsLoaderCfg):
 
     @property
     def self_collision_config(self) -> SelfCollisionKinematicsCfg:
-        count = self._kinematics_config.total_spheres
-        return SelfCollisionKinematicsCfg(num_spheres=count)
+        params = self._kinematics_config
+        if params.total_spheres == 0:
+            return SelfCollisionKinematicsCfg(num_spheres=0)
+        names = list(self._robot.collision_link_names)
+        if not names:
+            names = list(dict.fromkeys(sphere.link_name for sphere in self._robot.collision_spheres))
+        link_index = {name: index for index, name in enumerate(names)}
+        per_sphere = torch.tensor(
+            [link_index[sphere.link_name] for sphere in self._robot.collision_spheres],
+            dtype=torch.int64,
+            device=self.device_cfg.device,
+        )
+        return SelfCollisionKinematicsCfg.create_from_link_pairs(
+            names,
+            link_index,
+            self._robot.self_collision_ignore,
+            self._robot.self_collision_buffer,
+            params.link_spheres[0],
+            per_sphere,
+            self.device_cfg,
+        )
 
     @property
     def kinematics_parser(self) -> UrdfRobotParser:
@@ -86,6 +107,8 @@ class KinematicsLoader(KinematicsLoaderCfg):
                 mimic_multiplier=link_params.joint_offset[0],
                 mimic_offset=link_params.joint_offset[1],
             ))
+        self._kinematics_config = KinematicsParams(self._robot)
+        self.initialize_tensors()
 
     def add_fixed_link(
         self,

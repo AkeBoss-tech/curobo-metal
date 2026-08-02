@@ -9,8 +9,10 @@ import torch
 
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.kinematics.kinematics_state import KinematicsState, ToolPose
+from curobo._src.robot.types import JointLimits, KinematicsParams, SelfCollisionKinematicsCfg
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.pose import Pose
+from curobo._src.geom.types import Mesh
 from curobo_metal.config.robot import _topological_links
 from curobo_metal.ops.whole_body import WholeBodyModel, tree_forward_kinematics
 from curobo_metal.reference.tree_kinematics import TreeRobot
@@ -63,6 +65,14 @@ class Kinematics:
         self.compute_jacobian = compute_jacobian
         self.compute_spheres = compute_spheres
         self.compute_com = compute_com
+        self._compile_model()
+        self._batch = self._horizon = 0
+        self._buffers: dict[str, torch.Tensor] = {}
+        self.update_batch_size(1, 1, reset_buffers=True)
+
+    def _compile_model(self) -> None:
+        """Compile the current portable tree while retaining public config state."""
+        config = self.config
         mapping = config.kinematics_config.robot_cfg._tree_mapping()
         # FK does not consume inertia.  Some visualization-only upstream URDF
         # tensors are rounded and fail dynamics' positive-semidefinite check.
@@ -75,9 +85,6 @@ class Kinematics:
         )
         self._link_names = self._model.link_names
         self._tool_indices = tuple(self._link_names.index(name) for name in config.tool_frames)
-        self._batch = self._horizon = 0
-        self._buffers: dict[str, torch.Tensor] = {}
-        self.update_batch_size(1, 1, reset_buffers=True)
 
     @property
     def tool_frames(self) -> List[str]:
@@ -207,18 +214,30 @@ class Kinematics:
         return result
 
     def get_link_poses(self, joint_position: torch.Tensor, query_link_names: List[str]) -> Pose:
-        unknown = set(query_link_names) - set(self.tool_frames)
+        unknown = set(query_link_names) - set(self._link_names)
         if unknown:
-            raise ValueError(f"query links are not configured tool frames: {sorted(unknown)}")
-        q = joint_position.unsqueeze(1) if joint_position.ndim == 2 else joint_position
-        tool = self._forward(q).tool_poses
+            raise ValueError(f"unknown robot links: {sorted(unknown)}")
+        if joint_position.ndim == 1:
+            q = joint_position.reshape(1, 1, -1)
+        elif joint_position.ndim == 2:
+            q = joint_position.unsqueeze(1)
+        elif joint_position.ndim == 3:
+            q = joint_position
+        else:
+            raise ValueError("joint_position must have rank 1, 2, or 3")
+        if q.shape[-1] != self.dof:
+            raise ValueError(f"q should have dof = {self.dof}, got {q.shape[-1]}")
+        transforms = tree_forward_kinematics(
+            self._model, q.reshape(-1, self.dof)
+        ).transforms.reshape(*q.shape[:2], len(self._link_names), 4, 4)
         indices = torch.tensor(
-            [self.tool_frames.index(name) for name in query_link_names],
+            [self._link_names.index(name) for name in query_link_names],
             device=joint_position.device,
         )
+        selected = transforms.index_select(-3, indices)
         return Pose(
-            tool.position.index_select(-2, indices).squeeze(1),
-            tool.quaternion.index_select(-2, indices).squeeze(1),
+            selected[..., :3, 3].squeeze(1),
+            _matrix_to_quaternion(selected[..., :3, :3]).squeeze(1),
         )
 
     @property
@@ -283,14 +302,24 @@ class Kinematics:
         """Expose the compiled state for chains whose mimic joints are reduced."""
         return self.get_full_js(joint_state)
 
-    def update_kinematics_config(self, config: KinematicsCfg) -> None:
-        """Refresh buffers for an equivalent compiled portable configuration."""
-        if not isinstance(config, KinematicsCfg):
-            raise TypeError("config must be KinematicsCfg")
-        if config.kinematics_config.num_dof != self.dof:
-            raise NotImplementedError("changing portable kinematic topology requires a new Kinematics")
-        self.config = config
-        self.device_cfg = config.device_cfg
+    def update_kinematics_config(self, new_kin_config) -> None:
+        """Update the model parameters and recompile its portable tree.
+
+        cuRobo accepts a ``KinematicsParams`` record here.  Supporting that
+        form lets callers mutate spheres/inertials or replace a reduced tree
+        without depending on a CUDA-packed buffer implementation.
+        """
+        from curobo._src.robot.types import KinematicsParams
+
+        if isinstance(new_kin_config, KinematicsCfg):
+            self.config = new_kin_config
+        elif isinstance(new_kin_config, KinematicsParams):
+            self.config.kinematics_config = new_kin_config
+            self.config.tool_frames = list(new_kin_config.tool_frames)
+        else:
+            raise TypeError("new_kin_config must be KinematicsParams or KinematicsCfg")
+        self.device_cfg = self.config.device_cfg
+        self._compile_model()
         self.update_batch_size(self._batch or 1, self._horizon or 1, reset_buffers=True)
 
     def get_link_mesh(self, link_name: str):
@@ -304,7 +333,8 @@ class Kinematics:
             "portable Kinematics does not construct mesh assets; use RobotParser instead"
         )
 
-    def get_robot_as_mesh(self):
+    def get_robot_as_mesh(self, joint_position: torch.Tensor):
+        del joint_position
         return self.get_robot_link_meshes()
 
     @property

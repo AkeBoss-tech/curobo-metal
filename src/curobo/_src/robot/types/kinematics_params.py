@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any
 
 import torch
@@ -42,8 +43,45 @@ class KinematicsParams:
         return self.robot_cfg.base_link
 
     @property
+    def device_cfg(self):
+        """Device policy shared by every tensor exposed by this record."""
+        return self.robot_cfg.device_cfg
+
+    @property
     def cspace(self) -> Any:
         return self.robot_cfg.cspace
+
+    @property
+    def debug(self) -> Any:
+        return self.robot_cfg.metadata.get("debug")
+
+    @property
+    def joint_limits(self):
+        """Return portable tensor joint limits in the active-joint order.
+
+        The config model stores scalar limits on the URDF joints; consumers of
+        the historical ``KinematicsParams`` record expect the tensor-valued
+        ``JointLimits`` view.  Constructing it here keeps mutations of the
+        source robot visible and keeps CPU/MPS placement deterministic.
+        """
+        from .joint_limits import JointLimits
+
+        names = self.joint_names
+        by_name = {joint.name: joint for joint in self.robot_cfg.joints}
+        joints = [by_name[name] for name in names]
+
+        def bounds(values: list[tuple[float, float]]) -> torch.Tensor:
+            return self.device_cfg.to_device(values).transpose(0, 1).contiguous()
+
+        return JointLimits(
+            names,
+            bounds([(joint.limits.lower, joint.limits.upper) for joint in joints]),
+            bounds([(-joint.limits.velocity, joint.limits.velocity) for joint in joints]),
+            bounds([(-10.0, 10.0) for _ in joints]),
+            bounds([(-500.0, 500.0) for _ in joints]),
+            bounds([(-joint.limits.effort, joint.limits.effort) for joint in joints]),
+            self.device_cfg,
+        )
 
     @property
     def total_spheres(self) -> int:
@@ -71,6 +109,72 @@ class KinematicsParams:
     @property
     def link_name_to_idx_map(self) -> dict[str, int]:
         return {link.name: index for index, link in enumerate(self.robot_cfg.links)}
+
+    @property
+    def link_map(self) -> torch.Tensor:
+        """Stable link index for each link, matching the tree model order."""
+        return torch.arange(self.num_links, dtype=torch.int64, device=self.device_cfg.device)
+
+    @property
+    def joint_map(self) -> torch.Tensor:
+        """Stable active-joint index map; fixed and mimic joints use ``-1``."""
+        active = {name: index for index, name in enumerate(self.joint_names)}
+        return torch.tensor(
+            [active.get(joint.name, -1) for joint in self.robot_cfg.joints],
+            dtype=torch.int64,
+            device=self.device_cfg.device,
+        )
+
+    @property
+    def joint_map_type(self) -> torch.Tensor:
+        kinds = {"fixed": -1, "prismatic": 0, "revolute": 1}
+        return torch.tensor(
+            [kinds.get(joint.kind, -2) for joint in self.robot_cfg.joints],
+            dtype=torch.int64,
+            device=self.device_cfg.device,
+        )
+
+    @property
+    def joint_offset_map(self) -> torch.Tensor:
+        return self.device_cfg.to_device(
+            [[joint.mimic_multiplier, joint.mimic_offset] for joint in self.robot_cfg.joints]
+        ).reshape(-1, 2)
+
+    @property
+    def mimic_joints(self) -> dict[str, tuple[str, float, float]]:
+        return {
+            joint.name: (joint.mimic_joint, joint.mimic_multiplier, joint.mimic_offset)
+            for joint in self.robot_cfg.joints
+            if joint.mimic_joint is not None
+        }
+
+    @property
+    def tool_frame_map(self) -> torch.Tensor:
+        indices = self.link_name_to_idx_map
+        return torch.tensor(
+            [indices[name] for name in self.tool_frames],
+            dtype=torch.int64,
+            device=self.device_cfg.device,
+        )
+
+    @property
+    def fixed_transforms(self) -> torch.Tensor:
+        """[link, 4, 4] rest transforms, useful for portable introspection."""
+        from curobo_metal.ops.whole_body import WholeBodyModel
+        from curobo_metal.reference.tree_kinematics import TreeRobot
+
+        mapping = self.robot_cfg._tree_mapping()
+        # Rest FK does not consume inertia. Some widely-used URDF files carry
+        # visualization inertias which are not PSD, whereas the reference tree
+        # validates physical dynamics strictly.
+        for link in mapping["links"]:
+            link["inertial"]["inertia"] = [0.0] * 6
+        model = WholeBodyModel(
+            TreeRobot.from_dict(mapping),
+            device=self.device_cfg.device,
+            dtype=self.device_cfg.dtype,
+        )
+        return model.origins.clone()
 
     @property
     def tool_frames(self) -> list[str]:
@@ -110,8 +214,14 @@ class KinematicsParams:
         return self
 
     def clone(self) -> "KinematicsParams":
-        result = KinematicsParams(self.robot_cfg)
-        result.copy_(self)
+        result = KinematicsParams(deepcopy(self.robot_cfg))
+        result._link_spheres = (
+            None if self._link_spheres is None else self._link_spheres.clone()
+        )
+        result.reference_link_spheres = (
+            None if self.reference_link_spheres is None
+            else self.reference_link_spheres.clone()
+        )
         return result
 
     def validate_shapes(self) -> None:
@@ -165,14 +275,12 @@ class KinematicsParams:
         return int(self.get_sphere_index_from_link_name(link_name).numel())
 
     def disable_link_spheres(self, link_name: str) -> None:
-        self.get_link_spheres(link_name)[..., 3] = -torch.abs(
-            self.get_link_spheres(link_name)[..., 3]
-        )
+        indices = self.get_sphere_index_from_link_name(link_name)
+        self.link_spheres[:, indices, 3] = -torch.abs(self.link_spheres[:, indices, 3])
 
     def enable_link_spheres(self, link_name: str) -> None:
-        self.get_link_spheres(link_name)[..., 3] = torch.abs(
-            self.get_link_spheres(link_name)[..., 3]
-        )
+        indices = self.get_sphere_index_from_link_name(link_name)
+        self.link_spheres[:, indices, 3] = torch.abs(self.link_spheres[:, indices, 3])
 
     def reset_link_spheres(self, link_name: str) -> None:
         indices = self.get_sphere_index_from_link_name(link_name)
@@ -239,7 +347,29 @@ class KinematicsParams:
 
     @property
     def n_tree_levels(self) -> int:
-        return max(1, len(self.robot_cfg.links))
+        parents = {joint.child: joint.parent for joint in self.robot_cfg.joints}
+        max_depth = 0
+        for link in self.all_link_names():
+            depth, current = 0, link
+            while current != self.base_link:
+                current = parents.get(current)
+                if current is None:
+                    raise ValueError("robot tree contains a disconnected link")
+                depth += 1
+            max_depth = max(max_depth, depth)
+        return max_depth + 1
+
+    @property
+    def max_level_width(self) -> int:
+        parents = {joint.child: joint.parent for joint in self.robot_cfg.joints}
+        widths: dict[int, int] = {}
+        for link in self.all_link_names():
+            depth, current = 0, link
+            while current != self.base_link:
+                current = parents[current]
+                depth += 1
+            widths[depth] = widths.get(depth, 0) + 1
+        return max(widths.values(), default=0)
 
     def export_to_urdf(
         self,

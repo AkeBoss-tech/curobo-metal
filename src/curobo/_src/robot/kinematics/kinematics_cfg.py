@@ -8,8 +8,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from curobo._src.robot.types.kinematics_params import KinematicsParams
+from curobo._src.robot.types import CSpaceParams, JointLimits, SelfCollisionKinematicsCfg
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo_metal.config.loaders import load_robot_config
+from curobo._src.robot.parser import RobotParser
+from curobo._src.robot.loader.kinematics_loader_cfg import KinematicsLoaderCfg
+from curobo._src.robot.loader.kinematics_loader import KinematicsLoader
 
 
 def _packaged_robot_file(name: str) -> Path:
@@ -56,12 +60,7 @@ class KinematicsCfg:
         self.kinematics_config.make_contiguous()
 
     def get_joint_limits(self) -> Any:
-        joints = {
-            joint.name: joint.limits
-            for joint in self.kinematics_config.robot_cfg.joints
-            if joint.name in self.kinematics_config.joint_names
-        }
-        return joints
+        return self.kinematics_config.joint_limits
 
     @staticmethod
     def from_basic_urdf(
@@ -82,6 +81,8 @@ class KinematicsCfg:
         **kwargs: Any,
     ) -> "KinematicsCfg":
         path = getattr(content_path, "robot_config_file", content_path)
+        if path is None:
+            raise ValueError("content_path must provide robot_config_file")
         return KinematicsCfg.from_robot_yaml_file(
             path, tool_frames=tool_frames, device_cfg=device_cfg, **kwargs
         )
@@ -141,6 +142,17 @@ class KinematicsCfg:
     def from_config(config: Any) -> "KinematicsCfg":
         if isinstance(config, KinematicsCfg):
             return config
+        # Preserve loader-config data rather than forcing consumers to first
+        # instantiate the low-level loader themselves.
+        if isinstance(config, KinematicsLoaderCfg):
+            loader = KinematicsLoader(config)
+            return KinematicsCfg(
+                config.device_cfg,
+                list(config.tool_frames or loader.kinematics_config.tool_frames),
+                loader.kinematics_config,
+                loader.self_collision_config,
+                loader.kinematics_parser,
+            )
         if isinstance(config, dict):
             return KinematicsCfg.from_data_dict(config)
         raise TypeError("config must be KinematicsCfg or a robot configuration mapping")

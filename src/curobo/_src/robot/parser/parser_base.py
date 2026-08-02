@@ -6,7 +6,7 @@ from abc import abstractmethod
 from typing import Dict, List, Optional
 
 from curobo._src.geom.types import Mesh, Obstacle
-from curobo._src.robot.types import LinkParams
+from curobo._src.robot.types import JointType, LinkParams
 
 
 class RobotParser:
