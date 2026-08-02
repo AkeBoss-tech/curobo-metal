@@ -2317,9 +2317,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 3,
         "path": "curobo/_src/cost/cost_cspace_dist.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_dist",
@@ -4005,9 +4005,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 2,
         "path": "curobo/_src/cost/cost_support_polygon.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 6,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_support_polygon",
@@ -4237,9 +4237,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 4,
         "path": "curobo/_src/cost/cost_tool_pose.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_tool_pose",
