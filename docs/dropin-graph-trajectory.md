@@ -65,3 +65,9 @@ constructor reset intentionally clears only the default-node cache; it does not
 silently discard the caller-owned roadmap.  CUDA graph capture, Warp steering,
 and analytic CCD remain unavailable, so edge validity is whatever the supplied
 portable connector and feasibility callback establish.
+
+`GraphPlannerResult` retains the pinned variable-length per-query path list
+and adds ordinary CPU/MPS result lifecycle helpers: cloning, detaching,
+device/dtype movement, deterministic batch selection, success summaries, and
+device-resident padded path tensors with validity masks. These helpers do not
+expose or emulate raw CUDA graph/path buffers.
