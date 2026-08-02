@@ -112,6 +112,16 @@ class GradientDescentOpt(PortableOptimizer):
             raise TypeError("seed_action must be a torch.Tensor")
         batch = int(self.config.num_problems)
         horizon, dim = self.action_horizon, self.action_dim
+        # Lightweight callable rollouts do not publish a control-space shape.
+        # In that case retain the historical optimizer convenience: infer the
+        # complete seed layout instead of rejecting it because the portable
+        # defaults are ``1 x 1 x 1``.  Rollouts that do publish a shape still
+        # use the strict V2 validation below.
+        if batch == 1 and horizon == 1 and dim == 1:
+            if action.ndim == 3:
+                return action
+            if action.ndim == 2:
+                return action.unsqueeze(1)
         if action.ndim == 2 and tuple(action.shape) == (batch, horizon * dim):
             return action.reshape(batch, horizon, dim)
         if action.ndim == 3 and tuple(action.shape) == (batch, horizon, dim):
@@ -173,9 +183,12 @@ class GradientDescentOpt(PortableOptimizer):
         best = x.detach().clone()
         best_cost = self._objective_value(best)
         previous_cost = best_cost
-        # Unlike the line-search optimizers, V2's GD has a dedicated scale.
-        # ``step_scale`` only configures the rollout's action-bound helper.
+        # V2 exposes a dedicated scale.  Older callers supplied ``step_scale``
+        # before that field existed, so honor a non-default legacy value when
+        # the dedicated field has not been changed from its default.
         step = float(self.config.gradient_descent_step_scale)
+        if step == 0.001 and float(self.config.step_scale) != 1.0:
+            step = float(self.config.step_scale)
         iterations: list[torch.Tensor] = []
         start = time.perf_counter()
         # Optimizers are expected to work inside a caller's ``no_grad``
