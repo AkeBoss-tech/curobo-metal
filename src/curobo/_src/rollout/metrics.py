@@ -107,5 +107,44 @@ class RolloutMetrics(RolloutResult):
     feasible: Optional[torch.Tensor | bool] = None
     convergence: CostCollection = field(default_factory=CostCollection)
 
+    def clone(self):
+        return type(self)(
+            None if self.actions is None else self.actions.clone(),
+            None if self.costs_and_constraints is None else self.costs_and_constraints.clone(),
+            None if self.state is None else self.state.clone(), self.debug,
+            self.feasible.clone() if hasattr(self.feasible, "clone") else self.feasible,
+            self.convergence.clone(),
+        )
+
+    def get_only_batch_seed_indices(self, batch_idx, seed_idx):
+        result = self.clone()
+        if result.actions is not None:
+            result.actions = result.actions[batch_idx, seed_idx]
+        if result.state is not None:
+            result.state = result.state[batch_idx, seed_idx]
+        if hasattr(result.feasible, "__getitem__"):
+            result.feasible = result.feasible[batch_idx, seed_idx]
+        return result
+
+    def copy_at_batch_seed_indices(self, other, batch_idx, seed_idx):
+        if self.actions is not None and other.actions is not None:
+            self.actions[batch_idx, seed_idx] = other.actions[batch_idx, seed_idx]
+        if self.state is not None and other.state is not None:
+            self.state.position[batch_idx, seed_idx] = other.state.position[batch_idx, seed_idx]
+        if hasattr(self.feasible, "__setitem__") and hasattr(other.feasible, "__getitem__"):
+            self.feasible[batch_idx, seed_idx] = other.feasible[batch_idx, seed_idx]
+        if self.costs_and_constraints is not None and other.costs_and_constraints is not None:
+            self.costs_and_constraints.copy_at_batch_seed_indices(other.costs_and_constraints, batch_idx, seed_idx)
+        return self
+
+    def copy_only_index(self, other, index):
+        if self.actions is not None and other.actions is not None:
+            self.actions[index] = other.actions[index]
+        if self.state is not None and other.state is not None:
+            self.state.position[index] = other.state.position[index]
+        if hasattr(self.feasible, "__setitem__") and hasattr(other.feasible, "__getitem__"):
+            self.feasible[index] = other.feasible[index]
+        return self
+
 
 __all__ = ["CostCollection", "CostsAndConstraints", "RolloutResult", "RolloutMetrics"]

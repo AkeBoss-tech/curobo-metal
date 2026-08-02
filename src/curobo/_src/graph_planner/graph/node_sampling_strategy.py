@@ -63,5 +63,22 @@ class NodeSamplingStrategy:
         closest = x_start + phase.clamp(0, 1)[:, None] * segment
         return torch.linalg.vector_norm((vertices - closest) * self.distance_weight, dim=-1)
 
+    # These helpers were TorchScript/Warp acceleration entry points upstream.
+    # The portable versions deliberately use ordinary differentiable tensors.
+    @staticmethod
+    def jit_compute_distance_from_line(vertices, x_start, x_goal, distance_weight):
+        segment = x_goal - x_start
+        phase = ((vertices - x_start) * segment).sum(-1) / segment.square().sum().clamp_min(1e-12)
+        closest = x_start + phase.clamp(0, 1).unsqueeze(-1) * segment
+        return torch.linalg.vector_norm((vertices - closest) * distance_weight, dim=-1)
+
+    @staticmethod
+    def jit_transform_unit_ball_to_ellipsoid_approximate(samples, x_start, x_goal, max_radius):
+        midpoint = (x_start + x_goal) * 0.5
+        return midpoint + samples * torch.as_tensor(max_radius, dtype=samples.dtype, device=samples.device)
+
+    jit_transform_unit_ball_to_ellipsoid_householder = jit_transform_unit_ball_to_ellipsoid_approximate
+    jit_transform_unit_ball_to_ellipsoid_svd = jit_transform_unit_ball_to_ellipsoid_approximate
+
 
 __all__ = ["NodeSamplingStrategy"]

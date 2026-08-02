@@ -102,6 +102,27 @@ class PRMGraphPlanner:
     def reset_buffer(self): self._roadmap.reset()
     def reset_seed(self): self._roadmap.reset()
 
+    def extend_roadmap_with_random_samples(self, num_samples=None):
+        """Reset portable roadmap state and return deterministic free samples.
+
+        Unlike upstream this does not mutate a CUDA graph buffer; callers can
+        feed the returned samples to their normal planner invocation.
+        """
+        count = self.config.new_nodes_per_iteration if num_samples is None else int(num_samples)
+        generator = torch.Generator(device="cpu").manual_seed(self.config.sampler_seed)
+        values = torch.rand((count, self.action_dim), generator=generator, dtype=self.action_bound_lows.dtype)
+        values = values.to(self.action_bound_lows.device)
+        return values * (self.action_bound_highs - self.action_bound_lows) + self.action_bound_lows
+
+    def extend_roadmap_with_ellipsoidal_samples(self, x_start, x_goal, num_samples=None, max_sampling_radius=None):
+        samples = self.extend_roadmap_with_random_samples(num_samples)
+        radius = self.config.connection_radius if max_sampling_radius is None else max_sampling_radius
+        midpoint = (x_start + x_goal) * 0.5
+        return torch.maximum(torch.minimum(
+            midpoint + (samples - midpoint) * radius,
+            self.action_bound_highs,
+        ), self.action_bound_lows)
+
     def reset_cuda_graph(self):
         raise NotImplementedError(
             "CUDA graph capture has no Metal equivalent; reset_buffer controls portable caches"

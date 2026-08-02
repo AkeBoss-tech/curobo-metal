@@ -21,7 +21,7 @@ class TrajOptSolver:
         if not isinstance(config, TrajOptSolverCfg):
             raise TypeError("config must be TrajOptSolverCfg")
         self.config = config
-        self.scene_collision_checker = scene_collision_checker
+        self._scene_collision_checker = scene_collision_checker
         robot = config.robot_config.kinematics
         self._chain = robot.to_kinematic_chain(
             device=config.device_cfg.device, dtype=config.device_cfg.dtype
@@ -173,6 +173,46 @@ class TrajOptSolver:
     def problem_batch_size(self): return self.config.max_batch_size
     @property
     def interpolation_steps(self): return self.config.interpolation_buffer_size
+    optimizer = property(lambda self: self)
+    optimizer_rollouts = property(lambda self: [])
+    metrics_rollout = property(lambda self: None)
+    auxiliary_rollout = property(lambda self: None)
+    additional_metrics_rollouts = property(lambda self: [])
+    transition_model = property(lambda self: None)
+    scene_collision_checker = property(lambda self: self._scene_collision_checker)
+    goal_registry_manager = property(lambda self: None)
+    seed_manager = property(lambda self: self._seed_generator)
+    solve_state = property(lambda self: None)
+    kinematics = property(lambda self: self._chain)
+
+    def compute_kinematics(self, state):
+        from curobo._src.robot.kinematics.kinematics import Kinematics
+        from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
+        from curobo._src.robot.types.kinematics_params import KinematicsParams
+        params = KinematicsParams(self.config.robot_config.kinematics)
+        return Kinematics(KinematicsCfg(self.device_cfg, self.config.robot_config.kinematics.tool_frames, params)).compute_kinematics(state)
+    def get_all_rollout_instances(self, **kwargs):
+        del kwargs
+        return []
+    def enable_tool_pose_tracking(self, tool_frames=None):
+        del tool_frames
+        return None
+    def disable_tool_pose_tracking(self, tool_frames=None):
+        del tool_frames
+        return None
+    def enable_joint_position_tracking(self): return None
+    def disable_joint_position_tracking(self): return None
+    def update_tool_pose_criteria(self, tool_pose_criteria):
+        self.config.tool_pose_criteria = dict(tool_pose_criteria)
+    def update_link_inertial(self, link_name, mass=None, com=None, inertia=None):
+        del mass, com, inertia
+        raise NotImplementedError(f"runtime inertial mutation is unavailable for {link_name}")
+    def update_links_inertial(self, link_properties):
+        for name, values in link_properties.items():
+            self.update_link_inertial(name, **values)
+    def debug_dump(self, *args, **kwargs):
+        del args, kwargs
+        return {"backend": "portable", "cuda_graph": False}
 
 
 __all__ = ["TrajOptSolver"]

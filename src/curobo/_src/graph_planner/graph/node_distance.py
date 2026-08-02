@@ -50,5 +50,26 @@ class DistanceNeighborCalculator:
         ).indices
     )
 
+    @staticmethod
+    def jit_get_unique_nodes(nodes, similarity_threshold, distance_weight=None):
+        """Return first-occurrence unique roadmap vertices.
+
+        The CUDA implementation exposes this as a JIT helper.  Keeping it as a
+        tensor-only static method gives callers the same useful entry point on
+        CPU and MPS without pretending to expose a CUDA kernel.
+        """
+        weight = (
+            torch.ones(nodes.shape[-1], device=nodes.device, dtype=nodes.dtype)
+            if distance_weight is None else distance_weight
+        )
+        calculator = DistanceNeighborCalculator(nodes.shape[-1], weight, None)
+        return calculator.get_unique_nodes(nodes, similarity_threshold)
+
+    @staticmethod
+    def jit_get_unique_nodes_zero_distance(nodes, distance_weight=None):
+        return DistanceNeighborCalculator.jit_get_unique_nodes(
+            nodes, torch.finfo(nodes.dtype).eps, distance_weight
+        )
+
 
 __all__ = ["DistanceNeighborCalculator"]

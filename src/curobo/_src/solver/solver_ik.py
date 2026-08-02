@@ -50,6 +50,16 @@ class IKSolver:
     def default_joint_state(self):
         return JointState(self.device_cfg.to_device(self.default_joint_position), joint_names=self.joint_names)
 
+    optimizer = property(lambda self: None)
+    metrics_rollout = property(lambda self: None)
+    auxiliary_rollout = property(lambda self: None)
+    transition_model = property(lambda self: None)
+    solve_state = property(lambda self: None)
+    seed_manager = property(lambda self: None)
+    goal_registry_manager = property(lambda self: None)
+    scene_collision_checker = property(lambda self: None)
+    problem_batch_size = property(lambda self: self.config.max_batch_size)
+
     def compute_kinematics(self, state: JointState):
         return self._kinematics.compute_kinematics(state)
     def get_active_js(self, full_js): return self._kinematics.get_active_js(full_js)
@@ -58,6 +68,44 @@ class IKSolver:
     def reset_shape(self): return None
     def reset_cuda_graph(self): return None
     def destroy(self): return None
+
+    def get_all_rollout_instances(self, **kwargs):
+        del kwargs
+        return []
+    def prepare_action_seeds(self, batch_size, num_seeds, seed_config=None, current_state=None, seed_traj=None):
+        del seed_config
+        if seed_traj is not None:
+            return seed_traj.position if isinstance(seed_traj, JointState) else seed_traj
+        if current_state is not None:
+            position = current_state.position
+            if position.ndim == 1:
+                position = position.unsqueeze(0)
+            return position[:, None, None, :].expand(batch_size, num_seeds, 1, -1).clone()
+        return self.sample_configs(batch_size * num_seeds).reshape(batch_size, num_seeds, 1, -1)
+    def prepare_trajectory_seeds(self, batch_size, num_seeds, current_state, seed_config=None, seed_traj=None):
+        return self.prepare_action_seeds(batch_size, num_seeds, seed_config, current_state, seed_traj)
+    def enable_tool_pose_tracking(self, tool_frames=None):
+        del tool_frames
+        return None
+    def disable_tool_pose_tracking(self, tool_frames=None):
+        del tool_frames
+        return None
+    def enable_joint_position_tracking(self): return None
+    def disable_joint_position_tracking(self): return None
+    def update_tool_pose_criteria(self, tool_pose_criteria):
+        self.config.tool_pose_criteria = dict(tool_pose_criteria)
+    def update_world(self, scene_cfg):
+        del scene_cfg
+        raise NotImplementedError("runtime world mutation requires a portable SceneCollision adapter")
+    def update_link_inertial(self, link_name, mass=None, com=None, inertia=None):
+        del mass, com, inertia
+        raise NotImplementedError(f"runtime inertial mutation is unavailable for {link_name}")
+    def update_links_inertial(self, link_properties):
+        for name, values in link_properties.items():
+            self.update_link_inertial(name, **values)
+    def debug_dump(self, *args, **kwargs):
+        del args, kwargs
+        return {"backend": "portable", "cuda_graph": False}
 
     def sample_configs(self, num_samples: int, rejection_ratio: int = 10):
         del rejection_ratio

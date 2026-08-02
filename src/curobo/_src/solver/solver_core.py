@@ -44,6 +44,11 @@ class SolverCore:
     goal_registry_manager = property(lambda self: self._goal_manager)
     seed_manager = property(lambda self: self._seed_manager)
     scene_collision_checker = property(lambda self: None)
+    optimizer = property(lambda self: None)
+    metrics_rollout = property(lambda self: None)
+    auxiliary_rollout = property(lambda self: None)
+    transition_model = property(lambda self: None)
+    solve_state = property(lambda self: None)
 
     @property
     def default_joint_position(self):
@@ -67,8 +72,35 @@ class SolverCore:
     def reset_cuda_graph(self):
         raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
     def destroy(self): return None
+    def get_all_rollout_instances(self, **kwargs):
+        del kwargs
+        return []
+    def update_rollout_params(self, **kwargs):
+        del kwargs
+        return True
+    def update_tool_pose_criteria(self, tool_pose_criteria):
+        self.config.tool_pose_criteria = dict(tool_pose_criteria)
+    def enable_tool_pose_tracking(self, tool_frames=None):
+        del tool_frames
+        return None
+    def disable_tool_pose_tracking(self, tool_frames=None):
+        del tool_frames
+        return None
+    def enable_joint_position_tracking(self): return None
+    def disable_joint_position_tracking(self): return None
+    def sample_configs(self, num_samples, rejection_ratio=10):
+        del rejection_ratio
+        return self._seed_manager.generate_random_actions(1, num_samples).squeeze(0)
+    def prepare_goal_buffer(self, solve_state, **kwargs):
+        return self._goal_manager.create_goal_buffer(solve_state, **kwargs)
+    def debug_dump(self, *args, **kwargs):
+        del args, kwargs
+        return {"backend": "portable", "cuda_graph": False}
     def update_link_inertial(self, link_name, mass=None, com=None, inertia=None):
         raise NotImplementedError(f"runtime inertial mutation is unavailable for {link_name}")
+    def update_links_inertial(self, link_properties):
+        for name, values in link_properties.items():
+            self.update_link_inertial(name, **values)
 
 
 __all__ = ["SolverCore"]
