@@ -131,4 +131,3 @@ def test_validated_configuration_and_cost_stay_on_mps() -> None:
     )
     result.sum().backward()
     assert result.device.type == position.grad.device.type == "mps"
-
