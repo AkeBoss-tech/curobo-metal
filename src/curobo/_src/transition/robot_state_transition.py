@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 from typing import Optional, Union
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_ops import stack_joint_states
 from curobo._src.state.state_robot import RobotState
 from curobo._src.transition.fns_state_transition import (
     StateFromAcceleration, StateFromBSplineKnot, StateFromPositionClique,
@@ -17,16 +18,33 @@ from curobo._src.util.state_filter import JointStateFilter
 class RobotStateTransition:
     def __init__(self, config):
         self.config = config
+        self.batch_size = config.batch_size
+        self.interpolation_steps = config.interpolation_steps
         self._dt = config.device_cfg.to_device(
             config.dt_traj_params.get_dt_array(max(config.horizon - 1, 1))
         )
         self._dof = len(config.robot_config.cspace.joint_names)
         self._dynamics = self._create_dynamics()
+        # Upstream owns distinct CUDA buffers for planner rollouts and robot
+        # commands.  Keeping two lightweight tensor transition instances is
+        # important even without the packed CUDA ABI: command generation must
+        # not mutate a differentiable optimizer rollout's lifecycle state.
+        self._cmd_dynamics = self._create_dynamics()
         self.robot_dynamics = self._create_robot_dynamics()
         self.robot_model = self._create_robot_model()
+        self.num_dof = self._dof
+        self.d_dof = self._dof
+        self.action_dim = self._dof
+        self.d_state = 4 * self._dof
+        self.joint_names = (
+            list(self.robot_model.joint_names)
+            if self.robot_model is not None
+            else list(config.robot_config.cspace.joint_names)
+        )
         if self.robot_dynamics is not None:
             self.robot_dynamics.setup_batch_size(config.batch_size, config.horizon)
         self._filter = JointStateFilter(config.state_filter_cfg) if config.state_filter_cfg else None
+        self._initialize_robot_cmd_state()
 
     def _create_dynamics(self):
         cs = self.config.control_space
@@ -91,20 +109,31 @@ class RobotStateTransition:
         return Dynamics(DynamicsCfg(params, self.config.device_cfg))
 
     def _initialize_robot_cmd_state(self):
-        self._robot_cmd_state = None
+        # This is a reusable *shape* buffer only.  Results are copied by
+        # reference by the differentiable transition functions, so no graph is
+        # retained between optimizer iterations.
+        self._robot_cmd_state_seq = JointState.zeros(
+            (1, self.horizon, self.action_dim), self.device_cfg, self.joint_names
+        )
+        self._cmd_batch_size = 1
 
     def update_traj_dt(self, dt, base_dt=None, max_dt=None, base_ratio=None):
         if isinstance(dt, torch.Tensor):
-            self._dt = dt.to(**self.config.device_cfg.as_torch_dict())
+            schedule = dt.to(**self.config.device_cfg.as_torch_dict()).reshape(-1)
+            if schedule.numel() == 0 or bool((schedule <= 0).any().item()):
+                raise ValueError("trajectory timestep schedule must be non-empty and positive")
+            self._dt = schedule
         else:
             self.config.dt_traj_params.update_dt(dt, base_dt, max_dt, base_ratio)
             self._dt = self.config.device_cfg.to_device(
                 self.config.dt_traj_params.get_dt_array(max(self.horizon - 1, 1))
             )
-        if hasattr(self._dynamics, "dt_h"):
-            self._dynamics.dt_h = self._dt
+        for dynamics in (self._dynamics, self._cmd_dynamics):
+            if hasattr(dynamics, "dt_h"):
+                dynamics.dt_h = self._dt
 
     def tensor_step(self, state, act, state_seq=None, state_idx=None, **kwargs):
+        self._validate_step_inputs(state, act)
         return self._dynamics.forward(state, act, state_seq, state_idx, **kwargs)
 
     def robot_cmd_tensor_step(
@@ -117,24 +146,60 @@ class RobotStateTransition:
         implicit_goal_state_idx: Optional[torch.Tensor] = None,
         use_implicit_goal_state: Optional[torch.Tensor] = None,
     ) -> JointState:
-        return self.tensor_step(
+        self._validate_step_inputs(state, act)
+        result = self._cmd_dynamics.forward(
             state, act, state_seq, state_idx,
             goal_state=implicit_goal_state,
             goal_state_idx=implicit_goal_state_idx,
             use_implicit_goal_state=use_implicit_goal_state,
         )
+        result.joint_names = self.joint_names.copy()
+        return result
+
+    def _validate_step_inputs(self, state: JointState, act: torch.Tensor) -> None:
+        """Reject accidental host/device or joint-layout mixing early.
+
+        CUDA's packed kernels reject these inputs implicitly.  Explicit
+        validation gives CPU/MPS callers a useful error instead of a later
+        device copy or obscure matrix failure.
+        """
+        if not isinstance(state, JointState):
+            raise TypeError("state must be JointState")
+        if not isinstance(act, torch.Tensor):
+            raise TypeError("act must be a torch.Tensor")
+        if act.ndim < 2 or act.shape[-1] != self.action_dim:
+            raise ValueError(f"act must end in {self.action_dim} DOF values")
+        if state.position.shape[-1] != self.action_dim:
+            raise ValueError(f"state must end in {self.action_dim} DOF values")
+        if act.device != state.position.device:
+            raise ValueError("act and state must be on the same device")
+        if act.dtype != state.position.dtype:
+            raise ValueError("act and state must use the same dtype")
 
     def update_cmd_batch_size(self, batch_size):
-        self.update_batch_size(batch_size)
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+        if batch_size != self._cmd_batch_size:
+            self._robot_cmd_state_seq = JointState.zeros(
+                (batch_size, self.horizon, self.action_dim), self.device_cfg, self.joint_names
+            )
+            self._cmd_dynamics.update_batch_size(batch_size, self.horizon)
+            self._cmd_batch_size = batch_size
 
     def update_batch_size(self, batch_size, force_update=False):
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
         self.config.batch_size = batch_size
+        self.batch_size = batch_size
         self._dynamics.update_batch_size(batch_size, force_update=force_update)
         if self.robot_dynamics is not None:
             self.robot_dynamics.setup_batch_size(batch_size, self.horizon)
 
     def forward(self, start_state, act_seq, start_state_idx=None, goal_state=None,
                 goal_state_idx=None, use_implicit_goal_state=None, idxs_env=None):
+        if act_seq.ndim < 2:
+            raise ValueError("act_seq must include horizon and DOF dimensions")
+        self.update_batch_size(act_seq.shape[0], force_update=act_seq.requires_grad)
         state_seq = self.tensor_step(
             start_state, act_seq, None, start_state_idx, goal_state=goal_state,
             goal_state_idx=goal_state_idx,
@@ -177,23 +242,36 @@ class RobotStateTransition:
         return current_state if self._filter is None else self._filter.filter_joint_state(current_state)
 
     def get_robot_command(self, current_state, act_seq, shift_steps=1, **kwargs):
-        del kwargs
         if shift_steps < 1:
             raise ValueError("shift_steps must be positive")
         if self.return_full_act_buffer:
-            return self.get_state_from_action(current_state, act_seq)
+            self.update_cmd_batch_size(act_seq.shape[0])
+            return self.robot_cmd_tensor_step(
+                current_state, act_seq, self._robot_cmd_state_seq,
+                kwargs.get("state_idx"), kwargs.get("implicit_goal_state"),
+                kwargs.get("implicit_goal_state_idx"), kwargs.get("use_implicit_goal_state"),
+            )
         if act_seq.shape[-2] < shift_steps:
             raise ValueError("shift_steps exceeds action horizon")
         if self._filter is not None:
             command = current_state
+            command_buffer = None
             for step in range(shift_steps):
                 command = self._filter.integrate_action(act_seq[..., step, :], command)
-            return command
+                command_buffer = (
+                    command.clone()
+                    if command_buffer is None
+                    else stack_joint_states(command_buffer, command)
+                )
+            return command if shift_steps == 1 else command_buffer
         state = self.forward(current_state, act_seq[..., :shift_steps, :])
         return state.joint_state.get_trajectory_at_horizon_index(shift_steps - 1)
 
     def get_state_from_action(self, start_state, act_seq, state_idx=None):
-        return self.forward(start_state, act_seq, state_idx).joint_state
+        self.update_cmd_batch_size(act_seq.shape[0])
+        return self.robot_cmd_tensor_step(
+            start_state, act_seq, self._robot_cmd_state_seq, state_idx
+        )
 
     def get_action_from_state(self, state):
         if self.control_space == ControlSpace.ACCELERATION:
@@ -204,15 +282,21 @@ class RobotStateTransition:
 
     @property
     def action_bound_lows(self):
-        return -self.action_bound_highs
+        bounds = self.get_state_bounds()
+        if self.control_space in ControlSpace.position_types():
+            return bounds.position[0]
+        if self.control_space == ControlSpace.VELOCITY:
+            return bounds.velocity[0]
+        return bounds.acceleration[0]
 
     @property
     def action_bound_highs(self):
-        values = {
-            ControlSpace.ACCELERATION: self.max_acceleration,
-            ControlSpace.VELOCITY: self.max_velocity,
-        }
-        return values.get(self.control_space, torch.full((self._dof,), torch.inf, **self.device_cfg.as_torch_dict()))
+        bounds = self.get_state_bounds()
+        if self.control_space in ControlSpace.position_types():
+            return bounds.position[1]
+        if self.control_space == ControlSpace.VELOCITY:
+            return bounds.velocity[1]
+        return bounds.acceleration[1]
 
     @property
     def init_action_mean(self): return self.get_init_action_mean()
@@ -237,11 +321,11 @@ class RobotStateTransition:
         return self.device_cfg.to_device(value if isinstance(value, list) else [value] * self._dof)
 
     @property
-    def max_acceleration(self): return self._limit("max_acceleration", float("inf"))
+    def max_acceleration(self): return self.get_state_bounds().acceleration[1]
     @property
-    def max_jerk(self): return self._limit("max_jerk", float("inf"))
+    def max_jerk(self): return self.get_state_bounds().jerk[1]
     @property
-    def max_velocity(self): return self._limit("max_velocity", float("inf")) * self.config.vel_scale
+    def max_velocity(self): return self.get_state_bounds().velocity[1] * self.config.vel_scale
     @property
     def action_horizon(self): return self.config.n_knots or self.config.horizon
     @property
@@ -271,7 +355,23 @@ class RobotStateTransition:
         return self.robot_dynamics is not None
 
     def get_state_bounds(self):
-        return self.action_bound_lows, self.action_bound_highs
+        if self.robot_model is not None:
+            bounds = self.robot_model.get_joint_limits().clone()
+        else:
+            # A cspace-only transition has no URDF limits.  It still exposes a
+            # well-formed JointLimits record for optimizer/component callers.
+            from curobo._src.robot.types import JointLimits
+            finite = self.device_cfg.to_device(self._limit("max_acceleration", 10.0))
+            jerk = self.device_cfg.to_device(self._limit("max_jerk", 500.0))
+            velocity = torch.full_like(finite, float("inf"))
+            position = torch.full_like(finite, float("inf"))
+            bounds = JointLimits(
+                self.joint_names.copy(), torch.stack((-position, position)),
+                torch.stack((-velocity, velocity)), torch.stack((-finite, finite)),
+                torch.stack((-jerk, jerk)), None, self.device_cfg,
+            )
+        cspace = self.config.robot_config.cspace
+        return cspace.scale_joint_limits(bounds) if hasattr(cspace, "scale_joint_limits") else bounds
 
     def update_link_mass(self, link_name: str, mass: float):
         if self.robot_dynamics is None:
@@ -297,4 +397,6 @@ class RobotStateTransition:
         self.robot_dynamics.update_links_inertial(link_properties)
 
     def get_full_dof_from_solution(self, q_js):
-        return q_js
+        if not isinstance(q_js, JointState):
+            raise TypeError("q_js must be JointState")
+        return q_js if self.robot_model is None else self.robot_model.get_full_js(q_js)
