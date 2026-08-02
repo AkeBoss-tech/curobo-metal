@@ -47,3 +47,12 @@ class RNEAForwardFunction(torch.autograd.Function):
             "The raw CUDA-buffer RNEA function has no Metal equivalent; use "
             "curobo._src.robot.dynamics.Dynamics for differentiable CPU/MPS RNEA"
         )
+
+    @staticmethod
+    def backward(ctx, grad_tau: torch.Tensor):
+        """Keep the pinned autograd member visible without fabricating a VJP."""
+        del ctx, grad_tau
+        raise NotImplementedError(
+            "The raw CUDA-buffer RNEA VJP has no Metal equivalent; use "
+            "curobo._src.robot.dynamics.Dynamics for differentiable CPU/MPS RNEA"
+        )

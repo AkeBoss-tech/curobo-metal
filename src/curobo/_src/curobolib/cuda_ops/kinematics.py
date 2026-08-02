@@ -17,3 +17,11 @@ class KinematicsFusedFunction(torch.autograd.Function):
             "KinematicsFusedFunction consumes CUDA-specific packed buffers; use "
             "curobo.kinematics.Kinematics for CPU/MPS FK, spheres, and Jacobians"
         )
+
+    @staticmethod
+    def backward(ctx, *grad_outputs):
+        del ctx, grad_outputs
+        raise NotImplementedError(
+            "KinematicsFusedFunction's CUDA packed-buffer VJP is unavailable; "
+            "use curobo.kinematics.Kinematics with ordinary PyTorch autograd"
+        )

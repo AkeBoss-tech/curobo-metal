@@ -45,6 +45,42 @@ def launch_differentiation_position_backward_kernel(out_grad_position, grad_posi
 def _unsupported(name):
     raise NotImplementedError(f"{name} raw CUDA B-spline kernel is unavailable; use curobo._src.util.trajectory")
 
-def launch_bspline_interpolation_forward_kernel(*args, **kwargs): return _unsupported("launch_bspline_interpolation_forward_kernel")
-def launch_bspline_interpolation_backward_kernel(*args, **kwargs): return _unsupported("launch_bspline_interpolation_backward_kernel")
-def launch_bspline_interpolation_single_dt_kernel(*args, **kwargs): return _unsupported("launch_bspline_interpolation_single_dt_kernel")
+def launch_bspline_interpolation_forward_kernel(
+    out_position, out_velocity, out_acceleration, out_jerk, out_dt, u_position,
+    start_position, start_velocity, start_acceleration, start_jerk,
+    goal_position, goal_velocity, goal_acceleration, goal_jerk, start_idx,
+    goal_idx, traj_dt, use_implicit_goal_state, batch_size, horizon, dof,
+    n_knots, bspline_degree,
+):
+    del (out_position, out_velocity, out_acceleration, out_jerk, out_dt,
+         u_position, start_position, start_velocity, start_acceleration,
+         start_jerk, goal_position, goal_velocity, goal_acceleration, goal_jerk,
+         start_idx, goal_idx, traj_dt, use_implicit_goal_state, batch_size,
+         horizon, dof, n_knots, bspline_degree)
+    return _unsupported("launch_bspline_interpolation_forward_kernel")
+
+
+def launch_bspline_interpolation_backward_kernel(
+    out_grad_position, grad_position, grad_velocity, grad_acceleration,
+    grad_jerk, traj_dt, dt_idx, use_implicit_goal_state, batch_size,
+    padded_horizon, dof, n_knots, bspline_degree, use_direct_polynomial,
+):
+    del (out_grad_position, grad_position, grad_velocity, grad_acceleration,
+         grad_jerk, traj_dt, dt_idx, use_implicit_goal_state, batch_size,
+         padded_horizon, dof, n_knots, bspline_degree, use_direct_polynomial)
+    return _unsupported("launch_bspline_interpolation_backward_kernel")
+
+
+def launch_bspline_interpolation_single_dt_kernel(
+    out_position, out_velocity, out_acceleration, out_jerk, out_dt, knots,
+    knot_dt, start_position, start_velocity, start_acceleration, start_jerk,
+    goal_position, goal_velocity, goal_acceleration, goal_jerk, start_idx,
+    goal_idx, interpolation_dt, use_implicit_goal_state, interpolation_horizon,
+    batch_size, max_out_tsteps, dof, n_knots, bspline_degree,
+):
+    del (out_position, out_velocity, out_acceleration, out_jerk, out_dt, knots,
+         knot_dt, start_position, start_velocity, start_acceleration, start_jerk,
+         goal_position, goal_velocity, goal_acceleration, goal_jerk, start_idx,
+         goal_idx, interpolation_dt, use_implicit_goal_state, interpolation_horizon,
+         batch_size, max_out_tsteps, dof, n_knots, bspline_degree)
+    return _unsupported("launch_bspline_interpolation_single_dt_kernel")
