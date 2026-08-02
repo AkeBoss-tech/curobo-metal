@@ -36285,9 +36285,9 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
+        "missing_symbols": 15,
         "path": "curobo/_src/optim/gradient/conjugate_gradient.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.conjugate_gradient",
@@ -38514,9 +38514,9 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
+        "missing_symbols": 15,
         "path": "curobo/_src/optim/gradient/lbfgs.py",
-        "resolved_symbols": 8,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.lbfgs",
@@ -40370,9 +40370,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 12,
         "path": "curobo/_src/optim/gradient/line_search_strategy.py",
-        "resolved_symbols": 14,
+        "resolved_symbols": 15,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.line_search_strategy",
@@ -40964,9 +40964,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 12,
         "path": "curobo/_src/optim/gradient/lsr1.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 4,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.lsr1",
@@ -51639,9 +51639,9 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
+        "missing_symbols": 23,
         "path": "curobo/_src/perception/mapper/integrator_esdf.py",
-        "resolved_symbols": 10,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.integrator_esdf",
@@ -80427,9 +80427,9 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
+        "missing_symbols": 16,
         "path": "curobo/_src/solver/solver_core.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 15,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_core",
@@ -81399,9 +81399,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 5,
         "path": "curobo/_src/solver/solver_core_cfg.py",
-        "resolved_symbols": 17,
+        "resolved_symbols": 25,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_core_cfg",
