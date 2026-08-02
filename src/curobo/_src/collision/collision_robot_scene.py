@@ -111,14 +111,24 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         if q_tau is not None and q_tau.shape != joint_position.shape:
             raise ValueError("q_tau must have the same shape as q")
         limits = self.kinematics.get_joint_limits()
-        lower = joint_position.new_tensor([limits[n].lower for n in self.kinematics.joint_names])
-        upper = joint_position.new_tensor([limits[n].upper for n in self.kinematics.joint_names])
+        lower, upper = self._position_bounds(limits, joint_position)
         return (lower - joint_position).clamp_min(0) + (joint_position - upper).clamp_min(0)
+
+    def _position_bounds(self, limits, reference):
+        """Accept both V2 ``JointLimits`` tensors and legacy named mappings."""
+        if hasattr(limits, "position_lower_limits"):
+            return (
+                limits.position_lower_limits.to(device=reference.device, dtype=reference.dtype),
+                limits.position_upper_limits.to(device=reference.device, dtype=reference.dtype),
+            )
+        lower = reference.new_tensor([limits[n].lower for n in self.kinematics.joint_names])
+        upper = reference.new_tensor([limits[n].upper for n in self.kinematics.joint_names])
+        return lower, upper
 
     def sample(self, sample_size, mask_valid=True, env_query_idx=None):
         limits = self.kinematics.get_joint_limits()
-        lower = self.device_cfg.to_device([limits[n].lower for n in self.kinematics.joint_names])
-        upper = self.device_cfg.to_device([limits[n].upper for n in self.kinematics.joint_names])
+        reference = torch.empty((), **self.device_cfg.as_torch_dict())
+        lower, upper = self._position_bounds(limits, reference)
         samples = lower + torch.rand(
             sample_size, self.kinematics.dof, device=lower.device, dtype=lower.dtype
         ) * (upper - lower)
