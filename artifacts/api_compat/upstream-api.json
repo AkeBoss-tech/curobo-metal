@@ -43458,9 +43458,9 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
+        "missing_symbols": 19,
         "path": "curobo/_src/optim/particle/evolution_strategies.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.optim.particle.evolution_strategies",
@@ -66367,9 +66367,9 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
+        "missing_symbols": 2,
         "path": "curobo/_src/robot/builder/builder_robot.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 31,
         "status": "partial"
       },
       "name": "curobo._src.robot.builder.builder_robot",
