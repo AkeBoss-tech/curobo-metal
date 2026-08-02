@@ -42607,9 +42607,9 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 7,
         "path": "curobo/_src/optim/optim_factory.py",
-        "resolved_symbols": 10,
+        "resolved_symbols": 17,
         "status": "partial"
       },
       "name": "curobo._src.optim.optim_factory",
@@ -43458,9 +43458,9 @@
     },
     {
       "local": {
-        "missing_symbols": 27,
+        "missing_symbols": 24,
         "path": "curobo/_src/optim/particle/evolution_strategies.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.optim.particle.evolution_strategies",
@@ -45113,9 +45113,9 @@
     },
     {
       "local": {
-        "missing_symbols": 28,
+        "missing_symbols": 21,
         "path": "curobo/_src/optim/particle/mppi.py",
-        "resolved_symbols": 8,
+        "resolved_symbols": 15,
         "status": "partial"
       },
       "name": "curobo._src.optim.particle.mppi",
@@ -52829,9 +52829,9 @@
     },
     {
       "local": {
-        "missing_symbols": 35,
+        "missing_symbols": 34,
         "path": "curobo/_src/perception/mapper/integrator_tsdf.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.integrator_tsdf",
@@ -58230,9 +58230,9 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
+        "missing_symbols": 18,
         "path": "curobo/_src/perception/mapper/mapper.py",
-        "resolved_symbols": 8,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mapper",
@@ -64140,9 +64140,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 5,
         "path": "curobo/_src/perception/pose_estimation/mesh_robot.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 8,
         "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.mesh_robot",
@@ -64606,9 +64606,9 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 4,
         "path": "curobo/_src/perception/pose_estimation/pose_detector.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.pose_detector",
@@ -64921,9 +64921,9 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
+        "missing_symbols": 13,
         "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector.py",
-        "resolved_symbols": 1,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.sdf_pose_detector",
@@ -65983,9 +65983,9 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
+        "missing_symbols": 14,
         "path": "curobo/_src/perception/robot_segmenter.py",
-        "resolved_symbols": 2,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.perception.robot_segmenter",
