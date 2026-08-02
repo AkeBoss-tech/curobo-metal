@@ -17,13 +17,15 @@ from curobo._src.types.device_cfg import DeviceCfg
 class _Transition:
     def __init__(self, cfg):
         self.cfg = cfg
+        device_cfg = getattr(cfg, "device_cfg", DeviceCfg())
+        tensor_args = device_cfg.as_torch_dict()
         self.action_dim = 2
         self.action_horizon = 3
         self.horizon = 3
-        self.action_bound_lows = torch.tensor([-2.0, -1.0])
-        self.action_bound_highs = torch.tensor([2.0, 3.0])
-        self.default_joint_position = torch.tensor([0.25, -0.25])
-        self._dt = torch.tensor([0.1])
+        self.action_bound_lows = torch.tensor([-2.0, -1.0], **tensor_args)
+        self.action_bound_highs = torch.tensor([2.0, 3.0], **tensor_args)
+        self.default_joint_position = torch.tensor([0.25, -0.25], **tensor_args)
+        self._dt = torch.tensor([0.1], **tensor_args)
         self.updated_batches = []
 
     def update_batch_size(self, batch_size):
@@ -44,8 +46,7 @@ class _Transition:
         return JointState.from_position(current.position + action[:, shift_steps - 1])
 
 
-def _config():
-    device = DeviceCfg()
+def _config(device=DeviceCfg()):
     transition = SimpleNamespace(class_type=_Transition)
     empty = RobotCostManagerCfg()
     return RobotRolloutCfg(
@@ -110,3 +111,49 @@ def test_rollout_cuda_graph_and_invalid_inputs_are_explicit_boundaries():
         rollout.reset_cuda_graph()
     with pytest.raises(ValueError, match="shape"):
         rollout.evaluate_action(torch.zeros(2, 2))
+    with pytest.raises(ValueError, match="action_dim"):
+        rollout.evaluate_action(torch.zeros(2, 3, 1))
+    with pytest.raises(ValueError, match="horizon"):
+        rollout.evaluate_action(torch.zeros(2, 2, 2))
+    with pytest.raises(TypeError, match="floating"):
+        rollout.evaluate_action(torch.zeros(2, 3, 2, dtype=torch.int64))
+
+
+def test_rollout_rebuilds_particle_buffers_only_for_layout_changes():
+    rollout = RobotRollout(_config())
+    first_goal = GoalRegistry(current_js=JointState.from_position(torch.zeros(2, 2)))
+    rollout.update_params(first_goal, num_particles=3)
+    first_cache = rollout._num_particles_goal
+    assert rollout.batch_size == 6
+
+    # Value-only updates retain the preallocated particle/metric registries.
+    replacement = GoalRegistry(current_js=JointState.from_position(torch.ones(2, 2)))
+    rollout.update_params(replacement)
+    assert rollout._num_particles_goal is first_cache
+    torch.testing.assert_close(rollout.start_state.position, torch.ones(2, 2))
+
+    # A changed problem batch or seed multiplier gets a correctly shaped
+    # registry rather than stale index buffers from the previous solve.
+    reshaped = GoalRegistry(current_js=JointState.from_position(torch.zeros(3, 2)))
+    rollout.update_params(reshaped, num_particles=2)
+    assert rollout._num_particles_goal is not first_cache
+    assert rollout._num_particles_goal.batch_size == 3
+    assert rollout._num_particles_goal.num_seeds == 2
+    assert rollout.batch_size == 6
+    assert rollout.reset_shape() is True
+    assert rollout._particle_multiplier is None
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_rollout_mps_actions_sampling_and_autograd_remain_on_device():
+    rollout = RobotRollout(_config(DeviceCfg(torch.device("mps"))))
+    action = torch.full((2, 3, 2), 0.25, device="mps", requires_grad=True)
+    result = rollout.evaluate_action(action)
+    metrics = rollout.compute_metrics_from_action(action)
+    samples = rollout.sample_random_actions(4)
+
+    assert result.state.joint_state.position.device.type == "mps"
+    assert metrics.actions.device.type == "mps"
+    assert samples.device.type == "mps"
+    result.state.joint_state.position.square().sum().backward()
+    assert action.grad is not None and action.grad.device.type == "mps"

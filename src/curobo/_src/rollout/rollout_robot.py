@@ -40,6 +40,12 @@ class RobotRollout:
         self._use_cuda_graph = bool(use_cuda_graph)
         self._num_particles_goal: Optional[GoalRegistry] = None
         self._metrics_goal: Optional[GoalRegistry] = None
+        # The CUDA implementation keeps graph-address-stable goal buffers.
+        # Eager execution has no address-stability constraint, but retaining
+        # a layout signature lets us reuse those buffers for value-only goal
+        # updates and rebuild them precisely when a solve changes shape.
+        self._particle_goal_layout = None
+        self._particle_multiplier: Optional[int] = None
         self.start_state: Optional[JointState] = None
         self._batch_size: Optional[int] = None
         self.rollout_instance_name: Optional[str] = None
@@ -176,9 +182,69 @@ class RobotRollout:
     def _fallback_start_state(self, act_seq):
         return JointState.from_position(torch.zeros_like(act_seq[..., 0, :]))
 
-    def _compute_state_from_action_impl(self, act_seq):
+    def _validate_action(self, act_seq):
+        """Validate an action batch without inserting an implicit device copy.
+
+        A CPU action passed to an MPS rollout otherwise fails deep inside a
+        cost term (and an implicit ``to`` would sever the caller's autograd
+        and residency expectations).  The config-less convenience rollout is
+        deliberately permissive about its action dimension/horizon because it
+        is used as a simple tensor-shaped rollout in public smoke tests.
+        """
         if not isinstance(act_seq, torch.Tensor) or act_seq.ndim != 3:
             raise ValueError("act_seq must have shape [batch, horizon, action_dim]")
+        if not act_seq.is_floating_point():
+            raise TypeError("act_seq must have a floating-point dtype")
+        if self.device_cfg is not None and not self.device_cfg.is_same_torch_device(act_seq.device):
+            raise ValueError(
+                "action device does not match rollout device: "
+                f"{act_seq.device} != {self.device_cfg.device}"
+            )
+        if self.transition_model is not None:
+            if act_seq.shape[-1] != self.action_dim:
+                raise ValueError(
+                    f"action_dim mismatch: expected {self.action_dim}, got {act_seq.shape[-1]}"
+                )
+            if act_seq.shape[-2] != self.action_horizon:
+                raise ValueError(
+                    f"action horizon mismatch: expected {self.action_horizon}, got {act_seq.shape[-2]}"
+                )
+        return act_seq
+
+    @staticmethod
+    def _goal_batch_size(goal: GoalRegistry) -> int:
+        """Get a concrete problem-batch size for partly constructed goals."""
+        # A pose/joint target owns the planning-problem dimension.  In the
+        # current-state-only form used by low-level callers, however, the
+        # dataclass field is derived only once; prefer the live state so a
+        # caller can replace it with a differently sized batch between
+        # solves.
+        if goal.link_goal_poses is not None or goal.goal_js is not None:
+            if goal.batch_size >= 0:
+                return int(goal.batch_size)
+        for state in (goal.current_js, goal.seed_goal_js):
+            if state is not None:
+                return int(state.position.shape[0])
+        if goal.batch_size >= 0:
+            return int(goal.batch_size)
+        raise ValueError("goal has no state or pose payload from which to infer batch size")
+
+    @staticmethod
+    def _goal_layout(goal: GoalRegistry):
+        """Metadata that changes the persistent particle-buffer shape."""
+        def shape(name):
+            value = getattr(goal, name, None)
+            return None if value is None else tuple(value.shape)
+
+        return (
+            int(goal.batch_size), int(goal.num_seeds),
+            shape("idxs_link_pose"), shape("idxs_goal_js"),
+            shape("idxs_current_js"), shape("idxs_seed_goal_js"),
+            shape("idxs_enable"), shape("idxs_env"),
+        )
+
+    def _compute_state_from_action_impl(self, act_seq):
+        self._validate_action(act_seq)
         if self.transition_model is None:
             return JointState.from_position(act_seq)
         goal = self._num_particles_goal
@@ -192,6 +258,7 @@ class RobotRollout:
         )
 
     def _compute_state_from_action_metrics_impl(self, act_seq):
+        self._validate_action(act_seq)
         if self.metrics_transition_model is None:
             return JointState.from_position(act_seq)
         goal = self._metrics_goal
@@ -241,6 +308,7 @@ class RobotRollout:
                                         convergence=True, **kwargs)
 
     def evaluate_action(self, act_seq, **kwargs):
+        self._validate_action(act_seq)
         self.update_batch_size(act_seq.shape[0])
         state = self._compute_state_from_action_impl(act_seq)
         return RolloutResult(actions=act_seq, state=state,
@@ -257,6 +325,7 @@ class RobotRollout:
                               convergence=self._compute_convergence_metrics_impl(state, **kwargs))
 
     def compute_metrics_from_action(self, act_seq, **kwargs):
+        self._validate_action(act_seq)
         self.update_batch_size(act_seq.shape[0])
         state = self._compute_state_from_action_metrics_impl(act_seq)
         metrics = self.compute_metrics_from_state(state, **kwargs)
@@ -269,21 +338,33 @@ class RobotRollout:
         # A hand-constructed GoalRegistry may carry only a current/seed joint
         # state (no pose or target state from which its dataclass derives the
         # batch size).  Infer that ordinary planning shape before expansion.
-        if goal.batch_size < 0:
-            source = goal.current_js or goal.goal_js or goal.seed_goal_js
-            if source is not None:
-                goal.batch_size = int(source.position.shape[0])
+        goal.batch_size = self._goal_batch_size(goal)
+        if num_particles is not None:
+            if isinstance(num_particles, bool) or int(num_particles) < 1:
+                raise ValueError("num_particles must be a positive integer")
+            self._particle_multiplier = int(num_particles)
+        multiplier = self._particle_multiplier
         if goal.current_js is not None:
-            self.start_state = goal.current_js.clone() if self.start_state is None else self.start_state.copy_(goal.current_js)
-        if self._num_particles_goal is None:
-            self._num_particles_goal = goal.repeat_seeds(num_particles, True) if num_particles is not None else goal.clone()
+            self.start_state = (
+                goal.current_js.clone()
+                if self.start_state is None or not self.start_state._same_shape(goal.current_js)
+                else self.start_state.copy_(goal.current_js, allow_clone=False)
+            )
+
+        particle_goal = goal.repeat_seeds(multiplier, True) if multiplier is not None else goal.clone()
+        particle_layout = self._goal_layout(particle_goal)
+        if self._num_particles_goal is None or self._particle_goal_layout != particle_layout:
+            # Reallocation is intentional only on shape/topology changes;
+            # normal value updates preserve object identity and buffers.
+            self._num_particles_goal = particle_goal
+            self._particle_goal_layout = particle_layout
         else:
             self._num_particles_goal.copy_(goal, update_idx_buffers=False)
         if self._metrics_goal is None:
             self._metrics_goal = goal.clone()
         else:
             self._metrics_goal.copy_(goal, update_idx_buffers=True)
-        if num_particles is not None:
+        if multiplier is not None:
             self.update_batch_size(self._num_particles_goal.batch_size * self._num_particles_goal.num_seeds)
         return True
 
@@ -305,6 +386,8 @@ class RobotRollout:
 
     def update_batch_size(self, batch_size):
         batch_size = int(batch_size)
+        if batch_size < 0:
+            raise ValueError("batch_size must be non-negative")
         if self._batch_size == batch_size:
             return
         self._batch_size = batch_size
@@ -317,7 +400,12 @@ class RobotRollout:
     def update_dt(self, dt):
         for transition in (self.transition_model, self.metrics_transition_model):
             if transition is not None:
-                transition.update_traj_dt(dt)
+                update = getattr(transition, "update_traj_dt", None)
+                if update is None:
+                    update = getattr(transition, "update_dt", None)
+                if update is None:
+                    raise AttributeError("transition model has no dt update method")
+                update(dt)
         for manager in self._cost_manager_list:
             manager.update_dt(dt)
         return True
@@ -330,6 +418,8 @@ class RobotRollout:
     def reset_shape(self):
         self._num_particles_goal = None
         self._metrics_goal = None
+        self._particle_goal_layout = None
+        self._particle_multiplier = None
         return True
 
     def reset_cuda_graph(self):
@@ -377,7 +467,11 @@ class RobotRollout:
         if num_samples is not None:
             n = num_samples
         n = int(n or self.batch_size or 1)
+        if n < 0:
+            raise ValueError("number of action samples must be non-negative")
         horizon = int(self.action_horizon if horizon is None else horizon)
+        if horizon < 0:
+            raise ValueError("action horizon must be non-negative")
         if self.device_cfg is None:
             return torch.zeros((n, horizon, self.action_dim))
         values = torch.rand((n, horizon, self.action_dim), generator=self._sample_generator,
@@ -385,6 +479,13 @@ class RobotRollout:
         if not bounded or self.transition_model is None:
             return values
         lower, upper = self.action_bound_lows, self.action_bound_highs
+        # Bounds are configuration-owned constants.  Third-party transition
+        # adapters sometimes construct them on CPU even when the rollout is
+        # configured for MPS; normalising *these constants* is safe and keeps
+        # generated actions resident with their rollout (unlike moving a
+        # caller-supplied action/state inside an evaluation method).
+        lower = lower.to(device=values.device, dtype=values.dtype)
+        upper = upper.to(device=values.device, dtype=values.dtype)
         finite = torch.isfinite(lower) & torch.isfinite(upper)
         lower = torch.where(finite, lower, torch.zeros_like(lower))
         upper = torch.where(finite, upper, torch.ones_like(upper))
