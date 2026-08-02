@@ -71,6 +71,39 @@ def test_builder_and_loader_compile_full_urdf():
         builder.fit_collision_spheres()
 
 
+def test_builder_collects_exact_primitive_spheres_and_round_trips_yaml(tmp_path):
+    urdf = tmp_path / "primitive.urdf"
+    urdf.write_text(
+        """<robot name="primitive">
+  <link name="base"><collision><origin xyz="0.25 0 0"/>
+    <geometry><sphere radius="0.1"/></geometry></collision></link>
+  <link name="tool"/>
+  <joint name="tool_joint" type="fixed"><parent link="base"/><child link="tool"/>
+    <origin xyz="0 0 1" rpy="0 0 0"/></joint>
+</robot>""",
+        encoding="utf-8",
+    )
+    builder = RobotBuilder(str(urdf), tool_frames=["tool"])
+    spheres = builder.fit_collision_spheres(
+        use_collision_mesh=True, compute_metrics=True,
+        clip_links={"base": ("x", 0.2)},
+    )
+    assert spheres == {"base": [{"center": [0.1, 0.0, 0.0], "radius": 0.1}]}
+    assert builder.link_metrics["base"].coverage == 1.0
+    assert builder.num_spheres == 1
+    matrix = builder.compute_collision_matrix()
+    assert matrix["base"] == ["tool"]
+    builder.add_collision_ignore("tool", ["base"])
+    config = builder.build()
+    assert config.collision_link_names == ["base"]
+    saved = tmp_path / "primitive.yml"
+    builder.save(config, str(saved))
+    loaded = RobotBuilder.from_config(str(saved))
+    assert loaded.collision_spheres == {"base": [{"center": [0.1, 0.0, 0.0], "radius": 0.1}]}
+    with pytest.raises(NotImplementedError, match="exact sphere count"):
+        builder.refit_link_spheres("base", num_spheres=2, use_collision_mesh=True)
+
+
 def test_joint_limits_and_cspace_reindex_scale_clone():
     cfg = CSpaceParams(
         ["a", "b"], [0.0, 1.0], [1.0, 2.0], [1.0, 1.0],
