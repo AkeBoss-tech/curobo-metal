@@ -78464,9 +78464,9 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 4,
         "path": "curobo/_src/solver/seed_ik/seed_ik_error_calculator.py",
-        "resolved_symbols": 10,
+        "resolved_symbols": 18,
         "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_error_calculator",
