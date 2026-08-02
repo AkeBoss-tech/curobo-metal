@@ -14,6 +14,16 @@ errors, selected goal indices, world clearance, feasibility, and normal
 top-k result fields.  `optimization_dt` produces a finite-difference solution
 velocity relative to `current_state`.
 
+When `use_lm_seed=True` (the V2 default), the facade first runs the portable
+`SeedIKSolver`: deterministic damped Gauss--Newton implemented with
+`torch.linalg` on the requested CPU/MPS device.  The resulting candidates are
+then refined by the portable projected Adam stage.  Every solve also records a
+typed `SolveState` and `GoalRegistry` through `goal_registry_manager`, so
+callers that share the V2 solver lifecycle can observe batch, goal-set, tool,
+and seed shape changes.  The exported `_pad_batch_inputs` and
+`_slice_batch_result` helpers retain max-batch integration behavior without
+requiring static CUDA-graph allocations.
+
 `update_world` accepts a portable `SceneCfg`, a list of `SceneCfg` for an
 existing matching multi-environment collision adapter, or a `SceneCollision`.
 It updates the live adapter used for IK scoring.  World clearance is composed

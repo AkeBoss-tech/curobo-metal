@@ -5,14 +5,16 @@ import torch
 
 from curobo._src.geom.collision.collision_scene import SceneCollision, SceneCollisionCfg
 from curobo._src.geom.types import SceneCfg, Sphere
-from curobo._src.solver.solver_ik import IKSolver
+from curobo._src.solver.solve_mode import SolveMode
+from curobo._src.solver.solver_ik import IKSolver, _pad_batch_inputs, _slice_batch_result
 from curobo._src.solver.solver_ik_cfg import IKSolverCfg
 from curobo._src.types.tool_pose import GoalToolPose
 
 
 def _solver(**kwargs) -> IKSolver:
+    kwargs.setdefault("num_seeds", 2)
     return IKSolver(IKSolverCfg.create(
-        "franka.yml", num_seeds=2, use_cuda_graph=False, **kwargs
+        "franka.yml", use_cuda_graph=False, **kwargs
     ))
 
 
@@ -74,3 +76,55 @@ def test_ik_world_update_mutates_the_existing_scene_collision_adapter():
     assert not scene.check_obstacle_exists("old")
     with pytest.raises(NotImplementedError, match="YAML/USD"):
         solver.update_world("world.yml")
+
+
+def test_ik_persists_typed_goal_lifecycle_and_uses_portable_lm_seeding():
+    solver = _solver(max_goalset=2, num_seeds=2)
+    current = solver.default_joint_state
+    result = solver.solve_pose(_two_goal_pose(solver, exact_index=0), current_state=current)
+
+    assert result.success.tolist() == [[True]]
+    assert result.metrics["backend"] == "torch-adam+lm"
+    assert result.metrics["iterations"] >= 1
+    assert solver.seed_ik_solver is not None
+    assert solver.solve_state.solve_type is SolveMode.SINGLE
+    assert solver.solve_state.num_goalset == 2
+    assert solver.goal_registry_manager.goal_buffer.link_goal_poses is not None
+
+
+def test_ik_batch_padding_helpers_clone_and_restore_result_ranks():
+    solver = _solver(max_batch_size=2, max_goalset=2)
+    current = solver.default_joint_state
+    current = current.from_position(current.position.unsqueeze(0), solver.joint_names)
+    goal = _two_goal_pose(solver, exact_index=0)
+    padded_goal, padded_state, padded_seed = _pad_batch_inputs(
+        goal, current, current.position.reshape(1, 1, -1), 1, 2
+    )
+    assert padded_goal.batch_size == padded_state.position.shape[0] == padded_seed.shape[0] == 2
+    padded_goal.position[1, 0, 0, 0, 0] += 1.0
+    assert not torch.equal(padded_goal.position[0], padded_goal.position[1])
+
+    result = solver.solve_pose(goal, current_state=current, run_optimizer=False)
+    result.solution = torch.cat((result.solution, result.solution), dim=0)
+    result.success = torch.cat((result.success, result.success), dim=0)
+    result.js_solution.position = torch.cat((result.js_solution.position, result.js_solution.position), dim=0)
+    _slice_batch_result(result, 1)
+    assert result.solution.shape[0] == result.js_solution.position.shape[0] == 1
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+def test_ik_lm_seed_and_goal_registry_stay_on_mps_without_fallback():
+    from curobo._src.types.device_cfg import DeviceCfg
+
+    solver = IKSolver(IKSolverCfg.create(
+        "franka.yml", num_seeds=2, use_cuda_graph=False,
+        device_cfg=DeviceCfg(torch.device("mps"), torch.float32),
+    ))
+    state = solver.compute_kinematics(solver.default_joint_state)
+    goal = GoalToolPose(
+        solver.tool_frames, state.tool_poses.position.unsqueeze(3),
+        state.tool_poses.quaternion.unsqueeze(3),
+    )
+    result = solver.solve_pose(goal, current_state=solver.default_joint_state)
+    assert result.solution.device.type == "mps"
+    assert solver.goal_registry_manager.goal_buffer.link_goal_poses.device.type == "mps"
