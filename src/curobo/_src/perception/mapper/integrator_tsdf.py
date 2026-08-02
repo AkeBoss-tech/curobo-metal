@@ -16,6 +16,7 @@ import torch
 
 from .mapper import Mapper
 from .mapper_cfg import MapperCfg
+from curobo_metal.ops.perception.core import dense_esdf
 
 
 @dataclass
@@ -71,16 +72,52 @@ class BlockSparseTSDFIntegratorCfg:
         if len(self.grid_shape) != 3 or any(int(n) <= 0 for n in self.grid_shape):
             raise ValueError("grid_shape must contain three positive dimensions")
         self.grid_shape = tuple(int(n) for n in self.grid_shape)
-        if self.voxel_size <= 0 or self.truncation_distance <= 0:
-            raise ValueError("voxel_size and truncation_distance must be positive")
+        scalar_values = {
+            "voxel_size": self.voxel_size,
+            "truncation_distance": self.truncation_distance,
+            "depth_minimum_distance": self.depth_minimum_distance,
+            "depth_maximum_distance": self.depth_maximum_distance,
+            "frustum_decay": self.frustum_decay,
+            "time_decay": self.time_decay,
+            "minimum_tsdf_weight": self.minimum_tsdf_weight,
+            "roughness": self.roughness,
+            "accumulator_w_max": self.accumulator_w_max,
+        }
+        if not all(math.isfinite(float(value)) for value in scalar_values.values()):
+            raise ValueError("TSDF configuration scalars must be finite")
+        if self.voxel_size <= 0 or self.truncation_distance <= 0 or self.accumulator_w_max <= 0:
+            raise ValueError("voxel_size, truncation_distance, and accumulator_w_max must be positive")
+        if self.depth_minimum_distance < 0 or self.depth_minimum_distance >= self.depth_maximum_distance:
+            raise ValueError("depth_minimum_distance must be nonnegative and less than depth_maximum_distance")
+        if not 0 < self.time_decay <= 1 or not 0 < self.frustum_decay <= 1:
+            raise ValueError("time_decay and frustum_decay must be in (0, 1]")
+        if self.minimum_tsdf_weight < 0 or self.roughness <= 0:
+            raise ValueError("minimum_tsdf_weight must be nonnegative and roughness positive")
         if self.block_size < 1 or self.block_size > 32 or self.block_size & (self.block_size - 1):
             raise ValueError("block_size must be 1 or a power of two no greater than 32")
         if self.feature_dim:
             raise NotImplementedError("feature-volume integration requires Warp/CUDA")
         if self.lidar_num_sensors:
             raise NotImplementedError("LiDAR TSDF integration requires Warp/CUDA")
-        if self.enable_static:
-            raise NotImplementedError("static-scene TSDF stamping requires Warp/CUDA")
+        if self.seeding_method not in {"gather", "scatter"}:
+            raise ValueError("seeding_method must be 'gather' or 'scatter'")
+        if self.feature_integration_kernel not in {"auto", "grouped", "tiled"}:
+            raise ValueError("feature_integration_kernel must be 'auto', 'grouped', or 'tiled'")
+        if self.num_cameras <= 0:
+            raise ValueError("num_cameras must be positive")
+        if self.max_support_pixels_per_block_camera <= 0 or self.max_feature_tile_channels <= 0:
+            raise ValueError("portable camera scratch capacities must be positive")
+        if self.image_height is not None or self.image_width is not None:
+            if self.image_height is None or self.image_width is None:
+                raise ValueError("image_height and image_width must be specified together")
+            if self.image_height <= 0 or self.image_width <= 0:
+                raise ValueError("image_height and image_width must be positive")
+        if (self.texture_camera_image_height is None) != (self.texture_camera_image_width is None):
+            raise ValueError("texture_camera_image_height and texture_camera_image_width must be specified together")
+        if self.texture_num_cameras is None:
+            self.texture_num_cameras = self.num_cameras
+        if self.texture_num_cameras <= 0:
+            raise ValueError("texture_num_cameras must be positive")
         if self.origin is None:
             self.origin = torch.zeros(3, dtype=torch.float32)
         else:
@@ -92,8 +129,10 @@ class BlockSparseTSDFIntegratorCfg:
             self.max_blocks = max(1, int(math.prod(self.grid_shape) / self.block_size**3))
         if self.hash_capacity is None:
             self.hash_capacity = max(1, int(math.ceil(self.max_blocks * 2.0)))
-        if self.num_cameras <= 0:
-            raise ValueError("num_cameras must be positive")
+        if self.max_visible_blocks_per_integration is None:
+            self.max_visible_blocks_per_integration = self.max_blocks
+        if not 0 < self.max_visible_blocks_per_integration <= self.max_blocks:
+            raise ValueError("max_visible_blocks_per_integration must be in [1, max_blocks]")
 
 
 class BlockSparseTSDFIntegrator:
@@ -117,9 +156,14 @@ class BlockSparseTSDFIntegrator:
             decay_factor=config.time_decay,
             frustum_decay_factor=config.frustum_decay,
             block_size=config.block_size,
+            enable_static=config.enable_static,
+            static_obstacle_color=config.static_obstacle_color,
             device=config.device,
             accumulator_w_max=config.accumulator_w_max,
         ))
+        # Preserve the component spelling used by V2 callers.  This remains a
+        # bounded dense lifecycle object, not a CUDA/Warp block-pool ABI.
+        self._tsdf = self.mapper.tsdf
         self._frame_count = 0
 
     @property
@@ -149,8 +193,14 @@ class BlockSparseTSDFIntegrator:
     def integrate(self, observation=None, *, camera_observation=None, lidar_observation=None):
         if observation is not None and (camera_observation is not None or lidar_observation is not None):
             raise ValueError("observation cannot be combined with camera_observation or lidar_observation")
+        if observation is None and camera_observation is None and lidar_observation is None:
+            raise ValueError("integrate() requires observation, camera_observation, or lidar_observation")
         if lidar_observation is not None:
             raise NotImplementedError("LiDAR TSDF integration requires Warp/CUDA")
+        # The portable mapper has no projective frustum-recycling kernel, but
+        # global temporal decay is meaningful and can be implemented exactly
+        # over its dense state before each camera update.
+        self._apply_frame_decay(camera_observation=observation or camera_observation)
         result = self.mapper.integrate(
             observation=observation, camera_observation=camera_observation,
             lidar_observation=lidar_observation,
@@ -159,7 +209,8 @@ class BlockSparseTSDFIntegrator:
         return result
 
     def _integrate_camera_frame(self, observation, *, advance_frame=True, apply_decay=True):
-        del apply_decay
+        if apply_decay:
+            self._apply_frame_decay(camera_observation=observation)
         result = self.mapper.integrate(camera_observation=observation)
         if advance_frame:
             self._frame_count += 1
@@ -173,7 +224,18 @@ class BlockSparseTSDFIntegrator:
             return None
         state = self.mapper._mapper.state
         weight = state.weight * self.config.time_decay
-        self.mapper._replace_state(weight=weight)
+        expired = (weight > 0) & (weight < self.config.minimum_tsdf_weight)
+        occupancy = state.occupancy & ~expired
+        tsdf = torch.where(expired, torch.ones_like(state.tsdf), state.tsdf)
+        esdf, gradient = dense_esdf(
+            occupancy, self.config.voxel_size, self.mapper._mapper.config.unobserved_esdf,
+            dtype=state.tsdf.dtype,
+        )
+        self.mapper._replace_state(
+            tsdf=tsdf, weight=torch.where(expired, torch.zeros_like(weight), weight),
+            occupancy=occupancy, esdf=esdf, gradient=gradient,
+            generation=state.generation + 1,
+        )
         return None
 
     def _integrate_lidar_frame(self, observation, *, advance_frame=True):
@@ -191,10 +253,15 @@ class BlockSparseTSDFIntegrator:
         mask = (state.weight > 0) & (state.weight < self.config.minimum_tsdf_weight)
         count = int(mask.sum().item())
         if count:
+            occupancy = state.occupancy & ~mask
+            esdf, gradient = dense_esdf(
+                occupancy, self.config.voxel_size, self.mapper._mapper.config.unobserved_esdf,
+                dtype=state.tsdf.dtype,
+            )
             self.mapper._replace_state(
                 tsdf=torch.where(mask, torch.ones_like(state.tsdf), state.tsdf),
                 weight=torch.where(mask, torch.zeros_like(state.weight), state.weight),
-                occupancy=state.occupancy & ~mask,
+                occupancy=occupancy, esdf=esdf, gradient=gradient,
                 generation=state.generation + 1,
             )
         return count
@@ -208,12 +275,24 @@ class BlockSparseTSDFIntegrator:
     def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = False, level: float = 0.0):
         if level != 0.0:
             raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
-        return self.mapper.extract_mesh(refine_iterations, surface_only)
+        mesh = self.mapper.extract_mesh(refine_iterations, surface_only)
+        vertices = torch.as_tensor(mesh.vertices)
+        mesh.vertex_normals = torch.zeros_like(vertices)
+        # Geometry-only depth fusion has no RGB accumulator.  A deterministic
+        # opaque neutral color makes the source Mesh field usable without
+        # pretending texture/feature fusion occurred.
+        mesh.vertex_colors = torch.full(
+            (vertices.shape[0], 3), 0.5, device=vertices.device, dtype=vertices.dtype,
+        )
+        return mesh
 
     def extract_mesh_tensors(self, level: float = 0.0, surface_only: bool = False, refine_iterations: int = 0):
         mesh = self.extract_mesh(refine_iterations=refine_iterations, surface_only=surface_only, level=level)
-        normals = torch.zeros_like(mesh.vertices)
-        return mesh.vertices, mesh.faces, normals
+        vertices = torch.as_tensor(mesh.vertices)
+        normals = torch.as_tensor(mesh.vertex_normals, device=vertices.device, dtype=vertices.dtype)
+        colors = (torch.as_tensor(mesh.vertex_colors, device=vertices.device, dtype=vertices.dtype)
+                  .clamp(0, 1) * 255).to(torch.uint8)
+        return vertices, torch.as_tensor(mesh.faces, device=vertices.device, dtype=torch.int32), normals, colors
 
     def extract_textured_mesh(self, texture_observations, refine_iterations: int = 0,
                               surface_only: bool = True, level: float = 0.0,
@@ -267,7 +346,18 @@ class BlockSparseTSDFIntegrator:
     def get_stats(self, scan_pool: bool = True, scan_hash: bool = False):
         del scan_pool, scan_hash
         stats = self.mapper.get_stats()
-        stats.update({"frame_count": self._frame_count, "storage": "dense_portable"})
+        stats.update({
+            "frame_count": self._frame_count,
+            "memory_mb": self.mapper.memory_usage_mb(),
+            "storage": "dense_portable",
+            "last_camera_integration": {
+                "implementation": "dense_pytorch",
+                "profile_kernel_timings": self.config.profile_integration_kernel_timings,
+            },
+            "last_camera_integration_kernel_timings_ms": {},
+        })
+        stats["last_integration"] = dict(stats["last_camera_integration"])
+        stats["last_integration_kernel_timings_ms"] = {}
         return stats
 
     def memory_usage_mb(self):

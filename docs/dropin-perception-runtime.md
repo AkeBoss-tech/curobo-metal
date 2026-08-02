@@ -27,6 +27,16 @@ voxel size; sliding windows and resampling are rejected rather than silently
 returning an incorrectly registered distance field. `use_cuda_graph=True` is a
 persistent portable-execution request, not a CUDA Graph object.
 
+The integrator facades keep the V2 component and lifecycle spellings: `.tsdf`
+and `._tsdf`, raw mesh export as `(vertices, triangles, normals, colors)`, a
+real invalidatable dense `._site_index` diagnostic, and memory/stat accounting
+for TSDF plus ESDF buffers. `time_decay` is applied to the dense map and
+rebuilds its derived ESDF safely; `frustum_decay` remains a configuration
+boundary because the Warp projective-recycling kernel has no equivalent sparse
+pool implementation. Static `SceneCfg` cuboids and spheres can be stamped when
+`enable_static=True`; mesh/voxel/capsule/cylinder stamping remains explicit
+CUDA/Warp functionality.
+
 Checkpoint loading uses Torch's weights-only mode and saves portable dense
 tensor payloads under the V2 `curobo.mapper_blocks` metadata spelling. Native
 Warp block-pool payloads, raw hash-table pointers, LiDAR frames, static Warp
