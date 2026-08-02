@@ -15,8 +15,17 @@ from typing import Dict, Optional, Tuple
 
 import torch
 
+from curobo._src.cost.cost_tool_pose import ToolPoseCost
+from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCostCfg
+from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
+from curobo._src.geom.transform import quaternion_rate_to_axis_angle_rate
 from curobo._src.state.state_joint import JointState
-from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.cuda_stream_util import (
+    create_cuda_stream_pair,
+    cuda_stream_context,
+    synchronize_cuda_streams,
+)
 
 
 @dataclass
@@ -78,13 +87,81 @@ class SeedIKErrorCalculator:
         self._batch_size = -1
         self._num_seeds = -1
         self._num_problems = -1
-        self._criteria: Dict[str, object] = {}
+        self._cost_shape = None
+        self._cost_shape_cache: Dict[Tuple[int, torch.dtype, torch.device], torch.Tensor] = {}
+        # Keeping an actual portable ToolPoseCost makes this low-level class
+        # honour the public criteria-update lifecycle.  The LM residual below
+        # intentionally remains geometric (rather than invoking a custom
+        # CUDA backward), but reads the same stacked criteria state.
+        self.pose_cost = self._setup_cost_function()
+        self._criteria: Dict[str, ToolPoseCriteria] = self.pose_cost.config.tool_pose_criteria
+        self._streams = {}
+        self._events = {}
+        for stream_name in (
+            "pose_residual",
+            "joint_limit_residual",
+            "velocity_residual",
+            "acceleration_residual",
+        ):
+            self._streams[stream_name], self._events[stream_name] = create_cuda_stream_pair(
+                self.device_cfg.device
+            )
 
     def setup_batch_tensors(self, batch_size: int, num_seeds: int = 1):
         if batch_size <= 0 or num_seeds <= 0:
             raise ValueError("batch_size and num_seeds must be positive")
+        if batch_size == self._batch_size and num_seeds == self._num_seeds:
+            return
         self._batch_size, self._num_seeds = batch_size, num_seeds
         self._num_problems = batch_size * num_seeds
+        key = (self._num_problems, self.device_cfg.dtype, self.device_cfg.device)
+        self._cost_shape = self._cost_shape_cache.get(key)
+        if self._cost_shape is None:
+            self._cost_shape = torch.ones(
+                (self._num_problems, 1, 2 * self.num_links),
+                **self.device_cfg.as_torch_dict(),
+            )
+            self._cost_shape_cache[key] = self._cost_shape
+        self.pose_cost.setup_batch_tensors(self._num_problems, 1)
+
+    def _validate_problem_tensor(self, value: torch.Tensor, name: str, problems: int) -> None:
+        if not isinstance(value, torch.Tensor):
+            raise TypeError(f"{name} must be a torch.Tensor")
+        if value.shape != (problems, self.dof):
+            raise ValueError(f"{name} must have shape [{problems}, {self.dof}]")
+        if not self.device_cfg.is_same_torch_device(value.device):
+            raise ValueError(f"{name} must use the configured device")
+        if value.dtype != self.device_cfg.dtype:
+            raise ValueError(f"{name} must use the configured dtype")
+        if not bool(torch.isfinite(value).all().item()):
+            raise ValueError(f"{name} must contain only finite values")
+
+    @staticmethod
+    def _quaternion_to_matrix(quaternion: torch.Tensor) -> torch.Tensor:
+        """Return the goal-frame rotation for projected pose criteria."""
+        quaternion = torch.nn.functional.normalize(quaternion, dim=-1)
+        qw, qx, qy, qz = quaternion.unbind(-1)
+        return torch.stack(
+            (
+                1 - 2 * (qy.square() + qz.square()),
+                2 * (qx * qy - qz * qw),
+                2 * (qx * qz + qy * qw),
+                2 * (qx * qy + qz * qw),
+                1 - 2 * (qx.square() + qz.square()),
+                2 * (qy * qz - qx * qw),
+                2 * (qx * qz - qy * qw),
+                2 * (qy * qz + qx * qw),
+                1 - 2 * (qx.square() + qy.square()),
+            ),
+            dim=-1,
+        ).reshape(*quaternion.shape[:-1], 3, 3)
+
+    def _pose_axes(self, value: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Get terminal per-link axis weights and goal-frame projection flags."""
+        criteria = self.pose_cost._stacked_tool_pose_criteria
+        axes = criteria.terminal_pose_axes_weight_factor.to(value)
+        project = criteria.project_distance_to_goal.to(device=value.device).bool().reshape(-1)
+        return axes, project
 
     def _compute_pose_errors(
         self,
@@ -92,6 +169,17 @@ class SeedIKErrorCalculator:
         goal_poses: GoalToolPose,
         idxs_goal: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        self._validate_problem_tensor(joint_position, "joint_position", joint_position.shape[0])
+        if not isinstance(goal_poses, GoalToolPose):
+            raise TypeError("goal_poses must be a GoalToolPose")
+        if goal_poses.horizon != 1:
+            raise NotImplementedError("portable seeded IK evaluates a single target timestep")
+        if not self.device_cfg.is_same_torch_device(goal_poses.position.device) or not self.device_cfg.is_same_torch_device(goal_poses.quaternion.device):
+            raise ValueError("goal_poses must use the configured device")
+        if goal_poses.position.dtype != joint_position.dtype or goal_poses.quaternion.dtype != joint_position.dtype:
+            raise ValueError("goal_poses must use the joint-position dtype")
+        if not bool(torch.isfinite(goal_poses.position).all().item()) or not bool(torch.isfinite(goal_poses.quaternion).all().item()):
+            raise ValueError("goal_poses must contain only finite values")
         state = self.robot_model.compute_kinematics(
             JointState.from_position(joint_position, self.robot_model.joint_names)
         )
@@ -107,27 +195,35 @@ class SeedIKErrorCalculator:
         goal = goal_poses.reorder_links(self.robot_model.tool_frames)
         target_p = goal.position.index_select(0, idxs_goal)[:, 0, :, 0]
         target_q = goal.quaternion.index_select(0, idxs_goal)[:, 0, :, 0]
+        target_q_norm = torch.linalg.vector_norm(target_q, dim=-1)
+        if bool((target_q_norm <= torch.finfo(target_q.dtype).eps).any().item()):
+            raise ValueError("goal_poses quaternion must have nonzero norm")
         position_residual = current_p - target_p
-        orientation_residual = _quaternion_residual(current_q, target_q)
+        axes, project = self._pose_axes(joint_position)
+        if bool(project.any().item()):
+            projected = torch.matmul(
+                position_residual.unsqueeze(-2), self._quaternion_to_matrix(target_q)
+            ).squeeze(-2)
+            position_residual = torch.where(project.reshape(1, -1, 1), projected, position_residual)
+        orientation_residual = _quaternion_residual(
+            torch.nn.functional.normalize(current_q, dim=-1),
+            torch.nn.functional.normalize(target_q, dim=-1),
+        )
         residual = torch.cat((position_residual, orientation_residual), dim=-1)
         jacobian = state.tool_jacobians[:, 0].reshape(joint_position.shape[0], -1, self.dof)
-        weighted_residual = residual.clone()
-        weighted_residual[..., :3] *= self.config.position_weight**0.5
-        weighted_residual[..., 3:] *= self.config.orientation_weight**0.5
-        weighted_jacobian = jacobian.clone()
-        weighted_jacobian[:, 0::6] *= self.config.position_weight**0.5
-        weighted_jacobian[:, 1::6] *= self.config.position_weight**0.5
-        weighted_jacobian[:, 2::6] *= self.config.position_weight**0.5
-        weighted_jacobian[:, 3::6] *= self.config.orientation_weight**0.5
-        weighted_jacobian[:, 4::6] *= self.config.orientation_weight**0.5
-        weighted_jacobian[:, 5::6] *= self.config.orientation_weight**0.5
+        component_weight = axes.clamp_min(0).sqrt().reshape(1, self.num_links, 6)
+        component_weight = component_weight * residual.new_tensor(
+            [self.config.position_weight**0.5] * 3 + [self.config.orientation_weight**0.5] * 3
+        ).reshape(1, 1, 6)
+        weighted_residual = residual * component_weight
+        weighted_jacobian = jacobian * component_weight.reshape(1, -1, 1)
         flat_residual = weighted_residual.reshape(joint_position.shape[0], -1)
         jterror = torch.einsum("brd,br->bd", weighted_jacobian, flat_residual)
         return (
             jterror,
             weighted_jacobian,
-            torch.linalg.vector_norm(position_residual, dim=-1).amax(dim=-1),
-            2 * torch.acos((current_q * target_q).sum(dim=-1).abs().clamp(max=1)).amax(dim=-1),
+            torch.linalg.vector_norm(weighted_residual[..., :3], dim=-1).amax(dim=-1),
+            torch.linalg.vector_norm(weighted_residual[..., 3:], dim=-1).amax(dim=-1),
             flat_residual.square().sum(dim=-1),
         )
 
@@ -154,7 +250,10 @@ class SeedIKErrorCalculator:
             - (lower_violation > 0).to(joint_position.dtype)
         )
         jacobian = torch.diag_embed(derivative)
-        return derivative * residual, jacobian, residual.square().sum(dim=-1)
+        # This is intentionally the sum of per-joint residuals, matching the
+        # upstream LM acceptance scalar; pose/velocity/acceleration terms are
+        # already squared costs by construction.
+        return derivative * residual, jacobian, residual.sum(dim=-1)
 
     def _compute_velocity_errors(
         self, joint_position, current_position, dt, batch_size
@@ -219,22 +318,41 @@ class SeedIKErrorCalculator:
         problems = joint_position.shape[0]
         if self._num_problems >= 0 and problems != self._num_problems:
             raise ValueError(f"num_problems size mismatch: {problems} != {self._num_problems}")
-        pose = self._compute_pose_errors(joint_position, goal_poses, idxs_goal)
-        limits = self._compute_joint_limit_errors(
-            joint_position, problems, current_position, dt, velocity_clamping_active
-        )
+        with self.stream_context("pose_residual"):
+            pose = self._compute_pose_errors(joint_position, goal_poses, idxs_goal)
+        limits = (None, None, None)
+        if self.config.joint_limit_weight > 0:
+            with self.stream_context("joint_limit_residual"):
+                limits = self._compute_joint_limit_errors(
+                    joint_position, problems, current_position, dt, velocity_clamping_active
+                )
         velocity = acceleration = None
         if self.config.velocity_weight > 0:
-            velocity = self._compute_velocity_errors(joint_position, current_position, dt, problems)
+            with self.stream_context("velocity_residual"):
+                velocity = self._compute_velocity_errors(joint_position, current_position, dt, problems)
         if self.config.acceleration_weight > 0:
-            acceleration = self._compute_acceleration_errors(
-                joint_position, current_position, current_velocity, dt, problems
-            )
+            with self.stream_context("acceleration_residual"):
+                acceleration = self._compute_acceleration_errors(
+                    joint_position, current_position, current_velocity, dt, problems
+                )
+        synchronize_cuda_streams(self._events, self.device_cfg.device)
         velocity_parts = velocity if velocity is not None else (None, None, None)
         acceleration_parts = acceleration if acceleration is not None else (None, None, None)
-        jterror, jacobian, error_norm = self._combine_errors(
-            pose[0], pose[1], pose[4], *limits, *velocity_parts, *acceleration_parts
-        )
+        if limits[0] is None:
+            jterror, jacobian, error_norm = pose[0], pose[1], pose[4]
+            if velocity is not None:
+                jterror, jacobian, error_norm = self._combine_errors(
+                    jterror, jacobian, error_norm,
+                    velocity[0], velocity[1], velocity[2], *acceleration_parts,
+                )
+            elif acceleration is not None:
+                jterror = jterror + acceleration[0]
+                jacobian = torch.cat((jacobian, acceleration[1]), dim=1)
+                error_norm = error_norm + acceleration[2]
+        else:
+            jterror, jacobian, error_norm = self._combine_errors(
+                pose[0], pose[1], pose[4], *limits, *velocity_parts, *acceleration_parts
+            )
         return ErrorJacobianResult(
             pose[2], pose[3], jterror, jacobian, error_norm, joint_position.detach()
         )
@@ -247,22 +365,44 @@ class SeedIKErrorCalculator:
         )
 
     def _compute_analytical_pose_jTerror(self, current_poses, jacobian, batch_size):
-        del current_poses, jacobian, batch_size
-        raise NotImplementedError(
-            "portable SeedIK uses the geometric Jacobian directly; raw pose-gradient buffers are CUDA-only"
-        )
+        if not isinstance(current_poses, ToolPose):
+            raise TypeError("current_poses must be a ToolPose")
+        if current_poses.position.grad is None or current_poses.quaternion.grad is None:
+            raise RuntimeError("current pose gradients must be populated before analytical reduction")
+        position_residual = current_poses.position.grad.reshape(batch_size, self.num_links, 3)
+        quaternion_residual = current_poses.quaternion.grad.reshape(batch_size, self.num_links, 4)
+        quaternion = current_poses.quaternion.detach().reshape(batch_size, self.num_links, 4)
+        angular = quaternion_rate_to_axis_angle_rate(quaternion_residual, quaternion)
+        residual = torch.cat((position_residual, angular), dim=-1).reshape(batch_size, -1)
+        return torch.matmul(jacobian.transpose(-2, -1), residual.unsqueeze(-1)).squeeze(-1)
 
     def _setup_cost_function(self):
-        """CUDA ToolPoseCost is intentionally not constructed by this backend."""
-        return None
+        criteria = {
+            name: ToolPoseCriteria(
+                terminal_pose_convergence_tolerance=[0.0, 0.0],
+                terminal_pose_axes_weight_factor=[1.0] * 6,
+                device_cfg=self.device_cfg,
+            )
+            for name in self.robot_model.tool_frames
+        }
+        return ToolPoseCost(ToolPoseCostCfg(
+            weight=[self.config.position_weight, self.config.orientation_weight],
+            tool_frames=list(self.robot_model.tool_frames),
+            tool_pose_criteria=criteria,
+            device_cfg=self.device_cfg,
+            use_lie_group=False,
+        ))
 
     def update_tool_pose_criteria(self, tool_pose_criteria):
-        self._criteria = dict(tool_pose_criteria)
+        self.pose_cost.update_tool_pose_criteria(tool_pose_criteria)
+        self._criteria = self.pose_cost.config.tool_pose_criteria
 
     def stream_context(self, stream_name: str):
         if stream_name not in {"pose_residual", "joint_limit_residual", "velocity_residual", "acceleration_residual", "default", "kinematics", "cost"}:
             raise ValueError(f"unknown portable stream: {stream_name}")
-        return nullcontext()
+        if stream_name == "default":
+            return nullcontext()
+        return cuda_stream_context(stream_name, self._streams, self._events, self.device_cfg.device)
 
 
 __all__ = ["ErrorJacobianResult", "SeedIKErrorCalculator"]

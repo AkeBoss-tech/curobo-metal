@@ -14,5 +14,11 @@ this as `backend: "torch-lm"` and `cuda_graph: false`.
 
 Goal-set ranking is deterministic: every candidate is solved, then ties select
 the lower goal-set index and lower seed index.  Raw cost-gradient buffer APIs
-from the CUDA implementation are not emulated; the public error calculator
-uses the geometric Jacobian directly.
+from the CUDA implementation are not emulated.  The public error calculator
+does provide a persistent shape-keyed workspace, validates batch/device/dtype
+and finite goal inputs, and evaluates weighted geometric pose, joint-limit,
+velocity, and acceleration residual blocks on CPU or MPS.  Per-link
+`ToolPoseCriteria` updates take effect immediately: axis masks (including a
+fully disabled tool) change both residuals and Jacobian rows, while
+goal-frame translational projection is honoured.  CUDA stream names remain
+portable no-op contexts; no raw stream/event or packed-kernel ABI is claimed.
