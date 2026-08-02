@@ -31,9 +31,26 @@ The local classifications are:
 - `partial`: a local module exists but one or more names are absent;
 - `missing_module`: neither local package path exists.
 
-This first gate compares top-level symbol presence. It captures class-member
-metadata for later compatibility phases but does not yet treat member differences
-as local resolution failures.
+The inventory's module classification compares top-level symbol presence. It
+captures class-member metadata but does not treat member differences as module
+resolution failures.
+
+`tools/api_compat/surface_gate.py` is the review companion. It consumes the
+checked-in inventory and local source with AST only, reporting per-module
+top-level export coverage and declared function/constructor/method shape matches.
+It is intentionally an evidence report, not a drop-in verdict: dynamic exports,
+runtime-generated methods, behavior, numerical results, autograd, device
+residency, performance, and CUDA/Warp ABI compatibility remain outside its scope.
+
+```shell
+python tools/api_compat/surface_gate.py \
+  --inventory artifacts/api_compat/upstream-api.json \
+  --local-root src \
+  --output /tmp/curobo-surface-report.json
+```
+
+`--require-exact-exports` makes missing static exports fail the command. It does
+not promote callable-shape matches into behavioral or backend equivalence.
 
 ## Generate and check
 
@@ -66,6 +83,25 @@ pin. There is no override. Neither upstream nor local modules are imported, so
 inventory generation does not initialize CUDA, Torch, Warp, or Isaac
 dependencies.
 
+## Installed-wheel runtime import gate
+
+`tools/api_compat/runtime_imports.py` imports each runtime module recorded in the
+committed inventory. It needs no upstream checkout; the only input is the pinned
+JSON artifact. The regular test validates source-tree imports, while CI builds a
+wheel, installs it, changes to `/tmp`, and runs:
+
+```shell
+python tools/api_compat/runtime_imports.py \
+  --inventory /path/to/upstream-api.json \
+  --require-installed-wheel
+```
+
+The installed-wheel mode verifies that `curobo` resolves from the installed
+`curobo-metal` distribution before it imports all recorded runtime namespaces.
+This gate proves importability only. Optional CUDA, Warp, USD, Isaac, Blox, and
+Viser integrations must stay lazy at import time; their unsupported operations
+continue to raise explicit errors when invoked.
+
 ## Determinism and review
 
 Paths, modules, symbols, members, and JSON object keys are sorted; JSON uses a
@@ -75,4 +111,5 @@ identical upstream and local source must therefore produce byte-identical output
 
 Focused tests live in `tests/api_compat_inventory/` and cover wrong-revision
 rejection, signature/default recovery, dataclass and enum metadata, deterministic
-ordering, local classification, and the no-import property.
+ordering, local classification, the no-import property, AST surface reporting,
+and exhaustive runtime namespace importability.

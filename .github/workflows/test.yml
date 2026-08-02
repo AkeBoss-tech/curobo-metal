@@ -38,6 +38,13 @@ jobs:
           cd /tmp
           "$GITHUB_WORKSPACE/.venv/bin/python" \
             "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
+      - name: Import every pinned runtime namespace from the installed wheel
+        run: |
+          cd /tmp
+          "$GITHUB_WORKSPACE/.venv/bin/python" \
+            "$GITHUB_WORKSPACE/tools/api_compat/runtime_imports.py" \
+            --inventory "$GITHUB_WORKSPACE/artifacts/api_compat/upstream-api.json" \
+            --require-installed-wheel
 
   macos:
     runs-on: macos-14
@@ -55,3 +62,10 @@ jobs:
           cd /tmp
           "$GITHUB_WORKSPACE/.venv/bin/python" \
             "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
+      - name: Import every pinned runtime namespace from the installed wheel
+        run: |
+          cd /tmp
+          "$GITHUB_WORKSPACE/.venv/bin/python" \
+            "$GITHUB_WORKSPACE/tools/api_compat/runtime_imports.py" \
+            --inventory "$GITHUB_WORKSPACE/artifacts/api_compat/upstream-api.json" \
+            --require-installed-wheel
