@@ -108,7 +108,11 @@ def test_checkpoint_contract_roundtrip_and_warp_payload_boundary(tmp_path):
     assert torch.equal(loaded["blocks"]["tsdf"], blocks["tsdf"])
     entry = pack_hash_entry_host(-1, 0, 1, 7)
     assert isinstance(entry, int)
-    assert (rebuild_import_hash_state(torch.tensor([[0, 0, 0]], dtype=torch.int32), 4, 1) >= 0).sum() == 1
+    hash_table, block_to_hash_slot = rebuild_import_hash_state(
+        torch.tensor([[0, 0, 0]], dtype=torch.int32), 4, 1
+    )
+    assert (hash_table != -1).sum() == 1
+    assert block_to_hash_slot.tolist().count(-1) == 0
     integrator = BlockSparseTSDFIntegrator(BlockSparseTSDFIntegratorCfg(
         grid_shape=(2, 2, 2), voxel_size=0.1, device="cpu",
     ))

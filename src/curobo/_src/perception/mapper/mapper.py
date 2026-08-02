@@ -5,6 +5,14 @@ import torch
 from curobo._src.geom.types import Mesh, VoxelGrid
 from curobo._src.perception.mapper.mapper_cfg import MapperCfg
 from curobo._src.perception.mapper.storage import BlockDataView, OccupiedVoxels
+from curobo._src.perception.mapper.checkpoint_blocks import (
+    build_block_metadata,
+    is_portable_dense_block_payload,
+    load_block_checkpoint,
+    prepare_blocks_for_import,
+    save_block_checkpoint,
+    validate_block_metadata_for_target,
+)
 from curobo._src.types.camera import CameraObservation
 from curobo_metal.ops.perception import CameraObservation as NativeObservation
 from curobo_metal.ops.perception import PerceptionConfig, PerceptionMapper
@@ -101,11 +109,36 @@ class Mapper:
     def reset(self): self._mapper.reset()
 
     def save_blocks(self, file_path):
-        torch.save(self._mapper.state_dict(), file_path)
+        """Persist dense CPU/MPS state in the cuRobo checkpoint envelope."""
+        blocks = {
+            field: getattr(self._mapper.state, field)
+            for field in ("tsdf", "weight", "occupancy", "esdf", "gradient", "generation")
+        }
+        save_block_checkpoint(file_path, build_block_metadata(self), blocks)
 
     def import_blocks(self, file_path, import_weight=None):
-        self._mapper.load_state_dict(torch.load(file_path, map_location=self.device, weights_only=True))
-        return int((self._mapper.state.weight > 0).sum())
+        """Restore a dense checkpoint into an empty mapper.
+
+        A V2 CUDA/Warp sparse block-pool payload is identified and validated
+        by the checkpoint helpers, then rejected explicitly rather than being
+        misinterpreted as portable dense state.
+        """
+        checkpoint = load_block_checkpoint(file_path)
+        validate_block_metadata_for_target(checkpoint["block_metadata"], self)
+        blocks = prepare_blocks_for_import(
+            checkpoint["blocks"], checkpoint["block_metadata"],
+            import_weight=import_weight,
+            minimum_tsdf_weight=self.config.minimum_tsdf_weight,
+            block_empty_threshold=0.0,
+        )
+        if not is_portable_dense_block_payload(blocks):
+            raise NotImplementedError("importing CUDA/Warp sparse block-pool payloads is unavailable on the portable dense mapper")
+        if bool((self._mapper.state.weight > 0).any().item()):
+            raise ValueError("block import requires an empty target mapper")
+        state_checkpoint = self._mapper.state_dict()
+        state_checkpoint.update(blocks)
+        self._mapper.load_state_dict(state_checkpoint)
+        return int((self._mapper.state.weight > 0).sum().item())
 
     def get_stats(self, scan_pool=True, scan_hash=False):
         return {
