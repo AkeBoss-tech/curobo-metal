@@ -1,9 +1,18 @@
-"""Joint type definitions used by the portable robot loader."""
+"""Axis-aligned joint type definitions used by the portable robot loader."""
+
+from __future__ import annotations
 
 from enum import Enum
 
 
 class JointType(Enum):
+    """Pinned V2 joint encodings for fixed, prism, and revolute joints.
+
+    The numerical values form part of serialized kinematic maps, so they are
+    intentionally stable.  Arbitrary-axis joints are not represented by this
+    CUDA-originated enum; portable URDF loading raises an explicit error for
+    them rather than silently choosing a nearest axis.
+    """
     FIXED = -1
     X_PRISM = 0
     Y_PRISM = 1
