@@ -33,7 +33,22 @@ batch axis while the raw tensors use normal PyTorch integer-index views.
 
 Deliberate gaps are explicit: USD/Isaac parsing remains unsupported by the
 portable config loader; nonzero locked revolute joints currently raise
-`NotImplementedError`; mesh-returning helpers and CUDA multi-environment sphere
-configuration mutation are not implemented. Only sphere environment index zero
-is accepted, and mismatched joint names, ranks, degrees of freedom, devices, or
-dtypes raise rather than silently converting.
+`NotImplementedError`; mesh-returning helpers and the raw CUDA packed-FK ABI
+are not implemented. Mismatched joint names, ranks, degrees of freedom,
+devices, or dtypes raise rather than silently converting.
+
+## KinematicsParams metadata and sphere environments
+
+`KinematicsCfg.kinematics_config` supplies a device-correct portable
+`KinematicsParams` record. In addition to link spheres it derives stable tree
+metadata (`link_map`, level order, ancestor and downstream-link CSR arrays,
+and joint-to-tool reachability) plus CUDA-shaped inertial views
+(`link_masses_com` and padded `link_inertias`). These are inspectable value
+model tensors, not a claim that CUDA packed-buffer launches are available.
+
+The collision-sphere bank is `[environment, sphere, xyzw-radius]`. Call
+`set_num_envs(n)` to provision independent attachment configurations;
+`update_link_spheres(..., config_idx=None)` broadcasts one link update to every
+environment, while an explicit index changes only that environment. Cloning,
+`copy_`, and `to(DeviceCfg(...))` preserve independent value-model state and
+move materialized metadata to CPU or float32 MPS without CPU fallback.

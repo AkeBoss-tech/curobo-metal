@@ -23,6 +23,86 @@ class KinematicsParams:
     robot_cfg: Any
     reference_link_spheres: torch.Tensor | None = field(default=None, init=False)
     _link_spheres: torch.Tensor | None = field(default=None, init=False, repr=False)
+    # These records are intentionally derived from the portable tree rather
+    # than copied from a CUDA loader.  Keeping them cached gives callers the
+    # same stable tensor identity between reads while still allowing
+    # ``copy_``/``clone`` to preserve caller-owned buffers.
+    _tree_cache: Any = field(default=None, init=False, repr=False)
+    _fixed_transforms: torch.Tensor | None = field(default=None, init=False, repr=False)
+    _link_masses_com: torch.Tensor | None = field(default=None, init=False, repr=False)
+    _link_inertias: torch.Tensor | None = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._validate_robot_cfg()
+        self.validate_shapes()
+
+    def _validate_robot_cfg(self) -> None:
+        """Validate the portable model before lazily materializing tensors.
+
+        cuRobo's original record is made by a CUDA-side loader.  Here the
+        source of truth is the mutable :class:`RobotCfg`, so rejecting malformed
+        names or disconnected trees at the value-model boundary is preferable
+        to failing later in a planner or collision query.
+        """
+        required = ("links", "joints", "joint_names", "base_link", "device_cfg")
+        if any(not hasattr(self.robot_cfg, name) for name in required):
+            raise TypeError("robot_cfg must be a portable RobotCfg-style model")
+        names = [link.name for link in self.robot_cfg.links]
+        if not names or self.robot_cfg.base_link not in names:
+            raise ValueError("robot_cfg must contain its base_link")
+        if len(set(names)) != len(names):
+            raise ValueError("robot_cfg link names must be unique")
+        joint_names = list(self.robot_cfg.joint_names)
+        if not joint_names or len(set(joint_names)) != len(joint_names):
+            raise ValueError("robot_cfg active joint names must be non-empty and unique")
+        all_joint_names = [joint.name for joint in self.robot_cfg.joints]
+        if len(set(all_joint_names)) != len(all_joint_names):
+            raise ValueError("robot_cfg joint names must be unique")
+        links = set(names)
+        for joint in self.robot_cfg.joints:
+            if joint.parent not in links or joint.child not in links:
+                raise ValueError(f"joint {joint.name!r} references an unknown link")
+            if joint.kind not in {"fixed", "revolute", "prismatic"}:
+                raise ValueError(f"unsupported portable joint kind: {joint.kind!r}")
+            if joint.mimic_joint is not None and joint.mimic_joint not in joint_names:
+                raise ValueError(f"mimic joint {joint.name!r} has an unknown source")
+
+    def _tree(self):
+        """Return the tree in the topological order used by production FK."""
+        if self._tree_cache is None:
+            from curobo_metal.reference.tree_kinematics import TreeRobot
+
+            mapping = self.robot_cfg._tree_mapping()
+            # Kinematics metadata must remain available for URDFs carrying
+            # visual/approximate inertias that are not positive semidefinite.
+            # Production FK does not consume inertia; dynamics validates its
+            # own physical model.  Keep the original values for
+            # ``link_inertias`` below, but use zero inertias to build this
+            # topology-only tree exactly as portable FK does.
+            for link in mapping["links"]:
+                link["inertial"]["inertia"] = [0.0] * 6
+            self._tree_cache = TreeRobot.from_dict(mapping)
+        return self._tree_cache
+
+    @staticmethod
+    def _copy_or_replace(current: torch.Tensor | None, source: torch.Tensor | None) -> torch.Tensor | None:
+        if source is None:
+            return None
+        if (
+            current is not None
+            and current.shape == source.shape
+            and current.device == source.device
+            and current.dtype == source.dtype
+        ):
+            current.copy_(source)
+            return current
+        return source.clone()
+
+    def _clear_derived(self) -> None:
+        self._tree_cache = None
+        self._fixed_transforms = None
+        self._link_masses_com = None
+        self._link_inertias = None
 
     @property
     def num_dof(self) -> int:
@@ -108,19 +188,39 @@ class KinematicsParams:
 
     @property
     def link_name_to_idx_map(self) -> dict[str, int]:
-        return {link.name: index for index, link in enumerate(self.robot_cfg.links)}
+        return {link.name: index for index, link in enumerate(self._tree().links)}
 
     @property
     def link_map(self) -> torch.Tensor:
-        """Stable link index for each link, matching the tree model order."""
-        return torch.arange(self.num_links, dtype=torch.int64, device=self.device_cfg.device)
+        """Parent-link index for each topologically ordered link.
+
+        Root is ``-1``.  This is a genuine tree map, not an identity map: it
+        is safe for branching robots and is suitable for portable metadata
+        consumers even though raw CUDA packed-FK launchers remain unavailable.
+        """
+        return torch.tensor(
+            [link.parent for link in self._tree().links],
+            dtype=torch.int64,
+            device=self.device_cfg.device,
+        )
 
     @property
     def joint_map(self) -> torch.Tensor:
-        """Stable active-joint index map; fixed and mimic joints use ``-1``."""
+        """Active-joint index map in the source joint-record order.
+
+        The public portable loader historically exposed this one entry per
+        source joint (rather than including the synthetic root link), so that
+        rank is retained here.  Mimics resolve to their source active joint.
+        """
         active = {name: index for index, name in enumerate(self.joint_names)}
         return torch.tensor(
-            [active.get(joint.name, -1) for joint in self.robot_cfg.joints],
+            [
+                active.get(
+                    joint.mimic_joint if joint.mimic_joint is not None else joint.name,
+                    -1,
+                )
+                for joint in self.robot_cfg.joints
+            ],
             dtype=torch.int64,
             device=self.device_cfg.device,
         )
@@ -160,28 +260,139 @@ class KinematicsParams:
     @property
     def fixed_transforms(self) -> torch.Tensor:
         """[link, 4, 4] rest transforms, useful for portable introspection."""
-        from curobo_metal.ops.whole_body import WholeBodyModel
-        from curobo_metal.reference.tree_kinematics import TreeRobot
+        if self._fixed_transforms is None:
+            self._fixed_transforms = torch.stack([
+                torch.as_tensor(link.origin, device=self.device_cfg.device, dtype=self.device_cfg.dtype)
+                for link in self._tree().links
+            ]).contiguous()
+        return self._fixed_transforms
 
-        mapping = self.robot_cfg._tree_mapping()
-        # Rest FK does not consume inertia. Some widely-used URDF files carry
-        # visualization inertias which are not PSD, whereas the reference tree
-        # validates physical dynamics strictly.
-        for link in mapping["links"]:
-            link["inertial"]["inertia"] = [0.0] * 6
-        model = WholeBodyModel(
-            TreeRobot.from_dict(mapping),
-            device=self.device_cfg.device,
-            dtype=self.device_cfg.dtype,
-        )
-        return model.origins.clone()
+    @property
+    def link_masses_com(self) -> torch.Tensor:
+        """Packed ``[link, xyz-com, mass]`` inertial metadata."""
+        if self._link_masses_com is None:
+            raw = {link.name: link for link in self.robot_cfg.links}
+            self._link_masses_com = self.device_cfg.to_device(
+                [[*raw[link.name].com, raw[link.name].mass] for link in self._tree().links]
+            ).reshape(-1, 4).contiguous()
+        return self._link_masses_com
+
+    @property
+    def link_inertias(self) -> torch.Tensor:
+        """CUDA-shaped ``[link, 8]`` inertia packing for portable consumers.
+
+        The final two values are zero padding, retained for source
+        compatibility.  Calling a raw CUDA RNEA/FK ABI with this record is
+        still intentionally unsupported.
+        """
+        if self._link_inertias is None:
+            raw = {link.name: link for link in self.robot_cfg.links}
+            values = []
+            for link in self._tree().links:
+                packed = raw[link.name].inertia
+                values.append([
+                    packed[0], packed[1], packed[2], packed[3], packed[4], packed[5], 0.0, 0.0,
+                ])
+            self._link_inertias = self.device_cfg.to_device(values).reshape(-1, 8).contiguous()
+        return self._link_inertias
+
+    @property
+    def grasp_contact_link_names(self) -> list[str]:
+        value = self.robot_cfg.metadata.get("grasp_contact_link_names", [])
+        if value is None:
+            return []
+        result = list(value)
+        unknown = sorted(set(result) - set(self.link_name_to_idx_map))
+        if unknown:
+            raise ValueError(f"grasp_contact_link_names contain unknown links: {unknown}")
+        return result
 
     @property
     def tool_frames(self) -> list[str]:
         return list(self.robot_cfg.tool_frames)
 
+    @property
     def all_link_names(self) -> list[str]:
-        return [link.name for link in self.robot_cfg.links]
+        """All tree links in the same topological order as production FK."""
+        return [link.name for link in self._tree().links]
+
+    @property
+    def link_chain_data(self) -> torch.Tensor:
+        """CSR payload of ancestor link indices for every output link.
+
+        This is useful for Jacobian/introspection code.  It deliberately does
+        not claim compatibility with CUDA packed-buffer launch semantics.
+        """
+        data: list[int] = []
+        for index, link in enumerate(self._tree().links):
+            chain: list[int] = []
+            current = index
+            while current >= 0:
+                chain.append(current)
+                current = self._tree().links[current].parent
+            data.extend(reversed(chain))
+        return torch.tensor(data, dtype=torch.int64, device=self.device_cfg.device)
+
+    @property
+    def link_chain_offsets(self) -> torch.Tensor:
+        offsets = [0]
+        for index, link in enumerate(self._tree().links):
+            length = 1
+            current = link.parent
+            while current >= 0:
+                length += 1
+                current = self._tree().links[current].parent
+            offsets.append(offsets[-1] + length)
+        return torch.tensor(offsets, dtype=torch.int64, device=self.device_cfg.device)
+
+    @property
+    def joint_links_data(self) -> torch.Tensor:
+        """CSR payload of output links affected by each active joint."""
+        data: list[int] = []
+        for joint_index in range(self.num_dof):
+            for index, link in enumerate(self._tree().links):
+                current = index
+                while current >= 0:
+                    ancestor = self._tree().links[current]
+                    if ancestor.q_index == joint_index:
+                        data.append(index)
+                        break
+                    current = ancestor.parent
+        return torch.tensor(data, dtype=torch.int64, device=self.device_cfg.device)
+
+    @property
+    def joint_links_offsets(self) -> torch.Tensor:
+        offsets = [0]
+        for joint_index in range(self.num_dof):
+            count = 0
+            for index, link in enumerate(self._tree().links):
+                current = index
+                while current >= 0:
+                    ancestor = self._tree().links[current]
+                    if ancestor.q_index == joint_index:
+                        count += 1
+                        break
+                    current = ancestor.parent
+            offsets.append(offsets[-1] + count)
+        return torch.tensor(offsets, dtype=torch.int64, device=self.device_cfg.device)
+
+    @property
+    def joint_affects_endeffector(self) -> torch.Tensor:
+        """Flattened active-joint × tool-frame reachability matrix."""
+        values = []
+        indices = self.link_name_to_idx_map
+        for joint_index in range(self.num_dof):
+            for name in self.tool_frames:
+                current = indices[name]
+                affects = False
+                while current >= 0:
+                    link = self._tree().links[current]
+                    if link.q_index == joint_index:
+                        affects = True
+                        break
+                    current = link.parent
+                values.append(affects)
+        return torch.tensor(values, dtype=torch.bool, device=self.device_cfg.device)
 
     @property
     def mesh_link_names(self) -> list[str]:
@@ -196,39 +407,110 @@ class KinematicsParams:
         )
 
     def make_contiguous(self) -> None:
-        """Compatibility no-op: tensors are created contiguous by the backend."""
-        if self._link_spheres is not None:
-            self._link_spheres = self._link_spheres.contiguous()
+        """Make materialized portable tensor metadata contiguous in place."""
+        for name in (
+            "_link_spheres", "reference_link_spheres", "_fixed_transforms",
+            "_link_masses_com", "_link_inertias",
+        ):
+            value = getattr(self, name)
+            if value is not None and not value.is_contiguous():
+                setattr(self, name, value.contiguous())
 
     def copy_(self, other: "KinematicsParams") -> "KinematicsParams":
         if not isinstance(other, KinematicsParams):
             raise TypeError("other must be KinematicsParams")
-        self.robot_cfg = other.robot_cfg
-        self._link_spheres = (
-            None if other._link_spheres is None else other._link_spheres.clone()
+        if self.device_cfg != other.device_cfg:
+            raise ValueError("copy_ requires matching device_cfg values")
+        # The mutable source model does not expose an in-place record-copy API.
+        # Deep-copying it prevents a clone/update of one KinematicsParams from
+        # altering another, while cached tensor buffers retain identity whenever
+        # their shapes remain compatible.
+        self.robot_cfg = deepcopy(other.robot_cfg)
+        self._tree_cache = None
+        self._link_spheres = self._copy_or_replace(self._link_spheres, other._link_spheres)
+        self.reference_link_spheres = self._copy_or_replace(
+            self.reference_link_spheres, other.reference_link_spheres
         )
-        self.reference_link_spheres = (
-            None if other.reference_link_spheres is None
-            else other.reference_link_spheres.clone()
+        self._fixed_transforms = self._copy_or_replace(
+            self._fixed_transforms, other._fixed_transforms
         )
+        self._link_masses_com = self._copy_or_replace(
+            self._link_masses_com, other._link_masses_com
+        )
+        self._link_inertias = self._copy_or_replace(
+            self._link_inertias, other._link_inertias
+        )
+        self.validate_shapes()
         return self
 
     def clone(self) -> "KinematicsParams":
         result = KinematicsParams(deepcopy(self.robot_cfg))
-        result._link_spheres = (
-            None if self._link_spheres is None else self._link_spheres.clone()
-        )
-        result.reference_link_spheres = (
-            None if self.reference_link_spheres is None
-            else self.reference_link_spheres.clone()
-        )
+        result._link_spheres = self._copy_or_replace(None, self._link_spheres)
+        result.reference_link_spheres = self._copy_or_replace(None, self.reference_link_spheres)
+        result._fixed_transforms = self._copy_or_replace(None, self._fixed_transforms)
+        result._link_masses_com = self._copy_or_replace(None, self._link_masses_com)
+        result._link_inertias = self._copy_or_replace(None, self._link_inertias)
+        return result
+
+    def to(self, device_cfg: Any = None, *, device: torch.device | str | None = None,
+           dtype: torch.dtype | None = None) -> "KinematicsParams":
+        """Return an independent copy on a new portable device policy.
+
+        The operation moves value-model tensors only.  It does not expose the
+        CUDA FK/RNEA ABI or transform this record into a raw CUDA buffer.
+        """
+        from curobo._src.types.device_cfg import DeviceCfg
+
+        if isinstance(device_cfg, DeviceCfg):
+            target = device_cfg
+        else:
+            target_device = device if device is not None else device_cfg
+            if target_device is None:
+                target_device = self.device_cfg.device
+            target = DeviceCfg(torch.device(target_device), self.device_cfg.dtype if dtype is None else dtype)
+        result = self.clone()
+        result.robot_cfg.device_cfg = target
+        for name in (
+            "_link_spheres", "reference_link_spheres", "_fixed_transforms",
+            "_link_masses_com", "_link_inertias",
+        ):
+            value = getattr(result, name)
+            if value is not None:
+                setattr(result, name, value.to(**target.as_torch_dict()))
         return result
 
     def validate_shapes(self) -> None:
-        if self.num_dof != len(self.joint_names):
+        if self.num_dof != len(self.joint_names) or self.num_dof <= 0:
             raise ValueError("num_dof and joint_names disagree")
+        if len(set(self.tool_frames)) != len(self.tool_frames):
+            raise ValueError("tool_frames must be unique")
+        unknown_tools = sorted(set(self.tool_frames) - set(self.all_link_names))
+        if unknown_tools:
+            raise ValueError(f"tool_frames contain unknown links: {unknown_tools}")
         if self.link_spheres.ndim != 3 or self.link_spheres.shape[-1] != 4:
             raise ValueError("link_spheres must have shape [env, sphere, 4]")
+        if self.link_spheres.shape[0] < 1:
+            raise ValueError("link_spheres must contain at least one environment")
+        if self.link_spheres.shape[1] != self.total_spheres:
+            raise ValueError("link_spheres sphere count does not match collision geometry")
+        if not self.device_cfg.is_same_torch_device(self.link_spheres.device):
+            raise ValueError("link_spheres must be on device_cfg.device")
+        if not bool(torch.isfinite(self.link_spheres).all().item()):
+            raise ValueError("link_spheres must contain finite values")
+        if self.link_sphere_idx_map.numel() != self.total_spheres:
+            raise ValueError("link_sphere_idx_map must have one index per sphere")
+        if not self.device_cfg.is_same_torch_device(self.link_sphere_idx_map.device):
+            raise ValueError("link_sphere_idx_map must be on device_cfg.device")
+        if self.link_sphere_idx_map.numel() and bool(
+            ((self.link_sphere_idx_map < 0) | (self.link_sphere_idx_map >= self.num_links)).any().item()
+        ):
+            raise ValueError("link_sphere_idx_map contains an invalid link index")
+        if self.fixed_transforms.shape != (self.num_links, 4, 4):
+            raise ValueError("fixed_transforms must have shape [num_links, 4, 4]")
+        if self.link_masses_com.shape != (self.num_links, 4):
+            raise ValueError("link_masses_com must have shape [num_links, 4]")
+        if self.link_inertias.shape != (self.num_links, 8):
+            raise ValueError("link_inertias must have shape [num_links, 8]")
 
     def load_cspace_cfg_from_kinematics(self) -> None:
         if not self.robot_cfg.cspace.joint_names:
@@ -250,17 +532,62 @@ class KinematicsParams:
         start_sph_idx: int = 0,
         config_idx: int | None = None,
     ) -> None:
-        env = 0 if config_idx is None else config_idx
         indices = self.get_sphere_index_from_link_name(link_name)
+        if indices.numel() == 0:
+            raise ValueError(f"link {link_name!r} has no collision spheres")
+        if start_sph_idx < 0:
+            raise ValueError("start_sph_idx must be non-negative")
         values = torch.as_tensor(
             sphere_position_radius,
             device=self.link_spheres.device,
             dtype=self.link_spheres.dtype,
-        ).reshape(-1, 4)
-        target = indices[start_sph_idx:start_sph_idx + len(values)]
-        if len(target) != len(values):
+        )
+        if values.ndim not in (2, 3) or values.shape[-1] != 4:
+            raise ValueError("sphere_position_radius must have shape [sphere, 4] or [env, sphere, 4]")
+        count = values.shape[-2]
+        target = indices[start_sph_idx:start_sph_idx + count]
+        if target.numel() != count:
             raise ValueError("too many sphere values for link")
-        self.link_spheres[env, target] = values
+        if not bool(torch.isfinite(values).all().item()):
+            raise ValueError("sphere_position_radius must contain finite values")
+        if config_idx is None:
+            if values.ndim == 2:
+                self.link_spheres[:, target] = values
+            elif values.shape[0] == self.num_envs:
+                self.link_spheres[:, target] = values
+            else:
+                raise ValueError("batched sphere values must match num_envs")
+        else:
+            if not 0 <= config_idx < self.num_envs:
+                raise IndexError("config_idx is out of range")
+            if values.ndim == 3:
+                if values.shape[0] != 1:
+                    raise ValueError("config_idx accepts one sphere configuration")
+                values = values[0]
+            self.link_spheres[config_idx, target] = values
+
+    def set_num_envs(self, num_envs: int) -> None:
+        """Resize the collision-sphere configuration bank deterministically.
+
+        Expanding repeats the reference configuration.  Shrinking keeps the
+        leading configurations, matching the environment-index convention used
+        by portable FK and collision dispatch.
+        """
+        if not isinstance(num_envs, int) or num_envs <= 0:
+            raise ValueError("num_envs must be a positive integer")
+        current = self.link_spheres
+        if num_envs == current.shape[0]:
+            return
+        reference = self.reference_link_spheres
+        if num_envs < current.shape[0]:
+            self._link_spheres = current[:num_envs].clone()
+            self.reference_link_spheres = reference[:num_envs].clone()
+            return
+        extra = num_envs - current.shape[0]
+        self._link_spheres = torch.cat((current, reference[:1].expand(extra, -1, -1).clone()), dim=0)
+        self.reference_link_spheres = torch.cat(
+            (reference, reference[:1].expand(extra, -1, -1).clone()), dim=0
+        )
 
     def get_link_spheres(self, link_name: str, config_idx: int = 0) -> torch.Tensor:
         return self.link_spheres[config_idx, self.get_sphere_index_from_link_name(link_name)]
@@ -280,7 +607,7 @@ class KinematicsParams:
 
     def enable_link_spheres(self, link_name: str) -> None:
         indices = self.get_sphere_index_from_link_name(link_name)
-        self.link_spheres[:, indices, 3] = torch.abs(self.link_spheres[:, indices, 3])
+        self.link_spheres[:, indices, 3] = self.reference_link_spheres[:, indices, 3]
 
     def reset_link_spheres(self, link_name: str) -> None:
         indices = self.get_sphere_index_from_link_name(link_name)
@@ -296,7 +623,11 @@ class KinematicsParams:
         link = next((x for x in self.robot_cfg.links if x.name == link_name), None)
         if link is None:
             raise ValueError(f"unknown link: {link_name}")
+        if not torch.isfinite(torch.tensor(mass)) or mass < 0:
+            raise ValueError("mass must be finite and non-negative")
         link.mass = float(mass)
+        self._link_masses_com = None
+        self._tree_cache = None
 
     def update_link_com(self, link_name: str, com: torch.Tensor) -> None:
         link = next((x for x in self.robot_cfg.links if x.name == link_name), None)
@@ -305,7 +636,11 @@ class KinematicsParams:
         values = torch.as_tensor(com).reshape(-1)
         if values.numel() != 3:
             raise ValueError("com must have three values")
+        if not bool(torch.isfinite(values).all().item()):
+            raise ValueError("com must contain finite values")
         link.com = tuple(values.cpu().tolist())
+        self._link_masses_com = None
+        self._tree_cache = None
 
     def update_link_inertia(self, link_name: str, inertia: torch.Tensor) -> None:
         link = next((x for x in self.robot_cfg.links if x.name == link_name), None)
@@ -317,7 +652,11 @@ class KinematicsParams:
         if values.numel() == 9:
             matrix = values.reshape(3, 3)
             values = matrix[[0, 1, 2, 0, 0, 1], [0, 1, 2, 1, 2, 2]]
+        if not bool(torch.isfinite(values).all().item()):
+            raise ValueError("inertia must contain finite values")
         link.inertia = tuple(values.cpu().tolist())
+        self._link_inertias = None
+        self._tree_cache = None
 
     def get_link_inertia(self, link_name: str) -> torch.Tensor:
         link = next((x for x in self.robot_cfg.links if x.name == link_name), None)
@@ -347,29 +686,48 @@ class KinematicsParams:
 
     @property
     def n_tree_levels(self) -> int:
-        parents = {joint.child: joint.parent for joint in self.robot_cfg.joints}
-        max_depth = 0
-        for link in self.all_link_names():
-            depth, current = 0, link
-            while current != self.base_link:
-                current = parents.get(current)
-                if current is None:
-                    raise ValueError("robot tree contains a disconnected link")
-                depth += 1
-            max_depth = max(max_depth, depth)
-        return max_depth + 1
+        return int(self.link_level_offsets.numel() - 1)
 
     @property
     def max_level_width(self) -> int:
-        parents = {joint.child: joint.parent for joint in self.robot_cfg.joints}
-        widths: dict[int, int] = {}
-        for link in self.all_link_names():
-            depth, current = 0, link
-            while current != self.base_link:
-                current = parents[current]
+        offsets = self.link_level_offsets
+        return int((offsets[1:] - offsets[:-1]).max().item()) if offsets.numel() > 1 else 0
+
+    @property
+    def link_level_data(self) -> torch.Tensor:
+        levels: list[list[int]] = []
+        for index, link in enumerate(self._tree().links):
+            depth = 0
+            current = link.parent
+            while current >= 0:
                 depth += 1
-            widths[depth] = widths.get(depth, 0) + 1
-        return max(widths.values(), default=0)
+                current = self._tree().links[current].parent
+            while len(levels) <= depth:
+                levels.append([])
+            levels[depth].append(index)
+        return torch.tensor(
+            [index for level in levels for index in level],
+            dtype=torch.int64,
+            device=self.device_cfg.device,
+        )
+
+    @property
+    def link_level_offsets(self) -> torch.Tensor:
+        offsets = [0]
+        count = 0
+        for depth in range(self.num_links):
+            level_count = 0
+            for link in self._tree().links:
+                current, actual = link.parent, 0
+                while current >= 0:
+                    actual += 1
+                    current = self._tree().links[current].parent
+                if actual == depth:
+                    level_count += 1
+            if level_count:
+                count += level_count
+                offsets.append(count)
+        return torch.tensor(offsets, dtype=torch.int64, device=self.device_cfg.device)
 
     def export_to_urdf(
         self,
