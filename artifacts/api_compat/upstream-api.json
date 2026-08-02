@@ -32322,9 +32322,9 @@
     },
     {
       "local": {
-        "missing_symbols": 20,
+        "missing_symbols": 18,
         "path": "curobo/_src/optim/components/gradient_opt_core.py",
-        "resolved_symbols": 5,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.optim.components.gradient_opt_core",
@@ -85683,10 +85683,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
+        "missing_symbols": 0,
         "path": "curobo/_src/solver/solver_trajopt.py",
-        "resolved_symbols": 9,
-        "status": "partial"
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo._src.solver.solver_trajopt",
       "path": "curobo/_src/solver/solver_trajopt.py",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 250,
-    "resolved_modules": 111,
+    "partial_modules": 249,
+    "resolved_modules": 112,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 250,
-    "resolved_modules": 111,
+    "partial_modules": 249,
+    "resolved_modules": 112,
     "symbols": 7182
   },
   "upstream": {
