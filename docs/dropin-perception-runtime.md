@@ -31,11 +31,14 @@ The integrator facades keep the V2 component and lifecycle spellings: `.tsdf`
 and `._tsdf`, raw mesh export as `(vertices, triangles, normals, colors)`, a
 real invalidatable dense `._site_index` diagnostic, and memory/stat accounting
 for TSDF plus ESDF buffers. `time_decay` is applied to the dense map and
-rebuilds its derived ESDF safely; `frustum_decay` remains a configuration
-boundary because the Warp projective-recycling kernel has no equivalent sparse
-pool implementation. Static `SceneCfg` cuboids and spheres can be stamped when
-`enable_static=True`; mesh/voxel/capsule/cylinder stamping remains explicit
-CUDA/Warp functionality.
+rebuilds its derived ESDF safely. Camera `frustum_decay` is also supported by
+projecting the bounded dense voxel centers into each input camera; it preserves
+the useful in-view-versus-out-of-view lifecycle without claiming the upstream
+Warp per-block flag/pool ABI. TSDF surface export returns source-shaped
+`(centers, uint8_colors, signed_distances_m)` tuples, and RGB-D mesh/voxel
+exports use the portable visibility-tested projective texturer. Static
+`SceneCfg` cuboids and spheres can be stamped when `enable_static=True`;
+mesh/voxel/capsule/cylinder stamping remains explicit CUDA/Warp functionality.
 
 Checkpoint loading uses Torch's weights-only mode and saves portable dense
 tensor payloads under the V2 `curobo.mapper_blocks` metadata spelling. Native

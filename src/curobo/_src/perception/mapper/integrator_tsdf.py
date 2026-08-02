@@ -16,6 +16,8 @@ import torch
 
 from .mapper import Mapper
 from .mapper_cfg import MapperCfg
+from .projector_texture import ProjectiveTextureProjector, ProjectiveTextureProjectorCfg
+from .storage import OccupiedVoxels
 from curobo_metal.ops.perception.core import dense_esdf
 
 
@@ -170,6 +172,26 @@ class BlockSparseTSDFIntegrator:
     def tsdf(self):
         return self.mapper.tsdf
 
+    @property
+    def voxel_size(self) -> float:
+        """Metric spacing of the portable dense map.
+
+        These source-shaped read-only configuration fields are useful to
+        callers that receive an integrator rather than its ``.tsdf`` storage.
+        They describe the actual dense map and do not imply a Warp block pool.
+        """
+        return self.config.voxel_size
+
+    @property
+    def origin(self) -> torch.Tensor:
+        """World-space lower corner of the bounded dense map."""
+        return self.config.origin.to(device=self.mapper.device)
+
+    @property
+    def truncation_distance(self) -> float:
+        """Metric TSDF truncation distance."""
+        return self.config.truncation_distance
+
     def reset(self):
         self._frame_count = 0
         return self.mapper.reset()
@@ -200,7 +222,8 @@ class BlockSparseTSDFIntegrator:
         # The portable mapper has no projective frustum-recycling kernel, but
         # global temporal decay is meaningful and can be implemented exactly
         # over its dense state before each camera update.
-        self._apply_frame_decay(camera_observation=observation or camera_observation)
+        selected_observation = observation if observation is not None else camera_observation
+        self._apply_frame_decay(camera_observation=selected_observation)
         result = self.mapper.integrate(
             observation=observation, camera_observation=camera_observation,
             lidar_observation=lidar_observation,
@@ -216,14 +239,76 @@ class BlockSparseTSDFIntegrator:
             self._frame_count += 1
         return result
 
+    def _camera_frustum_mask(self, observation) -> torch.Tensor:
+        """Return dense cells projecting into at least one camera image.
+
+        The pinned implementation tracks frustum flags per allocated sparse
+        block.  We can preserve the useful per-frame semantic without a raw
+        block pool by projecting the actual bounded dense voxel centers.  The
+        mask intentionally describes a camera frustum, not a depth hit: cells
+        behind the measured surface still receive the configured in-view
+        decay, just as they do in the source lifecycle.
+        """
+        if observation is None:
+            return torch.zeros_like(self.mapper._mapper.state.occupancy)
+        if not hasattr(observation, "depth_image") or observation.depth_image is None:
+            raise ValueError("camera observation requires depth_image for frustum decay")
+        if observation.intrinsics is None or observation.pose is None:
+            raise ValueError("camera observation requires intrinsics and pose for frustum decay")
+
+        state = self.mapper._mapper.state
+        dtype, device = state.tsdf.dtype, state.tsdf.device
+        depth = observation.depth_image.to(device=device)
+        if depth.ndim == 2:
+            depth = depth.unsqueeze(0)
+        if depth.ndim != 3 or depth.shape[0] == 0:
+            raise ValueError("camera depth_image must have shape [H,W] or [C,H,W]")
+        camera_count, height, width = depth.shape
+        intrinsics = observation.intrinsics.to(device=device, dtype=dtype)
+        if intrinsics.ndim == 2:
+            intrinsics = intrinsics.unsqueeze(0)
+        if intrinsics.shape != (camera_count, 3, 3):
+            raise ValueError("camera intrinsics must have shape [3,3] or [C,3,3]")
+        matrices = observation.pose.get_matrix().to(device=device, dtype=dtype)
+        if matrices.ndim == 2:
+            matrices = matrices.unsqueeze(0)
+        if matrices.shape != (camera_count, 4, 4):
+            raise ValueError("camera pose must contain one transform per camera")
+
+        centers = torch.stack(torch.meshgrid(
+            *[(torch.arange(n, device=device, dtype=dtype) - (n - 1) / 2)
+              * self.config.voxel_size + center
+              for n, center in zip(state.tsdf.shape[1:], self.mapper._mapper.config.grid_center)],
+            indexing="ij",
+        ), -1).reshape(-1, 3)
+        rotation, translation = matrices[:, :3, :3], matrices[:, :3, 3]
+        local = torch.einsum("cij,nj->cni", rotation.transpose(-1, -2), centers) - torch.einsum(
+            "cij,cj->ci", rotation.transpose(-1, -2), translation
+        )[:, None, :]
+        z = local[..., 2]
+        safe_z = torch.where(z.abs() > torch.finfo(dtype).eps, z, torch.ones_like(z))
+        u = torch.round(intrinsics[:, 0, 0, None] * local[..., 0] / safe_z + intrinsics[:, 0, 2, None])
+        v = torch.round(intrinsics[:, 1, 1, None] * local[..., 1] / safe_z + intrinsics[:, 1, 2, None])
+        visible = (torch.isfinite(u) & torch.isfinite(v) & (z > 0)
+                   & (u >= 0) & (u < width) & (v >= 0) & (v < height)).any(0)
+        return visible.reshape_as(state.occupancy)[None] if state.occupancy.ndim == 3 else visible.reshape_as(state.occupancy)
+
     def _apply_frame_decay(self, camera_observation=None, lidar_observation=None):
-        del camera_observation
         if lidar_observation is not None:
             raise NotImplementedError("LiDAR frustum decay requires Warp/CUDA")
-        if self.config.time_decay == 1.0:
+        if self.config.time_decay == 1.0 and self.config.frustum_decay == 1.0:
             return None
         state = self.mapper._mapper.state
-        weight = state.weight * self.config.time_decay
+        if self.config.frustum_decay != 1.0 and camera_observation is not None:
+            in_view = self._camera_frustum_mask(camera_observation)
+            factor = torch.where(
+                in_view,
+                torch.full_like(state.weight, self.config.time_decay * self.config.frustum_decay),
+                torch.full_like(state.weight, self.config.time_decay),
+            )
+        else:
+            factor = torch.full_like(state.weight, self.config.time_decay)
+        weight = state.weight * factor
         expired = (weight > 0) & (weight < self.config.minimum_tsdf_weight)
         occupancy = state.occupancy & ~expired
         tsdf = torch.where(expired, torch.ones_like(state.tsdf), state.tsdf)
@@ -294,6 +379,40 @@ class BlockSparseTSDFIntegrator:
                   .clamp(0, 1) * 255).to(torch.uint8)
         return vertices, torch.as_tensor(mesh.faces, device=vertices.device, dtype=torch.int32), normals, colors
 
+    def _texture_projector(self, texture_observations) -> ProjectiveTextureProjector:
+        """Build a validated dense projective-texture adapter on demand.
+
+        Texture dimensions are optional in the portable configuration so a
+        caller can use a normal geometry-only map.  When an RGB observation is
+        supplied we infer omitted dimensions from that observation; explicit
+        configuration continues to be checked by the projector.
+        """
+        sample = texture_observations
+        if not hasattr(sample, "rgb_image"):
+            values = list(texture_observations)
+            if not values:
+                raise ValueError("texture_observations must contain at least one CameraObservation")
+            sample = values[0]
+        rgb = getattr(sample, "rgb_image", None)
+        if rgb is None or rgb.ndim not in (3, 4) or rgb.shape[-1] != 3:
+            raise ValueError("texture observations require rgb_image with shape [H,W,3] or [C,H,W,3]")
+        height, width = int(rgb.shape[-3]), int(rgb.shape[-2])
+        expected_cameras = self.config.texture_num_cameras
+        if rgb.ndim == 4 and rgb.shape[0] != expected_cameras:
+            raise ValueError("batched rgb_image camera count must match texture_num_cameras")
+        return ProjectiveTextureProjector(
+            self._tsdf,
+            self.mapper,
+            ProjectiveTextureProjectorCfg(
+                texture_num_cameras=expected_cameras,
+                image_height=self.config.texture_camera_image_height or height,
+                image_width=self.config.texture_camera_image_width or width,
+                depth_minimum_distance=self.config.depth_minimum_distance,
+                depth_maximum_distance=self.config.depth_maximum_distance,
+                voxel_size=self.config.voxel_size,
+            ),
+        )
+
     def extract_textured_mesh(self, texture_observations, refine_iterations: int = 0,
                               surface_only: bool = True, level: float = 0.0,
                               camera_min_distance: Optional[float] = None,
@@ -301,9 +420,16 @@ class BlockSparseTSDFIntegrator:
                               texture_depth_tolerance_m: Optional[float] = None):
         if level != 0.0:
             raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
-        return self.mapper.extract_textured_mesh(
-            texture_observations, refine_iterations, surface_only, camera_min_distance,
-            camera_max_distance, texture_depth_tolerance_m,
+        vertices, faces, normals, colors = self.extract_mesh_tensors(
+            level=level, surface_only=surface_only, refine_iterations=refine_iterations,
+        )
+        projector = self._texture_projector(texture_observations)
+        projection = projector.prepare_mesh_projection(
+            texture_observations, texture_depth_tolerance_m=texture_depth_tolerance_m,
+        )
+        return projector.project_mesh(
+            vertices, faces, normals, colors, projection,
+            camera_min_distance=camera_min_distance, camera_max_distance=camera_max_distance,
         )
 
     @staticmethod
@@ -319,18 +445,75 @@ class BlockSparseTSDFIntegrator:
         return max_points
 
     def extract_surface_voxels(self, sdf_threshold: float = None):
-        return self.extract_occupied_voxels(surface_only=True, sdf_threshold=sdf_threshold)
+        """Return ``(centers, colors, signed_distances_m)`` near the surface.
+
+        This differs intentionally from :meth:`extract_occupied_voxels`: it
+        exposes *observed* cells on both sides of the zero crossing, matching
+        the source debug/export API.  Geometry-only maps return deterministic
+        neutral colors because they have no RGB accumulator.
+        """
+        threshold = self.config.truncation_distance if sdf_threshold is None else float(sdf_threshold)
+        if not math.isfinite(threshold) or threshold < 0:
+            raise ValueError("sdf_threshold must be finite and non-negative")
+        state = self.mapper._mapper.state
+        observed = state.weight >= self.config.minimum_tsdf_weight
+        mask = observed & (state.tsdf.abs() <= threshold / self.config.truncation_distance)
+        coordinates = torch.nonzero(mask[0], as_tuple=False)
+        dtype = state.tsdf.dtype
+        center = state.tsdf.new_tensor(self.mapper._mapper.config.grid_center)
+        actual_shape = state.tsdf.shape[1:]
+        centers = (coordinates.to(dtype) - (state.tsdf.new_tensor(actual_shape) - 1) / 2)
+        centers = centers * self.config.voxel_size + center
+        colors = torch.full((len(centers), 3), 128, device=state.tsdf.device, dtype=torch.uint8)
+        distances = state.tsdf[0][mask[0]] * self.config.truncation_distance
+        return centers, colors, distances
 
     def extract_occupied_voxels(self, surface_only: bool = False, sdf_threshold: float = None, *,
                                 subvoxel_factor: int = 1, max_points: Optional[int] = None,
                                 texture_observations=None, camera_min_distance=None,
                                 camera_max_distance=None, texture_depth_tolerance_m=None):
-        self._validate_subvoxel_factor(subvoxel_factor)
-        self._validate_max_points(max_points)
-        return self.mapper.extract_occupied_voxels(
-            surface_only, sdf_threshold, subvoxel_factor=subvoxel_factor, max_points=max_points,
-            texture_observations=texture_observations, camera_min_distance=camera_min_distance,
-            camera_max_distance=camera_max_distance, texture_depth_tolerance_m=texture_depth_tolerance_m,
+        subvoxel_factor = self._validate_subvoxel_factor(subvoxel_factor)
+        max_points = self._validate_max_points(max_points)
+        state = self.mapper._mapper.state
+        observed = state.weight >= self.config.minimum_tsdf_weight
+        if surface_only:
+            threshold = self.config.voxel_size if sdf_threshold is None else float(sdf_threshold)
+            if not math.isfinite(threshold) or threshold < 0:
+                raise ValueError("sdf_threshold must be finite and non-negative")
+            candidate_mask = observed & (state.tsdf.abs() <= threshold / self.config.truncation_distance)
+        else:
+            candidate_mask = observed & (state.tsdf <= 0)
+        coordinates = torch.nonzero(candidate_mask[0], as_tuple=False)
+        dtype = state.tsdf.dtype
+        actual_shape = state.tsdf.shape[1:]
+        centers = (coordinates.to(dtype) - (state.tsdf.new_tensor(actual_shape) - 1) / 2)
+        centers = centers * self.config.voxel_size + state.tsdf.new_tensor(self.mapper._mapper.config.grid_center)
+        flat_indices = (coordinates[:, 0] * actual_shape[1] * actual_shape[2]
+                        + coordinates[:, 1] * actual_shape[2] + coordinates[:, 2]).to(torch.long)
+        # Ask the existing map for its source-shaped BlockDataView, then
+        # replace only its candidates with the correct TSDF observation mask.
+        view = self.mapper.extract_occupied_voxels().block_data
+        if max_points is not None and len(centers) * subvoxel_factor ** 3 > max_points:
+            source_count = max_points // subvoxel_factor ** 3
+            if source_count == 0:
+                centers, flat_indices = centers[:0], flat_indices[:0]
+            else:
+                selected = torch.linspace(0, len(centers) - 1, steps=source_count,
+                                          device=centers.device).round().to(torch.long)
+                centers, flat_indices = centers[selected], flat_indices[selected]
+        if subvoxel_factor > 1 and len(centers):
+            axis = ((torch.arange(subvoxel_factor, device=centers.device, dtype=dtype) + 0.5)
+                    / subvoxel_factor - 0.5) * self.config.voxel_size
+            offsets = torch.stack(torch.meshgrid(axis, axis, axis, indexing="ij"), -1).reshape(-1, 3)
+            centers = (centers[:, None] + offsets[None]).reshape(-1, 3)
+            flat_indices = flat_indices.repeat_interleave(len(offsets))
+        voxels = OccupiedVoxels(centers, flat_indices, view, subvoxel_factor=subvoxel_factor)
+        if texture_observations is None:
+            return voxels
+        return self._texture_projector(texture_observations).texture_occupied_voxels(
+            voxels, texture_observations, camera_min_distance=camera_min_distance,
+            camera_max_distance=camera_max_distance,
+            texture_depth_tolerance_m=texture_depth_tolerance_m,
         )
 
     def extract_matching_feature_voxels(self, feature_vector: torch.Tensor, top_k: int,

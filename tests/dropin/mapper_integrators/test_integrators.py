@@ -58,6 +58,66 @@ def test_tsdf_time_decay_rebuilds_the_dense_derived_state():
     assert decayed.esdf.gt(0).all()
 
 
+def test_tsdf_surface_export_has_source_tuple_shape_and_metric_distances():
+    integrator = BlockSparseTSDFIntegrator(BlockSparseTSDFIntegratorCfg(
+        grid_shape=(2, 2, 2), voxel_size=0.1, truncation_distance=0.2,
+        minimum_tsdf_weight=0.5, device="cpu",
+    ))
+    state = integrator.mapper._mapper.state
+    tsdf = torch.ones_like(state.tsdf)
+    weight = torch.zeros_like(state.weight)
+    tsdf[0, 0, 0, 0], weight[0, 0, 0, 0] = -0.25, 1.0
+    tsdf[0, 1, 1, 1], weight[0, 1, 1, 1] = 0.75, 1.0
+    integrator.mapper._replace_state(tsdf=tsdf, weight=weight)
+
+    centers, colors, distances = integrator.extract_surface_voxels(sdf_threshold=0.1)
+    assert centers.shape == (1, 3)
+    assert colors.dtype == torch.uint8 and colors.tolist() == [[128, 128, 128]]
+    assert distances.tolist() == pytest.approx([-0.05])
+    # The bounded dense map retains V2 metric configuration introspection.
+    assert integrator.voxel_size == 0.1
+    assert integrator.truncation_distance == 0.2
+    assert integrator.origin.tolist() == pytest.approx([0.0, 0.0, 0.0])
+
+
+def test_tsdf_frustum_decay_only_applies_extra_decay_to_in_view_voxels():
+    integrator = BlockSparseTSDFIntegrator(BlockSparseTSDFIntegratorCfg(
+        grid_shape=(3, 3, 3), voxel_size=0.1, origin=torch.tensor((-0.15, -0.15, -0.15)),
+        time_decay=1.0, frustum_decay=0.5, minimum_tsdf_weight=0.1, device="cpu",
+    ))
+    state = integrator.mapper._mapper.state
+    integrator.mapper._replace_state(weight=torch.ones_like(state.weight))
+    observation = _camera()
+    # A wide field of view makes the small test volume unambiguously visible.
+    observation.intrinsics = torch.tensor(((1.0, 0.0, 1.5), (0.0, 1.0, 1.5),
+                                           (0.0, 0.0, 1.0)))
+    integrator._apply_frame_decay(observation)
+    weight = integrator.mapper._mapper.state.weight
+    # Positive-z cells within the narrow camera image decay, while cells
+    # behind the camera retain their temporal weight.
+    assert (weight[0, :, :, 2] < 1).any()
+    assert weight[0, :, :, 0].eq(1).all()
+
+
+def test_tsdf_texture_export_uses_projective_rgbd_without_feature_volume():
+    integrator = BlockSparseTSDFIntegrator(BlockSparseTSDFIntegratorCfg(
+        grid_shape=(2, 2, 2), voxel_size=0.1, origin=torch.tensor((-0.1, -0.1, 0.9)),
+        texture_num_cameras=1, texture_camera_image_height=4, texture_camera_image_width=4,
+        truncation_distance=0.2, device="cpu",
+    ))
+    state = integrator.mapper._mapper.state
+    integrator.mapper._replace_state(tsdf=torch.full_like(state.tsdf, -0.1),
+                                    weight=torch.ones_like(state.weight))
+    observation = _camera()
+    observation.rgb_image = torch.tensor([17, 99, 201], dtype=torch.uint8).expand(4, 4, 3).clone()
+    observation.depth_image = torch.ones((4, 4))
+    observation.depth_to_meter = 1.0
+    voxels = integrator.extract_occupied_voxels(texture_observations=observation)
+    assert len(voxels) == 8
+    assert voxels.texture_valid.any()
+    assert voxels.colors_uint8()[voxels.texture_valid][0].tolist() == [17, 99, 201]
+
+
 def test_tsdf_static_scene_stamping_executes_on_the_dense_backend():
     integrator = BlockSparseTSDFIntegrator(BlockSparseTSDFIntegratorCfg(
         grid_shape=(4, 4, 4), voxel_size=0.1, origin=torch.tensor((-0.2, -0.2, -0.2)),
@@ -87,6 +147,24 @@ def test_esdf_integrator_keeps_real_site_and_voxel_grid_lifecycle():
     integrator.clear_region((-1, -1, -1), (1, 1, 1))
     assert integrator.dist_field.eq(0).all()
     assert integrator._site_index.eq(-1).all()
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_tsdf_projective_texture_and_surface_export_stay_on_mps():
+    integrator = BlockSparseTSDFIntegrator(BlockSparseTSDFIntegratorCfg(
+        grid_shape=(2, 2, 2), voxel_size=0.1, origin=torch.tensor((-0.1, -0.1, 0.9)),
+        texture_num_cameras=1, texture_camera_image_height=4, texture_camera_image_width=4,
+        truncation_distance=0.2, device="mps",
+    ))
+    state = integrator.mapper._mapper.state
+    integrator.mapper._replace_state(tsdf=torch.full_like(state.tsdf, -0.1),
+                                    weight=torch.ones_like(state.weight))
+    observation = _camera("mps")
+    observation.rgb_image = torch.full((4, 4, 3), 31, dtype=torch.uint8, device="mps")
+    observation.depth_to_meter = 1.0
+    voxels = integrator.extract_occupied_voxels(texture_observations=observation)
+    centers, _colors, distances = integrator.extract_surface_voxels()
+    assert voxels.texture_colors.device.type == centers.device.type == distances.device.type == "mps"
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
