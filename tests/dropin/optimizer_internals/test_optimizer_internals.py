@@ -11,6 +11,14 @@ from curobo._src.optim.util.levenberg_marquardt_step import (
     LevenbergMarquardtState,
     LevenbergMarquardtStep,
 )
+from curobo._src.optim.external.torch_opt import TorchOpt, TorchOptCfg
+from curobo._src.optim.optim_factory import create_optimization_config, create_optimizer
+from curobo._src.optim.particle.evolution_strategies import calc_exp, compute_es_mean
+from curobo._src.optim.particle.mppi import (
+    MPPICfg,
+    jit_calculate_exp_util_from_costs,
+    jit_mean_cov_diag_a,
+)
 from curobo._src.types.device_cfg import DeviceCfg
 
 
@@ -79,3 +87,45 @@ def test_mps_sampling_and_gradient_descent_without_fallback():
         torch.ones(2, 4, 2, device="mps")
     )
     assert result.device.type == "mps"
+
+
+def test_particle_update_helpers_are_batched_and_normalized():
+    costs = torch.tensor([[[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]], [[0.0, 0.0], [2.0, 2.0], [4.0, 4.0]]])
+    actions = torch.arange(24.0).reshape(2, 3, 2, 2)
+    weights = jit_calculate_exp_util_from_costs(costs, torch.ones(2), beta=0.5)
+    torch.testing.assert_close(weights.sum(-1), torch.ones(2))
+    mean, covariance = jit_mean_cov_diag_a(
+        costs, actions, torch.ones(2), torch.zeros(2, 2, 2), torch.ones(2, 2, 2),
+        1.0, 1.0, 1e-4, 0.5,
+    )
+    assert mean.shape == covariance.shape == (2, 2, 2)
+    assert bool((covariance >= 1e-4).all())
+    torch.testing.assert_close(calc_exp(costs.sum(-1)).sum(-1), torch.ones(2))
+    assert compute_es_mean(weights, actions, torch.zeros_like(mean), None, 3, 1.0).shape == mean.shape
+
+
+def test_external_torch_and_factory_routes_execute_real_optimizers():
+    objective = lambda value: value.square().sum(-1)
+    config = TorchOptCfg(num_iters=20, step_scale=0.1, torch_optim_name="SGD")
+    output = TorchOpt(config, [objective]).optimize(torch.tensor([[2.0, -1.0]]))
+    assert output.square().sum() < 0.1
+    for name, expected in (("es", "es"), ("scipy", "scipy"), ("torch", "torch")):
+        cfg = create_optimization_config({"solver_type": name, "num_iters": 2}, DeviceCfg())
+        assert cfg.solver_type == expected
+        assert create_optimizer(cfg, [objective]).config is cfg
+
+
+def test_portable_optimizer_exposes_bounds_and_goal_dt_lifecycle():
+    class Rollout:
+        action_horizon = 2
+        action_dim = 3
+        action_bound_lows = torch.full((3,), -1.0)
+        action_bound_highs = torch.ones(3)
+        def __call__(self, value): return value.square().sum(-1)
+        def update_dt(self, value): self.dt = value
+
+    rollout = Rollout()
+    optimizer = GradientDescentOpt(GradientDescentOptCfg(num_iters=1), [rollout])
+    torch.testing.assert_close(optimizer.action_bound_lows, torch.full((3,), -1.0))
+    optimizer.update_goal_dt(0.02)
+    assert rollout.dt == 0.02 and not optimizer.use_cuda_graph

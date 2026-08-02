@@ -9,4 +9,8 @@ class ParticleOptCore(GradientOptCore):
     def reset_distribution(self,reset_problem_ids=None): del reset_problem_ids; self.reset()
     def initialize_samples(self): return None
     def update_samples(self): return None
+    def update_init_mean(self, init_mean):
+        if hasattr(self.config, "init_mean"):
+            self.config.init_mean = init_mean
+        return init_mean
 __all__=["SampleMode","SquashType","gaussian_entropy","scale_ctrl","ParticleOptCore"]

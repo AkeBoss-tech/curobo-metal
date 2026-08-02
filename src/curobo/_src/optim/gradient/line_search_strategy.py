@@ -19,9 +19,15 @@ class LineSearchStrategy:
         action=torch.gather(xs,idx.ndim,gather).squeeze(idx.ndim)
         selected=LineSearchState(action,torch.gather(cost,-1,idx.unsqueeze(-1)).squeeze(-1),torch.gather(grad,idx.ndim,gather).squeeze(idx.ndim),idx)
         return LineSearchResult(selected,selected)
+    def update_num_problems(self, num_problems):
+        """Mirror the lifecycle hook used by reusable line-search contexts."""
+        self.num_problems = int(num_problems)
+        return self
 class GreedyLineSearchStrategy(LineSearchStrategy): pass
 class ArmijoLineSearchStrategy(LineSearchStrategy): pass
-class BaseWolfeLineSearchStrategy(LineSearchStrategy): pass
+class BaseWolfeLineSearchStrategy(LineSearchStrategy):
+    def update_num_problems(self, num_problems):
+        return super().update_num_problems(num_problems)
 class WolfeLineSearchStrategy(BaseWolfeLineSearchStrategy): pass
 class StrongWolfeLineSearchStrategy(BaseWolfeLineSearchStrategy): pass
 class ApproxWolfeLineSearchStrategy(BaseWolfeLineSearchStrategy): pass

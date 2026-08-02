@@ -15,4 +15,6 @@ class GradientOptCore(PortableOptimizer):
     def update_niters(self,niters): self.config.update_niters(niters)
     def update_solver_params(self,solver_params):
         for k,v in solver_params.get(self.config.solver_name,{}).items(): setattr(self.config,k,v)
+    def update_goal_dt(self, goal_dt):
+        return super().update_goal_dt(goal_dt)
     def debug_dump(self,file_path=""): raise NotImplementedError("debug serialization is not part of the portable optimizer surface")

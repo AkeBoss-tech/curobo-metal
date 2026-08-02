@@ -59,5 +59,50 @@ class MultiStageOptimizer:
         for optimizer in self.optimizers:
             optimizer.reset()
 
+    def get_all_rollout_instances(self):
+        return self._rollout_list
+
+    def compute_metrics(self, action):
+        callback = getattr(self.rollout_fn, "compute_metrics", None)
+        return callback(action) if callable(callback) else None
+
+    def reset_shape(self):
+        for optimizer in self.optimizers:
+            callback = getattr(optimizer, "reset_shape", optimizer.reset)
+            callback()
+
+    def reset_seed(self):
+        for optimizer in self.optimizers:
+            callback = getattr(optimizer, "reset_seed", optimizer.reset)
+            callback()
+
+    def reset_cuda_graph(self):
+        # No graph capture exists on CPU/MPS; this resets the portable cache.
+        self.reset()
+
+    def get_recorded_trace(self):
+        return [getattr(optimizer, "get_recorded_trace", lambda: None)() for optimizer in self.optimizers]
+
+    def update_niters(self, niters):
+        for optimizer in self.optimizers:
+            callback = getattr(optimizer, "update_niters", None)
+            if callable(callback):
+                callback(niters)
+
+    def update_solver_params(self, solver_params):
+        for optimizer in self.optimizers:
+            callback = getattr(optimizer, "update_solver_params", None)
+            if callable(callback):
+                callback(solver_params)
+
+    def update_goal_dt(self, goal_dt):
+        for optimizer in self.optimizers:
+            callback = getattr(optimizer, "update_goal_dt", None)
+            if callable(callback):
+                callback(goal_dt)
+
+    def debug_dump(self, file_path=""):
+        raise NotImplementedError("portable optimizer debug serialization is unavailable")
+
 
 __all__ = ["MultiStageOptimizer"]

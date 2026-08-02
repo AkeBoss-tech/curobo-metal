@@ -86,9 +86,14 @@ class PortableOptimizer:
         self._rollout_list = list(rollout_list)
         self.rollout_fn = self._rollout_list[0]
         self._enabled = True
+        # Keep this state visible because callers use it when deciding whether
+        # an optimizer may be re-used.  It deliberately remains false on the
+        # portable backend: an ExecutionCache is not a CUDA graph.
+        self.use_cuda_graph = False
         self._cache = ExecutionCache()
         self.opt_dt = 0.0
         self.debug = None
+        self._goal_dt = None
 
     @property
     def enabled(self):
@@ -184,6 +189,40 @@ class PortableOptimizer:
         callback = getattr(self.rollout_fn, "update_params", None)
         if callback is not None:
             callback(goal)
+
+    def update_goal_dt(self, goal_dt):
+        """Propagate a changed rollout timestep without rebuilding state."""
+        self._goal_dt = goal_dt
+        callback = getattr(self.rollout_fn, "update_dt", None)
+        if callable(callback):
+            callback(goal_dt)
+
+    # These are populated by cuRobo rollouts.  Keeping the attributes stable
+    # makes optimizer setup code portable even for lightweight callable
+    # rollouts that do not impose action bounds.
+    @property
+    def action_bound_lows(self):
+        return getattr(self.rollout_fn, "action_bound_lows", None)
+
+    @property
+    def action_bound_highs(self):
+        return getattr(self.rollout_fn, "action_bound_highs", None)
+
+    @property
+    def action_step_max(self):
+        return getattr(self.rollout_fn, "action_step_max", None)
+
+    @property
+    def action_horizon_bounds_lows(self):
+        return getattr(self.rollout_fn, "action_horizon_bounds_lows", None)
+
+    @property
+    def action_horizon_bounds_highs(self):
+        return getattr(self.rollout_fn, "action_horizon_bounds_highs", None)
+
+    @property
+    def action_horizon_step_max(self):
+        return getattr(self.rollout_fn, "action_horizon_step_max", None)
 
     def get_debug(self):
         return self.debug
