@@ -100,7 +100,9 @@ def test_particle_update_helpers_are_batched_and_normalized():
     )
     assert mean.shape == covariance.shape == (2, 2, 2)
     assert bool((covariance >= 1e-4).all())
-    torch.testing.assert_close(calc_exp(costs.sum(-1)).sum(-1), torch.ones(2))
+    # ES uses centered z-score utilities rather than MPPI's probability
+    # weights.  It therefore has zero mean along the particle dimension.
+    torch.testing.assert_close(calc_exp(costs.sum(-1)).mean(-1), torch.zeros(2))
     assert compute_es_mean(weights, actions, torch.zeros_like(mean), None, 3, 1.0).shape == mean.shape
 
 
