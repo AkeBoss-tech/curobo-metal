@@ -25679,9 +25679,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 4,
         "path": "curobo/_src/graph_planner/graph/node_manager.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 10,
         "status": "partial"
       },
       "name": "curobo._src.graph_planner.graph.node_manager",
