@@ -32,6 +32,15 @@ ESDF facade exposes an `is_esdf_current` lifecycle signal and a
 the production differentiable voxel sampler. `use_cuda_graph=True` is a
 persistent portable-execution request, not a CUDA Graph object.
 
+`Mapper` itself now has the same transactional high-level lifecycle:
+positional and keyword camera aliases are validated before a mutation, each
+valid camera frame invalidates the cached collision grid, and `compute_esdf()`
+reuses that grid until a real map generation changes. `get_voxel_grid()` and
+`query(points, padding=...)` refresh it safely and retain CPU/MPS tensor
+residency. Rendering accepts `[fx, fy, cx, cy]`, matrix, and multi-camera
+tensor forms. LiDAR observations still reject explicitly because their
+range-image fusion requires CUDA/Warp.
+
 The integrator facades keep the V2 component and lifecycle spellings: `.tsdf`
 and `._tsdf`, raw mesh export as `(vertices, triangles, normals, colors)`, a
 real invalidatable dense `._site_index` diagnostic, and memory/stat accounting

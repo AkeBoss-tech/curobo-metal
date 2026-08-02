@@ -20,6 +20,7 @@ from curobo._src.perception.mapper.checkpoint_blocks import (
     validate_block_metadata_for_target,
 )
 from curobo._src.types.camera import CameraObservation
+from curobo._src.types.lidar import LidarObservation
 from curobo_metal.ops.perception import CameraObservation as NativeObservation
 from curobo_metal.ops.perception import PerceptionConfig, PerceptionMapper
 from curobo_metal.ops.perception.core import DenseMap, dense_esdf
@@ -65,6 +66,15 @@ class Mapper:
             accumulator_w_max=config.accumulator_w_max,
         ), self._mapper)
         self._static_mask = torch.zeros_like(self._mapper.state.occupancy)
+        # The bounded dense mapper updates its exact ESDF together with every
+        # map mutation.  Keep the high-level cache/lifecycle contract separate
+        # from that storage so callers can reliably tell whether they need to
+        # re-request the collision VoxelGrid after integration, clearing, or
+        # static-scene replacement.
+        self._last_voxel_grid: Optional[VoxelGrid] = None
+        self._last_esdf_generation: Optional[torch.Tensor] = None
+        self._frame_count = 0
+        self._esdf_compute_count = 0
 
     @property
     def device(self): return self._mapper.state.tsdf.device
@@ -83,20 +93,76 @@ class Mapper:
 
     @property
     def integrator(self):
+        """Advanced dense mapper facade.
+
+        The portable implementation has no independent Warp block-pool
+        integrator object: this mapper owns the actual CPU/MPS state.  It
+        nevertheless exposes the source-facing ``integrator`` property so
+        callers can use mapping lifecycle operations through a stable object.
+        """
         return self
 
+    @property
+    def is_esdf_current(self) -> bool:
+        """Whether :meth:`compute_esdf` has observed the current map state."""
+        return self._last_esdf_generation is not None and bool(torch.equal(
+            self._last_esdf_generation, self._mapper.state.generation,
+        ))
+
+    def _normalize_integrate_observations(self, args, *, observation, camera_observation, lidar_observation):
+        """Apply the V2 observation-selection contract before touching state.
+
+        Keeping this validation in the high-level mapper is important: an
+        invalid alias combination must not accidentally advance map generation
+        or invalidate an otherwise usable ESDF cache.
+        """
+        if len(args) > 1:
+            raise TypeError(f"integrate() takes at most one positional observation, got {len(args)}")
+        if args:
+            if observation is not None or camera_observation is not None or lidar_observation is not None:
+                raise TypeError("positional observation cannot be combined with observation=, camera_observation=, or lidar_observation=")
+            observation = args[0]
+        elif observation is not None and (camera_observation is not None or lidar_observation is not None):
+            raise TypeError("observation= cannot be combined with camera_observation= or lidar_observation=")
+
+        if observation is not None:
+            if isinstance(observation, CameraObservation):
+                camera_observation = observation
+            elif isinstance(observation, LidarObservation):
+                lidar_observation = observation
+            else:
+                raise TypeError(
+                    "observation must be CameraObservation or LidarObservation, got "
+                    f"{type(observation).__name__}"
+                )
+        if camera_observation is None and lidar_observation is None:
+            raise TypeError("integrate() requires a camera_observation, lidar_observation, or one positional observation")
+        return camera_observation, lidar_observation
+
+    def _invalidate_esdf_cache(self):
+        self._last_voxel_grid = None
+        self._last_esdf_generation = None
+
     def integrate(self, *args, observation=None, camera_observation=None, lidar_observation=None):
-        obs = camera_observation or observation or (args[0] if args else None)
-        if lidar_observation is not None or obs is None or not isinstance(obs, CameraObservation):
-            raise NotImplementedError("portable Mapper currently integrates CameraObservation depth frames")
+        camera_observation, lidar_observation = self._normalize_integrate_observations(
+            args, observation=observation, camera_observation=camera_observation,
+            lidar_observation=lidar_observation,
+        )
+        if lidar_observation is not None:
+            raise NotImplementedError("portable Mapper LiDAR integration requires CUDA/Warp")
+        obs = camera_observation
         if obs.depth_image is None or obs.intrinsics is None or obs.pose is None:
             raise ValueError("camera observation requires depth_image, intrinsics, and pose")
         depth = obs.depth_image.to(self.device, dtype=self._mapper.state.tsdf.dtype) * obs.depth_to_meter
         intrinsics = obs.intrinsics.to(self.device, dtype=depth.dtype)
         pose = obs.pose.get_matrix().to(self.device, dtype=depth.dtype)
         self._mapper.update(NativeObservation(depth, intrinsics, pose))
+        self._frame_count += 1
+        self._invalidate_esdf_cache()
 
     def compute_esdf(self, esdf_origin=None, esdf_voxel_size=None):
+        if esdf_origin is None and esdf_voxel_size is None and self.is_esdf_current:
+            return self._last_voxel_grid
         if esdf_voxel_size not in (None, self.config.voxel_size):
             raise NotImplementedError("ESDF resampling is not implemented")
         if esdf_origin is not None:
@@ -107,12 +173,28 @@ class Mapper:
                 raise ValueError("esdf_origin must be an xyz vector")
             if not torch.allclose(supplied, expected):
                 raise NotImplementedError("portable dense Mapper does not implement sliding ESDF windows")
-        return VoxelGrid(
+        self._last_voxel_grid = VoxelGrid(
             name="mapper_esdf", pose=[*self._mapper.config.grid_center,1,0,0,0],
             dims=list(self.config.get_actual_extent()),
             voxel_size=self.config.voxel_size,
             feature_tensor=self._mapper.state.esdf[0],
         )
+        self._last_esdf_generation = self._mapper.state.generation.clone()
+        self._esdf_compute_count += 1
+        return self._last_voxel_grid
+
+    def get_voxel_grid(self):
+        """Return a current collision grid, refreshing the derived cache if needed."""
+        if not self.is_esdf_current:
+            return self.compute_esdf()
+        return self._last_voxel_grid
+
+    def query(self, points: torch.Tensor, *, env_indices: Optional[torch.Tensor] = None,
+              padding: float = 0.0):
+        """Differentiably query the current dense ESDF on the mapper device."""
+        if not self.is_esdf_current:
+            self.compute_esdf()
+        return self._mapper.query(points, env_indices=env_indices, padding=padding)
 
     def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = True):
         result = self._mapper.extract_mesh()
@@ -167,6 +249,8 @@ class Mapper:
     def reset(self):
         self._storage.reset()
         self._static_mask = torch.zeros_like(self._mapper.state.occupancy)
+        self._frame_count = 0
+        self._invalidate_esdf_cache()
 
     def save_blocks(self, file_path):
         """Persist dense CPU/MPS state in the cuRobo checkpoint envelope."""
@@ -199,6 +283,7 @@ class Mapper:
         state_checkpoint.update(blocks)
         self._storage.import_blocks(state_checkpoint)
         self._static_mask = torch.zeros_like(self._mapper.state.occupancy)
+        self._invalidate_esdf_cache()
         return int((self._mapper.state.weight > 0).sum().item())
 
     def get_stats(self, scan_pool=True, scan_hash=False):
@@ -207,29 +292,80 @@ class Mapper:
             "occupied_voxels": int(self._mapper.state.occupancy.sum()),
             "static_voxels": int(self._static_mask.sum()),
             "generation": int(self._mapper.state.generation.max()),
+            "frame_count": self._frame_count,
+            "esdf_compute_count": self._esdf_compute_count,
+            "esdf_current": self.is_esdf_current,
+            "esdf_storage": "dense_exact",
         })
         return stats
 
     def memory_usage_mb(self):
         return self._storage.memory_usage_mb()
 
-    def _render_result(self, intrinsics: torch.Tensor, pose, image_shape):
+    def _canonical_render_inputs(self, intrinsics: torch.Tensor, pose):
+        """Normalize source-supported camera batches without host copies."""
+        intrinsics = torch.as_tensor(intrinsics, device=self.device, dtype=self._mapper.state.tsdf.dtype)
+        intrinsics_was_batched = intrinsics.ndim == 3 or (intrinsics.ndim == 2 and intrinsics.shape[-1] == 4)
+        if intrinsics.ndim == 1:
+            if intrinsics.shape != (4,):
+                raise ValueError("intrinsics vector must be [fx, fy, cx, cy]")
+            intrinsics = intrinsics.unsqueeze(0)
+        if intrinsics.ndim == 2 and intrinsics.shape[-2:] == (3, 3):
+            intrinsics = intrinsics.unsqueeze(0)
+        elif intrinsics.ndim == 2 and intrinsics.shape[-1] == 4:
+            fx, fy, cx, cy = intrinsics.unbind(-1)
+            zero = torch.zeros_like(fx)
+            one = torch.ones_like(fx)
+            intrinsics = torch.stack((
+                torch.stack((fx, zero, cx), -1),
+                torch.stack((zero, fy, cy), -1),
+                torch.stack((zero, zero, one), -1),
+            ), -2)
+        elif intrinsics.ndim != 3 or intrinsics.shape[-2:] != (3, 3):
+            raise ValueError("intrinsics must have shape [3,3], [4], [N,3,3], or [N,4]")
+
         matrix = pose.get_matrix() if hasattr(pose, "get_matrix") else torch.as_tensor(pose)
-        if matrix.ndim == 3:
-            if matrix.shape[0] != 1:
-                raise ValueError("portable Mapper.render currently accepts one camera pose")
-            matrix = matrix[0]
-        return self._mapper.render(intrinsics.to(self.device), matrix.to(self.device), image_shape)
+        matrix = matrix.to(self.device, dtype=intrinsics.dtype)
+        # ``Pose.from_list`` stores one transform as ``[1,4,4]`` internally;
+        # retain the established Mapper convention that this still renders an
+        # unbatched image.  Actual multi-camera pose batches expose B > 1.
+        pose_was_batched = matrix.ndim == 3 and matrix.shape[0] > 1
+        if matrix.ndim == 2:
+            if matrix.shape != (4, 4):
+                raise ValueError("pose matrix must have shape [4,4] or [N,4,4]")
+            matrix = matrix.unsqueeze(0)
+        elif matrix.ndim != 3 or matrix.shape[-2:] != (4, 4):
+            raise ValueError("pose matrix must have shape [4,4] or [N,4,4]")
+        count = max(intrinsics.shape[0], matrix.shape[0])
+        if intrinsics.shape[0] not in (1, count) or matrix.shape[0] not in (1, count):
+            raise ValueError("intrinsics and pose batch sizes must match or be one")
+        if intrinsics.shape[0] == 1 and count > 1:
+            intrinsics = intrinsics.expand(count, -1, -1)
+        if matrix.shape[0] == 1 and count > 1:
+            matrix = matrix.expand(count, -1, -1)
+        return intrinsics, matrix, intrinsics_was_batched or pose_was_batched
+
+    def _render_result(self, intrinsics: torch.Tensor, pose, image_shape):
+        intrinsics, matrix, batched = self._canonical_render_inputs(intrinsics, pose)
+        if batched:
+            raise ValueError("_render_result is an unbatched compatibility helper; use render() for camera batches")
+        return self._mapper.render(intrinsics[0], matrix[0], image_shape)
 
     def render_depth(self, intrinsics: torch.Tensor, pose, image_shape):
-        return self._render_result(intrinsics, pose, image_shape).depth
+        return self.render(intrinsics, pose, image_shape)[0]
 
     def render(self, intrinsics: torch.Tensor, pose, image_shape):
-        result = self._render_result(intrinsics, pose, image_shape)
+        intrinsics, matrices, batched = self._canonical_render_inputs(intrinsics, pose)
+        results = [self._mapper.render(intrinsics[index], matrices[index], image_shape)
+                   for index in range(intrinsics.shape[0])]
+        depth = torch.stack([result.depth for result in results])
+        valid = torch.stack([result.valid for result in results])
         # Exact dense ESDF gradients are the available portable normal field;
         # pixels without an observed hit intentionally retain a zero normal.
-        normals = torch.zeros(result.depth.shape + (3,), device=result.depth.device, dtype=result.depth.dtype)
-        return result.depth, normals, result.valid
+        normals = torch.zeros(depth.shape + (3,), device=depth.device, dtype=depth.dtype)
+        if not batched:
+            return depth[0], normals[0], valid[0]
+        return depth, normals, valid
 
     def render_color(self, intrinsics: torch.Tensor, pose, image_shape):
         depth, normals, valid = self.render(intrinsics, pose, image_shape)
@@ -308,6 +444,8 @@ class Mapper:
                                     dtype=state.tsdf.dtype)
         self._replace_state(tsdf=tsdf, weight=weight, occupancy=occupancy, esdf=esdf,
                             gradient=gradient, generation=state.generation + (mask.any()).to(torch.int64))
+        if count:
+            self._invalidate_esdf_cache()
         return count
 
     def clear_blocks(self, pool_indices):
@@ -394,4 +532,5 @@ class Mapper:
                             gradient=gradient, generation=state.generation + 1)
         self._static_mask = torch.zeros_like(occupancy)
         self._static_mask[0] = mask
+        self._invalidate_esdf_cache()
         return int(mask.sum().item())
