@@ -3526,9 +3526,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 2,
         "path": "curobo/_src/cost/cost_scene_collision_cfg.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_scene_collision_cfg",
@@ -27489,10 +27489,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 0,
         "path": "curobo/_src/graph_planner/graph_planner_prm_cfg.py",
-        "resolved_symbols": 11,
-        "status": "partial"
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo._src.graph_planner.graph_planner_prm_cfg",
       "path": "curobo/_src/graph_planner/graph_planner_prm_cfg.py",
@@ -76589,9 +76589,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 6,
         "path": "curobo/_src/rollout/rollout_robot_cfg.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 8,
         "status": "partial"
       },
       "name": "curobo._src.rollout.rollout_robot_cfg",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 247,
-    "resolved_modules": 114,
+    "partial_modules": 246,
+    "resolved_modules": 115,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 247,
-    "resolved_modules": 114,
+    "partial_modules": 246,
+    "resolved_modules": 115,
     "symbols": 7182
   },
   "upstream": {
