@@ -29978,9 +29978,9 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 4,
         "path": "curobo/_src/motion/motion_planner_cfg.py",
-        "resolved_symbols": 14,
+        "resolved_symbols": 19,
         "status": "partial"
       },
       "name": "curobo._src.motion.motion_planner_cfg",
@@ -77707,9 +77707,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 3,
         "path": "curobo/_src/solver/manager_goal.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.solver.manager_goal",
