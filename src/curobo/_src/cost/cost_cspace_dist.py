@@ -1,3 +1,4 @@
-from .portable import CSpaceDistCost
-L2DistFunction = None
-__all__ = ["CSpaceDistCost", "L2DistFunction"]
+from .portable import BaseCost, CSpaceDistCost
+from .wp_torch_cspace_dist import L2DistFunction
+
+__all__ = ["BaseCost", "CSpaceDistCost", "L2DistFunction"]

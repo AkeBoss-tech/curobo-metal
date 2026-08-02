@@ -7,9 +7,13 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.state.state_joint import JointState
+from curobo._src.types.control_space import ControlSpace
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise, log_warn
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 class TrajInterpolationType(Enum):
@@ -30,13 +34,14 @@ def calculate_dt_no_clamp(
     max_jerk: torch.Tensor,
     epsilon: float = 1e-5,
 ):
-    """Return the minimum physical timestep satisfying derivative limits."""
-    values = (
-        (vel.abs() / max_vel.clamp_min(epsilon)).amax(dim=-1),
-        torch.sqrt((acc.abs() / max_acc.clamp_min(epsilon)).amax(dim=-1)),
-        torch.pow((jerk.abs() / max_jerk.clamp_min(epsilon)).amax(dim=-1), 1.0 / 3.0),
-    )
-    return torch.stack(values).amax(dim=0).clamp_min(epsilon)
+    """Return the derivative-limit timestep multiplier for each batch item."""
+    max_v = vel.abs().amax(dim=-2)
+    max_a = acc.abs().amax(dim=-2)
+    max_j = jerk.abs().amax(dim=-2)
+    v_score = (max_v / max_vel.clamp_min(epsilon).reshape(1, -1)).amax(dim=-1)
+    a_score = torch.sqrt((max_a / max_acc.clamp_min(epsilon).reshape(1, -1)).amax(dim=-1))
+    j_score = torch.pow((max_j / max_jerk.clamp_min(epsilon).reshape(1, -1)).amax(dim=-1), 1.0 / 3.0)
+    return torch.maximum(torch.maximum(v_score, a_score), j_score) * (1.0 + epsilon)
 
 
 def calculate_traj_steps(
@@ -47,11 +52,9 @@ def calculate_traj_steps(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     dt = torch.as_tensor(opt_dt)
     target = torch.as_tensor(interpolation_dt, device=dt.device, dtype=dt.dtype)
-    count = (dt * (horizon - 1) / target).round() if nearest_int else torch.ceil(
-        dt * (horizon - 1) / target
-    )
-    count = count.to(torch.int64) + 1
-    return count, count.max()
+    per_waypoint = (dt + target) / target if nearest_int else (dt + torch.remainder(dt, target)) / target
+    count = ((horizon - 1) * per_waypoint.to(torch.int64) + 1).to(torch.int32)
+    return count, count.max().to(torch.int32)
 
 
 def _linear_state(raw: JointState, steps: torch.Tensor, out: JointState) -> JointState:
@@ -83,12 +86,13 @@ def get_batch_interpolated_trajectory(
     goal_idx: Optional[torch.Tensor] = None,
     use_implicit_goal_state: Optional[torch.Tensor] = None,
 ):
-    del current_state, goal_state, start_idx, goal_idx, use_implicit_goal_state
     if kind == TrajInterpolationType.BSPLINE_KNOTS_CUDA:
-        raise NotImplementedError(
-            "BSPLINE_KNOTS_CUDA requires the pinned CUDA spline kernel; use LINEAR_CUDA "
-            "or a portable interpolation type"
+        return get_bspline_interpolation(
+            raw_traj, out_traj_state, interpolation_dt, current_state=current_state,
+            goal_state=goal_state, start_idx=start_idx, goal_idx=goal_idx,
+            use_implicit_goal_state=use_implicit_goal_state,
         )
+    del current_state, goal_state, start_idx, goal_idx, use_implicit_goal_state
     raw = raw_traj.unsqueeze(0) if raw_traj.position.ndim == 2 else raw_traj
     raw_dt = raw.dt
     if raw_dt is None:
@@ -97,7 +101,9 @@ def get_batch_interpolated_trajectory(
     size = (raw.position.shape[0], int(maximum.item()), raw.position.shape[-1])
     if out_traj_state is None or out_traj_state.position.shape[1] < size[1]:
         out_traj_state = JointState.zeros(size, device_cfg, joint_names=raw.joint_names)
-    return _linear_state(raw, steps, out_traj_state), steps
+    if kind == TrajInterpolationType.LINEAR_CUDA:
+        return get_cuda_linear_interpolation(raw, steps, out_traj_state), steps
+    return get_cpu_linear_interpolation(raw, steps, out_traj_state, kind, interpolation_dt), steps
 
 
 def get_cpu_linear_interpolation(
@@ -109,6 +115,20 @@ def get_cpu_linear_interpolation(
 ):
     del kind, interpolation_dt
     return _linear_state(raw_traj, traj_steps, out_traj_state)
+
+
+def get_cuda_linear_interpolation(raw_traj, traj_tsteps, out_traj):
+    """Portable implementation of the historical CUDA-named interpolation entry point."""
+    return _linear_state(raw_traj, traj_tsteps, out_traj)
+
+
+def get_bspline_interpolation(*args, **kwargs):
+    """Document the raw CUDA spline-kernel boundary without silently changing its semantics."""
+    del args, kwargs
+    raise NotImplementedError(
+        "BSPLINE_KNOTS_CUDA requires cuRobo's CUDA spline kernel; use LINEAR_CUDA, LINEAR, "
+        "CUBIC, or QUINTIC on the portable CPU/MPS backend"
+    )
 
 
 def linear_smooth(
@@ -150,6 +170,6 @@ def get_interpolated_trajectory(
 
 __all__ = [
     "TrajInterpolationType", "calculate_dt_no_clamp", "calculate_traj_steps",
-    "get_batch_interpolated_trajectory", "get_cpu_linear_interpolation",
+    "get_batch_interpolated_trajectory", "get_bspline_interpolation", "get_cuda_linear_interpolation", "get_cpu_linear_interpolation",
     "get_interpolated_trajectory", "linear_smooth",
 ]

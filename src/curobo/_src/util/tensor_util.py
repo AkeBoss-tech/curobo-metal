@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import List, Optional, Protocol, Tuple, Union
 import torch
+
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 class TensorLike(Protocol):
@@ -13,51 +16,73 @@ class TensorLike(Protocol):
     def clone(self): ...
 
 
-def check_tensor_shapes(new_tensor, mem_tensor):
-    return isinstance(mem_tensor, torch.Tensor) and new_tensor.shape == mem_tensor.shape
+def check_tensor_shapes(new_tensor: torch.Tensor, mem_tensor: torch.Tensor):
+    return (
+        isinstance(mem_tensor, torch.Tensor)
+        and len(mem_tensor.shape) == len(new_tensor.shape)
+        and new_tensor.shape == mem_tensor.shape
+    )
 
 
-def copy_tensor(new_tensor, mem_tensor):
+def copy_tensor(new_tensor: torch.Tensor, mem_tensor: torch.Tensor):
     if check_tensor_shapes(new_tensor, mem_tensor):
         mem_tensor.copy_(new_tensor)
         return True
     return False
 
 
-def copy_or_clone(new_tensor, ref_tensor, allow_clone: bool = True):
+def copy_or_clone(
+    new_tensor: Optional[TensorLike],
+    ref_tensor: Optional[TensorLike],
+    allow_clone: bool = True,
+) -> Optional[TensorLike]:
+    """Copy into a compatible buffer or return a new portable buffer.
+
+    The ``None`` behaviour matches cuRobo's caller-owned-buffer convention:
+    a missing input preserves the reference, and a missing reference clones
+    the input only when cloning is enabled.
+    """
+    if ref_tensor is None and new_tensor is None:
+        return None
     if new_tensor is None:
         return ref_tensor
     if ref_tensor is None:
-        if not allow_clone:
-            raise ValueError("ref_tensor is None")
-        return new_tensor.clone()
-    if ref_tensor.shape != new_tensor.shape:
         if allow_clone:
             return new_tensor.clone()
-        raise ValueError(f"ref_tensor.shape {ref_tensor.shape} != new_tensor.shape {new_tensor.shape}")
-    ref_tensor.copy_(new_tensor)
-    return ref_tensor
+        log_and_raise("ref_tensor is None")
+    if ref_tensor.shape == new_tensor.shape:
+        ref_tensor.copy_(new_tensor)
+        return ref_tensor
+    if allow_clone:
+        return new_tensor.clone()
+    log_and_raise(f"ref_tensor.shape {ref_tensor.shape} != new_tensor.shape {new_tensor.shape}")
 
 
-def clone_if_not_none(x):
+def clone_if_not_none(x: Union[torch.Tensor, None]) -> Union[torch.Tensor, None]:
     return None if x is None else x.clone()
 
 
-def cat_sum(tensor_list, sum_dim=(0,)):
+@get_torch_jit_decorator(only_valid_for_compile=True, slow_to_compile=True)
+def cat_sum(
+    tensor_list: List[torch.Tensor], sum_dim: Union[Tuple[int, int], Tuple[int], int] = (0,)
+):
     return torch.cat(tensor_list, dim=-1).sum(dim=sum_dim)
 
 
-def cat_max(tensor_list):
+@get_torch_jit_decorator(slow_to_compile=True)
+def cat_max(tensor_list: List[torch.Tensor]):
     return torch.stack(tensor_list).max(dim=0).values
 
 
-def tensor_repeat_seeds(tensor, num_seeds: int):
+@get_torch_jit_decorator(slow_to_compile=True)
+def tensor_repeat_seeds(tensor: torch.Tensor, num_seeds: int):
     return tensor[:, None].repeat(1, num_seeds, *([1] * (tensor.ndim - 1))).reshape(
         tensor.shape[0] * num_seeds, *tensor.shape[1:]
     )
 
 
-def fd_tensor(p, dt):
+@get_torch_jit_decorator(slow_to_compile=True)
+def fd_tensor(p: torch.Tensor, dt: torch.Tensor):
     delta = p[..., 1:, :] - p[..., :-1, :]
     step = torch.as_tensor(dt, device=p.device, dtype=p.dtype)
     if step.ndim == 0:
@@ -70,10 +95,12 @@ def fd_tensor(p, dt):
     return delta / step
 
 
+@get_torch_jit_decorator(slow_to_compile=True)
 def check_nan_last_dimension(position_trajectory):
     return torch.isnan(position_trajectory).any(dim=-1)
 
 
+@get_torch_jit_decorator(slow_to_compile=True)
 def shift_buffer(buffer, shift_d: int, action_dim: int, shift_steps: int = 1):
     output = buffer.clone().roll(-shift_d, -2)
     end = -(shift_steps - 1) * action_dim or output.shape[-2]
@@ -98,9 +125,10 @@ def find_last_idx(array, value):
     return torch.nonzero(array <= value)[-1].item()
 
 
-def round_away_from_zero(x):
+@get_torch_jit_decorator(slow_to_compile=True)
+def round_away_from_zero(x: torch.Tensor) -> torch.Tensor:
     return torch.trunc(x + 0.5 * torch.sign(x))
 
 
-def stable_topk(input_tensor, k: int, dim: int = -1, largest: bool = True):
+def stable_topk(input_tensor: torch.Tensor, k: int, dim: int = -1, largest: bool = True):
     return torch.topk(input_tensor, k, dim=dim, largest=largest, sorted=True)

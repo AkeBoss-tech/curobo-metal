@@ -60,6 +60,15 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
             env_query_idx, False,
         )
 
+    # SceneCollisionCost and older cuRobo consumers use this shorter spelling.
+    # Keep it as a real forwarding API rather than a CUDA-only placeholder.
+    def get_sphere_distance(self, x_sph, env_query_idx=None):
+        return self.get_collision_distance(x_sph, env_query_idx)
+
+    @property
+    def collision_buffer(self):
+        return self._collision_buffer
+
     def get_collision_constraint(self, x_sph, env_query_idx=None):
         value = self.get_collision_distance(x_sph, env_query_idx)
         return (-value).clamp_min(0)

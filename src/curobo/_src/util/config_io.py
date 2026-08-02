@@ -1,4 +1,19 @@
-"""Pinned cuRoboV2 configuration I/O compatibility."""
+"""Pinned cuRoboV2 configuration I/O compatibility.
+
+This module deliberately mirrors the historical internal import surface.  A
+number of applications import the type aliases from here, even though the
+actual implementations live in :mod:`curobo.util_file`.
+"""
+
+import os
+import re
+import shutil
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, TypeVar, Union
+
+import yaml
+from yaml import CLoader as Loader
 
 from curobo.util_file import (
     ConfigT,

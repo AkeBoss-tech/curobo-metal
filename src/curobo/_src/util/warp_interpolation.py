@@ -1,11 +1,12 @@
 """Compatibility boundary for the former Warp interpolation module."""
 
-from curobo._src.util.trajectory import get_cpu_linear_interpolation
-
 
 def get_cuda_linear_interpolation(raw_traj, traj_tsteps, out_traj):
     """Portable torch implementation retaining the historical CUDA-named API."""
-    return get_cpu_linear_interpolation(raw_traj, traj_tsteps, out_traj, kind=None)
+    # Import lazily to avoid a module-initialization cycle with trajectory.py.
+    from curobo._src.util.trajectory import get_cuda_linear_interpolation as _portable
+
+    return _portable(raw_traj, traj_tsteps, out_traj)
 
 
 def linear_interpolate_batch_dt_trajectory_kernel(*args, **kwargs):

@@ -1,3 +1,3 @@
-from .portable import SelfCollisionCost
+from .portable import BaseCost, SelfCollisionCost
 SelfCollisionDistance = None
-__all__ = ["SelfCollisionCost", "SelfCollisionDistance"]
+__all__ = ["BaseCost", "SelfCollisionCost", "SelfCollisionDistance"]

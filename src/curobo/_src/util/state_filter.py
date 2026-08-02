@@ -1,10 +1,13 @@
 """Joint-state filtering and command integration."""
 
 from dataclasses import dataclass
+from typing import Optional
 from curobo._src.state.filter_coeff import FilterCoeff
+from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_joint_ops import blend_joint_states
 from curobo._src.types.control_space import ControlSpace
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.types.tensor import T_DOF
 
 
 @dataclass(frozen=True)
@@ -31,7 +34,7 @@ class JointStateFilter(FilterCfg):
             ControlSpace.VELOCITY: self.integrate_vel,
         }.get(self.control_space, self.integrate_pos)
 
-    def filter_joint_state(self, raw_joint_state):
+    def filter_joint_state(self, raw_joint_state: JointState):
         if not self.enable:
             return raw_joint_state
         raw_joint_state = raw_joint_state.to(self.device_cfg)
@@ -55,7 +58,7 @@ class JointStateFilter(FilterCfg):
         self.cmd_joint_state.position = self.cmd_joint_state.position + self.cmd_joint_state.velocity * dt
         return self.cmd_joint_state
 
-    def integrate_acc(self, qdd_des, cmd_joint_state=None, dt=None):
+    def integrate_acc(self, qdd_des: T_DOF, cmd_joint_state: Optional[JointState] = None, dt: Optional[float] = None):
         self._set_state(cmd_joint_state); dt = self.dt if dt is None else dt
         self.cmd_joint_state.acceleration = qdd_des
         self.cmd_joint_state.velocity = self.cmd_joint_state.velocity + qdd_des * dt
@@ -63,13 +66,13 @@ class JointStateFilter(FilterCfg):
         self.cmd_joint_state.jerk = qdd_des * 0
         return self.cmd_joint_state.clone()
 
-    def integrate_vel(self, qd_des, cmd_joint_state=None, dt=None):
+    def integrate_vel(self, qd_des: T_DOF, cmd_joint_state: Optional[JointState] = None, dt: Optional[float] = None):
         self._set_state(cmd_joint_state); dt = self.dt if dt is None else dt
         self.cmd_joint_state.velocity = qd_des
         self.cmd_joint_state.position = self.cmd_joint_state.position + qd_des * dt
         return self.cmd_joint_state
 
-    def integrate_pos(self, q_des, cmd_joint_state=None, dt=None):
+    def integrate_pos(self, q_des: T_DOF, cmd_joint_state: Optional[JointState] = None, dt: Optional[float] = None):
         self._set_state(cmd_joint_state); dt = self.dt if dt is None else dt
         if not self.teleport_mode:
             self.cmd_joint_state.velocity = (q_des - self.cmd_joint_state.position) / dt

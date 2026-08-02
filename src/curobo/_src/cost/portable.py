@@ -75,6 +75,15 @@ class BaseCost:
     def reset(self, reset_problem_ids=None, **kwargs):
         return True
 
+    def forward(self, *args, **kwargs):
+        """Evaluate the cost.
+
+        Concrete costs override this method.  Keeping the abstract-looking
+        entrypoint is useful for callers which manage a heterogeneous list of
+        cuRobo costs without knowing their concrete type.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not implement forward")
+
     def _apply_weight(self, value: torch.Tensor) -> torch.Tensor:
         result = value * self.weight
         if self.config.convert_to_binary:
@@ -126,6 +135,17 @@ class BaseCSpaceCost(BaseCost):
     def disable_cspace_target(self):
         self.cspace_target_enabled = False
 
+    def validate_input(self, state_batch: JointState, *args, **kwargs) -> bool:
+        """Validate the portable joint-state portion of the cost contract."""
+        if not isinstance(state_batch, JointState):
+            raise TypeError("state_batch must be a JointState")
+        if state_batch.position.shape[-1] != self.config.dof:
+            raise ValueError(
+                f"joint state must end in {self.config.dof} values, got "
+                f"{state_batch.position.shape[-1]}"
+            )
+        return True
+
 
 def _indexed_goal(goal: torch.Tensor, idx: Optional[torch.Tensor], current: torch.Tensor):
     if idx is None:
@@ -135,6 +155,9 @@ def _indexed_goal(goal: torch.Tensor, idx: Optional[torch.Tensor], current: torc
 
 
 class PositionCSpaceCost(BaseCSpaceCost):
+    def setup_batch_tensors(self, batch_size: int, horizon: int):
+        return super().setup_batch_tensors(batch_size, horizon)
+
     def forward(self, state_batch: JointState, joint_torque=None,
                 target_joint_state: Optional[JointState] = None,
                 idxs_target_joint_state=None, current_joint_state=None,
@@ -158,6 +181,9 @@ class PositionCSpaceCost(BaseCSpaceCost):
 
 
 class StateCSpaceCost(PositionCSpaceCost):
+    def setup_batch_tensors(self, batch_size: int, horizon: int):
+        return super().setup_batch_tensors(batch_size, horizon)
+
     def forward(self, state_batch: JointState, joint_torque=None, **kwargs):
         value = super().forward(state_batch, joint_torque, **kwargs)
         for name in ("velocity", "acceleration", "jerk"):
@@ -200,6 +226,16 @@ class CSpaceDistCostCfg(BaseCostCfg):
 
 
 class CSpaceDistCost(BaseCost):
+    def setup_batch_tensors(self, batch_size: int, horizon: int):
+        return super().setup_batch_tensors(batch_size, horizon)
+
+    def validate_input(self, current_vec, goal_vec, *args, **kwargs) -> bool:
+        if not isinstance(current_vec, torch.Tensor) or not isinstance(goal_vec, torch.Tensor):
+            raise TypeError("current_vec and goal_vec must be tensors")
+        if current_vec.shape[-1] != goal_vec.shape[-1]:
+            raise ValueError("current_vec and goal_vec must have the same dof")
+        return True
+
     def forward(self, current_vec, goal_vec, idxs_goal=None):
         goal = _indexed_goal(goal_vec, idxs_goal, current_vec)
         residual = current_vec - goal
@@ -217,6 +253,10 @@ class CSpaceDistCost(BaseCost):
 
     def forward_out_distance(self, current_vec, goal_vec, idxs_goal=None):
         return self.forward(current_vec, goal_vec, idxs_goal).sqrt()
+
+    def jit_squared_cost_to_l2(self, value):
+        """Portable eager equivalent of the CUDA helper used by older callers."""
+        return torch.as_tensor(value).clamp_min(0).sqrt()
 
 
 @dataclass
@@ -278,8 +318,33 @@ class SceneCollisionCostCfg(BaseCostCfg):
     def update_num_spheres(self, num_spheres):
         self.num_spheres = num_spheres
 
+    def update_num_scene_collision_checkers(self, num_collision_checkers):
+        self._num_scene_collision_checkers = int(num_collision_checkers)
+
 
 class SceneCollisionCost(BaseCost):
+    def setup_batch_tensors(self, batch_size: int, horizon: int):
+        return super().setup_batch_tensors(batch_size, horizon)
+
+    def update_num_spheres(self, num_spheres):
+        self.config.update_num_spheres(num_spheres)
+
+    def validate_input(self, state, *args, **kwargs) -> bool:
+        spheres = getattr(state, "link_spheres_tensor", getattr(state, "robot_spheres", state))
+        if not isinstance(spheres, torch.Tensor) or spheres.shape[-1] != 4:
+            raise ValueError("scene collision expects spheres ending in xyzw-radius")
+        return True
+
+    def get_gradient_buffer(self):
+        checker = self.config.scene_collision_checker
+        return getattr(checker, "collision_buffer", None) if checker is not None else None
+
+    def jit_weight_distance(self, distance):
+        return self._apply_weight(torch.as_tensor(distance))
+
+    def jit_weight_collision(self, distance):
+        return self.jit_weight_distance(distance)
+
     def forward(self, state, idxs_env_query=None, trajectory_dt=None):
         spheres = getattr(state, "link_spheres_tensor", getattr(state, "robot_spheres", state))
         checker = self.config.scene_collision_checker
@@ -304,6 +369,17 @@ class SelfCollisionCostCfg(BaseCostCfg):
 
 
 class SelfCollisionCost(BaseCost):
+    def setup_batch_tensors(self, batch_size: int, horizon: int):
+        return super().setup_batch_tensors(batch_size, horizon)
+
+    def validate_input(self, robot_spheres, *args, **kwargs) -> bool:
+        if not isinstance(robot_spheres, torch.Tensor) or robot_spheres.shape[-1] != 4:
+            raise ValueError("self collision expects spheres ending in xyzw-radius")
+        return True
+
+    def reset(self, reset_problem_ids=None, **kwargs):
+        return super().reset(reset_problem_ids, **kwargs)
+
     def forward(self, robot_spheres):
         xyz, radius = robot_spheres[..., :3], robot_spheres[..., 3]
         distance = torch.cdist(xyz, xyz) - radius[..., :, None] - radius[..., None, :]

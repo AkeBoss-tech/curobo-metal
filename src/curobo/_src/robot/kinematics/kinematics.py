@@ -259,6 +259,54 @@ class Kinematics:
     def get_active_js(self, full_js: JointState):
         return full_js.reorder(self.joint_names)
 
+    def get_full_js(self, active_js: JointState) -> JointState:
+        """Return a named active state in the model's deterministic order.
+
+        This portable model already compiles locked joints out of the active
+        chain.  Consequently a "full" state is the reordered active state;
+        callers needing nonzero locked-revolute reconstruction retain the
+        documented unsupported boundary in :class:`KinematicsCfg`.
+        """
+        if not isinstance(active_js, JointState):
+            raise TypeError("active_js must be a JointState")
+        if active_js.joint_names is None:
+            return JointState(
+                position=active_js.position,
+                velocity=active_js.velocity,
+                acceleration=active_js.acceleration,
+                jerk=active_js.jerk,
+                joint_names=list(self.joint_names),
+            )
+        return active_js.reorder(self.joint_names)
+
+    def get_mimic_js(self, joint_state: JointState) -> JointState:
+        """Expose the compiled state for chains whose mimic joints are reduced."""
+        return self.get_full_js(joint_state)
+
+    def update_kinematics_config(self, config: KinematicsCfg) -> None:
+        """Refresh buffers for an equivalent compiled portable configuration."""
+        if not isinstance(config, KinematicsCfg):
+            raise TypeError("config must be KinematicsCfg")
+        if config.kinematics_config.num_dof != self.dof:
+            raise NotImplementedError("changing portable kinematic topology requires a new Kinematics")
+        self.config = config
+        self.device_cfg = config.device_cfg
+        self.update_batch_size(self._batch or 1, self._horizon or 1, reset_buffers=True)
+
+    def get_link_mesh(self, link_name: str):
+        del link_name
+        raise NotImplementedError(
+            "portable Kinematics does not construct mesh assets; use RobotParser.get_link_mesh"
+        )
+
+    def get_robot_link_meshes(self):
+        raise NotImplementedError(
+            "portable Kinematics does not construct mesh assets; use RobotParser instead"
+        )
+
+    def get_robot_as_mesh(self):
+        return self.get_robot_link_meshes()
+
     @property
     def base_link(self) -> str:
         return self.config.kinematics_config.base_link

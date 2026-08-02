@@ -13,6 +13,16 @@ from curobo._src.geom.types import SceneCfg
 from curobo._src.robot.kinematics.kinematics import Kinematics
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.cost.portable import (
+    CSpaceCostCfg,
+    CSpaceCostType,
+    PositionCSpaceCost,
+    SceneCollisionCost,
+    SceneCollisionCostCfg,
+    SelfCollisionCost,
+    SelfCollisionCostCfg,
+)
+from curobo._src.geom.collision.collision_scene import create_scene_collision
 
 
 @dataclass

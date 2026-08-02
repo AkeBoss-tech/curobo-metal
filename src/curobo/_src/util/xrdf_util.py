@@ -1,13 +1,16 @@
 from __future__ import annotations
 from copy import deepcopy
 from typing import Any,Dict,Optional
+from curobo._src.types.content_path import ContentPath
+from curobo._src.robot.parser.parser_urdf import UrdfRobotParser
+from curobo._src.util.logging import log_and_raise, log_warn
 from curobo._src.util_file import load_yaml
 def return_value_if_exists(input_dict:Dict,key:str,suffix:str="xrdf",raise_error:bool=True)->Any:
     if key not in input_dict:
         if raise_error:raise ValueError(f"{key} key not found in {suffix}")
         return None
     return input_dict[key]
-def convert_xrdf_to_curobo(content_path=None,input_xrdf_dict:Optional[Dict]=None)->Dict:
+def convert_xrdf_to_curobo(content_path: ContentPath = ContentPath(),input_xrdf_dict:Optional[Dict]=None)->Dict:
     if input_xrdf_dict is None:
         path=getattr(content_path,"robot_xrdf_absolute_path",None)
         if path is None:raise ValueError("XRDF content or robot_xrdf_absolute_path is required")

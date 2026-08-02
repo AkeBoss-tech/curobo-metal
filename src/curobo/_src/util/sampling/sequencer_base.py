@@ -1,6 +1,7 @@
 """Base interface for deterministic sample sequences."""
 
 from abc import ABC, abstractmethod
+import numpy as np
 
 
 class BaseSequencer(ABC):
