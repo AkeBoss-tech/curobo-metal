@@ -229,6 +229,13 @@ class BatchMotionPlanner(MotionPlanner):
         self._require_attempts(max_attempts, enable_graph_attempt)
         self._validate_ratio(success_ratio)
 
+        # The eager portable solver has no captured fixed-capacity buffers.
+        # Keep the configured capacity as a planning hint while allowing this
+        # batched facade to pass the actual request through to TrajOpt.
+        self.trajopt_solver.config.max_batch_size = max(
+            self.trajopt_solver.config.max_batch_size, batch
+        )
+
         best = None
         solved = torch.zeros(batch, dtype=torch.bool, device=current_state.device)
         total_time = 0.0
