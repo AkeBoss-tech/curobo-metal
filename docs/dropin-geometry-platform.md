@@ -26,3 +26,13 @@ OpenUSD and Viser modules import without optional packages; constructing or
 using those integrations raises a precise dependency error. When `usd-core` is
 installed, basic stage and transform helpers work, while the larger
 Isaac-specific robot animation surface remains explicitly unsupported.
+
+`MeshData` now keeps immutable local triangle snapshots in a shared portable
+cache, with stable cache identifiers, separate transforms/enables for each
+environment, reconstruction to an in-memory `SceneCfg`, and a `query_points`
+bridge to the production vectorized CPU/MPS triangle-distance operator.  It
+supports shared geometry with different per-environment poses and preserves
+point-query gradients, but it never exposes a pretend Warp mesh ID or BVH.
+Reusing a mesh name with different geometry is rejected: changing it could
+otherwise mutate a live shared cache in another environment.  Use a different
+name, or clear the cache after all environments have released the geometry.

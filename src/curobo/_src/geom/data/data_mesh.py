@@ -1,63 +1,297 @@
+"""Portable mesh-obstacle storage backed by ordinary PyTorch tensors.
+
+The pinned cuRobo module stores Warp BVH handles in this layer.  Metal cannot
+share those handles, but it can retain the same mutable per-environment layout
+and expose its geometry directly to :mod:`curobo_metal.ops.world_collision`.
+``mesh_ids`` are therefore stable *portable cache identifiers*, never raw Warp
+IDs.  All distance work is delegated to the production vectorized triangle
+operator; this file deliberately does not implement a second mesh kernel.
+"""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
+
 import torch
-from curobo._src.geom.types import Mesh
+
+from curobo._src.geom.types import Mesh, SceneCfg
+from curobo_metal.ops.world_collision import Mesh as BackendMesh
+from curobo_metal.ops.world_collision import MeshDistanceResult, mesh_distance
+
 from ._portable import PortableObstacleData, PortableWarpStruct, inverse_pose, raw_warp
+
+
+def _rotation_from_wxyz(quaternion: torch.Tensor) -> torch.Tensor:
+    """Return a matrix for one ``wxyz`` quaternion without leaving its device."""
+    q = quaternion / torch.linalg.vector_norm(quaternion).clamp_min(torch.finfo(quaternion.dtype).eps)
+    w, x, y, z = q.unbind()
+    return torch.stack((
+        torch.stack((1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w))),
+        torch.stack((2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w))),
+        torch.stack((2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y))),
+    ))
+
 
 @dataclass(frozen=True)
 class WarpMeshCache:
+    """Immutable local geometry shared by every environment using ``name``.
+
+    ``mesh_id`` is intentionally a portable, monotonically allocated cache ID.
+    ``mesh`` retains the source metadata for callers that need to reconstruct a
+    serialisable :class:`~curobo._src.geom.types.Mesh`; it is not a Warp object.
+    """
+
     name: str
-    mesh_id: Optional[int]
+    mesh_id: int
     vertices: torch.Tensor
     faces: torch.Tensor
     mesh: object = None
-    def get_bounds(self): return self.vertices.amin(0), self.vertices.amax(0)
+    watertight: bool = False
 
-class MeshDataWarp(PortableWarpStruct): pass
+    def get_bounds(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.vertices.amin(0), self.vertices.amax(0)
+
+
+class MeshDataWarp(PortableWarpStruct):
+    """Raw Warp structure boundary; use :class:`MeshData` query methods instead."""
+
+
 @dataclass(init=False)
 class MeshData(PortableObstacleData):
+    """Mutable, multi-environment mesh data with vectorized CPU/MPS queries.
+
+    Geometry is cached once by mesh name, matching cuRobo's shared Warp cache
+    ownership.  Reusing a name requires byte-identical local vertices/faces;
+    this avoids silently changing active geometry in another environment.
+    """
+
     @classmethod
-    def create_cache(cls,max_n,num_envs,device_cfg,max_dist=0.1):
+    def create_cache(cls, max_n, num_envs, device_cfg, max_dist=0.1):
         if max_n < 1 or num_envs < 1:
             raise ValueError("max_n and num_envs must be positive")
-        o=cls._base(max_n,num_envs,device_cfg)
-        o.mesh_ids=torch.zeros((num_envs,max_n),dtype=torch.int64,device=device_cfg.device)
-        o.dims=torch.zeros((num_envs,max_n,4),**device_cfg.as_torch_dict())
-        o._mesh_cache={};o.wp_cache=o._mesh_cache;o.max_dist=float(max_dist);o._wp_device=None; return o
+        if max_dist <= 0:
+            raise ValueError("max_dist must be positive")
+        output = cls._base(max_n, num_envs, device_cfg)
+        output.mesh_ids = torch.zeros((num_envs, max_n), dtype=torch.int64, device=device_cfg.device)
+        output.dims = torch.zeros((num_envs, max_n, 4), **device_cfg.as_torch_dict())
+        output._mesh_cache: dict[str, WarpMeshCache] = {}
+        output.wp_cache = output._mesh_cache  # pinned public field name
+        output.max_dist = float(max_dist)
+        output._wp_device = None
+        output._next_mesh_id = 1
+        return output
+
     @classmethod
-    def from_scene_cfg(cls,scene_cfg,device_cfg,env_idx=0,num_envs=1,max_n=None,max_dist=0.1):
-        o=cls.create_cache(max_n or max(len(scene_cfg.mesh),1),num_envs,device_cfg,max_dist); o.load_batch(scene_cfg.mesh,env_idx); return o
+    def from_scene_cfg(cls, scene_cfg, device_cfg, env_idx=0, num_envs=1, max_n=None, max_dist=0.1):
+        output = cls.create_cache(max_n or max(len(scene_cfg.mesh), 1), num_envs, device_cfg, max_dist)
+        output.load_batch(scene_cfg.mesh, env_idx)
+        return output
+
     @classmethod
-    def from_batch_scene_cfg(cls,scene_cfg_list,device_cfg,max_n=None,max_dist=0.1):
-        o=cls.create_cache(max_n or max([len(x.mesh) for x in scene_cfg_list]+[1]),len(scene_cfg_list),device_cfg,max_dist)
-        for i,s in enumerate(scene_cfg_list): o.load_batch(s.mesh,i)
-        return o
-    def _load_mesh_into_cache(self,mesh):
-        if mesh.vertices is None or mesh.faces is None: raise NotImplementedError("file-backed mesh loading requires trimesh data to be supplied")
-        entry=WarpMeshCache(mesh.name,None,torch.as_tensor(mesh.vertices,**self.device_cfg.as_torch_dict()),torch.as_tensor(mesh.faces,dtype=torch.int64,device=self.device_cfg.device))
-        self._mesh_cache[mesh.name]=entry; return entry
-    _load_mesh_to_warp=_load_mesh_into_cache
-    def load_batch(self,meshes,env_idx):
-        if len(meshes)>self.max_n: raise ValueError("mesh cache capacity exceeded")
+    def from_batch_scene_cfg(cls, scene_cfg_list, device_cfg, max_n=None, max_dist=0.1):
+        if not scene_cfg_list:
+            raise ValueError("scene_cfg_list must not be empty")
+        output = cls.create_cache(
+            max_n or max([len(scene.mesh) for scene in scene_cfg_list] + [1]),
+            len(scene_cfg_list), device_cfg, max_dist,
+        )
+        for index, scene in enumerate(scene_cfg_list):
+            output.load_batch(scene.mesh, index)
+        return output
+
+    def _mesh_tensors(self, mesh: Mesh) -> tuple[torch.Tensor, torch.Tensor]:
+        if mesh.vertices is None or mesh.faces is None:
+            raise NotImplementedError("file-backed mesh loading requires caller-supplied triangular vertices/faces")
+        vertices = torch.as_tensor(mesh.vertices, **self.device_cfg.as_torch_dict()).clone()
+        faces = torch.as_tensor(mesh.faces, dtype=torch.int64, device=self.device_cfg.device).clone()
+        if vertices.ndim != 2 or vertices.shape[1:] != (3,) or not len(vertices):
+            raise ValueError("mesh vertices must have shape [V,3], V > 0")
+        if faces.ndim != 2 or faces.shape[1:] != (3,) or not len(faces):
+            raise ValueError("mesh faces must have shape [F,3], F > 0")
+        if bool(((faces < 0) | (faces >= len(vertices))).any().item()):
+            raise ValueError("mesh faces contain an out-of-range vertex")
+        triangles = vertices[faces]
+        area = torch.linalg.vector_norm(torch.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0], dim=-1), dim=-1)
+        if bool((area <= torch.finfo(vertices.dtype).eps).any().item()):
+            raise ValueError("mesh faces must be nondegenerate triangles")
+        return vertices, faces
+
+    def _load_mesh_into_cache(self, mesh: Mesh) -> WarpMeshCache:
+        vertices, faces = self._mesh_tensors(mesh)
+        cached = self._mesh_cache.get(mesh.name)
+        if cached is not None:
+            if not (torch.equal(cached.vertices, vertices) and torch.equal(cached.faces, faces)):
+                raise ValueError(
+                    f"mesh name {mesh.name!r} is already cached with different geometry; use a distinct name"
+                )
+            return cached
+        cached = WarpMeshCache(
+            mesh.name, self._next_mesh_id, vertices, faces, mesh,
+            bool(getattr(mesh, "watertight", False)),
+        )
+        self._next_mesh_id += 1
+        self._mesh_cache[mesh.name] = cached
+        return cached
+
+    _load_mesh_to_warp = _load_mesh_into_cache
+
+    def load_batch(self, meshes: Sequence[Mesh], env_idx: int):
+        self._check_env(env_idx)
+        if len(meshes) > self.max_n:
+            raise ValueError("mesh cache capacity exceeded")
+        names = [mesh.name for mesh in meshes]
+        if len(set(names)) != len(names):
+            raise ValueError("mesh names must be unique within one environment")
         self.clear(env_idx)
-        for m in meshes:self.add(m,env_idx)
-    def add(self,mesh:Mesh,env_idx=0):
-        i=self.get_active_count(env_idx)
-        if i>=self.max_n: raise ValueError("mesh cache capacity exceeded")
-        self._load_mesh_into_cache(mesh); self.names[env_idx][i]=mesh.name
-        self.mesh_ids[env_idx,i]=i; lo,hi=self._mesh_cache[mesh.name].get_bounds();self.dims[env_idx,i,:3]=hi-lo
-        self.inv_pose[env_idx,i,:7]=inverse_pose(mesh.pose or [0,0,0,1,0,0,0],self.device_cfg)
-        self.enable[env_idx,i]=1; self.count[env_idx]+=1; return i
+        for mesh in meshes:
+            self.add(mesh, env_idx)
+
+    def add(self, mesh: Mesh, env_idx=0):
+        self._check_env(env_idx)
+        if not isinstance(mesh, Mesh):
+            raise TypeError("mesh must be a curobo Mesh")
+        if self.has_name(mesh.name, env_idx):
+            raise ValueError(f"mesh {mesh.name!r} already exists in environment {env_idx}")
+        index = self.get_active_count(env_idx)
+        if index >= self.max_n:
+            raise ValueError("mesh cache capacity exceeded")
+        cached = self._load_mesh_into_cache(mesh)
+        self.names[env_idx][index] = mesh.name
+        self.mesh_ids[env_idx, index] = cached.mesh_id
+        low, high = cached.get_bounds()
+        self.dims[env_idx, index, :3] = high - low
+        pose = mesh.pose if mesh.pose is not None else [0, 0, 0, 1, 0, 0, 0]
+        self.inv_pose[env_idx, index, :7] = inverse_pose(pose, self.device_cfg)
+        self.enable[env_idx, index] = 1
+        self.count[env_idx] += 1
+        return index
+
+    def update_mesh(self, mesh: Mesh, env_idx: int = 0) -> int:
+        """Update pose/metadata of a cached mesh without accepting a Warp ID.
+
+        The cache is intentionally immutable geometry.  Replacing triangles
+        under an active shared name is rejected so another environment cannot
+        observe an unannounced mutation; use ``clear(..., clear_warp_cache=True)``
+        after deactivating all users, or a distinct mesh name.
+        """
+        self._check_env(env_idx)
+        if not self.has_name(mesh.name, env_idx):
+            return self.add(mesh, env_idx)
+        cached = self._load_mesh_into_cache(mesh)
+        index = self.get_idx(mesh.name, env_idx)
+        self.mesh_ids[env_idx, index] = cached.mesh_id
+        low, high = cached.get_bounds()
+        self.dims[env_idx, index, :3] = high - low
+        pose = mesh.pose if mesh.pose is not None else [0, 0, 0, 1, 0, 0, 0]
+        self.update_pose(mesh.name, w_obj_pose=pose, env_idx=env_idx)
+        self.enable[env_idx, index] = 1
+        return index
+
     def update_pose(self, name, w_obj_pose=None, obj_w_pose=None, env_idx=0):
         return super().update_pose(name, w_obj_pose, obj_w_pose, env_idx)
-    def get_cached_mesh_names(self): return list(self._mesh_cache)
-    def update_from_warp_id(self,warp_mesh_id,name,w_obj_pose=None,obj_w_pose=None,env_idx=0,mesh_idx=None):
+
+    def update_from_warp_id(self, warp_mesh_id, name, w_obj_pose=None, obj_w_pose=None, env_idx=0, mesh_idx=None):
         raise NotImplementedError(
-            "Warp mesh ids are unavailable on the portable backend; create Mesh with vertices/faces instead"
+            "raw Warp mesh IDs are unavailable on the portable backend; use update_mesh(Mesh(...))"
         )
-    def clear(self,env_idx=None,clear_warp_cache=False):
+
+    def get_cached_mesh_names(self) -> list[str]:
+        return list(self._mesh_cache)
+
+    def get_bounds(self, name: str) -> tuple[torch.Tensor, torch.Tensor]:
+        try:
+            return self._mesh_cache[name].get_bounds()
+        except KeyError as error:
+            raise ValueError(f"mesh {name!r} is not present in the shared cache") from error
+
+    def get_world_pose(self, name: str, env_idx: int = 0) -> torch.Tensor:
+        """Return the current world-to-object inverse buffer inverted to world pose."""
+        self._check_env(env_idx)
+        return inverse_pose(self.inv_pose[env_idx, self.get_idx(name, env_idx), :7], self.device_cfg)
+
+    def get_meshes(self, env_idx: int = 0, *, include_disabled: bool = False) -> list[Mesh]:
+        """Reconstruct local meshes with their current pose for scene interop.
+
+        ``Mesh`` is serialisable and therefore receives detached CPU metadata;
+        use :meth:`as_backend_meshes` or :meth:`query_points` to retain tensor
+        device residency and differentiability for query points.
+        """
+        self._check_env(env_idx)
+        result: list[Mesh] = []
+        for index, name in enumerate(self.names[env_idx]):
+            if name is None or (not include_disabled and not bool(self.enable[env_idx, index].item())):
+                continue
+            cached = self._mesh_cache[name]
+            pose = self.get_world_pose(name, env_idx).detach().cpu().tolist()
+            source = cached.mesh
+            metadata = {"device_cfg": self.device_cfg}
+            if getattr(source, "color", None) is not None:
+                metadata["color"] = source.color
+            if getattr(source, "material", None) is not None:
+                metadata["material"] = source.material
+            result.append(Mesh(
+                name, pose=pose, vertices=cached.vertices.detach().cpu().tolist(),
+                faces=cached.faces.detach().cpu().tolist(), **metadata,
+            ))
+        return result
+
+    def as_scene_cfg(self, env_idx: int = 0, *, include_disabled: bool = False) -> SceneCfg:
+        """Return an in-memory scene suitable for :class:`SceneCollision` loading."""
+        return SceneCfg(mesh=self.get_meshes(env_idx, include_disabled=include_disabled))
+
+    def as_backend_meshes(self) -> tuple[BackendMesh, ...]:
+        """Return cached local triangle records for production distance queries."""
+        return tuple(BackendMesh(entry.vertices, entry.faces, entry.watertight) for entry in self._mesh_cache.values())
+
+    def query_points(
+        self, points: torch.Tensor, *, env_indices: torch.Tensor | None = None, signed: bool = False,
+    ) -> MeshDistanceResult:
+        """Compute selected mesh distance/gradient through the production CPU/MPS operator.
+
+        ``points`` follows :func:`curobo_metal.ops.world_collision.mesh_distance`
+        (``[Q,3]`` or ``[B,Q,3]``); environment rows retain this cache's current
+        poses and enable bits.  Signed distance requires every selected cached
+        mesh to be explicitly declared watertight by a caller-provided mesh
+        object, just like the production operator.
+        """
+        if not self._mesh_cache:
+            raise ValueError("cannot query an empty mesh cache")
+        if not isinstance(points, torch.Tensor):
+            raise TypeError("points must be a torch.Tensor")
+        if not self.device_cfg.is_same_torch_device(points.device):
+            raise ValueError(f"points must be on {self.device_cfg.device}")
+        if points.dtype != self.device_cfg.dtype:
+            raise TypeError(f"points must have dtype {self.device_cfg.dtype}")
+        entries = tuple(self._mesh_cache.values())
+        translations = torch.zeros((self.num_envs, len(entries), 3), **self.device_cfg.as_torch_dict())
+        rotations = torch.eye(3, **self.device_cfg.as_torch_dict()).expand(self.num_envs, len(entries), 3, 3).clone()
+        active = torch.zeros((self.num_envs, len(entries)), dtype=torch.bool, device=self.device_cfg.device)
+        index_for_name = {entry.name: index for index, entry in enumerate(entries)}
+        for environment in range(self.num_envs):
+            for slot, name in enumerate(self.names[environment]):
+                if name is None:
+                    continue
+                entry_index = index_for_name[name]
+                pose = self.get_world_pose(name, environment)
+                translations[environment, entry_index] = pose[:3]
+                rotations[environment, entry_index] = _rotation_from_wxyz(pose[3:])
+                active[environment, entry_index] = self.enable[environment, slot].bool()
+        return mesh_distance(
+            points, self.as_backend_meshes(), translations, rotations,
+            env_mesh_active=active, env_indices=env_indices, signed=signed,
+        )
+
+    def clear(self, env_idx=None, clear_warp_cache=False):
         super().clear(env_idx)
-        if clear_warp_cache:self._mesh_cache.clear()
-is_obs_enabled=load_obstacle_transform=compute_local_sdf=compute_local_sdf_with_grad=raw_warp
-__all__=["MeshData","MeshDataWarp","WarpMeshCache","is_obs_enabled","load_obstacle_transform","compute_local_sdf","compute_local_sdf_with_grad"]
+        if clear_warp_cache:
+            self._mesh_cache.clear()
+            self._next_mesh_id = 1
+
+
+is_obs_enabled = load_obstacle_transform = compute_local_sdf = compute_local_sdf_with_grad = raw_warp
+
+__all__ = [
+    "MeshData", "MeshDataWarp", "WarpMeshCache", "is_obs_enabled", "load_obstacle_transform",
+    "compute_local_sdf", "compute_local_sdf_with_grad",
+]
