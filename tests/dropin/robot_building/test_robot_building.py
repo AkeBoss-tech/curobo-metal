@@ -135,7 +135,7 @@ def test_franka_dynamics_batches_and_autograd():
     assert torque.shape == q.shape and torch.isfinite(torque).all()
     torch.autograd.grad(torque.sum(), q)
     dynamics.update_link_mass("panda_link1", 3.0)
-    with pytest.raises(NotImplementedError, match="external"):
+    with pytest.raises(ValueError, match="f_ext must end"):
         dynamics.compute_inverse_dynamics(
             state, f_ext=torch.ones((2, 3, 1, 6))
         )
