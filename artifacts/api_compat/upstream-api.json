@@ -29215,9 +29215,9 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
+        "missing_symbols": 13,
         "path": "curobo/_src/motion/motion_planner_batch.py",
-        "resolved_symbols": 5,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.motion.motion_planner_batch",
@@ -58230,9 +58230,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 11,
         "path": "curobo/_src/perception/mapper/mapper.py",
-        "resolved_symbols": 16,
+        "resolved_symbols": 18,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mapper",
@@ -61947,9 +61947,9 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
+        "missing_symbols": 17,
         "path": "curobo/_src/perception/mapper/storage.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.storage",
@@ -78464,9 +78464,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 12,
         "path": "curobo/_src/solver/seed_ik/seed_ik_error_calculator.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 10,
         "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_error_calculator",
@@ -78817,9 +78817,9 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
+        "missing_symbols": 14,
         "path": "curobo/_src/solver/seed_ik/seed_ik_solver.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 14,
         "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_solver",
@@ -79655,9 +79655,9 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
+        "missing_symbols": 2,
         "path": "curobo/_src/solver/seed_ik/seed_iteration_state_manager.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 5,
         "status": "partial"
       },
       "name": "curobo._src.solver.seed_ik.seed_iteration_state_manager",
