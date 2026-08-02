@@ -6,12 +6,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 
-from .replay_corpus import load as load_corpus
-from .replay_registry import BY_ID, PIN
+if __package__:
+    from .replay_corpus import load as load_corpus
+    from .replay_registry import BY_ID, PIN
+else:  # Support the documented tool as both ``-m`` module and script.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from tools.parity.replay_corpus import load as load_corpus
+    from tools.parity.replay_registry import BY_ID, PIN
 
 
 def sha(path: Path) -> str:
