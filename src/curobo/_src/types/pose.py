@@ -8,13 +8,67 @@ import numpy as np
 import torch
 
 from curobo_metal.types.math import Pose as _MetalPose
-from curobo_metal.types.math import _matrix_to_quaternion, _quaternion_to_matrix
+from curobo_metal.types.math import _quaternion_to_matrix
 
 from .device_cfg import DeviceCfg
 
 
 class Pose(_MetalPose):
     """Pose using xyz positions and ``wxyz`` quaternions."""
+
+    def __post_init__(self) -> None:
+        """Validate all pose representations before the base tensor wrapper.
+
+        The upstream constructor accepts a rotation matrix in lieu of a
+        quaternion.  The portable value type deliberately keeps the supplied
+        matrix too: callers that use it as an output buffer should not lose
+        that representation simply by constructing a :class:`Pose`.
+
+        This is ordinary PyTorch tensor work, so conversion and the resulting
+        rotation/quaternion graph remain available on both CPU and MPS.
+        """
+        if self.rotation is not None:
+            if not isinstance(self.rotation, torch.Tensor) or self.rotation.shape[-2:] != (3, 3):
+                raise ValueError("rotation must be a tensor ending in shape [3,3]")
+            if self.quaternion is None:
+                self.quaternion = matrix_to_quaternion(self.rotation)
+
+        if self.position is not None and self.rotation is not None:
+            if self.rotation.device != self.position.device or self.rotation.dtype != self.position.dtype:
+                raise ValueError("position and rotation must share device and dtype")
+            if self.rotation.shape[:-2] != self.position.shape[:-1]:
+                raise ValueError("rotation batch dimensions must match position")
+            # _MetalPose normalizes one-dimensional position/quaternion inputs
+            # to a batch of one.  Keep a user-provided rotation aligned with
+            # that convention as well.
+            if self.position.ndim == 1:
+                self.rotation = self.rotation.unsqueeze(0)
+
+        super().__post_init__()
+
+        if self.rotation is not None and self.position is not None:
+            if self.rotation.shape[:-2] != self.position.shape[:-1]:
+                raise ValueError("rotation batch dimensions must match position")
+
+    def __eq__(self, other: object) -> bool:
+        """Compare rigid transforms with cuRobo's 1e-6 pose tolerance.
+
+        Dataclass-generated equality is not valid for batched tensors because
+        ``Tensor.__bool__`` is ambiguous.  This explicit implementation
+        matches the V2 public contract and has deterministic scalar behavior.
+        """
+        if not isinstance(other, Pose):
+            return NotImplemented
+        if self.position is None or self.quaternion is None:
+            return self.position is other.position and self.quaternion is other.quaternion
+        if other.position is None or other.quaternion is None:
+            return False
+        if self.position.shape != other.position.shape or self.quaternion.shape != other.quaternion.shape:
+            return False
+        if self.device != other.device or self.position.dtype != other.position.dtype:
+            return False
+        linear, angular = self.distance(other)
+        return bool(torch.all(linear <= 1e-6).item() and torch.all(angular <= 1e-6).item())
 
     @property
     def shape(self) -> torch.Size:
@@ -186,6 +240,8 @@ class Pose(_MetalPose):
     def requires_grad_(self, requires_grad: bool):
         if self.position is not None: self.position.requires_grad_(requires_grad)
         if self.quaternion is not None: self.quaternion.requires_grad_(requires_grad)
+        if self.rotation is not None: self.rotation.requires_grad_(requires_grad)
+        return self
 
     def stack(self, other_pose: Pose):
         return type(self)(
@@ -229,9 +285,18 @@ class Pose(_MetalPose):
             .reshape(self.batch_size * num_seeds, 4),
         )
 
+    def __getitem__(self, index) -> "Pose":
+        """Index every materialized representation while retaining batch form."""
+        if self.position is None or self.quaternion is None:
+            raise IndexError("empty Pose")
+        rotation = None if self.rotation is None else self.rotation[index]
+        return type(self)(self.position[index], self.quaternion[index], rotation, name=self.name)
+
     def get_index(self, b: int, n: Optional[int] = None) -> "Pose":
         index = (b, slice(None)) if n is None else (b, n, slice(None))
-        return type(self)(self.position[index], self.quaternion[index])
+        rotation_index = (b, slice(None), slice(None)) if n is None else (b, n, slice(None), slice(None))
+        rotation = None if self.rotation is None else self.rotation[rotation_index]
+        return type(self)(self.position[index], self.quaternion[index], rotation, name=self.name)
 
     def __setitem__(self, idx: int | torch.Tensor, value: "Pose"):
         self.position[idx] = value.position
@@ -371,7 +436,36 @@ def quaternion_to_matrix(quaternion: torch.Tensor) -> torch.Tensor:
 def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
     if matrix.shape[-2:] != (3, 3):
         raise ValueError("matrix must end in shape [3,3]")
-    return _matrix_to_quaternion(matrix)
+    # Keep every candidate construction out-of-place.  The older lightweight
+    # value implementation assigned quaternion signs in-place, which breaks
+    # a matrix-backed Pose's autograd graph after the values are saved.
+    m = matrix
+    # Clamp before ``sqrt`` (rather than after it) so unselected zero-valued
+    # candidates cannot contribute an infinite derivative through the gather.
+    q_abs = torch.sqrt(torch.clamp(torch.stack((
+        1 + m[..., 0, 0] + m[..., 1, 1] + m[..., 2, 2],
+        1 + m[..., 0, 0] - m[..., 1, 1] - m[..., 2, 2],
+        1 - m[..., 0, 0] + m[..., 1, 1] - m[..., 2, 2],
+        1 - m[..., 0, 0] - m[..., 1, 1] + m[..., 2, 2],
+    ), dim=-1), min=torch.finfo(m.dtype).eps))
+    candidates = torch.stack((
+        torch.stack((q_abs[..., 0].square(), m[..., 2, 1] - m[..., 1, 2],
+                     m[..., 0, 2] - m[..., 2, 0], m[..., 1, 0] - m[..., 0, 1]), dim=-1),
+        torch.stack((m[..., 2, 1] - m[..., 1, 2], q_abs[..., 1].square(),
+                     m[..., 1, 0] + m[..., 0, 1], m[..., 0, 2] + m[..., 2, 0]), dim=-1),
+        torch.stack((m[..., 0, 2] - m[..., 2, 0], m[..., 1, 0] + m[..., 0, 1],
+                     q_abs[..., 2].square(), m[..., 2, 1] + m[..., 1, 2]), dim=-1),
+        torch.stack((m[..., 1, 0] - m[..., 0, 1], m[..., 2, 0] + m[..., 0, 2],
+                     m[..., 2, 1] + m[..., 1, 2], q_abs[..., 3].square()), dim=-1),
+    ), dim=-2)
+    index = q_abs.argmax(dim=-1)
+    selected = candidates.gather(
+        -2, index[..., None, None].expand(index.shape + (1, 4))
+    ).squeeze(-2)
+    denom = (2 * q_abs).clamp_min(torch.finfo(m.dtype).eps)
+    quaternion = selected / denom.gather(-1, index[..., None])
+    quaternion = normalize_quaternion(quaternion)
+    return torch.where(quaternion[..., :1] < 0, -quaternion, quaternion)
 
 
 def pose_to_matrix(pose: Pose) -> torch.Tensor:

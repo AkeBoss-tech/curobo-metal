@@ -24,3 +24,21 @@ CPU fallback; it does not make CUDA dtypes available on MPS.
 CUDA JIT state kernels, CUDA streams/graphs, and packed-buffer ABI calls are
 not implemented. The corresponding portable transition operations run as
 ordinary differentiable PyTorch tensor expressions instead.
+
+# Pose and joint-state value behavior
+
+The portable `Pose` and `JointState` models use regular PyTorch CPU/MPS tensor
+operations.  `Pose` accepts either a normalized `wxyz` quaternion or a
+rotation matrix; a supplied matrix is retained for buffer-aware callers while
+its quaternion conversion remains differentiable.  Pose indexing keeps all
+materialized representations and link names, and equality compares transform
+distance with cuRobo's `1e-6` tolerance rather than relying on ambiguous
+batched-tensor equality.
+
+`JointState` keeps derivative tensors, `dt`, knots, and knot timing resident
+on the same device/dtype as position.  Derivative trajectories may have a
+shorter horizon after finite differences; their final DOF dimension remains
+validated.  Shape operations intentionally treat `dt` as batch/horizon
+metadata rather than another DOF tensor, and seed replication preserves its
+batch alignment.  These operations are differentiable standard PyTorch
+composition on CPU and float32 MPS; no CUDA packed-buffer ABI is exposed.

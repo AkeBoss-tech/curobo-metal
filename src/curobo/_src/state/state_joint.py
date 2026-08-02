@@ -31,9 +31,27 @@ class JointState(_MetalJointState, State):
             self.device_cfg = DeviceCfg(self.position.device, self.position.dtype)
         else:
             self.position = self.device_cfg.to_device(self.position)
+
         for field in ("velocity", "acceleration", "jerk"):
             value = getattr(self, field)
-            if value is not None and not isinstance(value, torch.Tensor):
+            if value is None:
+                continue
+            value = self.device_cfg.to_device(value)
+            # Finite differences intentionally shorten the horizon for each
+            # successive derivative, so only the joint/DOF axis is invariant.
+            # Rejecting a shorter velocity/acceleration here would make an
+            # otherwise valid V2 trajectory impossible to index or clone.
+            if value.ndim == 0 or value.shape[-1] != self.position.shape[-1]:
+                raise ValueError(f"{field} must end in the position DOF dimension")
+            setattr(self, field, value)
+
+        # These trajectory metadata tensors do not necessarily have the same
+        # rank as position (for example dt may be [batch] or [batch, horizon]),
+        # but they must reside with the state.  Converting them here avoids a
+        # hidden CPU tensor surviving inside an otherwise MPS state.
+        for field in ("dt", "knot", "knot_dt"):
+            value = getattr(self, field)
+            if value is not None:
                 setattr(self, field, self.device_cfg.to_device(value))
         if self.joint_names is not None:
             self.joint_names = list(self.joint_names)
@@ -122,16 +140,115 @@ class JointState(_MetalJointState, State):
         return super().clone()
 
     def unsqueeze(self, idx: int):
-        return super().unsqueeze(idx)
+        return self._shape_result(
+            self.position.unsqueeze(idx),
+            self._apply_optional(self.velocity, lambda value: value.unsqueeze(idx)),
+            self._apply_optional(self.acceleration, lambda value: value.unsqueeze(idx)),
+            self._apply_optional(self.jerk, lambda value: value.unsqueeze(idx)),
+            knot=self._apply_optional(self.knot, lambda value: value.unsqueeze(idx)),
+        )
 
     def squeeze(self, dim: Optional[int] = 0):
-        return super().squeeze(dim)
+        return self._shape_result(
+            self.position.squeeze(dim),
+            self._apply_optional(self.velocity, lambda value: value.squeeze(dim)),
+            self._apply_optional(self.acceleration, lambda value: value.squeeze(dim)),
+            self._apply_optional(self.jerk, lambda value: value.squeeze(dim)),
+            knot=self._apply_optional(self.knot, lambda value: value.squeeze(dim)),
+        )
 
     def view(self, *shape):
-        return super().view(*shape)
+        if len(shape) == 1 and isinstance(shape[0], (tuple, list, torch.Size)):
+            shape = tuple(shape[0])
+        dt = self.dt
+        if dt is not None and len(shape) > 2:
+            # cuRobo's trajectory convention stores dt over batch/horizon,
+            # not over the final DOF axis.  Preserve it if it cannot be
+            # reshaped to that prefix (e.g. a scalar or global schedule).
+            prefix = tuple(shape[:2])
+            if dt.numel() == int(np.prod(prefix)):
+                dt = dt.view(*prefix)
+        return self._shape_result(
+            self.position.view(*shape),
+            self._apply_optional(self.velocity, lambda value: value.view(*shape)),
+            self._apply_optional(self.acceleration, lambda value: value.view(*shape)),
+            self._apply_optional(self.jerk, lambda value: value.view(*shape)),
+            dt=dt,
+            knot=self.knot,
+            knot_dt=self.knot_dt,
+        )
 
     def repeat(self, repeat_input: List[int]):
-        return super().repeat(repeat_input)
+        repeats = tuple(repeat_input)
+        return self._shape_result(
+            self.position.repeat(*repeats),
+            self._apply_optional(self.velocity, lambda value: value.repeat(*repeats)),
+            self._apply_optional(self.acceleration, lambda value: value.repeat(*repeats)),
+            self._apply_optional(self.jerk, lambda value: value.repeat(*repeats)),
+            knot=self.knot,
+            knot_dt=self.knot_dt,
+        )
+
+    @staticmethod
+    def _apply_optional(value, function):
+        return None if value is None else function(value)
+
+    def _shape_result(
+        self,
+        position: torch.Tensor,
+        velocity: Optional[torch.Tensor],
+        acceleration: Optional[torch.Tensor],
+        jerk: Optional[torch.Tensor],
+        *,
+        dt: Optional[torch.Tensor] = None,
+        knot: Optional[torch.Tensor] = None,
+        knot_dt: Optional[torch.Tensor] = None,
+    ) -> "JointState":
+        """Build a shaped state without treating scalar trajectory data as DOF data."""
+        return type(self)(
+            position, velocity, acceleration,
+            None if self.joint_names is None else self.joint_names.copy(), jerk,
+            self.device_cfg,
+            self.dt if dt is None else dt,
+            aux_data=dict(self.aux_data),
+            knot=self.knot if knot is None else knot,
+            knot_dt=self.knot_dt if knot_dt is None else knot_dt,
+            control_space=self.control_space,
+        )
+
+    def __getitem__(self, index) -> "JointState":
+        """Index state tensors while keeping per-batch timing well formed.
+
+        An integer batch index removes the leading position dimension, but V2
+        timing metadata remains a one-item batch tensor.  That distinction is
+        important to trajectory code which subsequently broadcasts a selected
+        state back into a batch.
+        """
+        if isinstance(index, list):
+            index = torch.as_tensor(index, device=self.device, dtype=torch.long)
+
+        def select(value):
+            return self._apply_optional(value, lambda tensor: tensor[index])
+
+        batch_index = index[0] if isinstance(index, tuple) and index else index
+
+        def select_batch_metadata(value):
+            if value is None or value.ndim == 0 or value.shape[0] != self.position.shape[0]:
+                return value
+            if isinstance(batch_index, int):
+                return value[batch_index].unsqueeze(0)
+            if isinstance(batch_index, torch.Tensor) and batch_index.numel() == 1:
+                return value[batch_index.reshape(-1)[0]].unsqueeze(0)
+            return value[batch_index]
+
+        return type(self)(
+            select(self.position), select(self.velocity), select(self.acceleration),
+            None if self.joint_names is None else self.joint_names.copy(), select(self.jerk),
+            self.device_cfg, select_batch_metadata(self.dt), aux_data=dict(self.aux_data),
+            knot=select_batch_metadata(self.knot),
+            knot_dt=select_batch_metadata(self.knot_dt),
+            control_space=self.control_space,
+        )
 
     def reorder(self, joint_names: List[str]) -> JointState:
         if self.joint_names is None:
@@ -181,6 +298,9 @@ class JointState(_MetalJointState, State):
             "joint_names", "knot", "knot_dt",
         ):
             setattr(self, field, getattr(in_joint_state, field))
+        self.device_cfg = in_joint_state.device_cfg
+        self.aux_data = dict(in_joint_state.aux_data)
+        self.control_space = in_joint_state.control_space
         return self
 
     def copy_(self, in_joint_state: JointState, allow_clone: bool = True):
@@ -235,11 +355,27 @@ class JointState(_MetalJointState, State):
     def repeat_seeds(self, num_seeds: int) -> "JointState":
         if num_seeds <= 1:
             return self.clone()
+
+        batch = self.position.shape[0]
+
         def repeat(value):
-            return value.view(value.shape[0], 1, *value.shape[1:]).repeat(
-                1, num_seeds, *([1] * (value.ndim - 1))
-            ).reshape(value.shape[0] * num_seeds, *value.shape[1:])
-        return self._map(repeat)
+            if value.ndim == 0 or value.shape[0] != batch:
+                return value
+            return value.unsqueeze(1).expand(
+                batch, num_seeds, *value.shape[1:]
+            ).reshape(batch * num_seeds, *value.shape[1:])
+
+        return type(self)(
+            repeat(self.position), self._apply_optional(self.velocity, repeat),
+            self._apply_optional(self.acceleration, repeat),
+            None if self.joint_names is None else self.joint_names.copy(),
+            self._apply_optional(self.jerk, repeat), self.device_cfg,
+            repeat(self.dt) if self.dt is not None else None,
+            aux_data=dict(self.aux_data),
+            knot=repeat(self.knot) if self.knot is not None else None,
+            knot_dt=repeat(self.knot_dt) if self.knot_dt is not None else None,
+            control_space=self.control_space,
+        )
 
     def get_state_tensor(self) -> torch.Tensor:
         return torch.cat([x for x in (self.position, self.velocity, self.acceleration, self.jerk)
