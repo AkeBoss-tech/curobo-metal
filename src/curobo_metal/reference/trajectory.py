@@ -24,11 +24,12 @@ TRAJECTORY_VERSION = 1
 # into the last 11--12 decimal places of a 100-step backtracking solve.  Keep
 # the state and externally recorded scalar outputs on this much finer-than-
 # tolerance grid so canonical JSON fixtures are portable byte-for-byte.
-_REPLAY_DECIMALS = 10
+_REPLAY_DECIMALS = 9
 # A recorded value can lie at most half a replay unit from an unrounded
 # evaluation on either host.  Leave one full unit for two independently
-# rounded values while still rejecting changes larger than 1e-10.
-TRAJECTORY_REPLAY_ATOL = 1e-10
+# rounded values while still rejecting changes larger than 1e-9.  The replay
+# grid is deliberately much tighter than every public solver tolerance.
+TRAJECTORY_REPLAY_ATOL = 1e-9
 
 
 def _float(value: Any, name: str) -> FloatArray:

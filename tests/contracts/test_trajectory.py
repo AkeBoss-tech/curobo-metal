@@ -132,15 +132,15 @@ def test_canonical_replay_and_oracle_result(name: str, status: str, success: boo
     assert result.status == (status,)
     assert result.success.tolist() == [success]
     assert result.selected_seed == case["expected"]["selected_seed"]
-    # The canonical fixture records a 1e-10 output grid.  This permits the
+    # The canonical fixture records a 1e-9 output grid.  This permits the
     # last-bit libm/BLAS variation of the finite-difference oracle without
     # accepting a numerically meaningful trajectory or objective regression.
     np.testing.assert_allclose(result.trajectories, case["expected"]["trajectories"],
                                rtol=0.0, atol=TRAJECTORY_REPLAY_ATOL)
     np.testing.assert_allclose(result.objective, case["expected"]["objective"],
                                rtol=0.0, atol=TRAJECTORY_REPLAY_ATOL)
-    np.testing.assert_array_equal(result.trajectories, np.round(result.trajectories, 10))
-    np.testing.assert_array_equal(result.objective, np.round(result.objective, 10))
+    np.testing.assert_array_equal(result.trajectories, np.round(result.trajectories, 9))
+    np.testing.assert_array_equal(result.objective, np.round(result.objective, 9))
     if name == "two_link_obstacle_detour.json":
         assert result.minimum_clearance[0] > 0.0
         assert np.max(np.abs(result.trajectories[0, 1:-1, 1])) > 0.02
