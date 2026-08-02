@@ -41993,9 +41993,9 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
+        "missing_symbols": 6,
         "path": "curobo/_src/optim/multi_stage_optimizer.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 8,
         "status": "partial"
       },
       "name": "curobo._src.optim.multi_stage_optimizer",
@@ -85570,10 +85570,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
+        "missing_symbols": 0,
         "path": "curobo/_src/solver/solver_mpc_result.py",
-        "resolved_symbols": 6,
-        "status": "partial"
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo._src.solver.solver_mpc_result",
       "path": "curobo/_src/solver/solver_mpc_result.py",
@@ -87538,9 +87538,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 7,
         "path": "curobo/_src/solver/solver_trajopt_result.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_trajopt_result",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 245,
-    "resolved_modules": 116,
+    "partial_modules": 244,
+    "resolved_modules": 117,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 245,
-    "resolved_modules": 116,
+    "partial_modules": 244,
+    "resolved_modules": 117,
     "symbols": 7182
   },
   "upstream": {
