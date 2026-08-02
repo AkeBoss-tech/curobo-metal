@@ -18,3 +18,16 @@ the scene, propagates it to attached eager rollouts, and increments
 USD, Warp collision objects, CUDA graph capture, streams, and graph debug
 dumps remain explicit unsupported boundaries; they are never silently mapped
 to an empty or CPU fallback scene.
+
+## Seed preparation
+
+`curobo._src.solver.manager_seed.SeedManager` keeps the V2 optimizer-facing
+layouts: action seeds are returned as `[batch * seed, 1, dof]`, while
+trajectory and deceleration seeds are `[batch * seed, horizon, dof]`.
+Batch-major and seed-major action configuration inputs are normalized,
+over-provisioned user seeds are truncated, and missing action seeds are padded
+from a deterministic bound-respecting Halton buffer.  Trajectory preparation
+prioritizes complete user trajectories, then interpolates user goal
+configurations, then holds the current joint state. `reset_seed()` restores the
+portable sample-buffer stream on CPU and MPS. CUDA graph capture, raw device
+buffers, and CUDA/Warp sampling ABI are intentionally not emulated.
