@@ -1,11 +1,24 @@
-"""Portable cuRobo goal registry."""
+"""Portable goal registry with cuRobo V2 batch/seed indexing semantics.
+
+The registry itself has no CUDA dependency: index tensors are ordinary
+``int32`` PyTorch tensors and state payloads remain on their caller-selected
+device.  CUDA graph ownership and packed kernel buffers are deliberately left
+to the solver layer rather than being faked here.
+"""
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional
+
 import torch
+import torch.autograd.profiler as profiler
+
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.pose import Pose
 from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.tensor_util import copy_or_clone, tensor_repeat_seeds
 
 @dataclass
 class GoalRegistry:
@@ -47,7 +60,9 @@ class GoalRegistry:
                 )
 
     @staticmethod
-    def _indices(size, device):
+    def _indices(size: int, device: torch.device) -> torch.Tensor:
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            raise ValueError("index size must be a non-negative integer")
         return torch.arange(size, device=device, dtype=torch.int32).unsqueeze(-1)
 
     def _update_batch_size(self):
@@ -56,16 +71,20 @@ class GoalRegistry:
         elif self.goal_js is not None:
             self.batch_size = self.goal_js.position.shape[0]
     @property
-    def link_goal_pose_dict(self):
+    def link_goal_pose_dict(self) -> Optional[Dict[str, Pose]]:
         return None if self.link_goal_poses is None else self.link_goal_poses.to_dict()
+
+    @profiler.record_function("GoalRegistry/repeat_seeds")
     def repeat_seeds(self, num_seeds, repeat_seed_idx_buffers=False):
-        if num_seeds < 1:
+        if not isinstance(num_seeds, int) or isinstance(num_seeds, bool) or num_seeds < 1:
             raise ValueError("num_seeds must be positive")
         out = self.clone()
+
         def repeat(value):
             if value is None:
                 return None
-            return value.repeat_interleave(num_seeds, dim=0)
+            return tensor_repeat_seeds(value, num_seeds)
+
         for name in ("idxs_link_pose", "idxs_goal_js", "idxs_enable", "idxs_env", "idxs_current_js"):
             setattr(out, name, repeat(getattr(self, name)))
         if repeat_seed_idx_buffers:
@@ -83,21 +102,42 @@ class GoalRegistry:
             None if self.current_state_dt is None else self.current_state_dt.clone()
         )
         return type(self)(**values)
-    def apply_kernel(self, kernel_mat):
+    def apply_kernel(self, kernel_mat: torch.Tensor):
+        """Map index buffers through a caller-provided batch selection matrix.
+
+        Payloads intentionally remain shared (or cloned according to
+        :meth:`clone`); only selection buffers are transformed.  This matches
+        V2's use in seed/batch expansion without claiming a packed CUDA
+        kernel implementation.
+        """
+        if not isinstance(kernel_mat, torch.Tensor) or kernel_mat.ndim != 2:
+            raise TypeError("kernel_mat must be a rank-2 torch.Tensor")
+        index_size = self.get_index_size()
+        if index_size is not None and kernel_mat.shape[1] != index_size:
+            raise ValueError("kernel_mat width must equal the registry index size")
+        first_index = next(
+            (getattr(self, name) for name in ("idxs_link_pose", "idxs_goal_js", "idxs_current_js", "idxs_env") if getattr(self, name) is not None),
+            None,
+        )
+        if first_index is not None and kernel_mat.device != first_index.device:
+            raise ValueError("kernel_mat and registry indices must be on the same device")
         out = self.clone()
         for name in ("idxs_enable", "idxs_goal_js", "idxs_current_js", "idxs_link_pose", "idxs_env"):
             value = getattr(out, name)
             if value is not None:
                 setattr(out, name, (kernel_mat @ value.to(torch.float32)).to(torch.int32))
         return out
-    def copy_(self, goal, update_idx_buffers=True, allow_clone=True):
+    @profiler.record_function("GoalRegistry/copy_")
+    def copy_(self, goal: "GoalRegistry", update_idx_buffers=True, allow_clone=True):
+        if not isinstance(goal, GoalRegistry):
+            raise TypeError("goal must be a GoalRegistry")
         for name in ("goal_js", "seed_goal_js", "current_js"):
             source = getattr(goal, name)
             target = getattr(self, name)
             if source is not None:
                 if target is None:
                     if not allow_clone:
-                        raise ValueError(f"{name} has no preallocated buffer")
+                        continue
                     setattr(self, name, source.clone())
                 else:
                     target.copy_(source, allow_clone=allow_clone)
@@ -112,7 +152,7 @@ class GoalRegistry:
                 target = getattr(self, name)
                 if target is None or target.shape != source.shape:
                     if not allow_clone:
-                        raise ValueError(f"{name} has no matching preallocated buffer")
+                        continue
                     setattr(self, name, source.clone())
                 else:
                     target.copy_(source)
@@ -123,7 +163,7 @@ class GoalRegistry:
                     target = getattr(self, name)
                     if target is None or target.shape != source.shape:
                         if not allow_clone:
-                            raise ValueError(f"{name} has no matching preallocated buffer")
+                            continue
                         setattr(self, name, source.clone())
                     else:
                         target.copy_(source)
@@ -138,7 +178,11 @@ class GoalRegistry:
     @classmethod
     def create_idx(cls, pose_batch_size, multi_env, num_seeds, device_cfg,
                    seed_goal_state=None, repeat_seed_idx_buffers=False):
-        if pose_batch_size < 0 or num_seeds < 1:
+        if not isinstance(device_cfg, DeviceCfg):
+            raise TypeError("device_cfg must be a DeviceCfg")
+        if (not isinstance(pose_batch_size, int) or isinstance(pose_batch_size, bool)
+                or pose_batch_size < 0 or not isinstance(num_seeds, int)
+                or isinstance(num_seeds, bool) or num_seeds < 1):
             raise ValueError("pose_batch_size must be non-negative and num_seeds positive")
         base = cls._indices(pose_batch_size, device_cfg.device)
         registry = cls(
