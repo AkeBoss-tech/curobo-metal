@@ -1,10 +1,16 @@
+import math
 from pathlib import Path
 from typing import Callable, Optional, Sequence, Union
 import torch
 
 from curobo._src.geom.types import Mesh, VoxelGrid
 from curobo._src.perception.mapper.mapper_cfg import MapperCfg
-from curobo._src.perception.mapper.storage import BlockDataView, OccupiedVoxels
+from curobo._src.perception.mapper.storage import (
+    BlockDataView,
+    BlockSparseTSDF,
+    BlockSparseTSDFCfg,
+    OccupiedVoxels,
+)
 from curobo._src.perception.mapper.checkpoint_blocks import (
     build_block_metadata,
     is_portable_dense_block_payload,
@@ -29,6 +35,10 @@ def _device(value):
 class Mapper:
     def __init__(self, config: MapperCfg):
         self.config = config
+        if config.feature_dim:
+            raise NotImplementedError("MapperCfg.feature_dim requires CUDA/Warp feature-volume integration")
+        if config.lidar_num_sensors:
+            raise NotImplementedError("MapperCfg.lidar_num_sensors requires CUDA/Warp LiDAR integration")
         center = (0.0,0.0,0.0) if config.grid_center is None else tuple(torch.as_tensor(config.grid_center).tolist())
         native = PerceptionConfig(
             config.grid_shape, config.voxel_size, center,
@@ -37,6 +47,24 @@ class Mapper:
             block_size=config.block_size,
         )
         self._mapper = PerceptionMapper(native, device=_device(config.device))
+        self._storage = BlockSparseTSDF.from_native(BlockSparseTSDFCfg(
+            max_blocks=config.max_blocks,
+            hash_capacity=config.hash_capacity,
+            voxel_size=config.voxel_size,
+            origin=torch.as_tensor(center),
+            truncation_distance=config.truncation_distance,
+            device=config.device,
+            grid_shape=config.grid_shape,
+            enable_dynamic=True,
+            enable_static=config.enable_static,
+            static_obstacle_color=tuple(float(v) / 255.0 if float(v) > 1 else float(v)
+                                        for v in config.static_obstacle_color),
+            block_size=config.block_size,
+            feature_dim=0,
+            color_grid_size=config.color_grid_size,
+            accumulator_w_max=config.accumulator_w_max,
+        ), self._mapper)
+        self._static_mask = torch.zeros_like(self._mapper.state.occupancy)
 
     @property
     def device(self): return self._mapper.state.tsdf.device
@@ -46,12 +74,12 @@ class Mapper:
 
     @property
     def tsdf(self):
-        """Portable dense TSDF state backing this mapper.
+        """Dense-backed :class:`BlockSparseTSDF` lifecycle facade.
 
-        It intentionally is not a Warp ``BlockSparseTSDF`` object; consumers
-        can inspect its named tensor fields on either CPU or MPS.
+        The returned object is intentionally not a Warp hash table.  Its
+        ``state`` property is the actual dense PyTorch map on CPU or MPS.
         """
-        return self._mapper.state
+        return self._storage
 
     @property
     def integrator(self):
@@ -71,6 +99,14 @@ class Mapper:
     def compute_esdf(self, esdf_origin=None, esdf_voxel_size=None):
         if esdf_voxel_size not in (None, self.config.voxel_size):
             raise NotImplementedError("ESDF resampling is not implemented")
+        if esdf_origin is not None:
+            expected = torch.as_tensor(self._mapper.config.grid_center, device=self.device,
+                                       dtype=self._mapper.state.tsdf.dtype)
+            supplied = torch.as_tensor(esdf_origin, device=self.device, dtype=expected.dtype)
+            if supplied.shape != (3,):
+                raise ValueError("esdf_origin must be an xyz vector")
+            if not torch.allclose(supplied, expected):
+                raise NotImplementedError("portable dense Mapper does not implement sliding ESDF windows")
         return VoxelGrid(
             name="mapper_esdf", pose=[*self._mapper.config.grid_center,1,0,0,0],
             dims=list(self.config.get_actual_extent()),
@@ -97,16 +133,40 @@ class Mapper:
         if surface_only:
             threshold = self.config.truncation_distance if sdf_threshold is None else float(sdf_threshold)
             occupied = occupied & (state.tsdf[0].abs() <= threshold / self.config.truncation_distance)
-        centers = torch.nonzero(occupied, as_tuple=False).to(self._mapper.state.tsdf.dtype)
+        coordinates = torch.nonzero(occupied, as_tuple=False)
+        centers = coordinates.to(self._mapper.state.tsdf.dtype)
         centers = (centers-(centers.new_tensor(occupied.shape)-1)/2)*self.config.voxel_size
         centers += centers.new_tensor(self._mapper.config.grid_center)
-        if max_points is not None: centers = centers[:max_points]
-        indices = torch.arange(len(centers), device=centers.device)
-        empty = centers.new_empty((len(centers),3))
-        view = BlockDataView(empty, centers, len(centers), centers.new_tensor(self.config.origin), self.config.voxel_size, self.config.block_size, occupied.shape)
+        # The source contract uses evenly spaced subvoxel centers.  Cap source
+        # voxels before expansion so every retained source voxel remains
+        # complete and the result is deterministic.
+        source_limit = None
+        if max_points is not None:
+            source_limit = max_points // (subvoxel_factor ** 3)
+            coordinates, centers = coordinates[:source_limit], centers[:source_limit]
+        if subvoxel_factor > 1 and len(centers):
+            axis = ((torch.arange(subvoxel_factor, device=centers.device, dtype=centers.dtype) + 0.5)
+                    / subvoxel_factor - 0.5) * self.config.voxel_size
+            offsets = torch.stack(torch.meshgrid(axis, axis, axis, indexing="ij"), -1).reshape(-1, 3)
+            centers = (centers[:, None] + offsets[None]).reshape(-1, 3)
+            coordinates = coordinates[:, None].expand(-1, len(offsets), -1).reshape(-1, 3)
+        shape = tuple(int(v) for v in occupied.shape)
+        indices = (coordinates[:, 0] * shape[1] * shape[2] + coordinates[:, 1] * shape[2] + coordinates[:, 2]).to(torch.long)
+        total = int(math.prod(shape))
+        coords = torch.stack(torch.meshgrid(
+            *[torch.arange(v, device=centers.device, dtype=torch.int32) for v in shape], indexing="ij",
+        ), -1).reshape(-1, 3)
+        rgb = torch.zeros((total, 1, 4), device=centers.device, dtype=centers.dtype)
+        features = centers.new_empty((total, 1, 0))
+        feature_weight = centers.new_zeros((total, 1))
+        view = BlockDataView(rgb, coords, total, centers.new_tensor(self._mapper.config.grid_center),
+                             self.config.voxel_size, 1, shape, features=features,
+                             feature_weight=feature_weight)
         return OccupiedVoxels(centers, indices, view, subvoxel_factor=subvoxel_factor)
 
-    def reset(self): self._mapper.reset()
+    def reset(self):
+        self._storage.reset()
+        self._static_mask = torch.zeros_like(self._mapper.state.occupancy)
 
     def save_blocks(self, file_path):
         """Persist dense CPU/MPS state in the cuRobo checkpoint envelope."""
@@ -114,7 +174,7 @@ class Mapper:
             field: getattr(self._mapper.state, field)
             for field in ("tsdf", "weight", "occupancy", "esdf", "gradient", "generation")
         }
-        save_block_checkpoint(file_path, build_block_metadata(self), blocks)
+        save_block_checkpoint(file_path, build_block_metadata(self.tsdf), blocks)
 
     def import_blocks(self, file_path, import_weight=None):
         """Restore a dense checkpoint into an empty mapper.
@@ -124,7 +184,7 @@ class Mapper:
         misinterpreted as portable dense state.
         """
         checkpoint = load_block_checkpoint(file_path)
-        validate_block_metadata_for_target(checkpoint["block_metadata"], self)
+        validate_block_metadata_for_target(checkpoint["block_metadata"], self.tsdf)
         blocks = prepare_blocks_for_import(
             checkpoint["blocks"], checkpoint["block_metadata"],
             import_weight=import_weight,
@@ -137,21 +197,21 @@ class Mapper:
             raise ValueError("block import requires an empty target mapper")
         state_checkpoint = self._mapper.state_dict()
         state_checkpoint.update(blocks)
-        self._mapper.load_state_dict(state_checkpoint)
+        self._storage.import_blocks(state_checkpoint)
+        self._static_mask = torch.zeros_like(self._mapper.state.occupancy)
         return int((self._mapper.state.weight > 0).sum().item())
 
     def get_stats(self, scan_pool=True, scan_hash=False):
-        return {
-            "observed_voxels": int((self._mapper.state.weight > 0).sum()),
+        stats = self._storage.get_stats(scan_pool, scan_hash)
+        stats.update({
             "occupied_voxels": int(self._mapper.state.occupancy.sum()),
+            "static_voxels": int(self._static_mask.sum()),
             "generation": int(self._mapper.state.generation.max()),
-        }
+        })
+        return stats
 
     def memory_usage_mb(self):
-        return sum(x.numel()*x.element_size() for x in (
-            self._mapper.state.tsdf, self._mapper.state.weight,
-            self._mapper.state.esdf, self._mapper.state.gradient,
-        )) / 2**20
+        return self._storage.memory_usage_mb()
 
     def _render_result(self, intrinsics: torch.Tensor, pose, image_shape):
         matrix = pose.get_matrix() if hasattr(pose, "get_matrix") else torch.as_tensor(pose)
@@ -269,4 +329,69 @@ class Mapper:
         return result
 
     def update_static_obstacles(self, scene, env_idx=0):
-        raise NotImplementedError("static scene stamping is not implemented")
+        """Stamp portable cuboids and spheres into the dense TSDF occupancy.
+
+        This is deliberately bounded to analytic primitives.  CUDA/Warp scene
+        tensors, mesh BVHs, and sparse static channels have materially
+        different memory and tie semantics, so they reject explicitly.
+        """
+        if not self.config.enable_static:
+            raise RuntimeError("MapperCfg.enable_static=True is required before stamping static obstacles")
+        from curobo._src.geom.types import Cuboid, SceneCfg, Sphere
+        from curobo._src.geom.data.data_scene import SceneData
+
+        if isinstance(scene, SceneData):
+            scene = scene.scene_model
+        if isinstance(scene, (list, tuple)):
+            if env_idx < 0 or env_idx >= len(scene):
+                raise ValueError("env_idx is outside the provided static scene list")
+            scene = scene[env_idx]
+        if not isinstance(scene, SceneCfg):
+            raise TypeError("static stamping requires SceneCfg or SceneData carrying SceneCfg")
+        if scene.mesh or scene.voxel or scene.capsule or scene.cylinder:
+            raise NotImplementedError("portable static stamping supports only cuboids and spheres; mesh/voxel/Warp primitives require CUDA/Warp")
+        state = self._mapper.state
+        centers = torch.stack(torch.meshgrid(
+            *[(torch.arange(n, device=self.device, dtype=state.tsdf.dtype) - (n - 1) / 2) * self.config.voxel_size + c
+              for n, c in zip(self.config.grid_shape, self._mapper.config.grid_center)], indexing="ij",
+        ), -1)
+        mask = torch.zeros_like(state.occupancy[0])
+        for obstacle in scene.cuboid:
+            if not isinstance(obstacle, Cuboid):
+                raise TypeError("scene.cuboid must contain Cuboid records")
+            pose = obstacle.pose
+            position = centers.new_tensor(pose[:3])
+            quat = centers.new_tensor(pose[3:])
+            quat = quat / torch.linalg.vector_norm(quat).clamp_min(torch.finfo(centers.dtype).eps)
+            w, x, y, z = quat.unbind()
+            rotation = torch.stack((
+                1 - 2 * (y*y + z*z), 2 * (x*y - z*w), 2 * (x*z + y*w),
+                2 * (x*y + z*w), 1 - 2 * (x*x + z*z), 2 * (y*z - x*w),
+                2 * (x*z - y*w), 2 * (y*z + x*w), 1 - 2 * (x*x + y*y),
+            )).reshape(3, 3)
+            local = (centers - position) @ rotation
+            half = centers.new_tensor(obstacle.dims) / 2
+            mask |= (local.abs() <= half).all(-1)
+        for obstacle in scene.sphere:
+            if not isinstance(obstacle, Sphere):
+                raise TypeError("scene.sphere must contain Sphere records")
+            position = centers.new_tensor(obstacle.position if obstacle.position is not None else obstacle.pose[:3])
+            mask |= torch.linalg.vector_norm(centers - position, dim=-1) <= obstacle.radius
+        # Remove the previous static layer before writing a replacement.  The
+        # dense backend has no separate static channel, hence this only claims
+        # static scene mutation between depth integration calls.
+        dynamic_occupancy = state.occupancy.clone()
+        dynamic_occupancy[self._static_mask] = False
+        occupancy = dynamic_occupancy.clone()
+        occupancy[0] |= mask
+        tsdf = state.tsdf.clone()
+        weight = state.weight.clone()
+        tsdf[0] = torch.where(mask, torch.full_like(tsdf[0], -0.5), tsdf[0])
+        weight[0] = torch.where(mask, torch.ones_like(weight[0]), weight[0])
+        esdf, gradient = dense_esdf(occupancy, self.config.voxel_size, self._mapper.config.unobserved_esdf,
+                                    dtype=state.tsdf.dtype)
+        self._replace_state(tsdf=tsdf, weight=weight, occupancy=occupancy, esdf=esdf,
+                            gradient=gradient, generation=state.generation + 1)
+        self._static_mask = torch.zeros_like(occupancy)
+        self._static_mask[0] = mask
+        return int(mask.sum().item())
