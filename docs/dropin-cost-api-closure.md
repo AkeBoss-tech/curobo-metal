@@ -17,8 +17,12 @@ Derived configuration `clone()` calls retain their concrete type and clone
 tensor-backed limits, targets, and criteria.  `ToolPoseCost` supports in-place
 updates for a subset of configured tools, terminal/non-terminal convergence
 tolerances, and goal-frame projection for axis-selective Cartesian approach
-criteria.  Its diagnostic buffers are reusable detached observations; returned
-costs remain native differentiable PyTorch tensors.  Swept scene cost forwards
+criteria.  Its public module returns the upstream interleaved
+`[position_cost, rotation_cost]` channels per tool (`[B,H,2*links]`), accepts a
+single-horizon goalset for an arbitrary current horizon, and supports either
+`[B]` or `[B,1]` goal-batch indices.  Its diagnostic buffers are reusable
+detached observations; returned costs remain native differentiable PyTorch
+tensors, including gradients to selected goals.  Swept scene cost forwards
 the public speed-metric and gradient-input controls to the portable collision
 checker and validates the configured batch/sphere lifecycle.
 
@@ -40,3 +44,6 @@ does not claim CUDA packed-buffer ABI compatibility, CUDA Graph capture,
 Warp-specific tie layouts, or numerical identity with the NVIDIA kernels.
 `ToolPoseCost` and the high-level cost classes are the supported differentiable
 portable interfaces; direct raw Warp entrypoints fail with an explicit error.
+The native autograd path deliberately does not reproduce Warp's
+`use_grad_input=False` custom-backward override; normal PyTorch loss scaling is
+preserved instead.

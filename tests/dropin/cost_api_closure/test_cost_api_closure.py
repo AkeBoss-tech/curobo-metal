@@ -122,7 +122,8 @@ def test_tool_pose_goalset_criteria_and_gradient() -> None:
     )
     cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["tool"])
     output, linear, angular, idx = ToolPoseCost(cfg)(current, goals)
-    assert output.shape == linear.shape == angular.shape == idx.shape == (1, 2, 1)
+    assert output.shape == (1, 2, 2)
+    assert linear.shape == angular.shape == idx.shape == (1, 2, 1)
     assert idx[0, 0, 0].item() == 0 and idx[0, 1, 0].item() == 0
     output.sum().backward()
     assert torch.isfinite(position.grad).all() and torch.isfinite(quat.grad).all()
@@ -165,7 +166,7 @@ def test_tool_pose_criteria_partial_updates_tolerance_and_goal_frame_projection(
         ["a"], goals.position[:, :, :1], torch.tensor([[[[[1.0, 0.0, 0.0, 0.0]]]]]),
     )
     output, *_ = tolerance_cost(single, single_goal)
-    assert output.item() == 0.0
+    assert torch.equal(output, torch.zeros_like(output))
     output.sum().backward()
     assert torch.isfinite(position.grad).all() and torch.isfinite(quat.grad).all()
 
