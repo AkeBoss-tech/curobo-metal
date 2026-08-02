@@ -6,6 +6,15 @@ facade over the production `SceneCollision` checker.  It accepts the pinned
 V2 `setup_batch_tensors`, `update_num_spheres`, `reset`, `validate_input`,
 `_discrete_fn`, `_sweep_fn`, and gradient-buffer lifecycle.
 
+`SceneCollisionCostCfg` compiles its scalar activation distance onto its
+`DeviceCfg` and rejects negative, non-finite, or vector activation distances
+before a solve begins. It also validates non-negative sphere counts and the
+configured checker protocol, then derives the checker count from native
+`SceneCollision` instances. Query-compatible custom checkers remain supported
+for testing and application extensions. `use_sweep_kernel` is retained as a
+V2 configuration option but selects the portable swept-query route; it does
+not expose Warp or CUDA kernel handles.
+
 Signed per-sphere clearances are converted to
 `0.5 * max(activation_distance - clearance, 0)^2`, then reduced with either
 `sum_distance=True` or the deterministic first `max` reduction.  The cost
