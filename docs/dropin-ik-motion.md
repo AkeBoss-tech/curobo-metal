@@ -24,6 +24,14 @@ and seed shape changes.  The exported `_pad_batch_inputs` and
 `_slice_batch_result` helpers retain max-batch integration behavior without
 requiring static CUDA-graph allocations.
 
+The seed solver accepts caller seeds, current-state velocity constraints and
+goal sets, returns stable top-ranked candidates, and honors
+`max_problems_mini_batch` by processing deterministic PyTorch chunks.  Equal
+shape calls retain prepared velocity buffers, while changed shapes allocate
+fresh portable state.  Inputs must already use the requested CPU/MPS device and
+dtype.  Captured CUDA graphs, Warp's packed LM step, and raw solver ABI buffers
+remain explicit unsupported boundaries.
+
 `update_world` accepts a portable `SceneCfg`, a list of `SceneCfg` for an
 existing matching multi-environment collision adapter, or a `SceneCollision`.
 It updates the live adapter used for IK scoring.  World clearance is composed

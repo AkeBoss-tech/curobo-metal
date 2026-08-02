@@ -104,6 +104,11 @@ class SeedIKSolver:
     def _setup_batch_size(self, batch_size: int, num_seeds: int = 1):
         if batch_size <= 0 or num_seeds <= 0:
             raise ValueError("batch_size and num_seeds must be positive")
+        # Callers prepare velocity/acceleration constraints immediately before
+        # optimizing.  Retaining equal-shape buffers prevents the later
+        # optimize call from silently discarding those prepared constraints.
+        if batch_size == self._batch_size and num_seeds == self._num_seeds:
+            return
         self._batch_size, self._num_seeds = batch_size, num_seeds
         self._num_problems = batch_size * num_seeds
         self.error_calculator.setup_batch_tensors(batch_size, num_seeds)
@@ -214,6 +219,11 @@ class SeedIKSolver:
             raise ValueError("seed_config must have rank 1, 2, or 3")
         if seed.shape[0] != batch_size:
             raise ValueError("seed_config batch dimension must match the goal batch")
+        if seed.shape[1] > self.config.num_seeds:
+            raise ValueError(
+                "seed_config cannot contain more seeds than config.num_seeds; "
+                "increase the configuration-lifetime seed count"
+            )
         return seed
 
     def _generate_seed_configs(self, batch_size: int, seed_config: Optional[torch.Tensor] = None):
@@ -272,6 +282,71 @@ class SeedIKSolver:
             self._velocity_current_velocity.copy_(velocity.repeat_interleave(num_seeds, dim=0))
         self._velocity_clamping_active = True
 
+    def _validate_goal(self, goal_tool_poses: GoalToolPose, batch_size: int) -> None:
+        """Fail clearly before allocating solver state on the wrong backend."""
+        if goal_tool_poses.batch_size != batch_size:
+            raise ValueError(f"expects batch size {batch_size}, got {goal_tool_poses.batch_size}")
+        if goal_tool_poses.horizon != 1:
+            raise NotImplementedError("seed IK solves a single target timestep")
+        if not self.device_cfg.is_same_torch_device(goal_tool_poses.position.device):
+            raise ValueError("goal_tool_poses must use the solver device")
+        if not self.device_cfg.is_same_torch_device(goal_tool_poses.quaternion.device):
+            raise ValueError("goal_tool_poses quaternion must use the solver device")
+        if goal_tool_poses.position.dtype != self.device_cfg.dtype:
+            raise ValueError("goal_tool_poses position must use the solver dtype")
+        if goal_tool_poses.quaternion.dtype != self.device_cfg.dtype:
+            raise ValueError("goal_tool_poses quaternion must use the solver dtype")
+
+    def _optimize_minibatches(
+        self,
+        initial_config: torch.Tensor,
+        goal_tool_poses: GoalToolPose,
+        current_state: Optional[JointState],
+        success_num_seeds: int = 1,
+    ):
+        """Bound ordinary PyTorch batches by the public mini-batch option.
+
+        CUDA uses this option to bound workspace allocation.  The portable
+        path applies the same logical split, retaining exact chunk ordering so
+        downstream global goal/seed ranking remains deterministic.
+        """
+        batch, seeds, _ = initial_config.shape
+        max_problems = int(self.config.max_problems_mini_batch)
+        if max_problems < seeds:
+            raise ValueError("max_problems_mini_batch must be at least config.num_seeds")
+        max_batch = max(1, max_problems // seeds)
+        if batch <= max_batch:
+            self._setup_batch_size(batch, seeds)
+            self._prepare_velocity_buffers(current_state, batch, seeds)
+            return self._optimize(initial_config, goal_tool_poses, success_num_seeds)
+
+        solution_parts, success_parts = [], []
+        position_parts, orientation_parts = [], []
+        max_iterations = 0
+        for start in range(0, batch, max_batch):
+            stop = min(start + max_batch, batch)
+            chunk_goal = GoalToolPose(
+                goal_tool_poses.tool_frames,
+                goal_tool_poses.position[start:stop],
+                goal_tool_poses.quaternion[start:stop],
+            )
+            chunk_state = None if current_state is None else current_state[start:stop]
+            self._setup_batch_size(stop - start, seeds)
+            self._prepare_velocity_buffers(chunk_state, stop - start, seeds)
+            q, ok, pe, re, iterations = self._optimize(
+                initial_config[start:stop], chunk_goal, success_num_seeds
+            )
+            solution_parts.append(q)
+            success_parts.append(ok)
+            position_parts.append(pe)
+            orientation_parts.append(re)
+            max_iterations = max(max_iterations, iterations)
+        return (
+            torch.cat(solution_parts, dim=0), torch.cat(success_parts, dim=0),
+            torch.cat(position_parts, dim=0), torch.cat(orientation_parts, dim=0),
+            max_iterations,
+        )
+
     def _optimize(self, initial_config, goal_tool_poses, success_num_seeds: int = 1):
         if initial_config.ndim != 3 or initial_config.shape[-1] != self.dof:
             raise ValueError("initial_config must have shape [batch, seed, dof]")
@@ -298,13 +373,10 @@ class SeedIKSolver:
         seed_config=None, return_seeds: int = 1, batch_size: int = 1,
     ) -> IKSolverResult:
         started = time.monotonic()
-        if goal_tool_poses.batch_size != batch_size:
-            raise ValueError(f"expects batch size {batch_size}, got {goal_tool_poses.batch_size}")
+        self._validate_goal(goal_tool_poses, batch_size)
         if return_seeds < 1 or return_seeds > self.config.num_seeds:
             raise ValueError("return_seeds must be in [1, config.num_seeds]")
         goal = goal_tool_poses.reorder_links(self.tool_frames)
-        if goal.horizon != 1:
-            raise NotImplementedError("seed IK solves a single target timestep")
         # Solve every goal-set item as an independent batch, then rank globally.
         goal_count = goal.num_goalset
         expanded_goal = GoalToolPose(
@@ -319,19 +391,26 @@ class SeedIKSolver:
         seeds = seeds[:, None].expand(-1, goal_count, -1, -1).reshape(batch_size * goal_count, self.config.num_seeds, self.dof).clone()
         if current_state is not None:
             current_state = current_state.clone()
-            def repeat_field(value):
+            def repeat_field(value, *, timing: bool = False):
                 if value is None:
                     return None
-                if value.ndim == 1:
+                # Joint vectors have a leading goal-batch dimension.  A
+                # one-dimensional dt is already batch-shaped, rather than a
+                # single state with ``batch`` pseudo-DOF values.
+                if timing and value.ndim == 1 and value.numel() == batch_size:
+                    value = value[:, None]
+                elif value.ndim == 1:
                     value = value[None]
+                if value.shape[0] != batch_size:
+                    raise ValueError("current_state batch dimension must match the goal batch")
                 return value[:, None].expand(-1, goal_count, *value.shape[1:]).reshape(batch_size * goal_count, *value.shape[1:])
             current_state.position = repeat_field(current_state.position)
             current_state.velocity = repeat_field(current_state.velocity)
             current_state.acceleration = repeat_field(current_state.acceleration)
-            current_state.dt = repeat_field(current_state.dt)
-        self._setup_batch_size(batch_size * goal_count, self.config.num_seeds)
-        self._prepare_velocity_buffers(current_state, batch_size * goal_count, self.config.num_seeds)
-        solutions, success, position_error, orientation_error, iterations = self._optimize(seeds, expanded_goal)
+            current_state.dt = repeat_field(current_state.dt, timing=True)
+        solutions, success, position_error, orientation_error, iterations = self._optimize_minibatches(
+            seeds, expanded_goal, current_state
+        )
         solutions = solutions.reshape(batch_size, goal_count * self.config.num_seeds, self.dof)
         success = success.reshape(batch_size, goal_count * self.config.num_seeds)
         position_error = position_error.reshape(batch_size, goal_count * self.config.num_seeds)
@@ -358,7 +437,18 @@ class SeedIKSolver:
             optimized_seeds=solutions, seed_rank=rank, seed_cost=cost.gather(1, rank),
             batch_size=batch_size, num_seeds=goal_count * self.config.num_seeds,
             solve_time=elapsed, total_time=elapsed,
-            metrics={"iterations": iterations, "backend": "torch-lm", "cuda_graph": False},
+            position_tolerance=self.config.position_tolerance,
+            orientation_tolerance=self.config.orientation_tolerance,
+            feasible=top_success.clone(),
+            metrics={
+                "iterations": iterations,
+                "backend": "torch-lm",
+                "cuda_graph": False,
+                "mini_batch_size": min(
+                    batch_size * goal_count,
+                    max(1, int(self.config.max_problems_mini_batch) // self.config.num_seeds),
+                ),
+            },
         )
 
     def solve_single(self, goal_tool_poses, current_state=None, seed_config=None, return_seeds=1):

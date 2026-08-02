@@ -58,6 +58,46 @@ def test_seed_ik_solves_batched_goalset_and_selects_exact_candidate():
     assert result.optimized_seeds.shape == (2, 6, 7)
 
 
+def test_seed_ik_minibatches_preserve_batched_seed_order_and_velocity_constraints():
+    solver = SeedIKSolver(SeedIKSolverCfg.create(
+        "franka.yml", num_seeds=2, max_iterations=16, inner_iterations=4,
+        position_tolerance=0.01, orientation_tolerance=0.1,
+        max_problems_mini_batch=2, velocity_weight=0.1,
+    ))
+    exact = _default_goal(solver)
+    goal = GoalToolPose(
+        exact.tool_frames,
+        exact.position.expand(3, -1, -1, -1, -1).clone(),
+        exact.quaternion.expand(3, -1, -1, -1, -1).clone(),
+    )
+    current = solver.default_joint_position.expand(3, -1).clone()
+    from curobo._src.state.state_joint import JointState
+    result = solver.solve_batch(
+        goal,
+        current_state=JointState(
+            current, velocity=torch.zeros_like(current), dt=torch.full((3,), 0.2)
+        ),
+        seed_config=current,
+    )
+    assert result.success.shape == (3, 1)
+    assert result.success.all()
+    assert result.metrics["mini_batch_size"] == 1
+    assert result.feasible is not None and result.feasible.all()
+
+
+def test_seed_ik_rejects_excess_seed_count_and_wrong_goal_dtype():
+    solver = _solver()
+    goal = _default_goal(solver)
+    with pytest.raises(ValueError, match="more seeds"):
+        solver.solve_single(
+            goal, seed_config=solver.default_joint_position.view(1, 1, -1).expand(1, 4, -1)
+        )
+    with pytest.raises(ValueError, match="solver dtype"):
+        solver.solve_single(
+            GoalToolPose(goal.tool_frames, goal.position.double(), goal.quaternion.double())
+        )
+
+
 def test_seed_error_includes_joint_limit_and_velocity_residuals():
     solver = _solver()
     goal = _default_goal(solver)
