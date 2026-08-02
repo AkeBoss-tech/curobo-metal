@@ -71460,10 +71460,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
+        "missing_symbols": 0,
         "path": "curobo/_src/robot/types/joint_types.py",
-        "resolved_symbols": 2,
-        "status": "partial"
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo._src.robot.types.joint_types",
       "path": "curobo/_src/robot/types/joint_types.py",
@@ -72488,10 +72488,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
+        "missing_symbols": 0,
         "path": "curobo/_src/robot/types/link_params.py",
-        "resolved_symbols": 10,
-        "status": "partial"
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo._src.robot.types.link_params",
       "path": "curobo/_src/robot/types/link_params.py",
@@ -73806,10 +73806,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/rollout/goal_registry.py",
-        "resolved_symbols": 8,
-        "status": "partial"
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo._src.rollout.goal_registry",
       "path": "curobo/_src/rollout/goal_registry.py",
@@ -76820,10 +76820,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 0,
         "path": "curobo/_src/rollout/rollout_rosenbrock.py",
-        "resolved_symbols": 14,
-        "status": "partial"
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo._src.rollout.rollout_rosenbrock",
       "path": "curobo/_src/rollout/rollout_rosenbrock.py",
@@ -82967,9 +82967,9 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 3,
         "path": "curobo/_src/solver/solver_ik_cfg.py",
-        "resolved_symbols": 11,
+        "resolved_symbols": 14,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_ik_cfg",
@@ -84991,9 +84991,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 3,
         "path": "curobo/_src/solver/solver_mpc_cfg.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 14,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_mpc_cfg",
@@ -87008,9 +87008,9 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 3,
         "path": "curobo/_src/solver/solver_trajopt_cfg.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 15,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_trajopt_cfg",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 243,
-    "resolved_modules": 118,
+    "partial_modules": 239,
+    "resolved_modules": 122,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 243,
-    "resolved_modules": 118,
+    "partial_modules": 239,
+    "resolved_modules": 122,
     "symbols": 7182
   },
   "upstream": {

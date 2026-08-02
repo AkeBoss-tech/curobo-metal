@@ -39,7 +39,7 @@ def test_ik_factory_keeps_portable_core_and_validates_lifecycle():
         cfg.clone(not_a_field=True)
 
 
-def test_mpc_factory_preserves_deceleration_and_strict_command_rate():
+def test_mpc_factory_preserves_deceleration_and_command_rate():
     cfg = MPCSolverCfg.create(
         "franka.yml", optimization_dt=0.04, num_control_points=8,
         squared_l2_regularization_weight=[0.1, 0.2], deceleration_time=0.3,
@@ -49,8 +49,7 @@ def test_mpc_factory_preserves_deceleration_and_strict_command_rate():
     assert cfg.deceleration_time == pytest.approx(0.3)
     assert cfg.requested_use_cuda_graph and not cfg.use_cuda_graph
     assert cfg.clone(cold_start_optimization_num_iters=6).cold_start_optimization_num_iters == 6
-    with pytest.raises(ValueError, match="interpolation_steps"):
-        MPCSolverCfg.create("franka.yml", interpolation_steps=3)
+    assert MPCSolverCfg.create("franka.yml", interpolation_steps=3).interpolation_steps == 3
     with pytest.raises(ValueError, match="deceleration_profile"):
         cfg.clone(deceleration_profile="linear")
     with pytest.raises(ValueError, match="warm_start_optimization_num_iters"):

@@ -56,8 +56,6 @@ class MPCSolverCfg:
             raise ValueError("core_cfg.robot_config must be robot_config")
         for name in ("max_batch_size", "max_goalset", "num_seeds", "interpolation_steps", "warm_start_optimization_num_iters", "cold_start_optimization_num_iters"):
             _positive_int(name, getattr(self, name))
-        if self.interpolation_steps != 4:
-            raise ValueError("interpolation_steps must be 4 for MPC")
         for name in ("position_tolerance", "orientation_tolerance", "optimizer_collision_activation_distance", "optimization_dt", "max_deceleration_time"):
             _positive_finite(name, getattr(self, name))
         if self.deceleration_time is not None:
@@ -142,8 +140,6 @@ class MPCSolverCfg:
     ) -> "MPCSolverCfg":
         if kwargs:
             raise TypeError(f"unsupported MPC configuration fields: {sorted(kwargs)}")
-        if interpolation_steps != 4:
-            raise ValueError("interpolation_steps must be 4 for MPC")
         del metrics_rollout, transition_model, collision_cache
         del override_optimizer_num_iters, transition_model_config_instance_type, cost_manager_config_instance_type
         if isinstance(robot, RobotCfg):
