@@ -33,7 +33,7 @@ class GoalManager:
             link_goal_poses=goal_tool_poses, current_js=current_js,
             current_state_dt=current_state_dt,
         )
-        self._goal_buffer.create_index_buffers(
+        self._goal_buffer = self._goal_buffer.create_index_buffers(
             solve_state.batch_size, solve_state.multi_env,
             solve_state.num_seeds or 1, self.device_cfg,
         )
