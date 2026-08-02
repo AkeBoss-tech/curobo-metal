@@ -2,9 +2,27 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence, Tuple
 import torch
 from curobo._src.state.state_joint import JointState
+
+
+class CostCollectionSum(torch.autograd.Function):
+    """Compatibility autograd helper for callers that precompute VJPs.
+
+    Normal portable aggregation follows standard PyTorch autograd.  This
+    helper retains the V2 callable contract for optimizer internals that pass
+    explicit gradients alongside values.
+    """
+    @staticmethod
+    def forward(ctx, *values):
+        count = len(values) // 2
+        ctx.gradients = values[count:]
+        return _sum(list(values[:count]), True)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return tuple(ctx.gradients) + tuple(None for _ in ctx.gradients)
 
 
 def _sum(values, sum_horizon):
@@ -12,7 +30,9 @@ def _sum(values, sum_horizon):
         return None
     normalized = [v if v.ndim >= 3 else v.unsqueeze(-1) for v in values]
     result = torch.cat(normalized, dim=-1).sum(-1)
-    return result.sum(1) if sum_horizon and result.ndim > 1 else result
+    # Keep the final singleton dimension.  Solver code treats both horizon
+    # reductions and individual scalar costs uniformly as ``[..., 1]``.
+    return result.sum(1, keepdim=True) if sum_horizon and result.ndim > 1 else result
 
 
 @dataclass
@@ -39,10 +59,18 @@ class CostCollection:
         self.values.extend(other.values); self.names.extend(other.names)
         self.weights.extend(other.weights); self.sq_weights.extend(other.sq_weights)
     def copy_at_batch_seed_indices(self, other, batch_idx, seed_idx):
-        for a, b in zip(self.values, other.values): a[batch_idx, seed_idx] = b[batch_idx, seed_idx]
+        for a, b in zip(self.values, other.values):
+            a[batch_idx, seed_idx] = b[batch_idx, seed_idx]
+        for a, b in zip(self.weights, other.weights):
+            a[batch_idx, seed_idx] = b[batch_idx, seed_idx]
+        for a, b in zip(self.sq_weights, other.sq_weights):
+            # Squared weights may be seed-independent [B, ...].
+            if a.ndim > 1:
+                a[batch_idx] = b[batch_idx]
         return self
     def copy_only_index(self, other, index):
         for a, b in zip(self.values, other.values): a[index] = b[index]
+        for a, b in zip(self.weights, other.weights): a[index] = b[index]
         return self
 
 
@@ -70,11 +98,24 @@ class CostsAndConstraints:
         return self.costs.values + self.constraints.values + self.hybrid_costs_constraints.values
     def get_feasible(self, sum_horizon=False, include_all_hybrid=True, include_from_hybrid=[]):
         value = self.get_sum_constraint(sum_horizon, include_all_hybrid, include_from_hybrid)
-        return None if value is None else value <= 0
+        return True if value is None else value <= 0
     def clone(self):
         return type(self)(self.costs.clone(), self.constraints.clone(),
                           self.hybrid_costs_constraints.clone())
-    def get_constraint_weights(self): return self.constraints.weights
+    def get_constraint_weights(self) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        collections = (self.constraints, self.hybrid_costs_constraints)
+        weights: List[torch.Tensor] = []
+        sq_weights: List[torch.Tensor] = []
+        for collection in collections:
+            for index, weight in enumerate(collection.weights):
+                if weight is not None:
+                    weights.append(weight)
+                    sq_weights.append(
+                        collection.sq_weights[index]
+                        if index < len(collection.sq_weights)
+                        else torch.ones_like(weight)
+                    )
+        return weights, sq_weights
     def copy_at_batch_seed_indices(self, other, batch_idx, seed_idx):
         for name in ("costs", "constraints", "hybrid_costs_constraints"):
             getattr(self, name).copy_at_batch_seed_indices(getattr(other, name), batch_idx, seed_idx)
@@ -93,9 +134,9 @@ class RolloutResult(Sequence):
     debug: Optional[Any] = None
     def __getitem__(self, idx):
         return type(self)(None if self.actions is None else self.actions[idx],
-                          self.costs_and_constraints,
+                          None if self.costs_and_constraints is None else self.costs_and_constraints.clone(),
                           None if self.state is None else self.state[idx], self.debug)
-    def __len__(self): return 0 if self.actions is None else len(self.actions)
+    def __len__(self): return -1 if self.actions is None else len(self.actions)
     def clone(self):
         return type(self)(None if self.actions is None else self.actions.clone(),
                           None if self.costs_and_constraints is None else self.costs_and_constraints.clone(),
@@ -115,6 +156,16 @@ class RolloutMetrics(RolloutResult):
             self.feasible.clone() if hasattr(self.feasible, "clone") else self.feasible,
             self.convergence.clone(),
         )
+
+    def __getitem__(self, idx):
+        result = self.clone()
+        if result.actions is not None:
+            result.actions = result.actions[idx]
+        if result.state is not None:
+            result.state = result.state[idx]
+        if isinstance(result.feasible, torch.Tensor):
+            result.feasible = result.feasible[idx]
+        return result
 
     def get_only_batch_seed_indices(self, batch_idx, seed_idx):
         result = self.clone()
@@ -147,4 +198,4 @@ class RolloutMetrics(RolloutResult):
         return self
 
 
-__all__ = ["CostCollection", "CostsAndConstraints", "RolloutResult", "RolloutMetrics"]
+__all__ = ["CostCollectionSum", "CostCollection", "CostsAndConstraints", "RolloutResult", "RolloutMetrics"]
