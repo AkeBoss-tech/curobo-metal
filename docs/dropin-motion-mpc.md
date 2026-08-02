@@ -8,6 +8,13 @@ stateful goal updates, cold/warm starts, and receding-horizon action results.
 The corresponding retargeter lifecycle is documented in
 [`dropin-motion-retargeter.md`](dropin-motion-retargeter.md).
 
+`MotionPlanner.plan_pose` also runs that real portable IK-to-TrajOpt
+composition for normal and goalset pose requests; it does not accidentally
+enter the CUDA-rollout-only implicit-goal path.  Retry attempts repair a
+partially successful IK seed population before TrajOpt, and optional PRM
+seeds are treated as validated graph attempts.  Warmup supports deterministic
+FK-derived goalsets and resource destruction is idempotent on CPU/MPS.
+
 The upstream `use_cuda_graph=True` configuration default is accepted and
 compiled to persistent portable caches. Calls that explicitly manipulate an
 NVIDIA CUDA Graph fail with `NotImplementedError`. Runtime world mutation,

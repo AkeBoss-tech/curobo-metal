@@ -28,10 +28,16 @@ class MotionPlanner:
         if not isinstance(config, MotionPlannerCfg):
             raise TypeError("config must be MotionPlannerCfg")
         self.config = config
+        self.device_cfg = config.device_cfg
+        # Keep the pinned public spelling as an alias.  A few downstream
+        # integrations retain this object to mutate their world in place.
+        self.scene_collision_checker = None
+        self._destroyed = False
         self._initialize_components()
 
     def _initialize_components(self):
         self._scene_collision = self._make_scene_collision(self.config.scene_collision_cfg)
+        self.scene_collision_checker = self._scene_collision
         self.ik_solver = IKSolver(
             self.config.ik_solver_config, self._scene_collision
         )
@@ -89,6 +95,15 @@ class MotionPlanner:
         )
 
     def destroy(self):
+        """Release planner state exactly once.
+
+        Metal has no CUDA graph executable to destroy, but idempotence is
+        important for context-manager and destructor users.  The underlying
+        solvers also use this call to invalidate their portable caches.
+        """
+        if self._destroyed:
+            return
+        self._destroyed = True
         self.ik_solver.destroy()
         self.trajopt_solver.destroy()
         if self.graph_planner is not None:
@@ -134,9 +149,19 @@ class MotionPlanner:
             raise ValueError("num_warmup_iterations must be positive")
         current = self.default_joint_state.unsqueeze(0)
         for _ in range(num_warmup_iterations):
-            goal = current.clone()
-            goal.position[..., warmup_joint_index] += warmup_joint_delta
-            result = self.plan_cspace(goal, current, max_attempts=1)
+            num_goalset = int(getattr(self.config.ik_solver_config, "max_goalset", 1))
+            if num_goalset > 1:
+                poses = self._make_warmup_goalset(
+                    current, num_goalset, warmup_joint_index, warmup_joint_delta
+                )
+                goal = GoalToolPose.from_poses(
+                    poses, ordered_tool_frames=self.tool_frames, num_goalset=num_goalset
+                )
+                result = self.plan_pose(goal, current, max_attempts=1)
+            else:
+                goal = current.clone()
+                goal.position[..., warmup_joint_index] += warmup_joint_delta
+                result = self.plan_cspace(goal, current, max_attempts=1)
             if result is None or not bool(result.success.any().item()):
                 return False
             self.reset_seed()
@@ -146,6 +171,33 @@ class MotionPlanner:
         if enable_graph and self.graph_planner is not None:
             self.graph_planner.warmup(num_warmup_iterations=num_warmup_iterations)
         return True
+
+    def _make_warmup_goalset(
+        self, current_state: JointState, num_goalset: int,
+        joint_index: int, joint_delta: float,
+    ) -> Dict[str, Pose]:
+        """Build deterministic, progressively offset FK warmup poses.
+
+        This mirrors the useful part of V2 warmup without CUDA graph capture:
+        every tool frame receives ``num_goalset`` poses in the exact flattened
+        layout consumed by :meth:`GoalToolPose.from_poses`.
+        """
+        if num_goalset < 1:
+            raise ValueError("num_goalset must be positive")
+        positions: Dict[str, list[torch.Tensor]] = {}
+        quaternions: Dict[str, list[torch.Tensor]] = {}
+        for index in range(num_goalset):
+            goal = current_state.clone()
+            goal.position[..., joint_index] += joint_delta * (index + 1) / num_goalset
+            tool_poses = self.compute_kinematics(goal).tool_poses
+            for frame in self.tool_frames:
+                pose = tool_poses.get_link_pose(frame)
+                positions.setdefault(frame, []).append(pose.position)
+                quaternions.setdefault(frame, []).append(pose.quaternion)
+        return {
+            frame: Pose(torch.cat(positions[frame], dim=0), torch.cat(quaternions[frame], dim=0))
+            for frame in positions
+        }
 
     @staticmethod
     def _validate_state(state: JointState, name: str) -> None:
@@ -196,10 +248,14 @@ class MotionPlanner:
                 goal_tool_poses, current_state, use_implicit_goal, max_attempts
             )
         return self._plan_pose_single(
-            goal_tool_poses, current_state, max_attempts, enable_graph_attempt
+            goal_tool_poses, current_state, max_attempts, enable_graph_attempt,
+            use_implicit_goal,
         )
 
-    def _plan_pose_single(self, goal_tool_poses, current_state, max_attempts, enable_graph_attempt):
+    def _plan_pose_single(
+        self, goal_tool_poses, current_state, max_attempts, enable_graph_attempt,
+        use_implicit_goal=True,
+    ):
         total_time = solve_time = 0.0
         last = None
         original = current_state.clone()
@@ -216,16 +272,41 @@ class MotionPlanner:
                 self.ik_solver.reset_seed()
                 continue
             seed_config = ik.solution
+            # Match the V2 retry contract: successful IK seeds repair failed
+            # ones so TrajOpt receives a complete seed population.  Indexing
+            # with a boolean mask produces a copy in PyTorch, so build the
+            # repaired tensor explicitly instead of relying on in-place fancy
+            # indexing (which silently did nothing in the old facade).
+            if seed_config.ndim == 3 and ik.success.ndim == 2:
+                repaired = seed_config.clone()
+                for batch in range(repaired.shape[0]):
+                    valid = torch.nonzero(ik.success[batch], as_tuple=False).flatten()
+                    if valid.numel() and valid.numel() < repaired.shape[1]:
+                        reference = repaired[batch, valid[0]].expand_as(repaired[batch])
+                        repaired[batch] = torch.where(
+                            ik.success[batch, :, None], repaired[batch], reference
+                        )
+                seed_config = repaired
             seed_traj = None
             if attempt >= enable_graph_attempt and self.graph_planner is not None:
                 seed_traj = self._get_graph_seed_trajectories(current, seed_config)
-                # PRM failure is a seed failure, not a reason to discard the
-                # direct differentiable trajectory optimizer.
+                if seed_traj is None:
+                    # Once graph seeding is enabled, a failed PRM query is an
+                    # attempt failure.  Retrying from a fresh deterministic
+                    # seed mirrors V2 and avoids treating an unvalidated
+                    # direct endpoint as a graph-derived motion.
+                    last = None
+                    self.reset_seed()
+                    continue
             result = self.trajopt_solver.solve_pose(
                 goal_tool_poses, current,
                 seed_config=seed_config, seed_traj=seed_traj,
                 return_seeds=1,
-                use_implicit_goal=True,
+                # ``TrajOptSolver`` composes its portable IK route.  Its
+                # CUDA rollout-only implicit-goal branch is intentionally not
+                # exposed as a fake Metal feature, regardless of the familiar
+                # high-level compatibility argument.
+                use_implicit_goal=False,
             )
             result.debug_info["ik_result"] = ik
             result.debug_info["attempt"] = attempt + 1
@@ -245,7 +326,8 @@ class MotionPlanner:
         # IK evaluates the complete goalset and records its deterministic
         # selected goal index.  TrajOpt then follows that joint endpoint.
         return self._plan_pose_single(
-            goal_tool_poses, current_state, max_attempts, enable_graph_attempt=max_attempts
+            goal_tool_poses, current_state, max_attempts, enable_graph_attempt=max_attempts,
+            use_implicit_goal=use_implicit_goal,
         )
 
     def plan_cspace(
@@ -273,7 +355,8 @@ class MotionPlanner:
             result = self.trajopt_solver.solve_cspace(
                 goal_state, current,
                 seed_traj=seed_traj,
-                initial_iters=self.config.trajopt_solver_config.max_iterations,
+                finetune_attempts=3 if seed_traj is not None else 1,
+                finetune_dt_scale=0.75 if seed_traj is not None else 0.55,
             )
             result.debug_info["attempt"] = attempt + 1
             total_time += result.total_time
@@ -461,6 +544,7 @@ class MotionPlanner:
     def update_world(self, scene_cfg):
         if self._scene_collision is None:
             self._scene_collision = self._make_scene_collision(scene_cfg)
+            self.scene_collision_checker = self._scene_collision
             self.ik_solver._scene_collision_checker = self._scene_collision
             self.trajopt_solver._scene_collision_checker = self._scene_collision
             self._attachment_manager = AttachmentManager(
@@ -489,9 +573,12 @@ class MotionPlanner:
         self, link_name: str, mass: Optional[float] = None,
         com: Optional[torch.Tensor] = None, inertia: Optional[torch.Tensor] = None,
     ):
-        raise NotImplementedError(
-            f"runtime inertial mutation is unavailable for {link_name}"
-        )
+        # The production whole-body backend deliberately exposes immutable
+        # inertial parameters today.  Delegate rather than inventing a local
+        # mutation cache so callers receive the same explicit backend boundary
+        # from both planner stages.
+        self.ik_solver.update_link_inertial(link_name, mass, com, inertia)
+        self.trajopt_solver.update_link_inertial(link_name, mass, com, inertia)
 
     def update_links_inertial(self, link_properties):
         for name, values in link_properties.items():
