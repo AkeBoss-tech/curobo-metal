@@ -1,9 +1,16 @@
-"""Portable high-level TSDF integrator backed by :class:`Mapper`."""
+"""Portable high-level TSDF integration over the dense CPU/MPS mapper.
+
+The public configuration intentionally accepts the V2 block-sparse options.
+The map state is dense (and therefore has no Warp hash/pool ABI), while depth
+fusion, mesh/voxel extraction, persistence, and region mutation are real
+PyTorch operations on CPU or MPS.
+"""
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Sequence, Tuple
 
 import torch
 
@@ -27,106 +34,170 @@ class BlockSparseTSDFIntegratorCfg:
     roughness: float = 3.0
     image_height: Optional[int] = None
     image_width: Optional[int] = None
+    texture_num_cameras: Optional[int] = None
+    texture_camera_image_height: Optional[int] = None
+    texture_camera_image_width: Optional[int] = None
+    lidar_num_sensors: int = 0
+    lidar_image_height: Optional[int] = None
+    lidar_image_width: Optional[int] = None
+    lidar_feature_grid_height: Optional[int] = None
+    lidar_feature_grid_width: Optional[int] = None
+    lidar_linear_interpolation_max_allowable_difference_vox: float = 2.0
+    lidar_nearest_interpolation_max_allowable_dist_to_ray_vox: float = 0.5
+    max_visible_blocks_per_lidar_integration: Optional[int] = None
+    max_support_pixels_per_block_lidar: int = 32
+    enable_static: bool = False
+    static_obstacle_color: Tuple[int, int, int] = (20, 20, 20)
+    seeding_method: str = "gather"
     num_cameras: int = 1
     device: str = "cuda:0"
     block_size: int = 8
     feature_dim: int = 0
+    feature_block_grid_size: int = 1
+    feature_grid_height: Optional[int] = None
+    feature_grid_width: Optional[int] = None
+    max_visible_blocks_per_integration: Optional[int] = None
+    max_support_pixels_per_block_camera: int = 32
+    feature_channels_per_thread: int = 4
+    max_feature_tile_channels: int = 4096
     color_grid_size: int = 1
-    accumulator_w_max: float = 1000.0
+    feature_integration_kernel: str = "auto"
+    profile_integration_kernel_timings: bool = False
+    accumulator_w_max: float = 10000.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.grid_shape is None:
             raise ValueError("grid_shape is required by the portable bounded mapper")
+        if len(self.grid_shape) != 3 or any(int(n) <= 0 for n in self.grid_shape):
+            raise ValueError("grid_shape must contain three positive dimensions")
+        self.grid_shape = tuple(int(n) for n in self.grid_shape)
+        if self.voxel_size <= 0 or self.truncation_distance <= 0:
+            raise ValueError("voxel_size and truncation_distance must be positive")
+        if self.block_size < 1 or self.block_size > 32 or self.block_size & (self.block_size - 1):
+            raise ValueError("block_size must be 1 or a power of two no greater than 32")
         if self.feature_dim:
             raise NotImplementedError("feature-volume integration requires Warp/CUDA")
+        if self.lidar_num_sensors:
+            raise NotImplementedError("LiDAR TSDF integration requires Warp/CUDA")
+        if self.enable_static:
+            raise NotImplementedError("static-scene TSDF stamping requires Warp/CUDA")
         if self.origin is None:
-            self.origin = torch.zeros(3)
+            self.origin = torch.zeros(3, dtype=torch.float32)
+        else:
+            self.origin = torch.as_tensor(self.origin, dtype=torch.float32)
+        if self.origin.shape != (3,):
+            raise ValueError("origin must be an xyz vector")
+        if self.max_blocks is None:
+            # This is an exposed sizing estimate only: the portable backend is dense.
+            self.max_blocks = max(1, int(math.prod(self.grid_shape) / self.block_size**3))
+        if self.hash_capacity is None:
+            self.hash_capacity = max(1, int(math.ceil(self.max_blocks * 2.0)))
+        if self.num_cameras <= 0:
+            raise ValueError("num_cameras must be positive")
 
 
 class BlockSparseTSDFIntegrator:
-    """High-level TSDF facade backed by the portable dense Mapper.
-
-    This accepts the familiar block-sparse configuration for source
-    compatibility, but intentionally exposes a dense tensor state rather than
-    pretending to expose Warp block-pool pointers.
-    """
+    """cuRobo-shaped TSDF facade with a bounded dense portable implementation."""
 
     def __init__(self, config: BlockSparseTSDFIntegratorCfg, kernels=None):
         if kernels is not None:
             raise NotImplementedError("custom Warp block-sparse kernels are unavailable on CPU/MPS")
-        self.cfg = config
-        extent = tuple(int(n) * self.cfg.voxel_size for n in self.cfg.grid_shape)
-        center = torch.as_tensor(self.cfg.origin) + torch.as_tensor(extent) / 2
+        self.config = config
+        self.cfg = config  # historical portable spelling
+        extent = tuple(int(n) * config.voxel_size for n in config.grid_shape)
+        center = config.origin + torch.as_tensor(extent, dtype=config.origin.dtype) / 2
         self.mapper = Mapper(MapperCfg(
             extent_meters_xyz=extent,
-            voxel_size=self.cfg.voxel_size,
+            voxel_size=config.voxel_size,
             grid_center=center,
-            truncation_distance=self.cfg.truncation_distance,
-            minimum_tsdf_weight=self.cfg.minimum_tsdf_weight,
-            depth_minimum_distance=self.cfg.depth_minimum_distance,
-            depth_maximum_distance=self.cfg.depth_maximum_distance,
-            block_size=self.cfg.block_size,
-            device=self.cfg.device,
-            accumulator_w_max=self.cfg.accumulator_w_max,
+            truncation_distance=config.truncation_distance,
+            minimum_tsdf_weight=config.minimum_tsdf_weight,
+            depth_minimum_distance=config.depth_minimum_distance,
+            depth_maximum_distance=config.depth_maximum_distance,
+            decay_factor=config.time_decay,
+            frustum_decay_factor=config.frustum_decay,
+            block_size=config.block_size,
+            device=config.device,
+            accumulator_w_max=config.accumulator_w_max,
         ))
+        self._frame_count = 0
 
     @property
     def tsdf(self):
-        return self.mapper._mapper.state
+        return self.mapper.tsdf
 
-    def integrate(self, observation=None, camera_observation=None, lidar_observation=None):
-        return self.mapper.integrate(
+    def reset(self):
+        self._frame_count = 0
+        return self.mapper.reset()
+
+    def import_blocks(self, blocks):
+        if isinstance(blocks, (str, bytes)) or hasattr(blocks, "__fspath__"):
+            result = self.mapper.import_blocks(blocks)
+        elif isinstance(blocks, dict):
+            # Dense state dictionaries are intentionally portable; Warp block-pool
+            # dictionaries have a different memory contract and must not be guessed.
+            required = {"tsdf", "weight", "occupancy", "esdf", "gradient", "generation"}
+            if not required.issubset(blocks):
+                raise NotImplementedError("importing Warp block-pool payloads requires CUDA/Warp")
+            self.mapper._mapper.load_state_dict(blocks)
+            result = int((self.mapper._mapper.state.weight > 0).sum().item())
+        else:
+            raise TypeError("blocks must be a portable dense state dictionary or checkpoint path")
+        self._frame_count = int(result > 0)
+        return result
+
+    def integrate(self, observation=None, *, camera_observation=None, lidar_observation=None):
+        if observation is not None and (camera_observation is not None or lidar_observation is not None):
+            raise ValueError("observation cannot be combined with camera_observation or lidar_observation")
+        if lidar_observation is not None:
+            raise NotImplementedError("LiDAR TSDF integration requires Warp/CUDA")
+        result = self.mapper.integrate(
             observation=observation, camera_observation=camera_observation,
             lidar_observation=lidar_observation,
         )
+        self._frame_count += 1
+        return result
 
-    def extract_mesh(self, refine_iterations=0, surface_only=False, level=0.0):
-        if level != 0.0:
-            raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
-        mesh = self.mapper.extract_mesh(refine_iterations, surface_only)
-        return mesh.vertices, mesh.faces, torch.zeros_like(mesh.vertices)
+    def _integrate_camera_frame(self, observation, *, advance_frame=True, apply_decay=True):
+        del apply_decay
+        result = self.mapper.integrate(camera_observation=observation)
+        if advance_frame:
+            self._frame_count += 1
+        return result
 
-    def extract_mesh_tensors(self, level=0.0, surface_only=False, refine_iterations=0):
-        return self.extract_mesh(refine_iterations, surface_only, level)
+    def _apply_frame_decay(self, camera_observation=None, lidar_observation=None):
+        del camera_observation
+        if lidar_observation is not None:
+            raise NotImplementedError("LiDAR frustum decay requires Warp/CUDA")
+        if self.config.time_decay == 1.0:
+            return None
+        state = self.mapper._mapper.state
+        weight = state.weight * self.config.time_decay
+        self.mapper._replace_state(weight=weight)
+        return None
 
-    def extract_occupied_voxels(self, surface_only=False, sdf_threshold=None, subvoxel_factor=1,
-                                max_points=None, texture_observations=None,
-                                camera_min_distance=None, camera_max_distance=None,
-                                texture_depth_tolerance_m=None):
-        return self.mapper.extract_occupied_voxels(
-            surface_only, sdf_threshold, subvoxel_factor=subvoxel_factor, max_points=max_points,
-            texture_observations=texture_observations, camera_min_distance=camera_min_distance,
-            camera_max_distance=camera_max_distance, texture_depth_tolerance_m=texture_depth_tolerance_m,
-        )
+    def _integrate_lidar_frame(self, observation, *, advance_frame=True):
+        del observation, advance_frame
+        raise NotImplementedError("LiDAR TSDF integration requires Warp/CUDA")
 
-    def extract_surface_voxels(self, sdf_threshold=None):
-        return self.extract_occupied_voxels(True, sdf_threshold)
+    def _validate_lidar_observation(self, observation):
+        del observation
+        raise NotImplementedError("LiDAR TSDF integration requires Warp/CUDA")
 
-    def extract_textured_mesh(self, texture_observations, refine_iterations=0, surface_only=True,
-                              level=0.0, camera_min_distance=None, camera_max_distance=None,
-                              texture_depth_tolerance_m=None):
-        if level != 0.0:
-            raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
-        return self.mapper.extract_textured_mesh(
-            texture_observations, refine_iterations, surface_only, camera_min_distance,
-            camera_max_distance, texture_depth_tolerance_m,
-        )
-
-    def render(self, intrinsics, pose, image_shape):
-        return self.mapper.render(intrinsics, pose, image_shape)
-
-    def reset(self):
-        return self.mapper.reset()
-
-    def save_blocks(self, path):
-        return self.mapper.save_blocks(path)
-
-    def import_blocks(self, blocks):
-        if isinstance(blocks, (str, bytes)):
-            return self.mapper.import_blocks(blocks)
-        if not isinstance(blocks, dict):
-            raise TypeError("blocks must be a state dictionary or checkpoint path")
-        self.mapper._mapper.load_state_dict(blocks)
+    def recycle_empty_blocks(self):
+        # Dense storage contains no unallocated pool blocks.  Recycle truly empty
+        # observed cells by clearing weights below the configured observation floor.
+        state = self.mapper._mapper.state
+        mask = (state.weight > 0) & (state.weight < self.config.minimum_tsdf_weight)
+        count = int(mask.sum().item())
+        if count:
+            self.mapper._replace_state(
+                tsdf=torch.where(mask, torch.ones_like(state.tsdf), state.tsdf),
+                weight=torch.where(mask, torch.zeros_like(state.weight), state.weight),
+                occupancy=state.occupancy & ~mask,
+                generation=state.generation + 1,
+            )
+        return count
 
     def clear_region(self, bounds_min, bounds_max):
         return self.mapper.clear_region(bounds_min, bounds_max)
@@ -134,22 +205,74 @@ class BlockSparseTSDFIntegrator:
     def clear_blocks(self, pool_indices):
         return self.mapper.clear_blocks(pool_indices)
 
-    def recycle_empty_blocks(self):
-        # Dense maps have no unused block pool; return a stable no-op count.
-        return 0
+    def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = False, level: float = 0.0):
+        if level != 0.0:
+            raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
+        return self.mapper.extract_mesh(refine_iterations, surface_only)
 
-    def get_matching_feature_voxels(self, feature_vector: torch.Tensor, top_k: int,
-                                    surface_only=False, sdf_threshold=None, minimum_score=None,
-                                    feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None):
-        return self.mapper.get_matching_feature_voxels(
-            feature_vector, top_k, surface_only, sdf_threshold, minimum_score, feature_projector
+    def extract_mesh_tensors(self, level: float = 0.0, surface_only: bool = False, refine_iterations: int = 0):
+        mesh = self.extract_mesh(refine_iterations=refine_iterations, surface_only=surface_only, level=level)
+        normals = torch.zeros_like(mesh.vertices)
+        return mesh.vertices, mesh.faces, normals
+
+    def extract_textured_mesh(self, texture_observations, refine_iterations: int = 0,
+                              surface_only: bool = True, level: float = 0.0,
+                              camera_min_distance: Optional[float] = None,
+                              camera_max_distance: Optional[float] = None,
+                              texture_depth_tolerance_m: Optional[float] = None):
+        if level != 0.0:
+            raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
+        return self.mapper.extract_textured_mesh(
+            texture_observations, refine_iterations, surface_only, camera_min_distance,
+            camera_max_distance, texture_depth_tolerance_m,
         )
 
-    extract_matching_feature_voxels = get_matching_feature_voxels
+    @staticmethod
+    def _validate_subvoxel_factor(subvoxel_factor: int):
+        if not isinstance(subvoxel_factor, int) or subvoxel_factor < 1:
+            raise ValueError("subvoxel_factor must be a positive integer")
+        return subvoxel_factor
 
-    def update_static_obstacles(self, scene, env_idx=0, debug=False):
+    @staticmethod
+    def _validate_max_points(max_points: Optional[int]):
+        if max_points is not None and (not isinstance(max_points, int) or max_points < 1):
+            raise ValueError("max_points must be a positive integer or None")
+        return max_points
+
+    def extract_surface_voxels(self, sdf_threshold: float = None):
+        return self.extract_occupied_voxels(surface_only=True, sdf_threshold=sdf_threshold)
+
+    def extract_occupied_voxels(self, surface_only: bool = False, sdf_threshold: float = None, *,
+                                subvoxel_factor: int = 1, max_points: Optional[int] = None,
+                                texture_observations=None, camera_min_distance=None,
+                                camera_max_distance=None, texture_depth_tolerance_m=None):
+        self._validate_subvoxel_factor(subvoxel_factor)
+        self._validate_max_points(max_points)
+        return self.mapper.extract_occupied_voxels(
+            surface_only, sdf_threshold, subvoxel_factor=subvoxel_factor, max_points=max_points,
+            texture_observations=texture_observations, camera_min_distance=camera_min_distance,
+            camera_max_distance=camera_max_distance, texture_depth_tolerance_m=texture_depth_tolerance_m,
+        )
+
+    def extract_matching_feature_voxels(self, feature_vector: torch.Tensor, top_k: int,
+                                        surface_only: bool = False, sdf_threshold: Optional[float] = None,
+                                        minimum_score: Optional[float] = None,
+                                        feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None):
+        return self.mapper.extract_matching_feature_voxels(
+            feature_vector, top_k, surface_only, sdf_threshold, minimum_score, feature_projector,
+        )
+
+    get_matching_feature_voxels = extract_matching_feature_voxels
+
+    def get_stats(self, scan_pool: bool = True, scan_hash: bool = False):
+        del scan_pool, scan_hash
+        stats = self.mapper.get_stats()
+        stats.update({"frame_count": self._frame_count, "storage": "dense_portable"})
+        return stats
+
+    def memory_usage_mb(self):
+        return self.mapper.memory_usage_mb()
+
+    def update_static_obstacles(self, scene, env_idx: int = 0, debug: bool = False):
         del debug
         return self.mapper.update_static_obstacles(scene, env_idx)
-
-    def get_stats(self):
-        return self.mapper.get_stats()
