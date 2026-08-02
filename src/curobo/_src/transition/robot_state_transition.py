@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+from typing import Optional, Union
 from curobo._src.state.state_joint import JointState
 from curobo._src.transition.fns_state_transition import (
     StateFromAcceleration, StateFromBSplineKnot, StateFromPositionClique,
@@ -20,6 +21,12 @@ class RobotStateTransition:
         )
         self._dof = len(config.robot_config.cspace.joint_names)
         self._dynamics = self._create_dynamics()
+        self.robot_dynamics = None
+        dynamics_cfg = getattr(config.robot_config, "dynamics", None)
+        if dynamics_cfg is not None:
+            from curobo._src.robot.dynamics.dynamics import Dynamics
+            self.robot_dynamics = Dynamics(dynamics_cfg)
+            self.robot_dynamics.setup_batch_size(config.batch_size, config.horizon)
         self._filter = JointStateFilter(config.state_filter_cfg) if config.state_filter_cfg else None
 
     def _create_dynamics(self):
@@ -56,7 +63,22 @@ class RobotStateTransition:
     def tensor_step(self, state, act, state_seq=None, state_idx=None, **kwargs):
         return self._dynamics.forward(state, act, state_seq, state_idx, **kwargs)
 
-    robot_cmd_tensor_step = tensor_step
+    def robot_cmd_tensor_step(
+        self,
+        state: JointState,
+        act: torch.Tensor,
+        state_seq: JointState = None,
+        state_idx: Optional[torch.Tensor] = None,
+        implicit_goal_state: Optional[JointState] = None,
+        implicit_goal_state_idx: Optional[torch.Tensor] = None,
+        use_implicit_goal_state: Optional[torch.Tensor] = None,
+    ) -> JointState:
+        return self.tensor_step(
+            state, act, state_seq, state_idx,
+            goal_state=implicit_goal_state,
+            goal_state_idx=implicit_goal_state_idx,
+            use_implicit_goal_state=use_implicit_goal_state,
+        )
 
     def update_cmd_batch_size(self, batch_size):
         self.update_batch_size(batch_size)
@@ -64,6 +86,8 @@ class RobotStateTransition:
     def update_batch_size(self, batch_size, force_update=False):
         self.config.batch_size = batch_size
         self._dynamics.update_batch_size(batch_size, force_update=force_update)
+        if self.robot_dynamics is not None:
+            self.robot_dynamics.setup_batch_size(batch_size, self.horizon)
 
     def forward(self, start_state, act_seq, start_state_idx=None, goal_state=None,
                 goal_state_idx=None, use_implicit_goal_state=None, idxs_env=None):
@@ -156,17 +180,40 @@ class RobotStateTransition:
     @property
     def filter_robot_command(self): return self.config.filter_robot_command
 
-    def compute_inverse_dynamics(self, state):
-        raise NotImplementedError("inverse dynamics requires the robot dynamics facade")
+    @property
+    def compute_inverse_dynamics(self):
+        """Whether a dynamics model is configured for this transition.
+
+        The pinned API exposes this as a capability flag; callers that need
+        torques should use the configured dynamics facade directly.
+        """
+        return self.robot_dynamics is not None
 
     def get_state_bounds(self):
         return self.action_bound_lows, self.action_bound_highs
 
-    def update_link_mass(self, link_name, mass):
-        raise NotImplementedError("link mutation requires a dynamics-enabled transition")
+    def update_link_mass(self, link_name: str, mass: float):
+        if self.robot_dynamics is None:
+            raise RuntimeError("Cannot update link mass without inverse dynamics")
+        self.robot_dynamics.update_link_mass(link_name, mass)
 
-    update_link_inertial = update_link_mass
-    update_links_inertial = update_link_mass
+    def update_link_inertial(
+        self,
+        link_name: str,
+        mass: Optional[float] = None,
+        com: Optional[torch.Tensor] = None,
+        inertia: Optional[torch.Tensor] = None,
+    ):
+        if self.robot_dynamics is None:
+            raise RuntimeError("Cannot update link inertial properties without inverse dynamics")
+        self.robot_dynamics.update_link_inertial(link_name, mass, com, inertia)
+
+    def update_links_inertial(
+        self, link_properties: dict[str, dict[str, Union[float, torch.Tensor]]]
+    ):
+        if self.robot_dynamics is None:
+            raise RuntimeError("Cannot update link inertial properties without inverse dynamics")
+        self.robot_dynamics.update_links_inertial(link_properties)
 
     def get_full_dof_from_solution(self, q_js):
         return q_js

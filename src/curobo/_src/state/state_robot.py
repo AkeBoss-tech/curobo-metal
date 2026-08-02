@@ -23,10 +23,21 @@ class RobotState:
     def detach(self):
         def detach(value): return None if value is None else value.detach()
         return type(self)(detach(self.joint_state), detach(self.joint_torque), detach(self.cuda_robot_model_state))
-    robot_spheres = property(lambda self: None if self.cuda_robot_model_state is None else self.cuda_robot_model_state.robot_spheres)
-    link_poses = property(lambda self: None if self.cuda_robot_model_state is None else self.cuda_robot_model_state.tool_poses)
-    tool_poses = property(lambda self: None if self.cuda_robot_model_state is None else self.cuda_robot_model_state.tool_poses)
-    tool_frames = property(lambda self: [] if self.tool_poses is None else self.tool_poses.tool_frames)
+    @property
+    def robot_spheres(self) -> Optional[torch.Tensor]:
+        return None if self.cuda_robot_model_state is None else self.cuda_robot_model_state.robot_spheres
+
+    @property
+    def link_poses(self) -> Optional[ToolPose]:
+        return None if self.cuda_robot_model_state is None else self.cuda_robot_model_state.tool_poses
+
+    @property
+    def tool_poses(self) -> Optional[ToolPose]:
+        return None if self.cuda_robot_model_state is None else self.cuda_robot_model_state.tool_poses
+
+    @property
+    def tool_frames(self) -> List[str]:
+        return [] if self.tool_poses is None else self.tool_poses.tool_frames
     def get_link_pose(self, link_name: str) -> Pose:
         if self.tool_poses is None: raise ValueError("Link poses are not set")
         return self.tool_poses.get_link_pose(link_name)

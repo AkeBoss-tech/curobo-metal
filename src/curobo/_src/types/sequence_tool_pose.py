@@ -22,19 +22,33 @@ class SequenceGoalToolPose:
         if self.position.shape[2] != len(self.tool_frames):
             raise ValueError("tool_frames must match link dimension")
 
-    num_frames = property(lambda self: self.position.shape[0])
-    num_envs = property(lambda self: self.position.shape[1])
-    num_links = property(lambda self: self.position.shape[2])
-    num_goalset = property(lambda self: self.position.shape[3])
-    device = property(lambda self: self.position.device)
+    @property
+    def num_frames(self) -> int:
+        return self.position.shape[0]
 
-    def get_frame(self, t: int):
+    @property
+    def num_envs(self) -> int:
+        return self.position.shape[1]
+
+    @property
+    def num_links(self) -> int:
+        return self.position.shape[2]
+
+    @property
+    def num_goalset(self) -> int:
+        return self.position.shape[3]
+
+    @property
+    def device(self) -> torch.device:
+        return self.position.device
+
+    def get_frame(self, t: int) -> GoalToolPose:
         return GoalToolPose(
             self.tool_frames, self.position[t].unsqueeze(1),
             self.quaternion[t].unsqueeze(1),
         )
 
-    def clone(self):
+    def clone(self) -> "SequenceGoalToolPose":
         return type(self)(
             self.tool_frames.copy(), self.position.clone(), self.quaternion.clone()
         )

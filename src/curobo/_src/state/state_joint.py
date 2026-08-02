@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -40,9 +40,28 @@ class JointState(_MetalJointState, State):
             if len(self.joint_names) != self.position.shape[-1]:
                 raise ValueError("joint_names must match the final position dimension")
 
+    # These accessors are deliberately declared on the compatibility class
+    # rather than inherited invisibly from the portable value implementation.
+    # A fair amount of downstream cuRobo code introspects this surface.
+    @property
+    def device(self) -> torch.device:
+        return self.position.device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.position.dtype
+
+    @property
+    def shape(self) -> torch.Size:
+        return self.position.shape
+
+    @property
+    def ndim(self) -> int:
+        return self.position.ndim
+
     @staticmethod
     def from_state_tensor(
-        state_tensor: torch.Tensor, joint_names: Optional[list[str]] = None, dof: int = 7
+        state_tensor, joint_names=None, dof=7
     ) -> "JointState":
         return JointState(
             state_tensor[..., :dof].contiguous(),
@@ -79,22 +98,14 @@ class JointState(_MetalJointState, State):
 
     @staticmethod
     def from_list(
-        position: list[float],
-        velocity: list[float],
-        acceleration: list[float],
-        device_cfg: DeviceCfg,
-    ) -> "JointState":
+        position, velocity, acceleration, device_cfg: DeviceCfg(),
+    ):
         return JointState(position, velocity, acceleration, device_cfg=device_cfg)
 
-    @classmethod
-    def zeros(
-        cls,
-        size: tuple[int, ...],
-        device_cfg: DeviceCfg,
-        joint_names: Optional[list[str]] = None,
-    ) -> "JointState":
+    @staticmethod
+    def zeros(size: Tuple[int], device_cfg: DeviceCfg, joint_names: Optional[List[str]] = None):
         value = torch.zeros(size, **device_cfg.as_torch_dict())
-        return cls(
+        return JointState(
             value,
             value.clone(),
             value.clone(),
@@ -106,6 +117,45 @@ class JointState(_MetalJointState, State):
 
     def data_ptr(self) -> int:
         return self.position.data_ptr()
+
+    def clone(self):
+        return super().clone()
+
+    def unsqueeze(self, idx: int):
+        return super().unsqueeze(idx)
+
+    def squeeze(self, dim: Optional[int] = 0):
+        return super().squeeze(dim)
+
+    def view(self, *shape):
+        return super().view(*shape)
+
+    def repeat(self, repeat_input: List[int]):
+        return super().repeat(repeat_input)
+
+    def reorder(self, joint_names: List[str]) -> JointState:
+        if self.joint_names is None:
+            raise ValueError("cannot reorder a JointState without joint_names")
+        try:
+            indices = [self.joint_names.index(name) for name in joint_names]
+        except ValueError as error:
+            raise ValueError("requested joint is absent from JointState") from error
+        index = torch.tensor(indices, device=self.device)
+
+        def select(value):
+            return None if value is None else value.index_select(-1, index)
+
+        # Construct without names first: inherited _map preserves the old names
+        # while changing the final DOF dimension, which violates this facade's
+        # eager validation before it can replace the names.
+        output = type(self)(
+            select(self.position), select(self.velocity), select(self.acceleration),
+            None, select(self.jerk), self.device_cfg, self.dt,
+            aux_data=dict(self.aux_data), knot=select(self.knot), knot_dt=self.knot_dt,
+            control_space=self.control_space,
+        )
+        output.joint_names = list(joint_names)
+        return output
 
     def copy_data(self, in_joint_state: "JointState"):
         """Copy tensor contents while retaining this object's metadata buffers."""
@@ -125,7 +175,7 @@ class JointState(_MetalJointState, State):
                 setattr(self, field, value.detach())
         return self
 
-    def copy_reference(self, in_joint_state: "JointState") -> "JointState":
+    def copy_reference(self, in_joint_state: JointState):
         for field in (
             "position", "velocity", "acceleration", "jerk", "dt",
             "joint_names", "knot", "knot_dt",
@@ -133,7 +183,7 @@ class JointState(_MetalJointState, State):
             setattr(self, field, getattr(in_joint_state, field))
         return self
 
-    def copy_(self, in_joint_state: "JointState", allow_clone: bool = True) -> "JointState":
+    def copy_(self, in_joint_state: JointState, allow_clone: bool = True):
         same = all(
             getattr(in_joint_state, field) is None
             or (
@@ -169,10 +219,10 @@ class JointState(_MetalJointState, State):
         value = self.reorder(joint_names)
         self.copy_reference(value)
 
-    def stack(self, new_state: "JointState") -> "JointState":
+    def stack(self, new_state: JointState):
         return self._combine(new_state, torch.stack)
 
-    def cat(self, other_js: "JointState", dim: int) -> "JointState":
+    def cat(self, other_js: JointState, dim: int):
         return self._combine(other_js, lambda values: torch.cat(values, dim=dim))
 
     def _combine(self, other: "JointState", operation) -> "JointState":
@@ -203,15 +253,15 @@ class JointState(_MetalJointState, State):
         from .state_joint_ops import apply_kernel_to_joint_state
         return apply_kernel_to_joint_state(self, kernel_mat)
 
-    def scale(self, dt):
+    def scale(self, dt: Union[float, torch.Tensor]):
         from .state_joint_ops import scale_joint_state
         return scale_joint_state(self, dt)
 
-    def scale_by_dt(self, dt, new_dt):
+    def scale_by_dt(self, dt: torch.Tensor, new_dt: torch.Tensor):
         from .state_joint_ops import scale_joint_state_by_dt
         return scale_joint_state_by_dt(self, dt, new_dt)
 
-    def scale_time(self, new_dt):
+    def scale_time(self, new_dt: torch.Tensor):
         from .state_joint_ops import scale_joint_state_time
         return scale_joint_state_time(self, new_dt)
 
@@ -219,11 +269,11 @@ class JointState(_MetalJointState, State):
         from .state_joint_ops import calculate_fd_from_position
         return calculate_fd_from_position(self, dt)
 
-    def get_augmented_joint_state(self, joint_names, lock_joints: Optional["JointState"] = None) -> "JointState":
+    def get_augmented_joint_state(self, joint_names, lock_joints: Optional[JointState] = None) -> JointState:
         from .state_joint_ops import augment_joint_state
         return augment_joint_state(self, joint_names, lock_joints)
 
-    def append_joints(self, joint_state):
+    def append_joints(self, joint_state: JointState):
         from .state_joint_ops import append_joints_to_state
         return append_joints_to_state(self, joint_state)
 
@@ -231,15 +281,15 @@ class JointState(_MetalJointState, State):
         from .state_joint_trajectory_ops import gather_joint_state_by_seed
         return gather_joint_state_by_seed(self, idx)
 
-    def copy_only_index(self, in_joint_state: "JointState", idx: Union[int, torch.Tensor]):
+    def copy_only_index(self, in_joint_state: JointState, idx: Union[int, torch.Tensor]):
         from .state_joint_trajectory_ops import copy_joint_state_only_index
         return copy_joint_state_only_index(self, in_joint_state, idx)
 
-    def copy_at_index(self, in_joint_state: "JointState", idx: Union[int, torch.Tensor]):
+    def copy_at_index(self, in_joint_state: JointState, idx: Union[int, torch.Tensor]):
         from .state_joint_trajectory_ops import copy_joint_state_at_index
         return copy_joint_state_at_index(self, in_joint_state, idx)
 
-    def copy_at_batch_seed_indices(self, in_joint_state: "JointState", batch_idx: torch.Tensor, seed_idx: torch.Tensor):
+    def copy_at_batch_seed_indices(self, in_joint_state: JointState, batch_idx: torch.Tensor, seed_idx: torch.Tensor):
         from .state_joint_trajectory_ops import copy_joint_state_at_batch_seed_indices
         return copy_joint_state_at_batch_seed_indices(
             self, in_joint_state, batch_idx, seed_idx

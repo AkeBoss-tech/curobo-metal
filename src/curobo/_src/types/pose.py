@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -22,6 +22,45 @@ class Pose(_MetalPose):
             raise ValueError("empty Pose has no shape")
         return self.position.shape
 
+    @property
+    def batch(self):
+        return self.batch_size
+
+    @property
+    def device(self):
+        if self.position is None:
+            raise ValueError("empty Pose has no device")
+        return self.position.device
+
+    @property
+    def ndim(self):
+        return 0 if self.position is None else self.position.ndim
+
+    @staticmethod
+    def from_matrix(matrix: Union[np.ndarray, torch.Tensor]):
+        if not isinstance(matrix, torch.Tensor):
+            matrix = DeviceCfg().to_device(matrix)
+        if matrix.shape[-2:] != (4, 4):
+            raise ValueError("matrix must end in shape [4,4]")
+        if matrix.ndim == 2:
+            matrix = matrix.unsqueeze(0)
+        rotation = matrix[..., :3, :3].contiguous()
+        return Pose(
+            position=matrix[..., :3, 3].contiguous(),
+            quaternion=matrix_to_quaternion(rotation),
+            rotation=rotation,
+            normalize_rotation=True,
+        )
+
+    @classmethod
+    def from_list(cls, pose: List[float], device_cfg: DeviceCfg = DeviceCfg(), q_xyzw=False):
+        if len(pose) != 7:
+            raise ValueError("pose list must contain xyz and four quaternion values")
+        quaternion = pose[3:]
+        if q_xyzw:
+            quaternion = [quaternion[3], *quaternion[:3]]
+        return cls(device_cfg.to_device(pose[:3]), device_cfg.to_device(quaternion))
+
     @classmethod
     def from_numpy(
         cls,
@@ -34,9 +73,9 @@ class Pose(_MetalPose):
     @classmethod
     def from_batch_list(
         cls,
-        pose: list[list[float]],
+        pose: List[List[float]],
         device_cfg: DeviceCfg = DeviceCfg(),
-        q_xyzw: bool = False,
+        q_xyzw=False,
     ) -> "Pose":
         value = np.asarray(pose)
         if value.ndim != 2 or value.shape[-1] != 7:
@@ -122,17 +161,39 @@ class Pose(_MetalPose):
     def get_rotation_matrix(self) -> torch.Tensor | None:
         return self.get_rotation()
 
+    def get_rotation(self):
+        if self.rotation is not None:
+            return self.rotation
+        return None if self.quaternion is None else quaternion_to_matrix(self.quaternion)
+
+    def get_pose_vector(self):
+        if self.position is None or self.quaternion is None:
+            raise ValueError("empty Pose has no vector")
+        return torch.cat((self.position, self.quaternion), dim=-1)
+
+    def clone(self):
+        return type(self)(
+            None if self.position is None else self.position.clone(),
+            None if self.quaternion is None else self.quaternion.clone(),
+            None if self.rotation is None else self.rotation.clone(),
+            name=self.name,
+            normalize_rotation=False,
+        )
+
+    def inverse(self):
+        return super().inverse()
+
     def requires_grad_(self, requires_grad: bool):
         if self.position is not None: self.position.requires_grad_(requires_grad)
         if self.quaternion is not None: self.quaternion.requires_grad_(requires_grad)
 
-    def stack(self, other_pose: "Pose") -> "Pose":
+    def stack(self, other_pose: Pose):
         return type(self)(
             torch.vstack((self.position, other_pose.position)),
             torch.vstack((self.quaternion, other_pose.quaternion)),
         )
 
-    def unsqueeze(self, dim: int = -1) -> "Pose":
+    def unsqueeze(self, dim=-1):
         for field in ("position", "quaternion", "rotation"):
             value = getattr(self, field)
             if value is not None:
@@ -140,7 +201,7 @@ class Pose(_MetalPose):
         self._update_shape_params()
         return self
 
-    def squeeze(self, dim: int = -1) -> "Pose":
+    def squeeze(self, dim=-1):
         for field in ("position", "quaternion", "rotation"):
             value = getattr(self, field)
             if value is not None:
@@ -151,7 +212,7 @@ class Pose(_MetalPose):
         if self.position is not None and self.position.ndim > 1:
             self.batch_size = self.position.shape[0]
 
-    def repeat(self, n: int) -> "Pose":
+    def repeat(self, n):
         if n <= 1:
             return self
         return type(self)(self.position.repeat(n, 1), self.quaternion.repeat(n, 1))
@@ -176,7 +237,7 @@ class Pose(_MetalPose):
         self.position[idx] = value.position
         self.quaternion[idx] = value.quaternion
 
-    def apply_kernel(self, kernel_mat: torch.Tensor) -> "Pose":
+    def apply_kernel(self, kernel_mat):
         if self.position is None:
             return self
         return type(self)(kernel_mat @ self.position, kernel_mat @ self.quaternion)
@@ -202,7 +263,7 @@ class Pose(_MetalPose):
     def get_numpy_matrix(self):
         return self.get_matrix().cpu().numpy()
 
-    def copy_(self, pose: "Pose"):
+    def copy_(self, pose: Pose):
         if pose.position is None and pose.quaternion is None:
             raise ValueError("Pose.copy_(): pose.position and pose.quaternion are None")
         if self.position.shape != pose.position.shape or self.quaternion.shape != pose.quaternion.shape:
@@ -210,23 +271,23 @@ class Pose(_MetalPose):
         self.position.copy_(pose.position); self.quaternion.copy_(pose.quaternion)
 
     @staticmethod
-    def cat(pose_list: list["Pose"]) -> "Pose":
+    def cat(pose_list: List[Pose]):
         return Pose(torch.cat([x.position for x in pose_list]),
                     torch.cat([x.quaternion for x in pose_list]))
 
-    def linear_distance(self, other_pose: "Pose"):
+    def linear_distance(self, other_pose: Pose):
         return torch.linalg.norm(self.position - other_pose.position, dim=-1)
 
-    def angular_distance(self, other_pose: "Pose", use_phi3: bool = False):
+    def angular_distance(self, other_pose: Pose, use_phi3: bool = False):
         left = self.quaternion / torch.linalg.vector_norm(self.quaternion, dim=-1, keepdim=True)
         right = other_pose.quaternion / torch.linalg.vector_norm(other_pose.quaternion, dim=-1, keepdim=True)
         dot = torch.abs(torch.sum(left * right, dim=-1)).clamp(max=1)
         return 1 - dot if use_phi3 else 2 * torch.acos(dot)
 
-    def distance(self, other_pose: "Pose", use_phi3: bool = False):
+    def distance(self, other_pose: Pose, use_phi3: bool = False):
         return self.linear_distance(other_pose), self.angular_distance(other_pose, use_phi3)
 
-    def multiply(self, other_pose: "Pose", out_position: Optional[torch.Tensor] = None,
+    def multiply(self, other_pose: Pose, out_position: Optional[torch.Tensor] = None,
                  out_quaternion: Optional[torch.Tensor] = None):
         result = super().multiply(other_pose)
         if out_position is not None:
@@ -253,7 +314,9 @@ class Pose(_MetalPose):
         return output
 
     def batch_transform_points(self, points: torch.Tensor, out_buffer: Optional[torch.Tensor] = None,
-                               gp_out=None, gq_out=None, gpt_out=None):
+                               gp_out: Optional[torch.Tensor] = None,
+                               gq_out: Optional[torch.Tensor] = None,
+                               gpt_out: Optional[torch.Tensor] = None):
         if points.ndim <= 2:
             raise ValueError("batch_transform requires points to be b,n,3 shape")
         rotation = self.get_rotation().view(-1, 3, 3)
@@ -264,7 +327,9 @@ class Pose(_MetalPose):
 
     def batch_transform_points_inverse(self, points: torch.Tensor,
                                        out_buffer: Optional[torch.Tensor] = None,
-                                       gp_out=None, gq_out=None, gpt_out=None):
+                                       gp_out: Optional[torch.Tensor] = None,
+                                       gq_out: Optional[torch.Tensor] = None,
+                                       gpt_out: Optional[torch.Tensor] = None):
         rotation = self.get_rotation().view(-1, 3, 3).transpose(-1, -2)
         output = torch.einsum("bij,b...j->b...i", rotation,
                               points - self.position.view(-1, 1, 3))
@@ -272,14 +337,23 @@ class Pose(_MetalPose):
             out_buffer.copy_(output); return out_buffer
         return output
 
-    def compute_offset_pose(self, offset: "Pose") -> "Pose":
+    def compute_offset_pose(self, offset: Pose):
         return self.multiply(offset)
 
-    def compute_local_pose(self, world_pose: "Pose") -> "Pose":
+    def compute_local_pose(self, world_pose: Pose):
         return self.inverse().multiply(world_pose)
 
     def contiguous(self) -> "Pose":
         return type(self)(self.position.contiguous(), self.quaternion.contiguous())
+
+    def to_list(self, q_xyzw=False):
+        return self.tolist(q_xyzw)
+
+    def tolist(self, q_xyzw=False):
+        vector = self.get_pose_vector().detach().cpu().squeeze().tolist()
+        if q_xyzw:
+            return vector[:3] + vector[4:] + [vector[3]]
+        return vector
 
 
 def normalize_quaternion(quaternion: torch.Tensor) -> torch.Tensor:

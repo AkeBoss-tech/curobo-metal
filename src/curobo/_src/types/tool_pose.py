@@ -21,12 +21,29 @@ class ToolPose(Sequence):
         if self.position.shape[2] != len(self.tool_frames):
             raise ValueError(f"num_links dim ({self.position.shape[2]}) != len(tool_frames) ({len(self.tool_frames)})")
 
-    batch_size = property(lambda self: self.position.shape[0])
-    horizon = property(lambda self: self.position.shape[1])
-    num_links = property(lambda self: self.position.shape[2])
-    shape = property(lambda self: self.position.shape)
-    ndim = property(lambda self: self.position.ndim)
-    device = property(lambda self: self.position.device)
+    @property
+    def batch_size(self) -> int:
+        return self.position.shape[0]
+
+    @property
+    def horizon(self) -> int:
+        return self.position.shape[1]
+
+    @property
+    def num_links(self) -> int:
+        return self.position.shape[2]
+
+    @property
+    def shape(self):
+        return self.position.shape
+
+    @property
+    def ndim(self):
+        return self.position.ndim
+
+    @property
+    def device(self):
+        return self.position.device
 
     def get_link_pose(self, link_name: str, make_contiguous: bool = False) -> Pose:
         if link_name not in self.tool_frames:
@@ -41,16 +58,21 @@ class ToolPose(Sequence):
     def to_dict(self, make_contiguous: bool = True) -> Dict[str, Pose]:
         return {name: self.get_link_pose(name, make_contiguous) for name in self.tool_frames}
 
-    def copy_(self, other: "ToolPose"):
+    def copy_(self, other: ToolPose):
         self.tool_frames = other.tool_frames
         self.position.copy_(other.position); self.quaternion.copy_(other.quaternion)
 
     def requires_grad_(self, requires_grad: bool):
         self.position.requires_grad_(requires_grad); self.quaternion.requires_grad_(requires_grad)
 
-    def clone(self): return type(self)(self.tool_frames.copy(), self.position.clone(), self.quaternion.clone())
-    def detach(self): return type(self)(self.tool_frames.copy(), self.position.detach(), self.quaternion.detach())
-    def contiguous(self): return type(self)(self.tool_frames, self.position.contiguous(), self.quaternion.contiguous())
+    def clone(self) -> ToolPose:
+        return type(self)(self.tool_frames.copy(), self.position.clone(), self.quaternion.clone())
+
+    def detach(self) -> ToolPose:
+        return type(self)(self.tool_frames.copy(), self.position.detach(), self.quaternion.detach())
+
+    def contiguous(self) -> ToolPose:
+        return type(self)(self.tool_frames, self.position.contiguous(), self.quaternion.contiguous())
     def __len__(self): return len(self.tool_frames)
 
     def __getitem__(self, idx: Union[int, str, torch.Tensor]):
@@ -86,13 +108,33 @@ class GoalToolPose(Sequence):
         if self.position.shape[2] != len(self.tool_frames):
             raise ValueError(f"num_links dim ({self.position.shape[2]}) != len(tool_frames) ({len(self.tool_frames)})")
 
-    batch_size = property(lambda self: self.position.shape[0])
-    horizon = property(lambda self: self.position.shape[1])
-    num_links = property(lambda self: self.position.shape[2])
-    num_goalset = property(lambda self: self.position.shape[3])
-    shape = property(lambda self: self.position.shape)
-    ndim = property(lambda self: self.position.ndim)
-    device = property(lambda self: self.position.device)
+    @property
+    def batch_size(self) -> int:
+        return self.position.shape[0]
+
+    @property
+    def horizon(self) -> int:
+        return self.position.shape[1]
+
+    @property
+    def num_links(self) -> int:
+        return self.position.shape[2]
+
+    @property
+    def num_goalset(self) -> int:
+        return self.position.shape[3]
+
+    @property
+    def shape(self):
+        return self.position.shape
+
+    @property
+    def ndim(self):
+        return self.position.ndim
+
+    @property
+    def device(self):
+        return self.position.device
 
     @classmethod
     def from_poses(cls, pose_dict: Dict[str, Pose],
@@ -118,18 +160,21 @@ class GoalToolPose(Sequence):
 
     def to_dict(self, make_contiguous: bool = True):
         return {name: self.get_link_pose(name, make_contiguous) for name in self.tool_frames}
-    def copy_(self, other):
+    def copy_(self, other: GoalToolPose):
         self.tool_frames = other.tool_frames; self.position.copy_(other.position); self.quaternion.copy_(other.quaternion)
     def requires_grad_(self, requires_grad: bool):
         self.position.requires_grad_(requires_grad); self.quaternion.requires_grad_(requires_grad)
-    def clone(self): return type(self)(self.tool_frames.copy(), self.position.clone(), self.quaternion.clone())
-    def detach(self): return type(self)(self.tool_frames.copy(), self.position.detach(), self.quaternion.detach())
+    def clone(self) -> GoalToolPose:
+        return type(self)(self.tool_frames.copy(), self.position.clone(), self.quaternion.clone())
+
+    def detach(self) -> GoalToolPose:
+        return type(self)(self.tool_frames.copy(), self.position.detach(), self.quaternion.detach())
     def __len__(self): return len(self.tool_frames)
     def __getitem__(self, idx):
         if isinstance(idx, str): return self.get_link_pose(idx)
         if isinstance(idx, int): return type(self)(self.tool_frames, self.position[idx].unsqueeze(0), self.quaternion[idx].unsqueeze(0))
         return type(self)(self.tool_frames, self.position[idx], self.quaternion[idx])
-    def reorder_links(self, ordered_tool_frames):
+    def reorder_links(self, ordered_tool_frames: List[str]) -> GoalToolPose:
         if not set(ordered_tool_frames).issubset(self.tool_frames):
             raise ValueError(f"Ordered link names {ordered_tool_frames} not a subset of {self.tool_frames}")
         if self.tool_frames == ordered_tool_frames: return self

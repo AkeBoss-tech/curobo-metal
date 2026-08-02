@@ -7,6 +7,41 @@ import torch
 from .pose import Pose
 
 
+def get_projection_rays(height, width, intrinsics: torch.Tensor, depth_to_meter=0.001):
+    """Build differentiable pinhole rays in the camera frame.
+
+    This is the portable tensor counterpart of cuRobo's geometry helper and
+    intentionally works on CPU and MPS without a Warp dependency.
+    """
+    if intrinsics.ndim == 2:
+        intrinsics = intrinsics.unsqueeze(0)
+    y, x = torch.meshgrid(
+        torch.arange(height, device=intrinsics.device, dtype=intrinsics.dtype),
+        torch.arange(width, device=intrinsics.device, dtype=intrinsics.dtype),
+        indexing="ij",
+    )
+    px = (x[None] - intrinsics[:, 0, 2, None, None]) / intrinsics[:, 0, 0, None, None]
+    py = (y[None] - intrinsics[:, 1, 2, None, None]) / intrinsics[:, 1, 1, None, None]
+    return torch.stack((px.expand_as(py), py, torch.ones_like(py)), -1) * depth_to_meter
+
+
+def project_depth_using_rays(depth_image, projection_rays):
+    if depth_image.ndim == 2:
+        depth_image = depth_image.unsqueeze(0)
+    return depth_image[..., None] * projection_rays
+
+
+def extract_depth_from_structured_pointcloud(pointcloud, output_image: Optional[torch.Tensor] = None):
+    if pointcloud.ndim == 3:
+        pointcloud = pointcloud.unsqueeze(0)
+    depth = pointcloud[..., 2]
+    if output_image is None:
+        return depth.clone()
+    target = output_image.unsqueeze(0) if output_image.ndim == 2 else output_image
+    target.copy_(depth)
+    return target
+
+
 @dataclass
 class CameraObservation:
     name: str = "camera_image"
@@ -31,7 +66,7 @@ class CameraObservation:
         if self.rgb_image is None: raise ValueError("rgb_image is None, cannot get shape")
         return self.rgb_image.shape
 
-    def copy_(self, new_data: "CameraObservation"):
+    def copy_(self, new_data: CameraObservation):
         for field in ("rgb_image", "depth_image", "image_segmentation", "projection_matrix",
                       "projection_rays", "timestamp", "feature_grid"):
             target, source = getattr(self, field), getattr(new_data, field)
@@ -60,12 +95,7 @@ class CameraObservation:
         if self.intrinsics is None: raise ValueError("intrinsics is None, cannot update projection rays")
         intrinsics = self.intrinsics.unsqueeze(0) if self.intrinsics.ndim == 2 else self.intrinsics
         height, width = self.depth_image.shape[-2:]
-        y, x = torch.meshgrid(torch.arange(height, device=intrinsics.device, dtype=intrinsics.dtype),
-                              torch.arange(width, device=intrinsics.device, dtype=intrinsics.dtype),
-                              indexing="ij")
-        x = (x[None] - intrinsics[:, 0, 2, None, None]) / intrinsics[:, 0, 0, None, None]
-        y = (y[None] - intrinsics[:, 1, 2, None, None]) / intrinsics[:, 1, 1, None, None]
-        rays = torch.stack((x.expand_as(y), y, torch.ones_like(y)), -1) * self.depth_to_meter
+        rays = get_projection_rays(height, width, intrinsics, self.depth_to_meter)
         if self.projection_rays is None: self.projection_rays = rays
         else: self.projection_rays.copy_(rays)
 
@@ -73,18 +103,14 @@ class CameraObservation:
         if self.depth_image is None: raise ValueError("depth_image is None, cannot generate pointcloud")
         if self.projection_rays is None: self.update_projection_rays()
         depth = self.depth_image.unsqueeze(0) if self.depth_image.ndim == 2 else self.depth_image
-        cloud = depth[..., None] * self.projection_rays
+        cloud = project_depth_using_rays(depth, self.projection_rays)
         if project_to_pose and self.pose is not None: cloud = self.pose.batch_transform_points(cloud)
         return cloud
 
-    def extract_depth_from_structured_pointcloud(self, pointcloud, output_image=None):
-        if pointcloud.ndim == 3: pointcloud = pointcloud.unsqueeze(0)
-        depth = pointcloud[..., 2]
-        if output_image is None: return depth.clone()
-        target = output_image.unsqueeze(0) if output_image.ndim == 2 else output_image
-        target.copy_(depth); return target
+    def extract_depth_from_structured_pointcloud(self, pointcloud, output_image: Optional[torch.Tensor] = None):
+        return extract_depth_from_structured_pointcloud(pointcloud, output_image)
 
-    def stack(self, new_observation: "CameraObservation", dim: int = 0):
+    def stack(self, new_observation: CameraObservation, dim: int = 0):
         def stack(field):
             left, right = getattr(self, field), getattr(new_observation, field)
             return torch.stack((left, right), dim=dim) if left is not None else None
@@ -100,4 +126,7 @@ class CameraObservation:
                     "timestamp": self.timestamp, "depth_to_meter": self.depth_to_meter}, file_path)
 
 
-__all__ = ["CameraObservation"]
+__all__ = [
+    "CameraObservation", "extract_depth_from_structured_pointcloud",
+    "get_projection_rays", "project_depth_using_rays",
+]
