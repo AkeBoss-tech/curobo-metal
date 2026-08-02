@@ -1,17 +1,42 @@
-"""Pinned IK configuration with portable CPU/MPS defaults."""
+"""Portable configuration value object for the pinned IK solver API.
 
-from dataclasses import dataclass
+The upstream factory assembles CUDA/Warp rollout graphs from several YAML
+files.  This module keeps that input contract but assembles the ordinary
+PyTorch CPU/MPS rollout records used by :mod:`curobo._src.solver.solver_ik`.
+CUDA graph capture remains a deliberately explicit backend boundary: the
+request is retained on ``core_cfg.requested_use_cuda_graph`` while the active
+portable configuration always reports ``use_cuda_graph == False``.
+"""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import dataclass, fields, replace
+import math
 from typing import Any, Dict, List, Optional, Type, Union
 
+from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
+from curobo._src.solver.solver_core_cfg import SolverCoreCfg
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
+from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.robot import RobotCfg
 
-from .solver_core_cfg import SolverCoreCfg
+
+def _positive_int(name: str, value: int) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+
+
+def _positive_finite(name: str, value: float) -> None:
+    if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be finite and positive")
 
 
 @dataclass
 class IKSolverCfg:
+    """Configuration specific to portable batched inverse kinematics."""
+
     core_cfg: SolverCoreCfg
     robot_config: RobotCfg
     max_batch_size: int = 1
@@ -35,14 +60,48 @@ class IKSolverCfg:
     seed_solver_num_seeds: int = 32
     self_collision_check: bool = True
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.core_cfg, SolverCoreCfg):
+            raise TypeError("core_cfg must be SolverCoreCfg")
+        if not isinstance(self.robot_config, RobotCfg):
+            raise TypeError("robot_config must be RobotCfg")
+        if self.core_cfg.robot_config is not self.robot_config:
+            raise ValueError("core_cfg.robot_config must be robot_config")
+        for name in ("max_batch_size", "max_goalset", "num_seeds", "seed_solver_num_seeds"):
+            _positive_int(name, getattr(self, name))
+        if self.override_iters_for_multi_link_ik is not None:
+            _positive_int("override_iters_for_multi_link_ik", self.override_iters_for_multi_link_ik)
+        for name in (
+            "position_tolerance", "orientation_tolerance",
+            "optimizer_collision_activation_distance", "seed_position_weight",
+            "seed_orientation_weight",
+        ):
+            _positive_finite(name, getattr(self, name))
+        for name in (
+            "non_terminal_tool_pose_weight_factor", "seed_velocity_weight",
+            "seed_acceleration_weight",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be finite and nonnegative")
+        if self.optimization_dt is not None:
+            _positive_finite("optimization_dt", self.optimization_dt)
+        if not isinstance(self.exit_early_batch_success_threshold, (float, int)) or not math.isfinite(self.exit_early_batch_success_threshold) or not 0 < self.exit_early_batch_success_threshold <= 1:
+            raise ValueError("exit_early_batch_success_threshold must be in (0, 1]")
+        for name in ("multi_env", "success_requires_convergence", "use_lm_seed", "exit_early", "self_collision_check"):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be bool")
+
     @property
-    def device_cfg(self): return self.core_cfg.device_cfg
+    def device_cfg(self) -> DeviceCfg: return self.core_cfg.device_cfg
     @property
-    def use_cuda_graph(self): return self.core_cfg.use_cuda_graph
+    def use_cuda_graph(self) -> bool: return self.core_cfg.use_cuda_graph
     @property
-    def random_seed(self): return self.core_cfg.random_seed
+    def requested_use_cuda_graph(self) -> bool: return self.core_cfg.requested_use_cuda_graph
     @property
-    def store_debug(self): return self.core_cfg.store_debug
+    def random_seed(self) -> int: return self.core_cfg.random_seed
+    @property
+    def store_debug(self) -> bool: return self.core_cfg.store_debug
     @property
     def scene_collision_cfg(self): return self.core_cfg.scene_collision_cfg
     @property
@@ -51,6 +110,29 @@ class IKSolverCfg:
     def optimizer_rollout_configs(self): return self.core_cfg.optimizer_rollout_configs
     @property
     def metrics_rollout_config(self): return self.core_cfg.metrics_rollout_config
+
+    def clone(self, **updates: Any) -> "IKSolverCfg":
+        """Return an independent configuration, optionally with validated updates."""
+        known = {item.name for item in fields(self)}
+        unknown = sorted(set(updates).difference(known))
+        if unknown:
+            raise TypeError(f"unknown IKSolverCfg fields: {unknown}")
+        core = updates.pop("core_cfg", deepcopy(self.core_cfg))
+        robot = updates.pop("robot_config", core.robot_config)
+        if robot is not core.robot_config:
+            # A caller who intentionally changes robot configuration gets a
+            # coherent new core record instead of a silently split config.
+            core = replace(core, robot_config=robot)
+        return replace(self, core_cfg=core, robot_config=robot, **updates)
+
+    copy = clone
+
+    def update(self, **updates: Any) -> "IKSolverCfg":
+        """Mutate this value object only after validating the complete update."""
+        candidate = self.clone(**updates)
+        for item in fields(self):
+            setattr(self, item.name, getattr(candidate, item.name))
+        return self
 
     @staticmethod
     def create(
@@ -70,8 +152,8 @@ class IKSolverCfg:
         optimizer_collision_activation_distance: float = 0.01,
         store_debug: bool = False,
         override_optimizer_num_iters: Dict[str, Optional[int]] = {"particle": None, "lbfgs": None},
-        transition_model_config_instance_type: Type = object,
-        cost_manager_config_instance_type: Type = object,
+        transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
+        cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
         override_iters_for_multi_link_ik: Optional[int] = None,
         optimization_dt: Optional[float] = None,
         load_collision_spheres: bool = True,
@@ -86,35 +168,45 @@ class IKSolverCfg:
         max_batch_size: int = 1,
         multi_env: bool = False,
         max_goalset: int = 1,
-    ):
-        del metrics_rollout, transition_model, collision_cache, override_optimizer_num_iters
+    ) -> "IKSolverCfg":
+        """Compile flexible robot/YAML inputs into CPU/MPS solver records.
+
+        ``use_cuda_graph=True`` is accepted for dependency-name compatibility;
+        portable execution uses a persistent eager cache instead of emulating
+        NVIDIA CUDA Graph capture.
+        """
+        del metrics_rollout, transition_model, collision_cache
         del transition_model_config_instance_type, cost_manager_config_instance_type
-        del velocity_regularization_weight, acceleration_regularization_weight
-        if use_cuda_graph:
-            use_cuda_graph = False  # dependency-name replacement keeps upstream default usable
+        del override_optimizer_num_iters
         if isinstance(robot, RobotCfg):
             robot_cfg = robot
-        else:
+        elif isinstance(robot, str):
             kin = KinematicsCfg.from_robot_yaml_file(
                 robot, device_cfg=device_cfg, load_collision_spheres=load_collision_spheres
             )
             robot_cfg = RobotCfg(kin.kinematics_config.robot_cfg, device_cfg=device_cfg)
-        core = SolverCoreCfg(
-            robot_cfg, device_cfg, list(optimizer_configs), scene_collision_cfg=scene_model,
-            use_cuda_graph=use_cuda_graph, random_seed=random_seed, store_debug=store_debug,
-        )
+        else:
+            robot_cfg = RobotCfg.create(robot, device_cfg=device_cfg,
+                                        load_collision_spheres=load_collision_spheres,
+                                        num_envs=max_batch_size if multi_env else 1)
+        # Task YAML is an optional upstream content bundle.  Keep the supplied
+        # records for inspection without requiring CUDA-only task assets.
+        optimizer_records = deepcopy(list(optimizer_configs))
+        for label, value in (("velocity_regularization_weight", velocity_regularization_weight),
+                             ("acceleration_regularization_weight", acceleration_regularization_weight)):
+            if value is not None:
+                _positive_finite(label, value)
+        core = SolverCoreCfg(robot_cfg, device_cfg, optimizer_records,
+                             scene_collision_cfg=scene_model, use_cuda_graph=use_cuda_graph,
+                             random_seed=random_seed, store_debug=store_debug)
         return IKSolverCfg(
             core, robot_cfg, max_batch_size, multi_env, max_goalset, num_seeds,
-            position_tolerance, orientation_tolerance,
-            optimizer_collision_activation_distance,
+            position_tolerance, orientation_tolerance, optimizer_collision_activation_distance,
             success_requires_convergence=success_requires_convergence,
             override_iters_for_multi_link_ik=override_iters_for_multi_link_ik,
-            optimization_dt=optimization_dt,
-            seed_position_weight=seed_position_weight,
-            seed_orientation_weight=seed_orientation_weight,
-            seed_velocity_weight=seed_velocity_weight,
-            seed_acceleration_weight=seed_acceleration_weight,
-            seed_solver_num_seeds=seed_solver_num_seeds,
+            optimization_dt=optimization_dt, seed_position_weight=seed_position_weight,
+            seed_orientation_weight=seed_orientation_weight, seed_velocity_weight=seed_velocity_weight,
+            seed_acceleration_weight=seed_acceleration_weight, seed_solver_num_seeds=seed_solver_num_seeds,
             self_collision_check=self_collision_check,
         )
 
