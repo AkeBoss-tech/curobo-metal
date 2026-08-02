@@ -94,10 +94,8 @@ def test_cg_formulas_shift_and_optimizer_reduce_quadratic_cost():
     grad = torch.tensor([[[2.0, 1.0]]])
     previous = torch.tensor([[[1.0, 1.0]]])
     step = -previous.clone()
-    direction, prev_grad, prev_step = jit_cg_compute_step_direction(grad, previous, step, 10.0, "PR")
+    direction = jit_cg_compute_step_direction(grad, previous, step, 10.0, "PR")
     assert direction.shape == grad.shape
-    torch.testing.assert_close(prev_grad, grad)
-    torch.testing.assert_close(prev_step, direction)
     shifted_grad, shifted_step = jit_cg_shift_buffers(previous, step, 1, 1)
     torch.testing.assert_close(shifted_grad, torch.tensor([[[1.0, 0.0]]]))
     torch.testing.assert_close(shifted_step, torch.tensor([[[-1.0, 0.0]]]))

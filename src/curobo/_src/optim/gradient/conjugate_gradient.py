@@ -32,8 +32,10 @@ def jit_cg_compute_step_direction(
 ):
     """Return a Polak-Ribiere/Fletcher-Reeves/Dai-Yuan CG direction.
 
-    The returned history tensors are updated out-of-place, avoiding in-place
-    writes that would invalidate an autograd caller's saved values.
+    This public helper returns only the search direction, matching the
+    historical cuRobo call surface.  The optimizer owns its history buffers
+    and updates them separately, so callers do not receive a surprising
+    tuple in place of a tensor.
     """
 
     if grad.shape != prev_grad.shape or grad.shape != prev_step.shape:
@@ -55,7 +57,7 @@ def jit_cg_compute_step_direction(
         )
     beta = torch.nan_to_num(beta, nan=0.0, posinf=0.0, neginf=0.0).clamp(0.0, max_beta)
     direction = -grad + beta.reshape(beta.shape + (1,) * (grad.ndim - beta.ndim)) * prev_step
-    return direction, grad.clone(), direction.clone()
+    return direction
 
 
 def jit_cg_shift_buffers(
@@ -162,7 +164,7 @@ class ConjugateGradientOpt(GradientDescentOpt):
             if previous_gradient is None:
                 direction = -gradient
             else:
-                direction, _previous_gradient, _previous_direction = jit_cg_compute_step_direction(
+                direction = jit_cg_compute_step_direction(
                     gradient, previous_gradient, previous_direction, self.config.max_beta, self.config.cg_method
                 )
             x, current_cost = self._candidate_step(leaf.detach(), direction.detach())
