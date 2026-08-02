@@ -70,6 +70,7 @@ from .graph_planning import (
 from .serialization import load_case, save_case
 from .trajectory import (
     TRAJECTORY_FORMAT,
+    TRAJECTORY_REPLAY_ATOL,
     TRAJECTORY_VERSION,
     TrajectoryCost,
     TrajectoryProblem,
@@ -137,6 +138,7 @@ __all__ = [
     "ScalarCost",
     "SphereTransformResult",
     "TRAJECTORY_FORMAT",
+    "TRAJECTORY_REPLAY_ATOL",
     "TRAJECTORY_VERSION",
     "TrajectoryCost",
     "TrajectoryProblem",

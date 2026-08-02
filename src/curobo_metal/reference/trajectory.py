@@ -17,6 +17,18 @@ from .forward_kinematics import SerialRobot, forward_kinematics
 FloatArray = NDArray[np.float64]
 TRAJECTORY_FORMAT = "curobo-metal-trajectory-case"
 TRAJECTORY_VERSION = 1
+# This is part of the *reference replay* contract, rather than an accuracy
+# shortcut for the production solver.  The reference uses finite differences
+# and repeatedly evaluates transcendental FK expressions.  libm/BLAS may
+# differ by a few ulps across supported hosts, which can otherwise accumulate
+# into the last 11--12 decimal places of a 100-step backtracking solve.  Keep
+# the state and externally recorded scalar outputs on this much finer-than-
+# tolerance grid so canonical JSON fixtures are portable byte-for-byte.
+_REPLAY_DECIMALS = 10
+# A recorded value can lie at most half a replay unit from an unrounded
+# evaluation on either host.  Leave one full unit for two independently
+# rounded values while still rejecting changes larger than 1e-10.
+TRAJECTORY_REPLAY_ATOL = 1e-10
 
 
 def _float(value: Any, name: str) -> FloatArray:
@@ -26,6 +38,24 @@ def _float(value: Any, name: str) -> FloatArray:
     result = np.asarray(array, dtype=np.float64)
     if not np.all(np.isfinite(result)):
         raise ValueError(f"{name} must contain only finite values")
+    return result
+
+
+def _canonical_replay_values(value: Any) -> FloatArray:
+    """Put reference-solver state/output values on the replay precision grid.
+
+    ``np.round`` also avoids platform-specific formatting of nearly equal
+    binary values.  Normalising signed zero matters because it is observable
+    in canonical JSON (``-0.0`` versus ``0.0``).
+    """
+    # ``np.round`` returns a NumPy scalar for scalar input, so force a mutable
+    # zero-dimensional ndarray before normalising signed zero.
+    result = np.array(
+        np.round(np.asarray(value, dtype=np.float64), decimals=_REPLAY_DECIMALS),
+        dtype=np.float64,
+        copy=True,
+    )
+    result[result == 0.0] = 0.0
     return result
 
 
@@ -324,12 +354,15 @@ def optimize_trajectory(problem: TrajectoryProblem) -> TrajectoryResult:
             status = "success"
         elif not collision_ok:
             status = "collision_constrained"
-        trajectories[seed_index] = q
+        trajectories[seed_index] = _canonical_replay_values(q)
         statuses.append(status)
         iterations[seed_index] = iteration
-        objectives[seed_index] = final.value
-        endpoint_errors[seed_index] = endpoint_error
-        clearances[seed_index] = final.minimum_clearance
+        # These are fixture-facing scalar outputs.  Canonicalise them after
+        # all semantic checks, so callers still get the true solve outcome
+        # while JSON replay is independent of host libm/BLAS last bits.
+        objectives[seed_index] = _canonical_replay_values(final.value).item()
+        endpoint_errors[seed_index] = _canonical_replay_values(endpoint_error).item()
+        clearances[seed_index] = _canonical_replay_values(final.minimum_clearance).item()
     candidates = np.flatnonzero(success)
     selected = int(candidates[np.argmin(objectives[candidates])]) if candidates.size else None
     return TrajectoryResult(
