@@ -85,7 +85,11 @@ def test_batch_pose_forwards_trajectory_options_and_goalset(monkeypatch):
     )
 
     assert result.goalset_index.shape == (2, 1, 1)
+    # Portable TrajOpt represents the CUDA-only implicit endpoint as the
+    # explicit selected IK state, avoiding a duplicate IK solve.
     assert observed["use_implicit_goal"] is False
+    assert isinstance(observed["goal_state"], JointState)
+    assert torch.equal(observed["goal_state"].position, ik.solution[:, 0])
     assert observed["finetune_attempts"] == 3
     assert observed["initial_iters"] == 7
     assert observed["time_optimal_iters"] == 5
@@ -103,6 +107,34 @@ def test_batch_pose_executes_a_real_two_problem_fk_goal():
     result = planner.plan_pose(goal, start, max_attempts=1)
     assert result.success.tolist() == [[True], [True]]
     assert result.js_solution.position.shape[:2] == (2, 1)
+
+
+def test_batch_pose_maps_implicit_goal_to_selected_ik_endpoint(monkeypatch):
+    planner = _planner()
+    names = planner.joint_names
+    start = JointState.from_position(planner.default_joint_state.position.repeat(2, 1), names)
+    position = torch.zeros((2, 1, len(planner.tool_frames), 1, 3))
+    quaternion = torch.zeros((2, 1, len(planner.tool_frames), 1, 4))
+    quaternion[..., 0] = 1.0
+    goal = GoalToolPose(planner.tool_frames, position, quaternion)
+    endpoint = start.position[:, None] + 0.01
+    ik = SimpleNamespace(
+        success=torch.ones((2, 1), dtype=torch.bool), total_time=0.0,
+        solution=endpoint, goalset_index=torch.zeros((2, 1, 1), dtype=torch.long),
+    )
+    monkeypatch.setattr(planner.ik_solver, "solve_pose", lambda *args, **kwargs: ik)
+    captured = {}
+
+    def solve_pose(*args, **kwargs):
+        captured.update(kwargs)
+        return _trajectory_result([[True], [True]], 1, names)
+
+    monkeypatch.setattr(planner.trajopt_solver, "solve_pose", solve_pose)
+    monkeypatch.setattr(planner, "_finish_trajectory", lambda value: value)
+    planner.plan_pose(goal, start, use_implicit_goal=True)
+
+    assert captured["use_implicit_goal"] is False
+    assert torch.equal(captured["goal_state"].position, endpoint[:, 0])
 
 
 def test_batch_grasp_approach_only_preserves_per_problem_result_shape():

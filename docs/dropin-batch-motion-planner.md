@@ -16,3 +16,8 @@ portable execution state, not CUDA graph capture. Raw CUDA graph controls,
 Warp/BVH implementation details, analytic CCD, and CUDA numerical parity are
 not provided. Grasp approach and lift solve the real batched stages, but do not
 claim the CUDA-only non-terminal linear rollout cost.
+
+Likewise, a pose request's `use_implicit_goal` is represented by the selected
+IK endpoint passed explicitly to portable TrajOpt. This preserves the planned
+joint-space goal and avoids CUDA rollout-buffer behavior; it is not a claim of
+the raw CUDA implicit-goal API.

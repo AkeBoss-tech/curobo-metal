@@ -184,12 +184,25 @@ class BatchMotionPlanner(MotionPlanner):
             seed_traj = None
             if self.graph_planner is not None and attempt >= enable_graph_attempt:
                 seed_traj = self._get_graph_seed_trajectories(current_state, ik_result.solution)
+            # The upstream implicit-goal route reads the selected IK endpoint
+            # from a CUDA rollout buffer.  Portable TrajOpt has no such
+            # captured buffer, but it has exactly the same joint-space target
+            # here: the deterministic first selected seed from this batch's
+            # preceding IK solve.  Supplying it explicitly avoids a redundant
+            # second IK solve and keeps the complete batch on CPU/MPS.
+            goal_state = JointState.from_position(
+                ik_result.solution[:, 0], self.joint_names
+            )
             candidate = self.trajopt_solver.solve_pose(
                 goal_tool_poses,
                 current_state,
                 seed_config=ik_result.solution,
                 seed_traj=seed_traj,
-                use_implicit_goal=use_implicit_goal,
+                # ``use_implicit_goal`` remains accepted for source
+                # compatibility.  Its observable endpoint is represented by
+                # ``goal_state`` above rather than CUDA-only rollout state.
+                use_implicit_goal=False,
+                goal_state=goal_state,
                 finetune_attempts=finetune_attempts,
                 initial_iters=initial_iters,
                 time_optimal_iters=time_optimal_iters,
