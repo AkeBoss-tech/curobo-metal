@@ -32322,9 +32322,9 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
+        "missing_symbols": 20,
         "path": "curobo/_src/optim/components/gradient_opt_core.py",
-        "resolved_symbols": 1,
+        "resolved_symbols": 5,
         "status": "partial"
       },
       "name": "curobo._src.optim.components.gradient_opt_core",
@@ -37502,9 +37502,9 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
+        "missing_symbols": 23,
         "path": "curobo/_src/optim/gradient/gradient_descent.py",
-        "resolved_symbols": 5,
+        "resolved_symbols": 6,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.gradient_descent",
@@ -49188,9 +49188,9 @@
     },
     {
       "local": {
-        "missing_symbols": 33,
+        "missing_symbols": 4,
         "path": "curobo/_src/perception/mapper/checkpoint_blocks.py",
-        "resolved_symbols": 18,
+        "resolved_symbols": 47,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.checkpoint_blocks",
@@ -51639,9 +51639,9 @@
     },
     {
       "local": {
-        "missing_symbols": 31,
+        "missing_symbols": 24,
         "path": "curobo/_src/perception/mapper/integrator_esdf.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 10,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.integrator_esdf",
@@ -52829,9 +52829,9 @@
     },
     {
       "local": {
-        "missing_symbols": 34,
+        "missing_symbols": 32,
         "path": "curobo/_src/perception/mapper/integrator_tsdf.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.integrator_tsdf",
@@ -66367,9 +66367,9 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
+        "missing_symbols": 21,
         "path": "curobo/_src/robot/builder/builder_robot.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.robot.builder.builder_robot",
