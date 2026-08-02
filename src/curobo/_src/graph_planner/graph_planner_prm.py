@@ -43,6 +43,9 @@ class PRMGraphPlanner:
         self.scene_collision_checker = scene_collision_checker
         self._roadmap = PersistentRoadmap(capacity=config.max_nodes)
         self._roadmap_samples: torch.Tensor | None = None
+        self._roadmap_neighbors_per_node = int(config.neighbors_per_node)
+        self._cspace_distance_weight: torch.Tensor | None = None
+        self._last_backend: Any | None = None
         self._generation = 0
         self._reset_sampler()
 
@@ -172,8 +175,88 @@ class PRMGraphPlanner:
     def _candidate_count(self) -> int:
         if self._roadmap_samples is not None:
             return self._roadmap_samples.shape[0]
-        # Reserve the terminal pair from the configured buffer limit.
-        return min(max(0, self.config.max_nodes - 2), self.config.new_nodes_per_iteration)
+        # A PRM query starts with terminal connections, then grows its roadmap
+        # only when those connections cannot produce a path.  This is
+        # deliberately unlike one-shot random planning: it makes
+        # ``new_nodes_per_iteration`` and the growth factors observable and
+        # keeps an empty roadmap genuinely empty until a query needs it.
+        return 0
+
+    def _make_problem(
+        self,
+        x_start: torch.Tensor,
+        x_goal: torch.Tensor,
+    ) -> GraphPlanningProblem:
+        """Create the production graph problem for the current PRM state."""
+        return GraphPlanningProblem(
+            starts=x_start,
+            goals=x_goal,
+            lower=self.action_bound_lows,
+            upper=self.action_bound_highs,
+            validity=self.check_samples_feasibility,
+            sample_count=self._candidate_count(),
+            seed=int(self.config.sampler_seed),
+            k_neighbors=int(self._roadmap_neighbors_per_node),
+            connection_radius=self.config.connection_radius,
+            edge_step=float(self.config.edge_step),
+            interpolation_step=float(self.config.edge_step),
+            execution_cache=self._roadmap.cache,
+        )
+
+    def _plan_with_growth(self, x_start: torch.Tensor, x_goal: torch.Tensor) -> Any:
+        """Plan and grow a reusable PRM deterministically when it is needed.
+
+        The pinned implementation starts from terminal nodes, expands only
+        unsuccessful queries, and retains those added nodes for later calls.
+        We preserve that lifecycle while using the production portable graph
+        operator for collision checks, edges, and search.  The upstream
+        CUDA/Warp ellipsoid transform is not reproduced; the already
+        documented bounded PyTorch sampler is used instead.
+        """
+        problem = self._make_problem(x_start, x_goal)
+        self._inject_roadmap_samples(problem, x_start.shape[0])
+        backend = self._roadmap.plan(problem)
+        self._last_backend = backend
+
+        requested = max(0, int(self.config.new_nodes_per_iteration))
+        iterations = max(0, int(self.config.max_path_finding_iterations))
+        neighbors = max(1, int(self._roadmap_neighbors_per_node))
+        for _ in range(iterations):
+            if bool(backend.success.all().item()) or requested == 0:
+                break
+            available = int(self.config.max_nodes) - self.n_nodes
+            if available <= 0:
+                break
+            # Upstream selects one outstanding batch member to expand.  A
+            # first-index rule is deterministic across CPU/MPS and avoids a
+            # host RNG dependency in the portable implementation.
+            failed = torch.nonzero(~backend.success, as_tuple=False).flatten()
+            batch_index = int(failed[0].item())
+            radius = torch.linalg.vector_norm(
+                (x_goal[batch_index] - x_start[batch_index]) * self.cspace_distance_weight
+            ) * float(self.config.exploration_radius)
+            samples = self._ellipsoidal_samples(
+                x_start[batch_index], x_goal[batch_index], radius,
+                min(requested, available),
+            )
+            if samples.shape[0] == 0:
+                break
+            self._append_samples(samples)
+            self._roadmap_neighbors_per_node = max(neighbors, self._roadmap_neighbors_per_node)
+            problem = self._make_problem(x_start, x_goal)
+            self._inject_roadmap_samples(problem, x_start.shape[0])
+            backend = self._roadmap.plan(problem)
+            self._last_backend = backend
+            requested = max(
+                1,
+                int(round(requested * float(self.config.new_nodes_per_iteration_growth_factor))),
+            )
+            neighbors = max(
+                1,
+                int(round(neighbors * float(self.config.neighbors_per_node_growth_factor))),
+            )
+            self._roadmap_neighbors_per_node = max(self._roadmap_neighbors_per_node, neighbors)
+        return backend
 
     def _interpolate_paths(
         self,
@@ -217,26 +300,20 @@ class PRMGraphPlanner:
             ], dim=-1)
         return output
 
-    def find_path(
-        self,
-        x_start: torch.Tensor,
-        x_goal: torch.Tensor,
-        interpolate_waypoints: bool = True,
-        interpolation_steps: int = 100,
-        interpolation_type: TrajInterpolationType = TrajInterpolationType.LINEAR,
-        validate_interpolated_trajectory: bool = True,
-    ) -> GraphPlannerResult:
+    def _find_path_impl(self, x_start: torch.Tensor, x_goal: torch.Tensor) -> GraphPlannerResult:
+        """Find un-interpolated PRM paths using the pinned private entrypoint.
+
+        Kept public-in-practice because applications historically called it
+        while instrumenting graph planning.  It returns the same result model
+        as :meth:`find_path`, but does not create interpolation samples.
+        """
         self._validate_actions(x_start, name="x_start")
         self._validate_actions(x_goal, name="x_goal")
         if x_start.shape != x_goal.shape:
             raise ValueError("x_start and x_goal must have the same shape")
-        if not isinstance(interpolation_type, TrajInterpolationType):
-            raise TypeError("interpolation_type must be a TrajInterpolationType")
-        if self.n_nodes > self.config.max_nodes * 0.75:
-            # Match upstream's bounded lifecycle: terminal-query growth must
-            # never make an old graph silently exceed its declared capacity.
-            self.reset_buffer()
         begin = time.perf_counter()
+        if self.n_nodes > self.config.max_nodes * 0.75:
+            self.reset_buffer()
         endpoints = self.check_samples_feasibility(torch.cat((x_start, x_goal), dim=0))
         if not bool(endpoints.all().item()):
             batch = x_start.shape[0]
@@ -246,28 +323,52 @@ class PRMGraphPlanner:
                 x_start.new_full((batch,), float("inf")), time.perf_counter() - begin,
                 False, "Start or End state in collision",
             )
-        problem = GraphPlanningProblem(
-            starts=x_start,
-            goals=x_goal,
-            lower=self.action_bound_lows,
-            upper=self.action_bound_highs,
-            validity=self.check_samples_feasibility,
-            sample_count=self._candidate_count(),
-            seed=int(self.config.sampler_seed),
-            k_neighbors=int(self.config.neighbors_per_node),
-            connection_radius=self.config.connection_radius,
-            edge_step=float(self.config.edge_step),
-            interpolation_step=float(self.config.edge_step),
-            execution_cache=self._roadmap.cache,
-        )
-        self._inject_roadmap_samples(problem, x_start.shape[0])
-        backend = self._roadmap.plan(problem)
+
+        backend = self._plan_with_growth(x_start, x_goal)
         plans: List[torch.Tensor | None] = [
             path if bool(ok) else None for path, ok in zip(backend.roadmap_paths, backend.success)
         ]
-        lengths = x_start.new_tensor([metric.path_cost for metric in backend.metrics])
-        interpolated = None
         success = backend.success.clone()
+        lengths = x_start.new_tensor([metric.path_cost for metric in backend.metrics])
+        # The pinned planner treats near-identical terminals as a valid,
+        # zero-length two-knot plan without growing the roadmap.  Keep the
+        # comparison device-resident and weighted by the published c-space
+        # metric.
+        similar = torch.linalg.vector_norm(
+            (x_goal - x_start) * self.cspace_distance_weight, dim=-1
+        ) < float(self.config.cspace_similarity_threshold)
+        for batch_index in torch.nonzero(similar, as_tuple=False).flatten().tolist():
+            plans[batch_index] = torch.stack((x_start[batch_index], x_goal[batch_index]))
+        success = torch.where(similar, torch.ones_like(success), success)
+        lengths = torch.where(similar, torch.zeros_like(lengths), lengths)
+        return GraphPlannerResult(
+            success, plans, None, self.joint_names, lengths,
+            time.perf_counter() - begin, bool(success.all()),
+            {
+                "status": backend.status,
+                "metrics": backend.metrics,
+                "generation": self._generation,
+                "n_nodes": self.n_nodes,
+                "neighbors_per_node": self._roadmap_neighbors_per_node,
+            },
+        )
+
+    def find_path(
+        self,
+        x_start: torch.Tensor,
+        x_goal: torch.Tensor,
+        interpolate_waypoints: bool = True,
+        interpolation_steps: int = 100,
+        interpolation_type: TrajInterpolationType = TrajInterpolationType.LINEAR,
+        validate_interpolated_trajectory: bool = True,
+    ) -> GraphPlannerResult:
+        if not isinstance(interpolation_type, TrajInterpolationType):
+            raise TypeError("interpolation_type must be a TrajInterpolationType")
+        path_result = self._find_path_impl(x_start, x_goal)
+        plans = path_result.plan_waypoints
+        assert plans is not None
+        interpolated = None
+        success = path_result.success
         if interpolate_waypoints and bool(success.any()):
             interpolated = self._interpolate_paths(
                 plans, success, interpolation_steps, interpolation_type
@@ -275,11 +376,10 @@ class PRMGraphPlanner:
             if validate_interpolated_trajectory:
                 mask = self.check_samples_feasibility(interpolated.reshape(-1, self.action_dim))
                 success &= mask.reshape(x_start.shape[0], interpolation_steps).all(dim=1)
-        return GraphPlannerResult(
-            success, plans, interpolated, self.joint_names, lengths,
-            time.perf_counter() - begin, bool(success.all()),
-            {"status": backend.status, "metrics": backend.metrics, "generation": self._generation},
-        )
+        path_result.success = success
+        path_result.interpolated_waypoints = interpolated
+        path_result.valid_query = bool(success.all())
+        return path_result
 
     def get_interpolated_trajectory(
         self, paths: List[torch.Tensor | None], success: torch.Tensor,
@@ -294,6 +394,8 @@ class PRMGraphPlanner:
     def reset_buffer(self) -> None:
         self._roadmap.reset()
         self._roadmap_samples = None
+        self._roadmap_neighbors_per_node = int(self.config.neighbors_per_node)
+        self._last_backend = None
         self._generation += 1
 
     def reset_seed(self) -> None:
@@ -308,6 +410,7 @@ class PRMGraphPlanner:
         if not isinstance(neighbors_per_node, int) or neighbors_per_node <= 0:
             raise ValueError("neighbors_per_node must be positive")
         self._append_samples(self._feasible_random_samples(num_samples))
+        self._roadmap_neighbors_per_node = max(self._roadmap_neighbors_per_node, neighbors_per_node)
 
     def extend_roadmap_with_ellipsoidal_samples(
         self,
@@ -322,6 +425,7 @@ class PRMGraphPlanner:
         self._append_samples(
             self._ellipsoidal_samples(x_start, x_goal, max_sampling_radius, num_samples)
         )
+        self._roadmap_neighbors_per_node = max(self._roadmap_neighbors_per_node, neighbors_per_node)
 
     def reset_cuda_graph(self) -> None:
         raise NotImplementedError(
@@ -374,7 +478,9 @@ class PRMGraphPlanner:
 
     @property
     def cspace_distance_weight(self) -> torch.Tensor:
-        return torch.ones(self.action_dim, **self.device_cfg.as_torch_dict())
+        if self._cspace_distance_weight is None:
+            self._cspace_distance_weight = torch.ones_like(self.action_bound_lows)
+        return self._cspace_distance_weight
 
     @property
     def joint_names(self) -> List[str]:

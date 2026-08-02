@@ -110,6 +110,50 @@ def test_strict_tensor_ranks_and_warmup_lifecycle() -> None:
         planner.reset_cuda_graph()
 
 
+def test_query_growth_retains_deterministic_roadmap_and_honors_neighbor_policy() -> None:
+    def feasible(points: torch.Tensor) -> torch.Tensor:
+        # A vertical wall blocks the direct terminal edge but leaves two
+        # deterministic routes around it.  It forces the portable PRM through
+        # its terminal-first then ellipsoidal-growth lifecycle.
+        in_wall = (points[:, 0].abs() < 0.20) & (points[:, 1].abs() < 0.35)
+        return ~in_wall
+
+    cfg = _cfg(feasible=feasible, new_nodes=16, max_nodes=96)
+    cfg.max_path_finding_iterations = 4
+    cfg.exploration_radius = 1.25
+    cfg.neighbors_per_node = 4
+    cfg.neighbors_per_node_growth_factor = 1.5
+    planner = PRMGraphPlanner(cfg)
+    result = planner._find_path_impl(
+        torch.tensor([[-0.9, 0.0]]), torch.tensor([[0.9, 0.0]])
+    )
+    assert result.success.tolist() == [True]
+    assert planner.n_nodes > 0
+    assert result.debug_info["n_nodes"] == planner.n_nodes
+    assert result.debug_info["neighbors_per_node"] >= cfg.neighbors_per_node
+    assert result.plan_waypoints[0].shape[-1] == 2
+
+    snapshot = planner._roadmap_samples.clone()
+    planner.reset_buffer()
+    planner.reset_seed()
+    repeat = PRMGraphPlanner(cfg)
+    repeated = repeat._find_path_impl(
+        torch.tensor([[-0.9, 0.0]]), torch.tensor([[0.9, 0.0]])
+    )
+    assert repeated.success.tolist() == [True]
+    torch.testing.assert_close(snapshot, repeat._roadmap_samples)
+
+
+def test_identical_terminals_are_zero_length_without_roadmap_growth() -> None:
+    planner = PRMGraphPlanner(_cfg(new_nodes=8))
+    position = torch.tensor([[0.2, -0.4]])
+    result = planner._find_path_impl(position, position.clone())
+    assert result.success.tolist() == [True]
+    assert planner.n_nodes == 0
+    assert result.path_length.tolist() == [0.0]
+    torch.testing.assert_close(result.plan_waypoints[0], position.expand(2, -1))
+
+
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
 def test_prm_roadmap_stays_on_mps_without_cpu_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")

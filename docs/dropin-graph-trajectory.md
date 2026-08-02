@@ -6,6 +6,15 @@ trajectory-optimizer import paths without importing CUDA, Warp, or NetworkX.
 through `curobo_metal.ops.graph_planning`; `TrajOptSolver.solve_cspace` routes
 seeded trajectory optimization through `curobo_metal.ops.trajectory`.
 
+The PRM facade now has a terminal-first persistent roadmap lifecycle: an empty
+roadmap tries the direct edge, then deterministically grows feasible
+ellipsoidal samples for an unresolved query up to the configured node and
+iteration limits.  Added samples and their effective neighbor policy persist
+across calls, `reset_buffer` restores the configured policy, and
+`_find_path_impl` is available for the historical un-interpolated planning
+entrypoint.  Near-identical terminals yield a zero-length two-knot plan under
+the configured c-space similarity threshold.
+
 The public enum values, result/config field names, primary method signatures,
 seed generation, interpolation, mutable graph lifecycle, and command-buffer
 lifecycle follow pinned revision
