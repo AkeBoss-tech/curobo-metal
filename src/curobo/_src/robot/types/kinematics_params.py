@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from copy import deepcopy
-from typing import Any
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from xml.etree import ElementTree as ET
 
 import torch
 
+from .collision_geometry import RobotCollisionGeometry
+from .cspace_params import CSpaceParams
+from .joint_limits import JointLimits
+from .joint_types import JointType
 from curobo._src.state.state_joint import JointState
+from curobo._src.types.device_cfg import DeviceCfg
 
 
 @dataclass
@@ -144,8 +151,6 @@ class KinematicsParams:
         ``JointLimits`` view.  Constructing it here keeps mutations of the
         source robot visible and keeps CPU/MPS placement deterministic.
         """
-        from .joint_limits import JointLimits
-
         names = self.joint_names
         by_name = {joint.name: joint for joint in self.robot_cfg.joints}
         joints = [by_name[name] for name in names]
@@ -513,10 +518,46 @@ class KinematicsParams:
             raise ValueError("link_inertias must have shape [num_links, 8]")
 
     def load_cspace_cfg_from_kinematics(self) -> None:
-        if not self.robot_cfg.cspace.joint_names:
-            self.robot_cfg.cspace.joint_names = self.joint_names
+        """Complete an omitted portable C-space record from joint limits.
+
+        The source loader creates a centered retract configuration and unit
+        cost weights when a robot file contains only URDF joint limits.  The
+        portable value model stores those values as Python lists so it can be
+        serialized without CUDA; derive the same values before any solver
+        reads the configuration.  Existing user-authored values are never
+        replaced.
+        """
+        cspace = self.robot_cfg.cspace
+        names = self.joint_names
+        if not cspace.joint_names:
+            cspace.joint_names = names.copy()
+        elif list(cspace.joint_names) != names:
+            raise ValueError("cspace joint_names must match active joint_names")
+
+        limits = self.joint_limits
+        lower, upper = limits.position[0], limits.position[1]
+        # Unbounded URDF joints cannot have a meaningful midpoint.  Zero is
+        # the conservative portable default and agrees with robot loaders
+        # that omit a retract configuration.
+        midpoint = torch.where(
+            torch.isfinite(lower) & torch.isfinite(upper),
+            (lower + upper) / 2,
+            torch.zeros_like(lower),
+        ).detach().cpu().tolist()
+        if not cspace.default_joint_position:
+            cspace.default_joint_position = midpoint
+        if cspace.cspace_distance_weight is None:
+            cspace.cspace_distance_weight = [1.0] * self.num_dof
+        if cspace.null_space_weight is None:
+            cspace.null_space_weight = [1.0] * self.num_dof
+        if cspace.max_acceleration is None:
+            cspace.max_acceleration = [10.0] * self.num_dof
+        if cspace.max_jerk is None:
+            cspace.max_jerk = [500.0] * self.num_dof
 
     def get_sphere_index_from_link_name(self, link_name: str) -> torch.Tensor:
+        if link_name not in self.link_name_to_idx_map:
+            raise ValueError(f"unknown link: {link_name}")
         values = [
             index for index, sphere in enumerate(self.robot_cfg.collision_spheres)
             if sphere.link_name == link_name
@@ -603,7 +644,11 @@ class KinematicsParams:
 
     def disable_link_spheres(self, link_name: str) -> None:
         indices = self.get_sphere_index_from_link_name(link_name)
-        self.link_spheres[:, indices, 3] = -torch.abs(self.link_spheres[:, indices, 3])
+        # V2 uses a fixed negative sentinel rather than merely flipping the
+        # current radius.  Retaining it makes repeated disable/update/enable
+        # cycles deterministic and allows existing collision filters to test
+        # the same convention on CPU and MPS.
+        self.link_spheres[:, indices, 3] = -100.0
 
     def enable_link_spheres(self, link_name: str) -> None:
         indices = self.get_sphere_index_from_link_name(link_name)
@@ -736,15 +781,100 @@ class KinematicsParams:
         include_spheres: bool = False,
         kinematics_parser=None,
     ) -> str:
-        del robot_name, include_spheres
-        parser = kinematics_parser
-        if parser is None and self.robot_cfg.urdf_path:
-            from curobo._src.robot.parser import UrdfRobotParser
-            parser = UrdfRobotParser(self.robot_cfg.urdf_path)
-        if parser is None:
-            raise NotImplementedError("URDF export requires a source URDF parser")
-        value = parser.get_urdf_string()
+        """Serialize the current portable robot value model as URDF XML.
+
+        This deliberately exports mutable mass, inertia, joint, and sphere
+        state instead of copying ``robot_cfg.urdf_path``.  It therefore works
+        for YAML-created models and for models changed after loading.  The
+        return value is XML text (and the same text is written when
+        ``output_path`` is supplied); construction of a ``yourdfpy`` object,
+        visual meshes, USD, and Isaac geometry remain optional external
+        integrations rather than hidden dependencies of the Metal package.
+        ``kinematics_parser`` is accepted for the pinned signature but is not
+        needed for portable structural export.
+        """
+        del kinematics_parser
+        if not isinstance(robot_name, str) or not robot_name:
+            raise ValueError("robot_name must be a non-empty string")
+
+        def number(value: object, label: str) -> str:
+            scalar = float(value)
+            if not torch.isfinite(torch.tensor(scalar)):
+                raise ValueError(f"{label} must be finite for URDF export")
+            return format(scalar, ".17g")
+
+        def vector(values: object, size: int, label: str) -> str:
+            items = list(values)
+            if len(items) != size:
+                raise ValueError(f"{label} must contain {size} values")
+            return " ".join(number(value, label) for value in items)
+
+        root = ET.Element("robot", {"name": robot_name})
+        spheres_by_link: dict[str, list[torch.Tensor]] = {}
+        if include_spheres:
+            spheres = self.link_spheres[0]
+            for index, sphere in enumerate(self.robot_cfg.collision_spheres):
+                value = spheres[index]
+                # Negative radii are the canonical disabled-sphere sentinel.
+                # A URDF sphere cannot represent that state, so omit it.
+                if float(value[3].detach().cpu()) > 0.0:
+                    spheres_by_link.setdefault(sphere.link_name, []).append(value)
+
+        for link in self.robot_cfg.links:
+            element = ET.SubElement(root, "link", {"name": link.name})
+            inertial = ET.SubElement(element, "inertial")
+            ET.SubElement(inertial, "origin", {"xyz": vector(link.com, 3, "link com"), "rpy": "0 0 0"})
+            ET.SubElement(inertial, "mass", {"value": number(link.mass, "link mass")})
+            ixx, iyy, izz, ixy, ixz, iyz = link.inertia
+            ET.SubElement(inertial, "inertia", {
+                "ixx": number(ixx, "link inertia"), "iyy": number(iyy, "link inertia"),
+                "izz": number(izz, "link inertia"), "ixy": number(ixy, "link inertia"),
+                "ixz": number(ixz, "link inertia"), "iyz": number(iyz, "link inertia"),
+            })
+            for sphere in spheres_by_link.get(link.name, []):
+                collision = ET.SubElement(element, "collision")
+                ET.SubElement(collision, "origin", {
+                    "xyz": vector(sphere[:3].detach().cpu().tolist(), 3, "sphere center"),
+                    "rpy": "0 0 0",
+                })
+                geometry = ET.SubElement(collision, "geometry")
+                ET.SubElement(geometry, "sphere", {"radius": number(sphere[3].detach().cpu(), "sphere radius")})
+
+        for joint in self.robot_cfg.joints:
+            joint_type = joint.kind
+            if joint_type not in {"fixed", "revolute", "prismatic"}:
+                raise NotImplementedError(f"URDF export does not support joint kind {joint_type!r}")
+            element = ET.SubElement(root, "joint", {"name": joint.name, "type": joint_type})
+            ET.SubElement(element, "parent", {"link": joint.parent})
+            ET.SubElement(element, "child", {"link": joint.child})
+            ET.SubElement(element, "origin", {
+                "xyz": vector(joint.xyz, 3, "joint origin xyz"),
+                "rpy": vector(joint.rpy, 3, "joint origin rpy"),
+            })
+            if joint_type != "fixed":
+                ET.SubElement(element, "axis", {"xyz": vector(joint.axis, 3, "joint axis")})
+                values = (joint.limits.lower, joint.limits.upper, joint.limits.effort, joint.limits.velocity)
+                if all(torch.isfinite(torch.tensor(float(value))) for value in values):
+                    ET.SubElement(element, "limit", {
+                        "lower": number(values[0], "joint lower limit"),
+                        "upper": number(values[1], "joint upper limit"),
+                        "effort": number(values[2], "joint effort limit"),
+                        "velocity": number(values[3], "joint velocity limit"),
+                    })
+            if joint.mimic_joint is not None:
+                ET.SubElement(element, "mimic", {
+                    "joint": joint.mimic_joint,
+                    "multiplier": number(joint.mimic_multiplier, "mimic multiplier"),
+                    "offset": number(joint.mimic_offset, "mimic offset"),
+                })
+
+        value = ET.tostring(root, encoding="unicode", xml_declaration=True)
         if output_path is not None:
-            from pathlib import Path
             Path(output_path).write_text(value, encoding="utf-8")
         return value
+
+
+__all__ = [
+    "Any", "CSpaceParams", "DeviceCfg", "Dict", "JointLimits", "JointState",
+    "JointType", "KinematicsParams", "List", "Optional", "RobotCollisionGeometry",
+]
