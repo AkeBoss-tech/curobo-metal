@@ -248,6 +248,11 @@ class BlockSparseTSDF:
             max_weight=config.accumulator_w_max, block_size=config.block_size,
         ), device=_device(config.device))
         self._failure_count = 0
+        # A dense map has no allocation queue, but callers use the V2 frame
+        # counters to tell whether an integration pass created new coverage.
+        # Keep a compact observed-mask snapshot at ``prepare_frame`` so those
+        # diagnostics remain meaningful without claiming sparse-pool ABI.
+        self._frame_observed: torch.Tensor | None = None
 
     @classmethod
     def from_native(cls, config: BlockSparseTSDFCfg, native: PerceptionMapper) -> "BlockSparseTSDF":
@@ -265,29 +270,67 @@ class BlockSparseTSDF:
     def grid_center(self) -> torch.Tensor:
         return self.config.origin
 
+    def _observed(self) -> torch.Tensor:
+        """Return the dense dynamic-observation mask as a flattened bool tensor."""
+        return (self.state.weight[0].reshape(-1) > 0)
+
+    def _logical_block_count(self, observed: torch.Tensor | None = None) -> tuple[int, int]:
+        """Return ``(active, capacity)`` in logical block units.
+
+        ``BlockSparseTSDFData`` is intentionally indexed per dense voxel in
+        this backend, while its monitoring API is naturally block-oriented.
+        Computing active *logical* blocks here gives callers stable capacity
+        and utilization measurements independent of the dense tensor layout.
+        """
+        shape = self.config.grid_shape
+        capacity = math.prod((math.ceil(size / self.config.block_size) for size in shape))
+        mask = self._observed() if observed is None else observed
+        if not bool(mask.any().item()):
+            return 0, capacity
+        coordinates = torch.nonzero(mask.reshape(shape), as_tuple=False)
+        keys = torch.div(coordinates, self.config.block_size, rounding_mode="floor")
+        return int(torch.unique(keys, dim=0).shape[0]), capacity
+
+    def _frame_new_indices(self, observed: torch.Tensor) -> torch.Tensor:
+        if self._frame_observed is None:
+            return torch.empty(0, device=observed.device, dtype=torch.int32)
+        baseline = self._frame_observed.to(device=observed.device)
+        if baseline.shape != observed.shape:
+            # This should be impossible without replacing the native mapper,
+            # but avoid reporting arbitrary counters if a caller does so.
+            return torch.empty(0, device=observed.device, dtype=torch.int32)
+        return torch.nonzero(observed & ~baseline, as_tuple=False).flatten().to(torch.int32)
+
     def _data(self) -> BlockSparseTSDFData:
         state = self.state
         n = int(state.tsdf[0].numel())
+        observed = self._observed()
+        new_blocks = self._frame_new_indices(observed)
         coords = torch.stack(torch.meshgrid(
             *[torch.arange(v, device=state.tsdf.device, dtype=torch.int32) for v in self.config.grid_shape],
             indexing="ij",
         ), -1).reshape(-1, 3)
         block_data = torch.stack((state.tsdf[0].reshape(-1), state.weight[0].reshape(-1)), -1).unsqueeze(0)
         empty_int = torch.empty(0, device=state.tsdf.device, dtype=torch.int32)
+        # RGB and learned features are deliberately unsupported, but retain a
+        # correctly-indexable zero accumulator so ``BlockDataView`` queries
+        # over dense flattened voxel ids have source-shaped output.
+        rgb = torch.zeros((n, 1, 4), device=state.tsdf.device, dtype=state.tsdf.dtype)
         return BlockSparseTSDFData(
-            block_data=block_data, block_grid_rgb=torch.zeros((1, 1, 4), device=state.tsdf.device, dtype=state.tsdf.dtype),
+            block_data=block_data, block_grid_rgb=rgb,
             block_coords=coords, block_size=self.config.block_size,
-            decay_factor=torch.ones(1, device=state.tsdf.device, dtype=state.tsdf.dtype),
+            decay_factor=torch.ones(n, device=state.tsdf.device, dtype=state.tsdf.dtype),
             free_count=torch.zeros(1, device=state.tsdf.device, dtype=torch.int32), free_list=empty_int,
-            frustum_flags=torch.zeros(n, device=state.tsdf.device, dtype=torch.bool), grid_shape=self.config.grid_shape,
+            frustum_flags=observed.to(torch.int32), grid_shape=self.config.grid_shape,
             hash_capacity=self.config.hash_capacity, hash_table=empty_int, max_blocks=self.config.max_blocks,
-            new_block_count=torch.zeros(1, device=state.tsdf.device, dtype=torch.int32), new_blocks=empty_int,
+            new_block_count=torch.tensor([len(new_blocks)], device=state.tsdf.device, dtype=torch.int32), new_blocks=new_blocks,
             num_allocated=torch.tensor([n], device=state.tsdf.device, dtype=torch.int32), origin=self.config.origin.to(state.tsdf.device),
             truncation_distance=self.config.truncation_distance, voxel_size=self.config.voxel_size,
             allocation_failures=torch.tensor([self._failure_count], device=state.tsdf.device, dtype=torch.int32),
             block_sums=state.weight[0].reshape(-1), block_to_hash_slot=empty_int, recycle_count=torch.zeros(1, device=state.tsdf.device, dtype=torch.int32),
             static_block_data=torch.empty(0, device=state.tsdf.device, dtype=state.tsdf.dtype),
             static_block_sums=torch.empty(0, device=state.tsdf.device, dtype=state.tsdf.dtype),
+            has_dynamic=self.config.enable_dynamic,
             has_static=self.config.enable_static,
         )
 
@@ -299,12 +342,14 @@ class BlockSparseTSDF:
         raise NotImplementedError("raw Warp BlockSparseTSDF storage is unavailable on CPU/MPS")
 
     def invalidate_cache(self) -> None:
-        # The production dense mapper has no host hash/cache mirror.
-        return None
+        # The production dense mapper has no host hash/cache mirror.  A frame
+        # snapshot however may no longer describe a caller-replaced state.
+        self._frame_observed = None
 
     def reset(self) -> None:
         self._native.reset()
         self.reset_failure_counter()
+        self._frame_observed = None
 
     def export_blocks(self) -> Dict[str, torch.Tensor]:
         state = self.state
@@ -334,17 +379,36 @@ class BlockSparseTSDF:
         self._native.load_state_dict(checkpoint)
 
     def get_stats(self, scan_pool: bool = True, scan_hash: bool = False) -> Dict[str, float]:
-        del scan_pool, scan_hash
-        state = self.state
-        observed = state.weight > 0
+        observed = self._observed()
         observed_voxels = int(observed.sum().item())
-        return {
-            "active_blocks": observed_voxels,
-            "num_allocated": int(state.tsdf[0].numel()),
+        active_blocks, capacity_blocks = self._logical_block_count(observed)
+        # There is no free-list or hash table in a fixed dense tensor.  Keep
+        # the V2 keys so monitoring integrations can run, but represent their
+        # actual portable meaning rather than fabricated hash occupancy.
+        stats: Dict[str, float] = {
+            "num_allocated": active_blocks,
+            "free_count": capacity_blocks - active_blocks,
+            "active_blocks": active_blocks,
+            "holes": 0,
+            "recycled_last": 0,
+            "tombstone_count": 0,
+            "pool_usage_pct": active_blocks / max(capacity_blocks, 1) * 100.0,
+            "fragmentation_pct": 0.0,
+            "hash_load_pct": 0.0,
             "observed_voxels": observed_voxels,
+            "dense_capacity_voxels": int(observed.numel()),
+            "dense_logical_blocks": capacity_blocks,
+            "dense_observed_fraction_pct": observed_voxels / max(int(observed.numel()), 1) * 100.0,
             "allocation_failures": self._failure_count,
             "storage": "dense_portable",
         }
+        if not scan_pool:
+            # The value is exact for dense storage; the flag only controls an
+            # expensive sparse-pool invariant upstream.
+            stats.pop("holes")
+        if scan_hash:
+            stats.update({"hash_empty": 0, "hash_tomb": 0, "hash_occ": 0})
+        return stats
 
     def reset_failure_counter(self) -> None:
         self._failure_count = 0
@@ -363,5 +427,8 @@ class BlockSparseTSDF:
         return self.memory_usage_bytes() / 2**20
 
     def prepare_frame(self) -> None:
-        # Kept for lifecycle compatibility. Dense tensors are allocated at construction.
-        return None
+        # Dense tensors are allocated at construction, but preserving the
+        # observed mask lets ``data.new_blocks`` report first observations made
+        # by the next integration pass.  Clone intentionally owns the
+        # snapshot: callers commonly mutate the returned state in-place.
+        self._frame_observed = self._observed().detach().clone()

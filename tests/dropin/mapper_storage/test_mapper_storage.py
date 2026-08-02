@@ -20,12 +20,52 @@ def test_dense_storage_lifecycle_exports_real_tensors_and_rejects_warp_abi():
     storage.reset()
     storage.import_blocks(blocks)
     assert storage.get_stats()["observed_voxels"] == 1
+    stats = storage.get_stats(scan_hash=True)
+    assert stats["active_blocks"] == 1
+    assert stats["num_allocated"] == 1
+    assert stats["free_count"] == 0
+    assert stats["holes"] == 0
+    assert stats["hash_occ"] == 0
+    assert stats["storage"] == "dense_portable"
     assert storage.data.block_data.shape == (1, 8, 2)
     assert storage.memory_usage_bytes() > 0
     with pytest.raises(NotImplementedError, match="Warp"):
         storage.get_warp_data()
     with pytest.raises(NotImplementedError, match="block-pool"):
         storage.import_blocks({"active_block_coords": torch.empty((0, 3), dtype=torch.int32)})
+
+
+def test_prepare_frame_reports_new_dense_coverage_and_cache_reset_is_explicit():
+    storage = BlockSparseTSDF(BlockSparseTSDFCfg(
+        grid_shape=(4, 4, 4), voxel_size=0.1, block_size=2, origin=torch.zeros(3), device="cpu",
+    ))
+    storage.prepare_frame()
+    storage.state.weight[0, 0, 0, 0] = 1.0
+    storage.state.weight[0, 3, 3, 3] = 1.0
+    data = storage.data
+    assert torch.equal(data.new_blocks.cpu(), torch.tensor([0, 63], dtype=torch.int32))
+    assert data.new_block_count.item() == 2
+    stats = storage.get_stats()
+    assert stats["active_blocks"] == 2
+    assert stats["dense_logical_blocks"] == 8
+    assert stats["pool_usage_pct"] == pytest.approx(25.0)
+
+    storage.invalidate_cache()
+    assert storage.data.new_block_count.item() == 0
+    storage.reset()
+    assert storage.get_stats()["active_blocks"] == 0
+    assert storage.data.frustum_flags.sum().item() == 0
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_dense_storage_frame_diagnostics_run_on_mps_without_cpu_fallback():
+    storage = BlockSparseTSDF(BlockSparseTSDFCfg(
+        grid_shape=(2, 2, 2), voxel_size=0.1, block_size=1, origin=torch.zeros(3), device="mps",
+    ))
+    storage.prepare_frame()
+    storage.state.weight[0, 1, 0, 1] = 1.0
+    assert storage.data.new_blocks.device.type == "mps"
+    assert storage.get_stats()["active_blocks"] == 1
 
 
 def test_occupied_voxel_queries_subvoxel_sampling_and_static_scene_replacement():
