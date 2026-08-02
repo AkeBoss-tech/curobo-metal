@@ -29,7 +29,16 @@ state, c-space solves, and pose solves composed through the portable IK solver.
 Calls requesting more returned plans than supplied seeds increase the number of
 optimized seeds and results are ranked by actual trajectory objective.
 
-Raw Warp kernels, CUDA graph capture/reset, per-seed variable dt, and CUDA
+The portable TrajOpt lifecycle also runs the requested initial, time-optimal,
+and later finetune passes against the production trajectory operator. Each
+accepted pass has a shorter shared knot duration and must remain feasible before
+it replaces a seed. `SolveState`, result timing, goal-set indices, seed ranking,
+and cache statistics are populated for every solve. The cache is ordinary
+shape-keyed CPU/MPS optimizer state and resets on a structural solve-shape
+change; it is not a CUDA graph. Robot-file retract states are materialized on
+the configured device, so fallback-disabled MPS callers retain MPS tensors.
+
+Raw Warp kernels, CUDA graph capture/reset, independent per-seed variable dt, and CUDA
 B-spline-knot kernels remain explicit unavailable boundaries. The historical
 `BSPLINE_KNOTS_CUDA` configuration falls back to endpoint-preserving linear
 portable interpolation; it is not claimed to reproduce the CUDA spline kernel.

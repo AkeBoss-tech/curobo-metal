@@ -6,19 +6,34 @@ import json
 import math
 from pathlib import Path
 import time
+from typing import Dict, Optional, Tuple
 
 import torch
+import torch.autograd.profiler as profiler
 
+import curobo._src.runtime as curobo_runtime
+from curobo._src.geom.collision.collision_scene import SceneCollision
+from curobo._src.rollout.goal_registry import GoalRegistry
+from curobo._src.rollout.metrics import RolloutMetrics
+from curobo._src.rollout.rollout_robot import RobotRollout
+from curobo._src.solver.solve_mode import SolveMode
+from curobo._src.solver.solve_state import SolveState
+from curobo._src.solver.solver_core import SolverCore
 from curobo._src.solver.solver_ik import IKSolver
 from curobo._src.solver.solver_ik_cfg import IKSolverCfg
 from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
 from curobo._src.solver.solver_trajopt_result import TrajOptSolverResult
 from curobo._src.state.state_joint import JointState
-from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.types.control_space import ControlSpace
+from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.logging import log_and_raise, log_warn
+from curobo._src.util.torch_util import get_torch_jit_decorator
 from curobo._src.util.trajectory import (
-    TrajInterpolationType, get_batch_interpolated_trajectory,
+    TrajInterpolationType, calculate_dt_no_clamp, get_batch_interpolated_trajectory,
 )
 from curobo._src.util.trajectory_seed_generator import TrajectorySeedGenerator
+from curobo_metal.optim import ExecutionCache
 from curobo_metal.ops.trajectory import TrajectoryProblem, optimize_trajectory
 
 
@@ -45,6 +60,13 @@ class TrajOptSolver:
         self._joint_position_tracking = True
         self._sample_generator = torch.Generator(device="cpu")
         self._sample_generator.manual_seed(config.random_seed)
+        # Shape-keyed optimizer state remains ordinary CPU/MPS tensor state;
+        # unlike an upstream CUDA graph it never captures a device stream.
+        self._execution_cache = ExecutionCache()
+        self._solve_state: Optional[SolveState] = None
+        self._goal_buffer: Optional[GoalRegistry] = None
+        self._last_trace: Dict[str, object] = {}
+        self._destroyed = False
         # Pose planning is a composition of the portable IK and c-space
         # trajectory solvers.  Keeping it private avoids changing the existing
         # configuration model while making the upstream ``solve_pose`` entry
@@ -118,7 +140,11 @@ class TrajOptSolver:
         finetune_iters=None,
         finetune_dt_scale: float = 0.55,
     ):
-        del finetune_attempts, time_optimal_iters, finetune_iters, finetune_dt_scale
+        self._assert_live()
+        self._validate_solve_options(
+            finetune_attempts, initial_iters, time_optimal_iters,
+            finetune_iters, finetune_dt_scale,
+        )
         count = self.config.num_seeds if num_seeds is None else num_seeds
         if isinstance(count, bool) or not isinstance(count, int) or count < 1:
             raise ValueError("num_seeds must be a positive integer")
@@ -148,6 +174,7 @@ class TrajOptSolver:
                 f"solve_cspace batch_size={start.shape[0]} exceeds config.max_batch_size="
                 f"{self.config.max_batch_size}"
             )
+        self._set_solve_state(start.shape[0], count, goalset=1)
         solve_dt = self._resolve_dt(dt, start.shape[0], count, start)
         if seed_traj is not None:
             seeds = seed_traj.position if isinstance(seed_traj, JointState) else seed_traj
@@ -157,40 +184,86 @@ class TrajOptSolver:
                 start, goal[:, None].expand(-1, count, -1), count
             )
         begin = time.perf_counter()
-        result = optimize_trajectory(TrajectoryProblem(
-            self._chain, start, goal, self._lower, self._upper,
-            self.config.action_horizon, solve_dt,
-            seeds=seeds,
-            max_iterations=self.config.max_iterations if initial_iters is None else initial_iters,
-            endpoint_tolerance=self.config.position_tolerance,
-            optimizer=self.config.optimizer_name,
-        ))
+        iteration_count = self.config.max_iterations if initial_iters is None else initial_iters
+        result = self._optimize(start, goal, seeds, solve_dt, iteration_count)
         trajectory = result.trajectories
         if trajectory.ndim == 3:
             trajectory = trajectory[None]
-        objective = result.objective
-        if objective.ndim == 1:
-            objective = objective[None]
+        objective = result.objective[None] if result.objective.ndim == 1 else result.objective
+        success = result.success[None] if result.success.ndim == 1 else result.success
+        endpoint_error = result.endpoint_error[None] if result.endpoint_error.ndim == 1 else result.endpoint_error
+        violation = (result.maximum_limit_violation[None]
+                     if result.maximum_limit_violation.ndim == 1
+                     else result.maximum_limit_violation)
+
+        # Match V2's time-optimal lifecycle with portable, ordinary PyTorch
+        # solves.  A candidate replaces a seed only when it remains feasible,
+        # so a faster invalid seed can never displace a working plan.
+        trace = [{"attempt": 0, "dt": solve_dt, "iterations": iteration_count,
+                  "accepted": int(success.sum().item())}]
+        best_dt = solve_dt
+        for attempt in range(1, finetune_attempts + 1):
+            candidate_dt = min(
+                self.config.maximum_trajectory_dt,
+                max(self.config.minimum_trajectory_dt, best_dt * finetune_dt_scale),
+            )
+            if candidate_dt >= best_dt:
+                break
+            candidate_iterations = (
+                time_optimal_iters if attempt == 1 and time_optimal_iters is not None
+                else finetune_iters if attempt > 1 and finetune_iters is not None
+                else self.config.max_iterations
+            )
+            candidate = self._optimize(start, goal, trajectory, candidate_dt, candidate_iterations)
+            candidate_trajectory = (
+                candidate.trajectories[None]
+                if candidate.trajectories.ndim == 3 else candidate.trajectories
+            )
+            candidate_objective = (
+                candidate.objective[None] if candidate.objective.ndim == 1 else candidate.objective
+            )
+            candidate_success = (
+                candidate.success[None] if candidate.success.ndim == 1 else candidate.success
+            )
+            candidate_endpoint = (
+                candidate.endpoint_error[None]
+                if candidate.endpoint_error.ndim == 1 else candidate.endpoint_error
+            )
+            candidate_violation = (
+                candidate.maximum_limit_violation[None]
+                if candidate.maximum_limit_violation.ndim == 1
+                else candidate.maximum_limit_violation
+            )
+            replace = candidate_success & (~success | (candidate_dt < best_dt))
+            trajectory = torch.where(replace[..., None, None], candidate_trajectory, trajectory)
+            objective = torch.where(replace, candidate_objective, objective)
+            success = torch.where(replace, candidate_success, success)
+            endpoint_error = torch.where(replace, candidate_endpoint, endpoint_error)
+            violation = torch.where(replace, candidate_violation, violation)
+            accepted = int(replace.sum().item())
+            trace.append({"attempt": attempt, "dt": candidate_dt,
+                          "iterations": candidate_iterations, "accepted": accepted})
+            if accepted:
+                best_dt = candidate_dt
+            else:
+                break
         rank = objective.argsort(dim=-1)
         chosen_index = rank[:, :return_seeds]
         chosen = self._gather_seed_tensor(trajectory, chosen_index)
-        success = result.success if result.success.ndim == 2 else result.success[None]
-        endpoint_error = result.endpoint_error if result.endpoint_error.ndim == 2 else result.endpoint_error[None]
-        violation = (result.maximum_limit_violation if result.maximum_limit_violation.ndim == 2
-                     else result.maximum_limit_violation[None])
         chosen_success = self._gather_seed_tensor(success, chosen_index)
         chosen_error = self._gather_seed_tensor(endpoint_error, chosen_index)
         chosen_violation = self._gather_seed_tensor(violation, chosen_index)
+        selected_dt = best_dt
         state = JointState.from_position(
             chosen, self.joint_names
-        ).finite_difference(solve_dt)
-        state.dt = chosen.new_full(chosen.shape[:2], solve_dt)
+        ).finite_difference(selected_dt)
+        state.dt = chosen.new_full(chosen.shape[:2], selected_dt)
         state.knot = chosen
         state.knot_dt = state.dt
         dense_state, last_tstep = self.get_interpolated_trajectory(
             JointState.from_position(
                 chosen.reshape(-1, chosen.shape[-2], chosen.shape[-1]), self.joint_names
-            ).finite_difference(solve_dt)
+            ).finite_difference(selected_dt)
         )
         interpolated = dense_state.position.reshape(
             chosen.shape[0], chosen.shape[1], dense_state.position.shape[-2], chosen.shape[-1]
@@ -229,10 +302,23 @@ class TrajOptSolver:
             total_cost_reshaped=objective,
             interpolated_trajectory=dense_result,
             interpolated_last_tstep=last_tstep.view(chosen.shape[:2]),
-            maximum_trajectory_dt=start.new_full((start.shape[0],), solve_dt),
-            minimum_trajectory_dt=start.new_full((start.shape[0],), solve_dt),
+            maximum_trajectory_dt=start.new_full((start.shape[0],), selected_dt),
+            minimum_trajectory_dt=start.new_full((start.shape[0],), selected_dt),
         )
+        output.goalset_index = torch.zeros_like(chosen_index)
+        output.debug_info.update({
+            "backend": "portable",
+            "optimizer": self.config.optimizer_name,
+            "finetune": trace,
+            "execution_cache": {
+                "generation": self._execution_cache.generation,
+                "hits": self._execution_cache.hits,
+                "misses": self._execution_cache.misses,
+                "size": self._execution_cache.size,
+            },
+        })
         output.process_metrics_and_rank_seeds()
+        self._last_trace = output.debug_info
         return output
 
     def solve_pose(
@@ -258,7 +344,14 @@ class TrajOptSolver:
         the best IK seed becomes the c-space endpoint.  CUDA graph execution is
         deliberately not emulated; both stages retain normal CPU/MPS autograd.
         """
-        del use_implicit_goal
+        self._assert_live()
+        if not isinstance(current_state, JointState):
+            raise TypeError("current_state must be a JointState")
+        if use_implicit_goal and goal_state is None:
+            raise NotImplementedError(
+                "implicit pose goals require cuRobo CUDA rollout buffers; provide goal_state "
+                "or use the portable IK-composed pose path"
+            )
         if goal_state is None:
             ik_result = self._pose_ik.solve_pose(
                 goal_tool_poses,
@@ -271,6 +364,11 @@ class TrajOptSolver:
             )
         else:
             ik_result = None
+        if seed_config is not None and seed_traj is None:
+            seed_traj = self._trajectory_from_seed_config(
+                current_state, seed_config,
+                self.config.num_seeds if num_seeds is None else max(num_seeds, return_seeds),
+            )
         result = self.solve_cspace(
             goal_state,
             current_state,
@@ -360,10 +458,19 @@ class TrajOptSolver:
 
     def reset_seed(self):
         self._sample_generator.manual_seed(self.config.random_seed)
+        self._seed_generator = TrajectorySeedGenerator(
+            self.config.action_horizon, self._chain.dof, self.config.device_cfg
+        )
         return None
-    def reset_shape(self): return None
+    def reset_shape(self):
+        self._execution_cache.reset()
+        self._solve_state = None
+        self._goal_buffer = None
+        return None
     def destroy(self):
         self._pose_ik.destroy()
+        self.reset_shape()
+        self._destroyed = True
     def reset_cuda_graph(self):
         raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
 
@@ -374,13 +481,19 @@ class TrajOptSolver:
     @property
     def horizon(self): return self.config.action_horizon
     @property
-    def opt_dim(self): return self.action_dim
+    def opt_dim(self): return self.action_dim * self.action_horizon
     @property
     def joint_names(self): return list(self.config.robot_config.kinematics.joint_names)
     @property
     def tool_frames(self): return list(self.config.robot_config.kinematics.tool_frames)
     @property
-    def default_joint_position(self): return self.config.robot_config.kinematics.retract_config
+    def default_joint_position(self):
+        # Robot configuration files are host-side data.  Materialize their
+        # retract state on the solver device rather than leaking a CPU tensor
+        # into an otherwise MPS planning request.
+        return self.config.device_cfg.to_device(
+            self.config.robot_config.kinematics.retract_config
+        )
     @property
     def default_joint_state(self):
         return JointState.from_position(self.default_joint_position, self.joint_names)
@@ -399,7 +512,7 @@ class TrajOptSolver:
     scene_collision_checker = property(lambda self: self._scene_collision_checker)
     goal_registry_manager = property(lambda self: None)
     seed_manager = property(lambda self: self._seed_generator)
-    solve_state = property(lambda self: None)
+    solve_state = property(lambda self: self._solve_state)
     kinematics = property(lambda self: self._chain)
 
     def compute_kinematics(self, state):
@@ -412,13 +525,19 @@ class TrajOptSolver:
         del kwargs
         return []
     def enable_tool_pose_tracking(self, tool_frames=None):
-        del tool_frames
+        self._validate_tool_frames(tool_frames)
+        self._tool_pose_tracking = True
         return None
     def disable_tool_pose_tracking(self, tool_frames=None):
-        del tool_frames
+        self._validate_tool_frames(tool_frames)
+        self._tool_pose_tracking = False
         return None
-    def enable_joint_position_tracking(self): return None
-    def disable_joint_position_tracking(self): return None
+    def enable_joint_position_tracking(self):
+        self._joint_position_tracking = True
+        return None
+    def disable_joint_position_tracking(self):
+        self._joint_position_tracking = False
+        return None
     def update_tool_pose_criteria(self, tool_pose_criteria):
         self.config.tool_pose_criteria = dict(tool_pose_criteria)
     def update_link_inertial(self, link_name, mass=None, com=None, inertia=None):
@@ -498,6 +617,85 @@ class TrajOptSolver:
         while index.ndim < value.ndim:
             index = index.unsqueeze(-1)
         return value.gather(1, index.expand(*index.shape[:2], *value.shape[2:]))
+
+    def _assert_live(self) -> None:
+        if self._destroyed:
+            raise RuntimeError("TrajOptSolver has been destroyed")
+
+    def _set_solve_state(self, batch_size: int, num_seeds: int, *, goalset: int) -> None:
+        if batch_size == 1:
+            mode = SolveMode.SINGLE
+        elif self.config.multi_env:
+            mode = SolveMode.MULTI_ENV
+        else:
+            mode = SolveMode.BATCH
+        solve_state = SolveState(
+            mode, batch_size, batch_size if self.config.multi_env else 1,
+            num_goalset=goalset, num_trajopt_seeds=num_seeds,
+            tool_frames=self.tool_frames,
+        )
+        structural = self._solve_state is None or any(
+            getattr(self._solve_state, name, None) != getattr(solve_state, name, None)
+            for name in ("solve_type", "batch_size", "num_envs", "num_goalset", "num_trajopt_seeds")
+        )
+        self._solve_state = solve_state
+        if structural:
+            self._execution_cache.reset()
+
+    def _optimize(self, start, goal, seeds, dt, max_iterations):
+        return optimize_trajectory(TrajectoryProblem(
+            self._chain, start, goal, self._lower, self._upper,
+            self.config.action_horizon, dt,
+            seeds=seeds,
+            max_iterations=max_iterations,
+            endpoint_tolerance=self.config.position_tolerance,
+            optimizer=self.config.optimizer_name,
+            optimizer_cache=self._execution_cache,
+            warm_start=True,
+        ))
+
+    @staticmethod
+    def _validate_solve_options(
+        finetune_attempts, initial_iters, time_optimal_iters, finetune_iters, finetune_dt_scale,
+    ) -> None:
+        if (isinstance(finetune_attempts, bool) or not isinstance(finetune_attempts, int)
+                or finetune_attempts < 0):
+            raise ValueError("finetune_attempts must be a nonnegative integer")
+        for name, value in (("initial_iters", initial_iters),
+                            ("time_optimal_iters", time_optimal_iters),
+                            ("finetune_iters", finetune_iters)):
+            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 1):
+                raise ValueError(f"{name} must be a positive integer or None")
+        if not isinstance(finetune_dt_scale, (float, int)) or isinstance(finetune_dt_scale, bool):
+            raise TypeError("finetune_dt_scale must be a finite float in (0, 1]")
+        if not math.isfinite(float(finetune_dt_scale)) or not 0 < float(finetune_dt_scale) <= 1:
+            raise ValueError("finetune_dt_scale must be finite and in (0, 1]")
+
+    def _trajectory_from_seed_config(self, current_state, seed_config, count):
+        value = seed_config.position if isinstance(seed_config, JointState) else seed_config
+        if not isinstance(value, torch.Tensor):
+            raise TypeError("seed_config must be a JointState or tensor")
+        current = self.get_active_js(current_state).position
+        if current.ndim == 1:
+            current = current[None]
+        if value.ndim == 2:
+            if value.shape != current.shape:
+                raise ValueError("seed_config must have shape [batch, dof] or [batch, seed, dof]")
+            value = value[:, None]
+        if value.ndim != 3 or value.shape[0] != current.shape[0] or value.shape[-1] != self.action_dim:
+            raise ValueError("seed_config must have shape [batch, dof] or [batch, seed, dof]")
+        if value.shape[1] < count:
+            value = value.repeat(1, math.ceil(count / value.shape[1]), 1)
+        return self._seed_generator.generate_interpolated_seeds(
+            current, value[:, :count].to(device=current.device, dtype=current.dtype), count
+        )
+
+    def _validate_tool_frames(self, tool_frames) -> None:
+        if tool_frames is None:
+            return
+        invalid = set(tool_frames).difference(self.tool_frames)
+        if invalid:
+            raise ValueError(f"unknown tool frame(s): {sorted(invalid)}")
 
 
 __all__ = ["TrajOptSolver"]
