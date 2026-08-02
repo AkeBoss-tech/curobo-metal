@@ -26,3 +26,11 @@ projection, callback-owned distribution updates, best/sample/mean extraction,
 partial reset, warm-start shifting, batch resize, and debug traces.  It uses
 ordinary PyTorch CPU/MPS tensors.  CUDA graph capture, Warp samplers, and the
 packed CUDA rollout-result ABI remain deliberate unsupported boundaries.
+
+`GradientOptCore` likewise provides a concrete eager CPU/MPS lifecycle for
+owner-supplied L-BFGS, LSR1, and conjugate-gradient direction callbacks.  It
+evaluates autograd costs and gradients, performs deterministic finite-candidate
+per-problem line selection, tracks best finite actions and convergence, honors
+partial reinitialization, resize and shift hooks, and records immutable debug
+states.  CUDA Graph executors and packed CUDA rollout buffers remain explicit
+unsupported boundaries.
