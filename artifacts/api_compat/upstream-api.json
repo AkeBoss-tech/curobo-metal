@@ -71576,9 +71576,9 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 1,
         "path": "curobo/_src/robot/types/kinematics_params.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 14,
         "status": "partial"
       },
       "name": "curobo._src.robot.types.kinematics_params",
