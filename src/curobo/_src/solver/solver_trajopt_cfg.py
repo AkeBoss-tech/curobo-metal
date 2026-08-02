@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Dict, List, Optional, Type, Union
 
 from curobo._src.types.device_cfg import DeviceCfg
@@ -35,6 +36,39 @@ class TrajOptSolverCfg:
     use_cuda_graph_value: bool = True
     random_seed_value: int = 123
     store_debug_value: bool = False
+
+    def __post_init__(self) -> None:
+        """Reject configurations the portable execution path cannot make meaningful.
+
+        Upstream catches these while assembling its CUDA rollout stack.  Keeping
+        the validation on the value object gives callers the same early failure
+        when they construct ``TrajOptSolverCfg`` directly instead of using
+        :meth:`create`.
+        """
+        integer_values = {
+            "max_batch_size": self.max_batch_size,
+            "max_goalset": self.max_goalset,
+            "num_seeds": self.num_seeds,
+            "action_horizon": self.action_horizon,
+            "max_iterations": self.max_iterations,
+            "interpolation_buffer_size": self.interpolation_buffer_size,
+        }
+        if any(isinstance(value, bool) or not isinstance(value, int) or value < 1
+               for value in integer_values.values()):
+            raise ValueError("TrajOpt integer capacities and iteration counts must be positive")
+        scalar_values = {
+            "position_tolerance": self.position_tolerance,
+            "orientation_tolerance": self.orientation_tolerance,
+            "minimum_trajectory_dt": self.minimum_trajectory_dt,
+            "maximum_trajectory_dt": self.maximum_trajectory_dt,
+            "interpolation_dt": self.interpolation_dt,
+        }
+        if any(not math.isfinite(value) or value <= 0 for value in scalar_values.values()):
+            raise ValueError("TrajOpt tolerances and time steps must be finite and positive")
+        if self.minimum_trajectory_dt > self.maximum_trajectory_dt:
+            raise ValueError("minimum_trajectory_dt must not exceed maximum_trajectory_dt")
+        if self.optimizer_name not in {"adam", "lbfgs", "particle", "es"}:
+            raise ValueError("optimizer_name must be 'adam', 'lbfgs', 'particle', or 'es'")
 
     @property
     def device_cfg(self): return self.robot_config.device_cfg

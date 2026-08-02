@@ -13,8 +13,16 @@ lifecycle follow pinned revision
 
 The historical names `LINEAR_CUDA` and
 `get_cuda_linear_interpolation` execute portable PyTorch operations on CPU or
-MPS. Raw Warp kernels, CUDA graph capture/reset, and CUDA B-spline-knot kernels
-raise `NotImplementedError`. `solve_pose` requires an explicit `goal_state`;
-pose-to-joint conversion remains the responsibility of the IK compatibility
-layer. Sampled edge checks are deterministic but are not a continuous
-collision certificate.
+MPS. `TrajOptSolver` supports deterministic seed preparation/ranking, active
+joint-name reduction, bounded c-space sampling, runtime tool-pose tracking,
+finite-difference retiming, dense interpolation limits, serializable debug
+state, c-space solves, and pose solves composed through the portable IK solver.
+Calls requesting more returned plans than supplied seeds increase the number of
+optimized seeds and results are ranked by actual trajectory objective.
+
+Raw Warp kernels, CUDA graph capture/reset, per-seed variable dt, and CUDA
+B-spline-knot kernels remain explicit unavailable boundaries. The historical
+`BSPLINE_KNOTS_CUDA` configuration falls back to endpoint-preserving linear
+portable interpolation; it is not claimed to reproduce the CUDA spline kernel.
+Sampled edge checks are deterministic but are not a continuous collision
+certificate.
