@@ -12,7 +12,7 @@ operators.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 import math
 
 import torch
@@ -21,6 +21,23 @@ from curobo._src.types.device_cfg import DeviceCfg
 
 
 _INTEGER_DTYPES = {torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8}
+
+
+def _copy_or_clone_tensor(
+    source: Optional[torch.Tensor], target: Optional[torch.Tensor]
+) -> Optional[torch.Tensor]:
+    """Preserve a caller buffer only when copy semantics are well-defined."""
+    if source is None:
+        return target
+    if (
+        target is not None
+        and target.shape == source.shape
+        and target.dtype == source.dtype
+        and target.device == source.device
+    ):
+        target.copy_(source)
+        return target
+    return source.clone()
 
 
 @dataclass
@@ -83,9 +100,159 @@ class SelfCollisionKinematicsCfg:
             raise ValueError("collision_pairs must not contain duplicate pairs")
 
     @property
+    def device(self) -> torch.device:
+        """Device that owns this configuration's materialized tensors.
+
+        A configuration without tensors is deliberately device-neutral.  CPU
+        is returned for that empty value so callers can safely create a
+        zero-sphere cost before selecting a planning device.
+        """
+        if self.collision_pairs is not None:
+            return self.collision_pairs.device
+        if self.sphere_padding is not None:
+            return self.sphere_padding.device
+        return torch.device("cpu")
+
+    @property
+    def num_collision_checks(self) -> int:
+        """Number of enabled, canonical sphere pairs."""
+        return 0 if self.collision_pairs is None else int(self.collision_pairs.shape[0])
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether no self-collision pair is enabled."""
+        return self.num_collision_checks == 0
+
+    def pair_mask(self) -> torch.Tensor:
+        """Return a symmetric boolean ``[num_spheres, num_spheres]`` mask.
+
+        This is a portable inspection utility, not a replacement for the
+        compact pair list passed to production collision costs.  It preserves
+        the empty and device-residency semantics of the configuration.
+        """
+        mask = torch.zeros(
+            (self.num_spheres, self.num_spheres), dtype=torch.bool, device=self.device
+        )
+        if self.collision_pairs is None or self.collision_pairs.numel() == 0:
+            return mask
+        pairs = self.collision_pairs.to(dtype=torch.long)
+        mask[pairs[:, 0], pairs[:, 1]] = True
+        mask[pairs[:, 1], pairs[:, 0]] = True
+        return mask
+
+    def clone(self) -> "SelfCollisionKinematicsCfg":
+        """Return an independent configuration without changing pair order."""
+        return type(self)(
+            num_spheres=self.num_spheres,
+            sphere_padding=None if self.sphere_padding is None else self.sphere_padding.clone(),
+            collision_pairs=None if self.collision_pairs is None else self.collision_pairs.clone(),
+            _num_checks_per_thread_large_collision_pairs=self._num_checks_per_thread_large_collision_pairs,
+            _max_threads_per_block_large_collision_pairs=self._max_threads_per_block_large_collision_pairs,
+            _max_threads_per_block_small_collision_pairs=self._max_threads_per_block_small_collision_pairs,
+            _num_checks_per_thread_small_collision_pairs=self._num_checks_per_thread_small_collision_pairs,
+        )
+
+    def to(self, target: Union[DeviceCfg, torch.device, str]) -> "SelfCollisionKinematicsCfg":
+        """Move an independent configuration to a CPU/MPS device policy.
+
+        Pair indices remain integral while a :class:`DeviceCfg` supplies the
+        floating dtype for padding.  This intentionally does not expose
+        CUDA/Warp launch buffers.
+        """
+        if isinstance(target, DeviceCfg):
+            device, padding_dtype = target.device, target.dtype
+        else:
+            device = torch.device(target)
+            padding_dtype = None if self.sphere_padding is None else self.sphere_padding.dtype
+        padding = self.sphere_padding
+        if padding is not None:
+            padding = padding.to(device=device, dtype=padding_dtype).clone()
+        pairs = self.collision_pairs
+        if pairs is not None:
+            pairs = pairs.to(device=device).clone()
+        result = self.clone()
+        result.sphere_padding = padding
+        result.collision_pairs = pairs
+        result.__post_init__()
+        return result
+
+    def copy_(self, source: "SelfCollisionKinematicsCfg") -> "SelfCollisionKinematicsCfg":
+        """Copy ``source`` while retaining compatible caller-owned buffers.
+
+        Shape-changing replacements are cloned atomically after source
+        validation; matching tensors preserve their identity, which is useful
+        for persistent cost buffers.
+        """
+        if not isinstance(source, SelfCollisionKinematicsCfg):
+            raise TypeError("source must be a SelfCollisionKinematicsCfg")
+        source.__post_init__()
+        padding = _copy_or_clone_tensor(source.sphere_padding, self.sphere_padding)
+        pairs = _copy_or_clone_tensor(source.collision_pairs, self.collision_pairs)
+        self.num_spheres = source.num_spheres
+        self.sphere_padding = padding
+        self.collision_pairs = pairs
+        self._num_checks_per_thread_large_collision_pairs = source._num_checks_per_thread_large_collision_pairs
+        self._max_threads_per_block_large_collision_pairs = source._max_threads_per_block_large_collision_pairs
+        self._max_threads_per_block_small_collision_pairs = source._max_threads_per_block_small_collision_pairs
+        self._num_checks_per_thread_small_collision_pairs = source._num_checks_per_thread_small_collision_pairs
+        self.__post_init__()
+        return self
+
+    def reindex_spheres(self, sphere_indices: Sequence[int] | torch.Tensor) -> "SelfCollisionKinematicsCfg":
+        """Return the configuration for a reordered or reduced sphere set.
+
+        ``sphere_indices`` uses *new-to-old* indexing, matching PyTorch
+        ``index_select``.  Pairs whose endpoint was removed are discarded;
+        surviving pairs are remapped and recanonicalized deterministically.
+        """
+        if isinstance(sphere_indices, torch.Tensor):
+            if sphere_indices.ndim != 1 or sphere_indices.dtype not in _INTEGER_DTYPES:
+                raise TypeError("sphere_indices must be a rank-1 integer tensor")
+            if sphere_indices.device != self.device:
+                raise ValueError("sphere_indices must be on the configuration device")
+            index = sphere_indices.to(dtype=torch.long)
+        else:
+            index = torch.as_tensor(sphere_indices, dtype=torch.long, device=self.device)
+            if index.ndim != 1:
+                raise ValueError("sphere_indices must be rank-1")
+        if index.numel() == 0:
+            return type(self)(
+                num_spheres=0,
+                sphere_padding=None if self.sphere_padding is None else self.sphere_padding[:0].clone(),
+                collision_pairs=(
+                    None
+                    if self.collision_pairs is None
+                    else torch.empty((0, 2), dtype=self.collision_pairs.dtype, device=self.device)
+                ),
+            )
+        if bool(((index < 0) | (index >= self.num_spheres)).any().item()):
+            raise ValueError("sphere_indices contains an out-of-range sphere index")
+        if torch.unique(index).numel() != index.numel():
+            raise ValueError("sphere_indices must not contain duplicates")
+        remap = torch.full((self.num_spheres,), -1, dtype=torch.long, device=self.device)
+        remap[index] = torch.arange(index.numel(), dtype=torch.long, device=self.device)
+        pairs = self.collision_pairs
+        if pairs is None:
+            remapped_pairs = None
+        else:
+            remapped_pairs = remap[pairs.to(dtype=torch.long)]
+            keep = (remapped_pairs >= 0).all(dim=1)
+            remapped_pairs = remapped_pairs[keep]
+            remapped_pairs = torch.sort(remapped_pairs, dim=1).values
+            remapped_pairs = remapped_pairs.to(dtype=pairs.dtype).contiguous()
+        padding = None if self.sphere_padding is None else self.sphere_padding.index_select(0, index).clone()
+        return type(self)(
+            num_spheres=int(index.numel()), sphere_padding=padding, collision_pairs=remapped_pairs,
+            _num_checks_per_thread_large_collision_pairs=self._num_checks_per_thread_large_collision_pairs,
+            _max_threads_per_block_large_collision_pairs=self._max_threads_per_block_large_collision_pairs,
+            _max_threads_per_block_small_collision_pairs=self._max_threads_per_block_small_collision_pairs,
+            _num_checks_per_thread_small_collision_pairs=self._num_checks_per_thread_small_collision_pairs,
+        )
+
+    @property
     def num_checks_per_thread(self) -> int:
         """Pinned V2 launch heuristic, exposed for configuration parity."""
-        pair_count = 0 if self.collision_pairs is None else int(self.collision_pairs.shape[0])
+        pair_count = self.num_collision_checks
         return (
             self._num_checks_per_thread_large_collision_pairs
             if pair_count > 1000
@@ -95,7 +262,7 @@ class SelfCollisionKinematicsCfg:
     @property
     def max_threads_per_block(self) -> int:
         """Pinned V2 launch heuristic, exposed for configuration parity."""
-        pair_count = 0 if self.collision_pairs is None else int(self.collision_pairs.shape[0])
+        pair_count = self.num_collision_checks
         return (
             self._max_threads_per_block_large_collision_pairs
             if pair_count > 1000
@@ -105,7 +272,7 @@ class SelfCollisionKinematicsCfg:
     @property
     def num_blocks_per_batch(self) -> int:
         """Number of V2-style reduction blocks needed for the configured pairs."""
-        pair_count = 0 if self.collision_pairs is None else int(self.collision_pairs.shape[0])
+        pair_count = self.num_collision_checks
         if pair_count == 0:
             return 0
         return math.ceil(pair_count / (self.num_checks_per_thread * self.max_threads_per_block))

@@ -70,6 +70,10 @@ class JointLimits:
     @staticmethod
     def from_data_dict(data: Dict, device_cfg: DeviceCfg = DeviceCfg()) -> "JointLimits":
         """Create limits from a serialized record on ``device_cfg``'s device."""
+        if not isinstance(data, dict):
+            raise TypeError("joint limit data must be a dictionary")
+        if not isinstance(device_cfg, DeviceCfg):
+            raise TypeError("device_cfg must be a DeviceCfg")
         required = ("joint_names", *JointLimits._LIMIT_FIELDS)
         missing = [name for name in required if name not in data]
         if missing:
@@ -116,13 +120,10 @@ class JointLimits:
             raise TypeError("new_jl must be a JointLimits")
         if self.device_cfg != new_jl.device_cfg:
             raise ValueError("copy_ requires matching device_cfg values")
-        if self.position.shape != new_jl.position.shape:
-            raise ValueError("joint limit shapes must match for copy_")
+        new_jl.validate_shape(len(new_jl.joint_names))
         self.joint_names = new_jl.joint_names.copy()
         for name in self._LIMIT_FIELDS:
-            target = getattr(self, name)
-            source = getattr(new_jl, name)
-            target.copy_(source)
+            setattr(self, name, copy_or_clone(getattr(new_jl, name), getattr(self, name)))
         self.effort = copy_or_clone(new_jl.effort, self.effort)
         return self
 
@@ -162,6 +163,74 @@ class JointLimits:
         selected = self.reindex(joint_names)
         return self.copy_(selected)
 
+    @property
+    def dof(self) -> int:
+        """Number of named degrees of freedom represented by this record."""
+        return len(self.joint_names)
+
+    def as_dict(self, *, clone: bool = False) -> Dict[str, object]:
+        """Return the public serialized layout without moving tensors to CPU.
+
+        ``clone=True`` is appropriate for mutable configuration snapshots;
+        the default intentionally retains tensor references for efficient
+        read-only solver/config plumbing on CPU and MPS.
+        """
+        values: Dict[str, object] = {"joint_names": self.joint_names.copy()}
+        for name in self._ALL_LIMIT_FIELDS:
+            value = getattr(self, name)
+            values[name] = None if value is None else (value.clone() if clone else value)
+        return values
+
+    def lower_limits(self, limit_type: str = "position") -> torch.Tensor:
+        """Return the lower row for a named limit family."""
+        return self._limit_tensor(limit_type)[0]
+
+    def upper_limits(self, limit_type: str = "position") -> torch.Tensor:
+        """Return the upper row for a named limit family."""
+        return self._limit_tensor(limit_type)[1]
+
+    def clamp_position(self, position: torch.Tensor) -> torch.Tensor:
+        """Differentiably clamp positions along the final named-DOF axis."""
+        if not isinstance(position, torch.Tensor):
+            raise TypeError("position must be a torch.Tensor")
+        if position.ndim == 0 or position.shape[-1] != self.dof:
+            raise ValueError(f"position must end in the {self.dof} configured joint values")
+        if not self.device_cfg.is_same_torch_device(position.device):
+            raise ValueError("position must be on device_cfg.device")
+        if not position.dtype.is_floating_point:
+            raise TypeError("position must have a floating dtype")
+        lower = self.position[0].to(dtype=position.dtype)
+        upper = self.position[1].to(dtype=position.dtype)
+        return torch.maximum(torch.minimum(position, upper), lower)
+
+    def with_position_margin(self, margin: float | Sequence[float] | torch.Tensor) -> "JointLimits":
+        """Return a safety-shrunk copy of position bounds.
+
+        The margin may be scalar or per-DOF.  Other limit families remain
+        unchanged, so this is safe to use for collision clearance policies
+        without accidentally rescaling dynamics constraints.
+        """
+        value = self.device_cfg.to_device(margin)
+        if value.ndim == 0:
+            value = value.expand(self.dof)
+        if value.ndim != 1 or value.numel() != self.dof:
+            raise ValueError("position margin must be scalar or contain one value per joint")
+        if not bool(torch.isfinite(value).all().item()) or bool((value < 0).any().item()):
+            raise ValueError("position margin must be finite and non-negative")
+        if bool((2 * value >= self.position[1] - self.position[0]).any().item()):
+            raise ValueError("position margin collapses one or more joint ranges")
+        result = self.clone()
+        result.position = torch.stack((self.position[0] + value, self.position[1] - value))
+        return result
+
+    def detach(self) -> "JointLimits":
+        """Return an independent record detached from any autograd graph."""
+        return JointLimits(
+            self.joint_names.copy(), self.position.detach().clone(), self.velocity.detach().clone(),
+            self.acceleration.detach().clone(), self.jerk.detach().clone(),
+            None if self.effort is None else self.effort.detach().clone(), self.device_cfg,
+        )
+
     def merge(self, other: "JointLimits", *, overwrite: bool = False) -> "JointLimits":
         """Return the ordered union of two named limit records.
 
@@ -197,6 +266,15 @@ class JointLimits:
         if unknown:
             raise ValueError(f"joint_names for reindex contain unknown joints: {unknown}")
         return requested
+
+    def _limit_tensor(self, limit_type: str) -> torch.Tensor:
+        if limit_type not in self._ALL_LIMIT_FIELDS:
+            allowed = ", ".join(self._ALL_LIMIT_FIELDS)
+            raise ValueError(f"unknown limit_type {limit_type!r}; expected one of {allowed}")
+        value = getattr(self, limit_type)
+        if value is None:
+            raise ValueError(f"{limit_type} limits are not configured")
+        return value
 
     def _column_for_name(self, name: str) -> Dict[str, Optional[torch.Tensor]]:
         index = self.joint_names.index(name)
@@ -238,6 +316,30 @@ class JointLimits:
     @property
     def position_upper_limits(self) -> torch.Tensor:
         return self.position[1]
+
+    @property
+    def velocity_lower_limits(self) -> torch.Tensor:
+        return self.velocity[0]
+
+    @property
+    def velocity_upper_limits(self) -> torch.Tensor:
+        return self.velocity[1]
+
+    @property
+    def acceleration_lower_limits(self) -> torch.Tensor:
+        return self.acceleration[0]
+
+    @property
+    def acceleration_upper_limits(self) -> torch.Tensor:
+        return self.acceleration[1]
+
+    @property
+    def jerk_lower_limits(self) -> torch.Tensor:
+        return self.jerk[0]
+
+    @property
+    def jerk_upper_limits(self) -> torch.Tensor:
+        return self.jerk[1]
 
 
 __all__ = ["JointLimits"]
