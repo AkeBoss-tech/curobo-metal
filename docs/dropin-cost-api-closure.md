@@ -22,6 +22,19 @@ costs remain native differentiable PyTorch tensors.  Swept scene cost forwards
 the public speed-metric and gradient-input controls to the portable collision
 checker and validates the configured batch/sphere lifecycle.
 
+`CSpaceCostCfg` additionally validates finite, non-negative component and
+target weights, c-space dimensionality, and all joint-limit fields required by
+the selected POSITION or STATE mode before a solve begins.  It accepts a
+`RobotStateTransition`-style initializer and converts a STATE configuration to
+the corresponding two-term POSITION form in teleport mode, matching the
+pinned public lifecycle.  A missing `cost_type` remains a legacy
+scalar-POSITION convenience; new code should set the type explicitly.
+
+The portable C-space evaluator does not implement the CUDA/Warp rollout
+retiming kernels.  Configurations requesting `retime_weights` or
+`retime_regularization_weights` therefore raise a precise error at creation
+instead of silently running with incorrect weights.
+
 Raw Warp launch helpers remain deliberately unavailable. In particular, this
 does not claim CUDA packed-buffer ABI compatibility, CUDA Graph capture,
 Warp-specific tie layouts, or numerical identity with the NVIDIA kernels.

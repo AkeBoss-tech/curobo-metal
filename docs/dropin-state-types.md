@@ -40,5 +40,10 @@ on the same device/dtype as position.  Derivative trajectories may have a
 shorter horizon after finite differences; their final DOF dimension remains
 validated.  Shape operations intentionally treat `dt` as batch/horizon
 metadata rather than another DOF tensor, and seed replication preserves its
-batch alignment.  These operations are differentiable standard PyTorch
-composition on CPU and float32 MPS; no CUDA packed-buffer ABI is exposed.
+batch alignment.  The four-channel packed representation is always
+`[position, velocity, acceleration, jerk]`; absent derivative channels pack
+as zeros instead of changing the layout.  Constructor-created derivative
+buffers are independently mutable, and clone/copy/index/device-transfer
+preserve `dt`, knot buffers, control-space metadata, and user auxiliary data.
+These operations are differentiable standard PyTorch composition on CPU and
+float32 MPS; no CUDA packed-buffer ABI is exposed.

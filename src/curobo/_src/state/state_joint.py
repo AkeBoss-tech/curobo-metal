@@ -99,20 +99,27 @@ class JointState(_MetalJointState, State):
         device_cfg: DeviceCfg = DeviceCfg(),
     ):
         position_t = device_cfg.to_device(position)
-        zero = torch.zeros_like(position_t)
         return JointState(
             position_t,
-            zero if velocity is None else device_cfg.to_device(velocity),
-            zero if acceleration is None else device_cfg.to_device(acceleration),
+            torch.zeros_like(position_t) if velocity is None else device_cfg.to_device(velocity),
+            torch.zeros_like(position_t) if acceleration is None else device_cfg.to_device(acceleration),
             joint_names,
-            zero if jerk is None else device_cfg.to_device(jerk),
+            torch.zeros_like(position_t) if jerk is None else device_cfg.to_device(jerk),
             device_cfg,
         )
 
     @staticmethod
     def from_position(position: T_BDOF, joint_names: Optional[List[str]] = None):
-        zero = torch.zeros_like(position)
-        return JointState(position, zero, zero, joint_names, zero)
+        # Keep derivative channels independently mutable.  Reusing a single
+        # zero tensor aliases velocity/acceleration/jerk and means a later
+        # in-place update to one silently changes the others.
+        return JointState(
+            position,
+            torch.zeros_like(position),
+            torch.zeros_like(position),
+            joint_names,
+            torch.zeros_like(position),
+        )
 
     @staticmethod
     def from_list(
@@ -136,8 +143,25 @@ class JointState(_MetalJointState, State):
     def data_ptr(self) -> int:
         return self.position.data_ptr()
 
-    def clone(self):
-        return super().clone()
+    def __len__(self) -> int:
+        return self.position.shape[0]
+
+    def clone(self) -> "JointState":
+        """Clone every materialized state channel without breaking autograd.
+
+        The base portable value model deliberately has a minimal clone helper.
+        The compatibility type additionally owns timing, knot, and control
+        metadata, so copying it explicitly avoids losing state during solver
+        buffer lifecycle operations.
+        """
+        clone = lambda value: None if value is None else value.clone()
+        return type(self)(
+            clone(self.position), clone(self.velocity), clone(self.acceleration),
+            None if self.joint_names is None else self.joint_names.copy(), clone(self.jerk),
+            self.device_cfg, clone(self.dt), aux_data=dict(self.aux_data),
+            knot=clone(self.knot), knot_dt=clone(self.knot_dt),
+            control_space=self.control_space,
+        )
 
     def unsqueeze(self, idx: int):
         return self._shape_result(
@@ -276,17 +300,24 @@ class JointState(_MetalJointState, State):
 
     def copy_data(self, in_joint_state: "JointState"):
         """Copy tensor contents while retaining this object's metadata buffers."""
-        for field in ("position", "velocity", "acceleration", "jerk", "dt", "knot", "knot_dt"):
+        for field in self._tensor_fields():
             source, target = getattr(in_joint_state, field), getattr(self, field)
             if source is not None and target is not None:
                 target.copy_(source)
         return self
 
     def to(self, device_cfg: DeviceCfg) -> "JointState":
-        return self._map(device_cfg.to_device)
+        convert = lambda value: None if value is None else device_cfg.to_device(value)
+        return type(self)(
+            convert(self.position), convert(self.velocity), convert(self.acceleration),
+            None if self.joint_names is None else self.joint_names.copy(), convert(self.jerk),
+            device_cfg, convert(self.dt), aux_data=dict(self.aux_data),
+            knot=convert(self.knot), knot_dt=convert(self.knot_dt),
+            control_space=self.control_space,
+        )
 
     def detach(self) -> "JointState":
-        for field in ("position", "velocity", "acceleration", "jerk", "dt"):
+        for field in self._tensor_fields():
             value = getattr(self, field)
             if value is not None:
                 setattr(self, field, value.detach())
@@ -304,53 +335,79 @@ class JointState(_MetalJointState, State):
         return self
 
     def copy_(self, in_joint_state: JointState, allow_clone: bool = True):
-        same = all(
-            getattr(in_joint_state, field) is None
-            or (
-                getattr(self, field) is not None
-                and getattr(self, field).shape == getattr(in_joint_state, field).shape
-            )
-            for field in ("position", "velocity", "acceleration", "jerk", "dt")
-        )
-        if not same:
+        if not self._same_shape(in_joint_state):
             if not allow_clone:
                 raise ValueError(
                     f"current state has shape: {self.position.shape} while new shape is "
                     f"{in_joint_state.position.shape}"
                 )
             return self.copy_reference(in_joint_state.clone())
-        for field in ("position", "velocity", "acceleration", "jerk", "dt"):
+        for field in self._tensor_fields():
             source, target = getattr(in_joint_state, field), getattr(self, field)
-            if source is not None:
+            if source is not None and target is not None:
                 target.copy_(source)
         if in_joint_state.joint_names is not None:
-            self.joint_names = in_joint_state.joint_names
+            self.joint_names = in_joint_state.joint_names.copy()
+        self.aux_data = dict(in_joint_state.aux_data)
+        self.control_space = in_joint_state.control_space
         return self
 
+    @staticmethod
+    def _tensor_fields() -> tuple[str, ...]:
+        return ("position", "velocity", "acceleration", "jerk", "dt", "knot", "knot_dt")
+
+    def _same_shape(self, other: "JointState") -> bool:
+        """Whether this object can receive ``other`` through in-place copy.
+
+        Optional channels are allowed in the source (matching V2's partial
+        state behavior), but each materialized source channel must have a
+        corresponding same-shaped target buffer on the same device.
+        """
+        for field in self._tensor_fields():
+            source = getattr(other, field)
+            target = getattr(self, field)
+            if source is None:
+                continue
+            if target is None or target.shape != source.shape or target.device != source.device:
+                return False
+        return True
+
     def __setitem__(self, index: int | torch.Tensor, value: "JointState") -> None:
-        for field in ("position", "velocity", "acceleration", "jerk"):
+        for field in self._tensor_fields():
             target, source = getattr(self, field), getattr(value, field)
             if target is not None and source is not None:
                 target[index] = source
-        if self.dt is not None and value.dt is not None:
-            self.dt[index] = value.dt
 
     def reindex(self, joint_names: List[str]):
         value = self.reorder(joint_names)
         self.copy_reference(value)
 
     def stack(self, new_state: JointState):
-        return self._combine(new_state, torch.stack)
+        return self._combine(new_state, torch.stack, join_names=False)
 
     def cat(self, other_js: JointState, dim: int):
-        return self._combine(other_js, lambda values: torch.cat(values, dim=dim))
+        dof_dim = dim if dim >= 0 else self.position.ndim + dim
+        return self._combine(
+            other_js, lambda values: torch.cat(values, dim=dim),
+            join_names=dof_dim == self.position.ndim - 1,
+        )
 
-    def _combine(self, other: "JointState", operation) -> "JointState":
+    def _combine(self, other: "JointState", operation, *, join_names: bool) -> "JointState":
         values = {}
         for field in ("position", "velocity", "acceleration", "jerk"):
             left, right = getattr(self, field), getattr(other, field)
-            values[field] = None if left is None else operation((left, right))
-        return type(self)(joint_names=self.joint_names, **values)
+            values[field] = None if left is None or right is None else operation((left, right))
+        if join_names and self.joint_names is not None and other.joint_names is not None:
+            joint_names = self.joint_names + other.joint_names
+        else:
+            joint_names = None if self.joint_names is None else self.joint_names.copy()
+        return type(self)(
+            joint_names=joint_names, device_cfg=self.device_cfg,
+            dt=None if self.dt is None else self.dt.clone(),
+            aux_data=dict(self.aux_data), knot=None if self.knot is None else self.knot.clone(),
+            knot_dt=None if self.knot_dt is None else self.knot_dt.clone(),
+            control_space=self.control_space, **values,
+        )
 
     def repeat_seeds(self, num_seeds: int) -> "JointState":
         if num_seeds <= 1:
@@ -378,8 +435,16 @@ class JointState(_MetalJointState, State):
         )
 
     def get_state_tensor(self) -> torch.Tensor:
-        return torch.cat([x for x in (self.position, self.velocity, self.acceleration, self.jerk)
-                          if x is not None], dim=-1)
+        # The V2 packing ABI always allocates four derivative channels.  A
+        # partial state therefore packs absent derivatives as zeros rather
+        # than shifting the position/velocity layout based on optional fields.
+        zero = torch.zeros_like(self.position)
+        return torch.cat(
+            tuple(value if value is not None else zero for value in (
+                self.position, self.velocity, self.acceleration, self.jerk
+            )),
+            dim=-1,
+        )
 
     def blend(self, coeff: FilterCoeff, new_state: "JointState"):
         from .state_joint_ops import blend_joint_states
