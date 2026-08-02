@@ -69,6 +69,36 @@ def test_sdf_detector_requires_local_pose_and_state_is_cloneable():
     assert copied.observed_points.data_ptr() != state.observed_points.data_ptr()
 
 
+def test_sdf_detector_exposes_pinned_refinement_state_lifecycle_without_warp():
+    mesh = _mesh()
+    points, _ = mesh.sample_surface_points(12)
+    detector = SDFPoseDetector(mesh, SDFDetectorCfg(
+        max_iterations=2, inner_iterations=2, n_points=12, distance_threshold=1.0,
+    ))
+    initial = Pose.from_list([0, 0, 0, 1, 0, 0, 0])
+    state = detector._setup_refinement(points, initial)
+    assert state.n_points == 12
+    assert state.best_JtJ.shape == (6, 6)
+    assert state.best_Jtr.shape == (6,)
+    assert state.best_sum_sq.ndim == 0
+    assert state.best_n_valid.item() == 12
+    # The upstream named buffer construction is accepted independently of the
+    # compact portable constructor and retains deep-copy semantics.
+    named = SDFRefinementState(
+        observed_points=state.observed_points, n_points=state.n_points,
+        best_position=state.best_position, best_quaternion=state.best_quaternion,
+        best_error=state.best_error, best_sum_sq=state.best_sum_sq,
+        best_n_valid=state.best_n_valid, best_JtJ=state.best_JtJ, best_Jtr=state.best_Jtr,
+        lambda_damping=state.lambda_damping, translation_change=state.translation_change,
+        rotation_change=state.rotation_change,
+    )
+    copied = named.clone()
+    assert copied.observed_points.data_ptr() != named.observed_points.data_ptr()
+    updated = detector._refine_inner_iterations(copied)
+    assert updated.iterations == detector.config.inner_iterations
+    assert torch.isfinite(updated.best_error)
+
+
 def test_dense_tsdf_refiner_returns_curobo_pose_error_iterations_contract():
     mapper = Mapper(MapperCfg((0.4, 0.4, 0.4), voxel_size=0.1,
                               grid_center=torch.tensor((0.0, 0.0, 0.4)),

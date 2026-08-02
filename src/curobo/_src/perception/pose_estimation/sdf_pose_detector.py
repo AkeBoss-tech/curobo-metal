@@ -1,14 +1,14 @@
 """Portable local mesh-SDF pose refinement.
 
-This is deliberately a high-level replacement for V2's Warp BVH kernels: it
-uses deterministic sampled mesh points and eager PyTorch ICP on CPU or MPS.
-It is suitable when an initial pose is available.  Raw Warp mesh IDs,
-BVH traversal, CUDA graphs, and the two-pass kernel ABI remain unavailable.
+The pinned CUDA implementation uses Warp BVH signed-distance kernels and
+CUDA-graph-captured Levenberg--Marquardt iterations.  This module preserves its
+high-level state and refinement lifecycle on CPU/MPS using deterministic mesh
+surface samples and ordinary PyTorch normal equations.  It deliberately does
+not claim Warp mesh-ID, BVH, CUDA graph, or signed-distance numerical parity.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 import time
 from typing import Optional
@@ -22,27 +22,59 @@ from .detection_result import DetectionResult
 from .mesh_robot import RobotMesh
 from .pose_detector import PoseDetector
 from .sdf_pose_detector_cfg import SDFDetectorCfg
-from .util import extract_observed_points, resample_points
+from .util import extract_observed_points, huber_loss, resample_points
 
 
-@dataclass
 class SDFRefinementState:
-    """Portable refinement state with V2's accepted-pose fields.
+    """State for one portable LM-style refinement session.
 
-    The first three positional fields preserve the earlier compatibility
-    facade.  The additional values document and retain an actual optimization
-    session without pretending to own CUDA graph buffers.
+    Both the original compact portable constructor
+    ``(position, quaternion, loss, ...)`` and V2's named state-buffer fields
+    are accepted.  That allows callers to retain and copy a state session
+    without depending on CUDA graph-owned buffers.
     """
 
-    position: torch.Tensor
-    quaternion: torch.Tensor
-    loss: torch.Tensor
-    iterations: int = 0
-    observed_points: Optional[torch.Tensor] = None
-    best_n_valid: Optional[torch.Tensor] = None
-    lambda_damping: Optional[torch.Tensor] = None
-    translation_change: Optional[torch.Tensor] = None
-    rotation_change: Optional[torch.Tensor] = None
+    def __init__(self, *args, **kwargs) -> None:
+        # Upstream positional layout is (observed_points, n_points,
+        # best_position, best_quaternion, ...); compact portable layout has a
+        # quaternion tensor as its second argument.
+        if len(args) >= 2 and isinstance(args[1], int):
+            names = (
+                "observed_points", "n_points", "best_position", "best_quaternion",
+                "best_error", "best_sum_sq", "best_n_valid", "best_JtJ", "best_Jtr",
+                "lambda_damping", "translation_change", "rotation_change",
+            )
+        else:
+            names = (
+                "position", "quaternion", "loss", "iterations", "observed_points",
+                "best_n_valid", "lambda_damping", "translation_change", "rotation_change",
+            )
+        if len(args) > len(names):
+            raise TypeError("too many SDFRefinementState positional arguments")
+        for name, value in zip(names, args):
+            if name in kwargs:
+                raise TypeError(f"{name} was provided twice")
+            kwargs[name] = value
+
+        self.position = kwargs.pop("position", kwargs.pop("best_position", None))
+        self.quaternion = kwargs.pop("quaternion", kwargs.pop("best_quaternion", None))
+        self.loss = kwargs.pop("loss", kwargs.pop("best_error", None))
+        if self.position is None or self.quaternion is None or self.loss is None:
+            raise TypeError("position/quaternion/loss (or their best_* aliases) are required")
+        self.iterations = int(kwargs.pop("iterations", 0))
+        self.observed_points = kwargs.pop("observed_points", None)
+        self.n_points = int(kwargs.pop(
+            "n_points", len(self.observed_points) if self.observed_points is not None else 0
+        ))
+        self.best_n_valid = kwargs.pop("best_n_valid", None)
+        self.best_sum_sq = kwargs.pop("best_sum_sq", None)
+        self.best_JtJ = kwargs.pop("best_JtJ", None)
+        self.best_Jtr = kwargs.pop("best_Jtr", None)
+        self.lambda_damping = kwargs.pop("lambda_damping", None)
+        self.translation_change = kwargs.pop("translation_change", None)
+        self.rotation_change = kwargs.pop("rotation_change", None)
+        if kwargs:
+            raise TypeError(f"unexpected SDFRefinementState fields: {', '.join(sorted(kwargs))}")
 
     @property
     def best_position(self) -> torch.Tensor:
@@ -57,41 +89,39 @@ class SDFRefinementState:
         return self.loss
 
     def clone(self) -> "SDFRefinementState":
-        def clone(value):
+        def copied(value):
             return None if value is None else value.clone()
+
         return type(self)(
-            clone(self.position), clone(self.quaternion), clone(self.loss), self.iterations,
-            clone(self.observed_points), clone(self.best_n_valid), clone(self.lambda_damping),
-            clone(self.translation_change), clone(self.rotation_change),
+            position=copied(self.position), quaternion=copied(self.quaternion), loss=copied(self.loss),
+            iterations=self.iterations, observed_points=copied(self.observed_points), n_points=self.n_points,
+            best_n_valid=copied(self.best_n_valid), best_sum_sq=copied(self.best_sum_sq),
+            best_JtJ=copied(self.best_JtJ), best_Jtr=copied(self.best_Jtr),
+            lambda_damping=copied(self.lambda_damping),
+            translation_change=copied(self.translation_change), rotation_change=copied(self.rotation_change),
         )
 
     def copy_(self, other: "SDFRefinementState") -> "SDFRefinementState":
         for name in (
-            "position", "quaternion", "loss", "observed_points", "best_n_valid",
-            "lambda_damping", "translation_change", "rotation_change",
+            "position", "quaternion", "loss", "observed_points", "best_n_valid", "best_sum_sq",
+            "best_JtJ", "best_Jtr", "lambda_damping", "translation_change", "rotation_change",
         ):
-            source = getattr(other, name)
-            target = getattr(self, name)
+            source, target = getattr(other, name), getattr(self, name)
             if source is None:
                 setattr(self, name, None)
             elif target is None:
                 setattr(self, name, source.clone())
             else:
                 target.copy_(source)
-        self.iterations = other.iterations
+        self.iterations, self.n_points = other.iterations, other.n_points
         return self
 
 
 def _resolve_device(value: torch.device) -> torch.device:
-    """Translate upstream CUDA defaults to the available portable backend."""
+    """Translate the upstream CUDA default to the available portable backend."""
     if value.type == "cuda":
         return torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     return value
-
-
-def _rotation_angle(rotation: torch.Tensor) -> torch.Tensor:
-    cosine = ((torch.diagonal(rotation, dim1=-2, dim2=-1).sum(-1) - 1) / 2).clamp(-1, 1)
-    return torch.acos(cosine)
 
 
 def _skew(value: torch.Tensor) -> torch.Tensor:
@@ -103,50 +133,25 @@ def _skew(value: torch.Tensor) -> torch.Tensor:
 
 
 def _axis_angle_matrix(omega: torch.Tensor) -> torch.Tensor:
-    """Native CPU/MPS Rodrigues update, including the zero-angle series."""
+    """Native CPU/MPS Rodrigues update including a stable zero-angle series."""
     theta = torch.linalg.vector_norm(omega)
     cross = _skew(omega)
-    theta2 = theta.square()
+    theta_sq = theta.square()
     small = theta <= torch.finfo(omega.dtype).eps
-    sine_scale = torch.where(small, 1 - theta2 / 6, torch.sin(theta) / theta)
-    cosine_scale = torch.where(small, 0.5 - theta2 / 24, (1 - torch.cos(theta)) / theta2)
-    eye = torch.eye(3, device=omega.device, dtype=omega.dtype)
-    return eye + sine_scale * cross + cosine_scale * (cross @ cross)
-
-
-def _gauss_newton_step(
-    source_world: torch.Tensor, target_world: torch.Tensor, damping: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Compute a local rigid update with ordinary tensor linear algebra.
-
-    Avoids SVD/matrix-rank because those MPS operators are not implemented
-    without fallback.  Damping makes rank-deficient symmetric meshes stable.
-    """
-    residual = source_world - target_world
-    cross = torch.stack((
-        torch.stack((torch.zeros_like(source_world[:, 0]), -source_world[:, 2], source_world[:, 1]), -1),
-        torch.stack((source_world[:, 2], torch.zeros_like(source_world[:, 0]), -source_world[:, 0]), -1),
-        torch.stack((-source_world[:, 1], source_world[:, 0], torch.zeros_like(source_world[:, 0])), -1),
-    ), -2)
-    jacobian = torch.cat((torch.eye(3, device=source_world.device, dtype=source_world.dtype).expand(
-        len(source_world), -1, -1), -cross), dim=-1)
-    hessian = torch.einsum("nij,nik->jk", jacobian, jacobian)
-    gradient = torch.einsum("nij,ni->j", jacobian, residual)
-    delta = torch.linalg.solve(
-        hessian + damping * torch.eye(6, device=source_world.device, dtype=source_world.dtype), -gradient,
-    )
-    return delta[:3], delta[3:]
+    sine_scale = torch.where(small, 1 - theta_sq / 6, torch.sin(theta) / theta)
+    cosine_scale = torch.where(small, 0.5 - theta_sq / 24, (1 - torch.cos(theta)) / theta_sq)
+    return (torch.eye(3, device=omega.device, dtype=omega.dtype)
+            + sine_scale * cross + cosine_scale * (cross @ cross))
 
 
 class SDFPoseDetector(PoseDetector):
-    """Initial-pose local registration against a sampled :class:`RobotMesh`."""
+    """Required-initial-pose local mesh registration with V2-like LM state."""
 
     def __init__(self, robot_mesh: RobotMesh, config: Optional[SDFDetectorCfg] = None) -> None:
         self.robot_mesh = robot_mesh
         self.config = config or SDFDetectorCfg()
         self.device = _resolve_device(self.config.device_cfg.device)
-        # ``PoseDetector`` is not initialized: its centroid detector has a
-        # different config and intentionally does not implement SDF semantics.
+        # PoseDetector's centroid config is intentionally not applicable here.
         self.geometry = robot_mesh
 
     def _model_points(self, n_points: int) -> torch.Tensor:
@@ -155,32 +160,135 @@ class SDFPoseDetector(PoseDetector):
     def _initial_pose(self, initial_pose: Pose) -> Pose:
         if not isinstance(initial_pose, Pose):
             raise TypeError("initial_pose must be a curobo Pose")
-        position = initial_pose.position.reshape(-1, 3)
-        quaternion = initial_pose.quaternion.reshape(-1, 4)
+        position, quaternion = initial_pose.position.reshape(-1, 3), initial_pose.quaternion.reshape(-1, 4)
         if len(position) != 1 or len(quaternion) != 1:
             raise ValueError("portable SDFPoseDetector supports one initial pose")
         return Pose(position.to(self.device), quaternion.to(self.device))
 
-    def _evaluate(self, model: torch.Tensor, points: torch.Tensor, rotation: torch.Tensor,
-                  translation: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _evaluate(
+        self, model: torch.Tensor, points: torch.Tensor, rotation: torch.Tensor, translation: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         transformed = model @ rotation.mT + translation
-        distances = torch.cdist(transformed, points)
-        residual, nearest = distances.min(dim=-1)
-        valid = residual <= self.config.distance_threshold
-        return transformed, nearest, valid
+        residual, nearest = torch.cdist(transformed, points).min(dim=-1)
+        return transformed, nearest, residual <= self.config.distance_threshold
 
-    def detect(self, camera_obs: CameraObservation, config: Optional[torch.Tensor] = None,
-               initial_pose: Optional[Pose] = None) -> DetectionResult:
-        return self.detect_from_points(extract_observed_points(camera_obs), config, initial_pose)
+    def _evaluate_at_pose(
+        self, observed_points: torch.Tensor, n_points: int, position: torch.Tensor, quaternion: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Form V2-shaped LM normal equations using the portable SDF proxy.
 
-    def detect_from_points(self, observed_points: torch.Tensor, config: Optional[torch.Tensor] = None,
-                           initial_pose: Optional[Pose] = None) -> DetectionResult:
-        """Refine ``initial_pose`` using deterministic nearest-surface ICP.
-
-        Unlike the CUDA implementation, no global rotation sweep is attempted;
-        callers must provide a local initial estimate.  A configuration updates
-        articulated meshes before points are sampled.
+        Warp's signed distance/gradient query is replaced by deterministic
+        nearest surface samples.  The residual Jacobian is nevertheless an
+        exact rigid point-to-point Jacobian, including robust Huber weights.
         """
+        if n_points < 1:
+            raise ValueError("n_points must be positive")
+        points = observed_points.reshape(-1, 3)[:n_points]
+        if len(points) != n_points:
+            raise ValueError("n_points exceeds observed_points length")
+        model = self._model_points(n_points).to(points)
+        if len(model) == 0:
+            raise ValueError("detector mesh contains no sampleable points")
+        rotation = Pose(position[None], quaternion[None]).get_rotation()[0]
+        transformed, nearest, valid = self._evaluate(model, points, rotation, position)
+        residual = transformed - points[nearest]
+        residual_norm = torch.linalg.vector_norm(residual, dim=-1)
+        cross = torch.stack((
+            torch.stack((torch.zeros_like(transformed[:, 0]), -transformed[:, 2], transformed[:, 1]), -1),
+            torch.stack((transformed[:, 2], torch.zeros_like(transformed[:, 0]), -transformed[:, 0]), -1),
+            torch.stack((-transformed[:, 1], transformed[:, 0], torch.zeros_like(transformed[:, 0])), -1),
+        ), -2)
+        jacobian = torch.cat((torch.eye(3, device=points.device, dtype=points.dtype).expand(
+            n_points, -1, -1), -cross), dim=-1)
+        weights = valid.to(points.dtype)
+        if self.config.use_huber:
+            weights = weights * torch.where(
+                residual_norm <= self.config.huber_delta, torch.ones_like(residual_norm),
+                self.config.huber_delta / residual_norm.clamp_min(torch.finfo(points.dtype).eps),
+            )
+        jtj = torch.einsum("nai,n,naj->ij", jacobian, weights, jacobian)
+        jtr = torch.einsum("nai,n,na->i", jacobian, weights, residual)
+        sum_sq = ((huber_loss(residual_norm, self.config.huber_delta) * 2
+                   if self.config.use_huber else residual_norm.square()) * valid).sum()
+        return jtj, jtr, sum_sq, valid.sum().to(torch.int64)
+
+    def _setup_refinement(self, observed_points: torch.Tensor, initial_pose: Pose) -> SDFRefinementState:
+        """Allocate a portable refinement session in the pinned state shape."""
+        pose = self._initial_pose(initial_pose)
+        points = observed_points.reshape(-1, 3)
+        jtj, jtr, sum_sq, n_valid = self._evaluate_at_pose(
+            points, len(points), pose.position[0], pose.quaternion[0]
+        )
+        error = torch.sqrt(sum_sq / n_valid.clamp_min(1).to(sum_sq.dtype))
+        return SDFRefinementState(
+            observed_points=points, n_points=len(points), best_position=pose.position[0],
+            best_quaternion=pose.quaternion[0], best_error=error, best_sum_sq=sum_sq,
+            best_n_valid=n_valid, best_JtJ=jtj, best_Jtr=jtr,
+            lambda_damping=points.new_tensor(self.config.lambda_initial),
+            translation_change=points.new_zeros(3), rotation_change=points.new_zeros(3),
+        )
+
+    def _refine_iteration(self, state: SDFRefinementState) -> SDFRefinementState:
+        """Perform one monotonic trust-region update on CPU/MPS tensors."""
+        if any(value is None for value in (state.observed_points, state.best_JtJ, state.best_Jtr,
+                                            state.best_sum_sq, state.best_n_valid, state.lambda_damping)):
+            raise ValueError("state lacks normal-equation buffers required for refinement")
+        eye = torch.eye(6, device=state.position.device, dtype=state.position.dtype)
+        delta = torch.linalg.solve(state.best_JtJ + state.lambda_damping * eye, -state.best_Jtr)
+        delta_t, delta_r = delta[:3], delta[3:]
+        current_rotation = Pose(state.position[None], state.quaternion[None]).get_rotation()[0]
+        candidate_position = state.position + delta_t
+        candidate_quaternion = matrix_to_quaternion((_axis_angle_matrix(delta_r) @ current_rotation)[None])[0]
+        cand_jtj, cand_jtr, cand_sum_sq, cand_n_valid = self._evaluate_at_pose(
+            state.observed_points, state.n_points, candidate_position, candidate_quaternion
+        )
+        predicted = -torch.dot(delta, state.best_Jtr) - 0.5 * torch.dot(delta, state.best_JtJ @ delta)
+        actual = state.best_sum_sq - cand_sum_sq
+        rho = actual / predicted.clamp_min(torch.finfo(actual.dtype).eps)
+        min_valid = max(1, math.ceil(self.config.min_valid_ratio * state.n_points))
+        accept = bool((cand_n_valid >= min_valid).item() and (actual > 0).item()
+                      and (rho >= self.config.rho_min).item())
+        if accept:
+            position, quaternion, jtj, jtr, sum_sq, n_valid = (
+                candidate_position, candidate_quaternion, cand_jtj, cand_jtr, cand_sum_sq, cand_n_valid
+            )
+            damping = (state.lambda_damping / self.config.lambda_factor).clamp_min(self.config.lambda_min)
+            translation_change, rotation_change = delta_t, delta_r
+        else:
+            position, quaternion, jtj, jtr, sum_sq, n_valid = (
+                state.position, state.quaternion, state.best_JtJ, state.best_Jtr,
+                state.best_sum_sq, state.best_n_valid,
+            )
+            damping = (state.lambda_damping * self.config.lambda_factor).clamp_max(self.config.lambda_max)
+            translation_change, rotation_change = torch.zeros_like(delta_t), torch.zeros_like(delta_r)
+        return SDFRefinementState(
+            observed_points=state.observed_points, n_points=state.n_points, best_position=position,
+            best_quaternion=quaternion, best_error=torch.sqrt(sum_sq / n_valid.clamp_min(1).to(sum_sq.dtype)),
+            best_sum_sq=sum_sq, best_n_valid=n_valid, best_JtJ=jtj, best_Jtr=jtr, lambda_damping=damping,
+            translation_change=translation_change, rotation_change=rotation_change,
+            iterations=state.iterations + 1,
+        )
+
+    def _refine_inner_iterations(self, state: SDFRefinementState) -> SDFRefinementState:
+        """Portable eager equivalent of V2's captured inner iteration batch."""
+        for _ in range(self.config.inner_iterations):
+            state = self._refine_iteration(state)
+        return state
+
+    def _extract_observed_points(self, camera_obs: CameraObservation) -> torch.Tensor:
+        return extract_observed_points(camera_obs)
+
+    def detect(
+        self, camera_obs: CameraObservation, config: Optional[torch.Tensor] = None,
+        initial_pose: Optional[Pose] = None,
+    ) -> DetectionResult:
+        return self.detect_from_points(self._extract_observed_points(camera_obs), config, initial_pose)
+
+    def detect_from_points(
+        self, observed_points: torch.Tensor, config: Optional[torch.Tensor] = None,
+        initial_pose: Optional[Pose] = None,
+    ) -> DetectionResult:
+        """Refine a required local estimate using deterministic robust samples."""
         started = time.perf_counter()
         if initial_pose is None:
             raise ValueError("SDFPoseDetector requires an initial_pose estimate")
@@ -190,66 +298,24 @@ class SDFPoseDetector(PoseDetector):
             raise TypeError("observed_points must be a torch.Tensor")
         if observed_points.ndim != 2 or observed_points.shape[-1] != 3:
             raise ValueError("observed_points must have shape [N, 3]")
-        if len(observed_points) == 0:
-            raise ValueError("observed_points must contain at least one point")
         points = observed_points.to(device=self.device, dtype=self.config.device_cfg.dtype)
         points = points[torch.isfinite(points).all(dim=-1)]
         if len(points) == 0:
-            raise ValueError("observed_points contains no finite point")
+            raise ValueError("observed_points must contain at least one finite point")
         points = resample_points(points, min(len(points), self.config.n_points))
-        model = self._model_points(min(len(points), self.config.n_points)).to(points)
-        if len(model) == 0:
+        if len(self._model_points(len(points))) == 0:
             raise ValueError("detector mesh contains no sampleable points")
-
-        pose = self._initial_pose(initial_pose)
-        rotation = pose.get_rotation()[0]
-        translation = pose.position[0]
-        minimum_valid = max(1, math.ceil(self.config.min_valid_ratio * len(model)))
-        iterations = 0
-        lambda_damping = points.new_tensor(self.config.lambda_initial)
-
-        for iteration in range(self.config.max_iterations):
-            transformed, nearest, valid = self._evaluate(model, points, rotation, translation)
-            if int(valid.sum().item()) < minimum_valid:
+        state = self._setup_refinement(points, initial_pose)
+        for _ in range(self.config.max_iterations):
+            state = self._refine_iteration(state)
+            if (state.translation_change.norm() <= self.config.convergence_threshold
+                    and state.rotation_change.norm() <= self.config.rotation_convergence_threshold):
                 break
-            delta_translation, delta_rotation_vector = _gauss_newton_step(
-                transformed[valid], points[nearest[valid]], lambda_damping
-            )
-            candidate_rotation = _axis_angle_matrix(delta_rotation_vector) @ rotation
-            candidate_translation = translation + delta_translation
-            candidate_transformed, _, candidate_valid = self._evaluate(
-                model, points, candidate_rotation, candidate_translation
-            )
-            candidate_distances = torch.cdist(candidate_transformed, points).min(dim=-1).values
-            candidate_loss = candidate_distances[candidate_valid].square().mean()
-            current_loss = torch.cdist(transformed, points).min(dim=-1).values[valid].square().mean()
-            # Keep the accepted pose monotonic.  This is the portable analogue
-            # of V2's LM trust-region acceptance without CUDA graph state.
-            if candidate_loss <= current_loss:
-                accepted_rotation = candidate_rotation @ rotation.mT
-                accepted_translation = candidate_translation - translation
-                rotation, translation = candidate_rotation, candidate_translation
-                lambda_damping = (lambda_damping / self.config.lambda_factor).clamp_min(self.config.lambda_min)
-            else:
-                accepted_rotation = torch.eye(3, device=points.device, dtype=points.dtype)
-                accepted_translation = torch.zeros(3, device=points.device, dtype=points.dtype)
-                lambda_damping = (lambda_damping * self.config.lambda_factor).clamp_max(self.config.lambda_max)
-            iterations = iteration + 1
-            if (accepted_translation.norm() <= self.config.convergence_threshold
-                    and _rotation_angle(accepted_rotation) <= self.config.rotation_convergence_threshold):
-                break
-        transformed, _, valid = self._evaluate(model, points, rotation, translation)
-        residual = torch.cdist(transformed, points).min(dim=-1).values
-        final_loss = residual[valid].square().mean() if bool(valid.any().item()) else torch.full((), torch.inf, device=points.device, dtype=points.dtype)
-        pose = Pose(translation[None], matrix_to_quaternion(rotation[None]))
-        valid_ratio = float(valid.float().mean().detach().cpu())
-        confidence = min(1.0, valid_ratio / self.config.min_valid_ratio)
+        valid_ratio = float(state.best_n_valid.to(points.dtype).div(state.n_points).detach().cpu())
         return DetectionResult(
-            pose=pose,
-            config=config,
-            confidence=confidence,
-            alignment_error=float(final_loss.sqrt().detach().cpu()),
-            n_iterations=iterations,
+            pose=Pose(state.position[None], state.quaternion[None]), config=config,
+            confidence=min(1.0, valid_ratio / self.config.min_valid_ratio),
+            alignment_error=float(state.loss.detach().cpu()), n_iterations=state.iterations,
             compute_time=time.perf_counter() - started,
         )
 

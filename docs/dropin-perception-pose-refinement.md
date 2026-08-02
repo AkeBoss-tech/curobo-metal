@@ -11,6 +11,15 @@ alignment error, iteration count, and elapsed time).  It intentionally does not
 perform V2's global CUDA/Warp rotation search, so an initial estimate is part of
 the portable contract.
 
+The detector also exposes V2's local refinement lifecycle:
+`_setup_refinement`, `_evaluate_at_pose`, `_refine_iteration`, and
+`_refine_inner_iterations`.  `SDFRefinementState` accepts its pinned named
+normal-equation buffers as well as the original compact portable constructor;
+`clone` and `copy_` retain deep-copy/in-place semantics.  The normal equations
+use robust Huber-weighted point-to-point residuals from deterministic mesh
+surface samples, so they are useful for bounded local alignment on CPU/MPS but
+are not a raw signed-distance or Warp-BVH substitute.
+
 `BlockSparseRaycastPoseRefiner` accepts a portable dense `Mapper` or its TSDF
 integrator facade.  It validates depth and uses the actual dense renderer to
 refine a camera transform.  Its public call returns `(Pose, alignment_error,
