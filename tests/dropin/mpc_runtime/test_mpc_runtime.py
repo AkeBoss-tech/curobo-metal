@@ -49,3 +49,67 @@ def test_rejects_time_varying_pose_goals():
     )
     with pytest.raises(NotImplementedError, match="single-time"):
         mpc.update_goal_tool_poses(time_varying)
+
+
+def test_next_action_consumes_portable_receding_horizon_buffer():
+    mpc, current = _mpc()
+    goal = current.clone()
+    goal.position = goal.position + 0.02
+    assert mpc.update_goal_state(goal)
+
+    first = mpc.optimize_next_action(current)
+    solved_after_first = mpc.debug_dump()["solve_count"]
+    second = mpc.optimize_next_action(current)
+    state = mpc.debug_dump()
+
+    assert solved_after_first == 1
+    assert state["solve_count"] == 1
+    assert first.metrics["command_index"] == 0
+    assert second.metrics["command_index"] == 1
+    assert first.next_action.position.shape == (1, mpc.action_dim)
+    assert not first.metrics["reoptimized"]
+    assert not second.metrics["reoptimized"]
+
+
+def test_safe_deceleration_uses_velocity_and_supports_mixed_batch():
+    cfg = ModelPredictiveControlCfg.create(
+        "franka.yml", max_batch_size=2, warm_start_optimization_num_iters=1,
+        cold_start_optimization_num_iters=1,
+    )
+    mpc = ModelPredictiveControl(cfg)
+    position = mpc.default_joint_state.position.repeat(2, 1)
+    current = type(mpc.default_joint_state)(
+        position, torch.full_like(position, 0.2), torch.zeros_like(position),
+        mpc.joint_names,
+    )
+    assert mpc.setup(current)
+    plan = mpc.prepare_safe_deceleration_trajectory(
+        current, torch.tensor([True, False]), deceleration_profile="linear"
+    )
+    assert plan.shape == (2, mpc.action_horizon, mpc.action_dim)
+    assert torch.all(plan[0, 1] > plan[0, 0])
+    torch.testing.assert_close(plan[1], current.position[1].expand_as(plan[1]))
+    with pytest.raises(ValueError, match="deceleration_profile"):
+        mpc.prepare_safe_deceleration_trajectory(
+            current, torch.tensor([True, False]), deceleration_profile="bad"
+        )
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_mpc_buffer_and_deceleration_stay_on_mps(monkeypatch):
+    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")
+    from curobo._src.types.device_cfg import DeviceCfg
+
+    cfg = ModelPredictiveControlCfg.create(
+        "franka.yml", device_cfg=DeviceCfg(torch.device("mps"), torch.float32),
+        warm_start_optimization_num_iters=1, cold_start_optimization_num_iters=1,
+    )
+    mpc = ModelPredictiveControl(cfg)
+    current = mpc.default_joint_state
+    assert mpc.setup(current)
+    result = mpc.optimize_next_action(current)
+    assert result.next_action.position.device.type == "mps"
+    safe = mpc.prepare_safe_deceleration_trajectory(
+        current, torch.tensor([True], device="mps")
+    )
+    assert safe.device.type == "mps"
