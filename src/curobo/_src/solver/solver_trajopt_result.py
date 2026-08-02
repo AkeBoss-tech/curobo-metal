@@ -80,9 +80,13 @@ class TrajOptSolverResult(BaseSolverResult):
         """
         if self.js_solution is None:
             raise ValueError("js_solution is not set")
-        dt = self.maximum_trajectory_dt
+        # The V2 result derives elapsed time from the materialised rollout
+        # state.  ``maximum_trajectory_dt`` is a constraint/diagnostic, not
+        # necessarily the dt selected by an optimiser.  It is still a useful
+        # fallback for lightweight callers that only materialise a solution.
+        dt = self.js_solution.dt
         if dt is None:
-            dt = self.js_solution.dt
+            dt = self.maximum_trajectory_dt
         if dt is None:
             raise ValueError("trajectory dt is not set")
         horizon = self.js_solution.position.shape[-2]
@@ -119,8 +123,10 @@ class TrajOptSolverResult(BaseSolverResult):
 
     @staticmethod
     def _copy_tensor_at_mask(target: Optional[torch.Tensor], source: Optional[torch.Tensor], mask: torch.Tensor) -> None:
-        if target is None or source is None:
+        if target is None and source is None:
             return
+        if target is None or source is None:
+            raise ValueError("both trajectory result fields must be set or both must be None")
         if target.device != source.device:
             raise ValueError("result tensors must share a device")
         if target.shape != source.shape:
@@ -135,25 +141,43 @@ class TrajOptSolverResult(BaseSolverResult):
         retry logic, distinct from :meth:`copy_successful_solutions` which
         selects individual seed candidates.
         """
-        if mask.dtype != torch.bool or mask.ndim != 1:
-            raise ValueError("mask must be a one-dimensional boolean batch mask")
-        if self.success.shape[0] != mask.numel() or other.success.shape[0] != mask.numel():
-            raise ValueError("mask length must match result batch size")
-        for item in fields(self):
-            name = item.name
-            if name in {"metrics", "interpolated_metrics", "debug_info", "solution_state"}:
-                continue
-            left, right = getattr(self, name), getattr(other, name)
-            if isinstance(left, torch.Tensor) and isinstance(right, torch.Tensor):
-                self._copy_tensor_at_mask(left, right, mask)
-        for name in ("js_solution", "interpolated_trajectory"):
-            left, right = getattr(self, name), getattr(other, name)
-            if left is None or right is None:
-                continue
+        if not isinstance(other, TrajOptSolverResult):
+            raise TypeError("other must be a TrajOptSolverResult")
+        # BaseSolverResult owns every inherited materialised field, including
+        # the normal rollout JointState.  Do not duplicate that logic here:
+        # doing so previously made subclass behaviour silently diverge from
+        # IK/MPC whenever optional fields were asymmetric.
+        super().copy_at_batch_indices(other, mask)
+        self._copy_interpolated_at_batch_indices(other, mask)
+
+    def _copy_interpolated_at_batch_indices(
+        self, other: "TrajOptSolverResult", mask: torch.Tensor
+    ) -> None:
+        """Copy TrajOpt-only materialised payloads at complete batch rows."""
+        self._copy_tensor_at_mask(
+            self.interpolated_last_tstep, other.interpolated_last_tstep, mask
+        )
+        left, right = self.interpolated_trajectory, other.interpolated_trajectory
+        if left is None and right is None:
+            pass
+        elif left is None or right is None:
+            raise ValueError("both interpolated trajectories must be set or both must be None")
+        else:
             for field_name in left._tensor_fields():
-                dst, src = getattr(left, field_name), getattr(right, field_name)
-                if dst is not None and src is not None and dst.shape == src.shape:
-                    dst[mask] = src[mask]
+                self._copy_tensor_at_mask(
+                    getattr(left, field_name), getattr(right, field_name), mask
+                )
+        target_metrics, source_metrics = self.interpolated_metrics, other.interpolated_metrics
+        if target_metrics is None and source_metrics is None:
+            return
+        if target_metrics is None or source_metrics is None:
+            raise ValueError("both interpolated_metrics fields must be set or both must be None")
+        copy = getattr(target_metrics, "copy_only_index", None)
+        if not callable(copy):
+            raise NotImplementedError(
+                "interpolated metric values must provide copy_only_index for portable batch merging"
+            )
+        copy(source_metrics, mask)
 
     @staticmethod
     def _gather_seed_tensor(value: Optional[torch.Tensor], indices: torch.Tensor, seed_shape: tuple[int, int]) -> Optional[torch.Tensor]:
@@ -182,6 +206,10 @@ class TrajOptSolverResult(BaseSolverResult):
         # ``num_seeds`` can be omitted by callers constructing a bare result;
         # derive it from the cost tensor in that case.
         original_count = self.seed_cost.shape[1] if self.seed_cost is not None else self.total_cost_reshaped.shape[1]
+        # Preserve V2's identity fast path.  Besides avoiding needless copies,
+        # this retains metric views when callers request every available seed.
+        if topk == original_count:
+            return self
         seed_shape = (indices.shape[0], original_count)
         result = self.clone()
         for item in fields(result):
@@ -250,26 +278,47 @@ class TrajOptSolverResult(BaseSolverResult):
 
     def copy_successful_solutions(self, other: "TrajOptSolverResult") -> None:
         """Copy successful individual batch/seed candidates from ``other``."""
-        if self.success.shape != other.success.shape:
-            raise ValueError("success tensors must share shape")
-        if self.success.ndim != 2:
-            # Base-style result values without a seed dimension are still
-            # useful for callers selecting whole batch entries.
-            self.copy_at_batch_indices(other, other.success.to(dtype=torch.bool))
+        if not isinstance(other, TrajOptSolverResult):
+            raise TypeError("other must be a TrajOptSolverResult")
+        if self.success.ndim != 2 or other.success.ndim != 2:
+            # A non-seeded TrajOpt result has the same batch-level contract as
+            # BaseSolverResult; leave its strict validation and merge there.
+            super().copy_successful_solutions(other)
+            self._copy_interpolated_at_batch_indices(other, other.success)
             return
+        super().copy_successful_solutions(other)
+        if self.success.shape != other.success.shape:
+            # ``super`` normally reports this before we reach here, but retain
+            # a direct guarantee for static type users calling this override.
+            raise ValueError("success tensors must share shape")
         batch_idx, seed_idx = other.success.nonzero(as_tuple=True)
-        for item in fields(self):
-            name = item.name
-            if name in {"metrics", "interpolated_metrics", "debug_info", "solution_state"}:
-                continue
-            left, right = getattr(self, name), getattr(other, name)
-            if isinstance(left, torch.Tensor) and isinstance(right, torch.Tensor) and left.ndim >= 2:
-                if left.shape == right.shape:
-                    left[batch_idx, seed_idx] = right[batch_idx, seed_idx]
-        for name in ("js_solution", "interpolated_trajectory"):
-            left, right = getattr(self, name), getattr(other, name)
-            if left is not None and right is not None:
-                copy_joint_state_at_batch_seed_indices(left, right, batch_idx, seed_idx)
+        left, right = self.interpolated_trajectory, other.interpolated_trajectory
+        if left is None and right is None:
+            pass
+        elif left is None or right is None:
+            raise ValueError("both interpolated trajectories must be set or both must be None")
+        else:
+            copy_joint_state_at_batch_seed_indices(left, right, batch_idx, seed_idx)
+        target, source = self.interpolated_last_tstep, other.interpolated_last_tstep
+        if target is None and source is None:
+            pass
+        elif target is None or source is None:
+            raise ValueError("both interpolated_last_tstep fields must be set or both must be None")
+        else:
+            if target.shape != source.shape or target.device != source.device:
+                raise ValueError("interpolated_last_tstep tensors must share shape and device")
+            target[batch_idx, seed_idx] = source[batch_idx, seed_idx]
+        target_metrics, source_metrics = self.interpolated_metrics, other.interpolated_metrics
+        if target_metrics is None and source_metrics is None:
+            return
+        if target_metrics is None or source_metrics is None:
+            raise ValueError("both interpolated_metrics fields must be set or both must be None")
+        copy = getattr(target_metrics, "copy_at_batch_seed_indices", None)
+        if not callable(copy):
+            raise NotImplementedError(
+                "interpolated metric values must provide copy_at_batch_seed_indices for portable seed merging"
+            )
+        copy(source_metrics, batch_idx, seed_idx)
 
 
 __all__ = ["TrajOptSolverResult"]

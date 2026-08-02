@@ -111,6 +111,47 @@ def _select_action_channel(state: JointState, index: int) -> JointState:
     )
 
 
+def _copy_batch_tensor(
+    target: Optional[torch.Tensor], source: Optional[torch.Tensor], mask: torch.Tensor, name: str
+) -> None:
+    """Copy a complete MPC batch selection with explicit layout failures."""
+    if target is None and source is None:
+        return
+    if target is None or source is None:
+        raise ValueError(f"both {name} fields must be set or both must be None")
+    if target.device != source.device or target.shape != source.shape:
+        raise ValueError(f"{name} tensors must share shape and device")
+    if target.ndim < 1 or target.shape[0] != mask.numel():
+        raise ValueError(f"{name} must have the MPC batch as its leading dimension")
+    target[mask] = source[mask]
+
+
+def _copy_batch_joint_state(
+    target: Optional[JointState], source: Optional[JointState], mask: torch.Tensor, name: str
+) -> None:
+    if target is None and source is None:
+        return
+    if target is None or source is None:
+        raise ValueError(f"both {name} fields must be set or both must be None")
+    for field_name in target._tensor_fields():
+        _copy_batch_tensor(
+            getattr(target, field_name), getattr(source, field_name), mask, f"{name}.{field_name}"
+        )
+
+
+def _copy_batch_robot_state(
+    target: Optional[RobotState], source: Optional[RobotState], mask: torch.Tensor
+) -> None:
+    if target is None and source is None:
+        return
+    if target is None or source is None:
+        raise ValueError("both robot_state_sequence fields must be set or both must be None")
+    # RobotState owns portable model-state copy semantics (including flattened
+    # batch/seed FK payloads).  Reuse that public lifecycle instead of
+    # guessing which model fields happen to be materialised.
+    target.copy_only_index(source, mask)
+
+
 @dataclass
 class MPCSolverResult(BaseSolverResult):
     """Result specific to the portable MPC solver.
@@ -219,6 +260,18 @@ class MPCSolverResult(BaseSolverResult):
                 raise ValueError(f"{name}.position must have shape {shape}")
             if device is not None and position.device != device:
                 raise ValueError(f"{name} must reside on the result device")
+        if self.action_buffer is not None and self.action_sequence is not None:
+            if self.action_buffer.shape != self.action_sequence.position.shape:
+                raise ValueError("action_buffer and action_sequence.position must share shape")
+        if self.action_sequence is not None and self.full_action_sequence is not None:
+            if self.action_sequence.position.shape != self.full_action_sequence.position.shape:
+                raise ValueError("action_sequence and full_action_sequence must share shape")
+        if self.robot_state_sequence is not None:
+            position = self.robot_state_sequence.joint_state.position
+            if position.ndim != 3 or (batch and position.shape[0] != batch):
+                raise ValueError("robot_state_sequence.joint_state.position must have shape [batch, horizon, dof]")
+            if device is not None and position.device != device:
+                raise ValueError("robot_state_sequence must reside on the result device")
         if self.action_dt is not None and (not isinstance(self.action_dt, (float, int)) or self.action_dt <= 0):
             raise ValueError("action_dt must be a positive scalar when provided")
 
@@ -261,8 +314,25 @@ class MPCSolverResult(BaseSolverResult):
             if index < 0 or index >= self.action_buffer.shape[1]:
                 raise IndexError("action index is outside the available action horizon")
             names = None if self.action_sequence is None else self.action_sequence.joint_names
-            return JointState.from_position(
-                self.action_buffer[:, index].clone(), None if names is None else names.copy()
+            dt = None
+            if self.action_sequence is not None and self.action_sequence.dt is not None:
+                sequence_dt = self.action_sequence.dt
+                if sequence_dt.ndim >= 2 and sequence_dt.shape[:2] == self.action_buffer.shape[:2]:
+                    dt = sequence_dt[:, index].clone()
+                else:
+                    dt = sequence_dt.clone()
+            elif self.action_dt is not None:
+                dt = torch.full(
+                    (self.action_buffer.shape[0],), float(self.action_dt),
+                    device=self.action_buffer.device, dtype=self.action_buffer.dtype,
+                )
+            return JointState(
+                self.action_buffer[:, index].clone(),
+                torch.zeros_like(self.action_buffer[:, index]),
+                torch.zeros_like(self.action_buffer[:, index]),
+                None if names is None else names.copy(),
+                torch.zeros_like(self.action_buffer[:, index]),
+                dt=dt,
             )
         if self.action_sequence is not None:
             return _select_action_channel(self.action_sequence, index)
@@ -277,6 +347,32 @@ class MPCSolverResult(BaseSolverResult):
             raise ValueError("success must have a leading result batch dimension")
         success = self.success.reshape(batch, -1).all(dim=1)
         return self.select_batch(success.nonzero(as_tuple=False).flatten())
+
+    def _copy_mpc_at_batch_indices(self, other: "MPCSolverResult", mask: torch.Tensor) -> None:
+        """Copy MPC-only plan/action payloads selected by a batch mask."""
+        _copy_batch_joint_state(self.next_action, other.next_action, mask, "next_action")
+        _copy_batch_joint_state(self.action_sequence, other.action_sequence, mask, "action_sequence")
+        _copy_batch_joint_state(
+            self.full_action_sequence, other.full_action_sequence, mask, "full_action_sequence"
+        )
+        _copy_batch_robot_state(self.robot_state_sequence, other.robot_state_sequence, mask)
+        _copy_batch_tensor(self.action_buffer, other.action_buffer, mask, "action_buffer")
+
+    def copy_at_batch_indices(self, other: "MPCSolverResult", mask: torch.Tensor) -> None:
+        """Copy complete materialised MPC result rows, including actions."""
+        if not isinstance(other, MPCSolverResult):
+            raise TypeError("other must be an MPCSolverResult")
+        super().copy_at_batch_indices(other, mask)
+        self._copy_mpc_at_batch_indices(other, mask)
+
+    def copy_successful_solutions(self, other: "MPCSolverResult") -> None:
+        """Merge successful MPC rows, including current and full action plans."""
+        if not isinstance(other, MPCSolverResult):
+            raise TypeError("other must be an MPCSolverResult")
+        if other.success.ndim != 1:
+            raise ValueError("MPC success must have shape [batch] for action-plan merging")
+        super().copy_successful_solutions(other)
+        self._copy_mpc_at_batch_indices(other, other.success)
 
 
 __all__ = ["MPCSolverResult"]
