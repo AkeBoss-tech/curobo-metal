@@ -1089,9 +1089,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 7,
         "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 20,
         "status": "partial"
       },
       "name": "curobo._src.collision.collision_robot_scene_cfg",
@@ -1857,9 +1857,9 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 7,
         "path": "curobo/_src/cost/cost_cspace_base.py",
-        "resolved_symbols": 1,
+        "resolved_symbols": 3,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_base",
@@ -2317,9 +2317,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 7,
         "path": "curobo/_src/cost/cost_cspace_dist.py",
-        "resolved_symbols": 2,
+        "resolved_symbols": 3,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_dist",
@@ -2770,9 +2770,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 6,
         "path": "curobo/_src/cost/cost_cspace_position.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 4,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_position",
@@ -2948,9 +2948,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 6,
         "path": "curobo/_src/cost/cost_cspace_state.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 4,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_state",
@@ -3228,9 +3228,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 7,
         "path": "curobo/_src/cost/cost_scene_collision.py",
-        "resolved_symbols": 1,
+        "resolved_symbols": 4,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_scene_collision",
@@ -3738,9 +3738,9 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 5,
         "path": "curobo/_src/cost/cost_self_collision.py",
-        "resolved_symbols": 2,
+        "resolved_symbols": 3,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_self_collision",
@@ -4005,9 +4005,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 5,
         "path": "curobo/_src/cost/cost_support_polygon.py",
-        "resolved_symbols": 1,
+        "resolved_symbols": 3,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_support_polygon",
@@ -4237,9 +4237,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 9,
         "path": "curobo/_src/cost/cost_tool_pose.py",
-        "resolved_symbols": 5,
+        "resolved_symbols": 6,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_tool_pose",
@@ -18241,9 +18241,9 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 9,
         "path": "curobo/_src/geom/data/data_voxel.py",
-        "resolved_symbols": 10,
+        "resolved_symbols": 15,
         "status": "partial"
       },
       "name": "curobo._src.geom.data.data_voxel",
@@ -19372,9 +19372,9 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 1,
         "path": "curobo/_src/geom/data/helper_pose.py",
-        "resolved_symbols": 2,
+        "resolved_symbols": 5,
         "status": "partial"
       },
       "name": "curobo._src.geom.data.helper_pose",
@@ -22972,9 +22972,9 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
+        "missing_symbols": 16,
         "path": "curobo/_src/geom/types.py",
-        "resolved_symbols": 19,
+        "resolved_symbols": 24,
         "status": "partial"
       },
       "name": "curobo._src.geom.types",
@@ -75572,9 +75572,9 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 13,
         "path": "curobo/_src/rollout/rollout_robot.py",
-        "resolved_symbols": 8,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.rollout.rollout_robot",
@@ -87960,9 +87960,9 @@
     },
     {
       "local": {
-        "missing_symbols": 44,
+        "missing_symbols": 15,
         "path": "curobo/_src/state/state_joint.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 36,
         "status": "partial"
       },
       "name": "curobo._src.state.state_joint",
@@ -94492,9 +94492,9 @@
     },
     {
       "local": {
-        "missing_symbols": 27,
+        "missing_symbols": 15,
         "path": "curobo/_src/types/pose.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 18,
         "status": "partial"
       },
       "name": "curobo._src.types.pose",
@@ -97727,10 +97727,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/config_io.py",
-        "resolved_symbols": 15,
-        "status": "partial"
+        "resolved_symbols": 27,
+        "status": "resolved"
       },
       "name": "curobo._src.util.config_io",
       "path": "curobo/_src/util/config_io.py",
@@ -99043,10 +99043,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/sampling/sample_buffer.py",
-        "resolved_symbols": 4,
-        "status": "partial"
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo._src.util.sampling.sample_buffer",
       "path": "curobo/_src/util/sampling/sample_buffer.py",
@@ -99542,10 +99542,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/sampling/sequencer_base.py",
-        "resolved_symbols": 3,
-        "status": "partial"
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.util.sampling.sequencer_base",
       "path": "curobo/_src/util/sampling/sequencer_base.py",
@@ -100060,10 +100060,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/state_filter.py",
-        "resolved_symbols": 7,
-        "status": "partial"
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo._src.util.state_filter",
       "path": "curobo/_src/util/state_filter.py",
@@ -100424,10 +100424,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/tensor_util.py",
-        "resolved_symbols": 18,
-        "status": "partial"
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo._src.util.tensor_util",
       "path": "curobo/_src/util/tensor_util.py",
@@ -100922,10 +100922,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/torch_util.py",
-        "resolved_symbols": 15,
-        "status": "partial"
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo._src.util.torch_util",
       "path": "curobo/_src/util/torch_util.py",
@@ -101128,10 +101128,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/torch_utils.py",
-        "resolved_symbols": 0,
-        "status": "partial"
+        "resolved_symbols": 1,
+        "status": "resolved"
       },
       "name": "curobo._src.util.torch_utils",
       "path": "curobo/_src/util/torch_utils.py",
@@ -101147,9 +101147,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 1,
         "path": "curobo/_src/util/trajectory.py",
-        "resolved_symbols": 15,
+        "resolved_symbols": 22,
         "status": "partial"
       },
       "name": "curobo._src.util.trajectory",
@@ -101603,10 +101603,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/trajectory_execution_manager.py",
-        "resolved_symbols": 4,
-        "status": "partial"
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo._src.util.trajectory_execution_manager",
       "path": "curobo/_src/util/trajectory_execution_manager.py",
@@ -101961,10 +101961,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/trajectory_seed_generator.py",
-        "resolved_symbols": 6,
-        "status": "partial"
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.util.trajectory_seed_generator",
       "path": "curobo/_src/util/trajectory_seed_generator.py",
@@ -105805,10 +105805,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/xrdf_util.py",
-        "resolved_symbols": 8,
-        "status": "partial"
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo._src.util.xrdf_util",
       "path": "curobo/_src/util/xrdf_util.py",
@@ -105945,10 +105945,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/xrdf_utils.py",
-        "resolved_symbols": 0,
-        "status": "partial"
+        "resolved_symbols": 1,
+        "status": "resolved"
       },
       "name": "curobo._src.util.xrdf_utils",
       "path": "curobo/_src/util/xrdf_utils.py",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 262,
-    "resolved_modules": 99,
+    "partial_modules": 251,
+    "resolved_modules": 110,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 262,
-    "resolved_modules": 99,
+    "partial_modules": 251,
+    "resolved_modules": 110,
     "symbols": 7182
   },
   "upstream": {
