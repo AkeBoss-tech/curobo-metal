@@ -57,6 +57,16 @@ class SeedIKSolverCfg:
     def __post_init__(self):
         if self.max_iterations <= 0 or self.inner_iterations <= 0:
             raise ValueError("seed IK iteration counts must be positive")
+        if self.max_iterations < self.inner_iterations:
+            raise ValueError("max_iterations must be >= inner_iterations")
+        if self.max_iterations % self.inner_iterations:
+            raise ValueError("max_iterations must be divisible by inner_iterations")
+        if self.num_seeds <= 0:
+            raise ValueError("num_seeds must be positive")
+        if self.lambda_initial <= 0 or self.lambda_factor <= 1:
+            raise ValueError("LM damping must be positive and lambda_factor > 1")
+        if not 0.0 <= self.batch_success_threshold <= 1.0:
+            raise ValueError("batch_success_threshold must be in [0, 1]")
 
 
 __all__ = ["SeedIKSolverCfg"]

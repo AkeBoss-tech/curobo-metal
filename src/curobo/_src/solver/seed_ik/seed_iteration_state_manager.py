@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 
 from .seed_ik_state import SeedIKState
@@ -29,33 +31,30 @@ class SeedIterationStateManager:
             predicted_reduction, batch_size,
         )
         accepted = self._determine_step_acceptance(ratio, batch_size)
-        result = current_state.clone()
-        for name in (
-            "joint_position", "error_norm", "jTerror", "jacobian",
-            "position_errors", "orientation_errors",
-        ):
-            old, new = getattr(result, name), getattr(candidate_state, name)
-            if old is not None and new is not None:
-                mask = accepted.reshape(accepted.shape + (1,) * (new.ndim - accepted.ndim))
-                setattr(result, name, torch.where(mask, new, old))
-        result.lambda_damping = self._update_damping_parameter(
+        selected = self._select_state_values(current_state, candidate_state, accepted)
+        error_norm = torch.where(accepted, candidate_state.error_norm, current_state.error_norm)
+        damping = self._update_damping_parameter(
             current_state.lambda_damping, accepted, batch_size
         )
-        result.success = self._check_convergence(
-            result.joint_position, result.position_errors, result.orientation_errors
+        success = self._check_convergence(
+            selected.joint_position, selected.position_errors, selected.orientation_errors
         )
-        return result
+        return SeedIKState(
+            success=success, improvement=accepted, joint_position=selected.joint_position,
+            error_norm=error_norm, jTerror=selected.jTerror, jacobian=selected.jacobian,
+            lambda_damping=damping, position_errors=selected.position_errors,
+            orientation_errors=selected.orientation_errors,
+        )
 
     def _calculate_trust_region_ratio(self, old_error_norm, new_error_norm, predicted_reduction, batch_size):
-        del batch_size
-        return (old_error_norm - new_error_norm) / predicted_reduction.clamp_min(1e-12)
+        return (old_error_norm - new_error_norm) / (
+            predicted_reduction.reshape(batch_size).clamp_min(1e-8)
+        )
     def _determine_step_acceptance(self, trust_ratio, batch_size):
-        del batch_size
-        return trust_ratio > self.rho_min
+        return trust_ratio.reshape(batch_size) >= self.rho_min
     def _update_damping_parameter(self, current_damping, step_accepted, batch_size):
-        del batch_size
         factor = torch.where(
-            step_accepted,
+            step_accepted.reshape(batch_size, 1, 1),
             current_damping.new_tensor(1 / self.lambda_factor),
             current_damping.new_tensor(self.lambda_factor),
         )
@@ -68,7 +67,29 @@ class SeedIterationStateManager:
             orientation_errors <= self.orientation_tolerance
         )
     def _check_joint_limit_satisfaction(self, joint_position):
-        return ((joint_position >= self.action_min) & (joint_position <= self.action_max)).all(-1)
+        return ((joint_position > self.action_min) & (joint_position < self.action_max)).all(-1)
+
+    @dataclass
+    class SelectedStateValues:
+        joint_position: torch.Tensor
+        jTerror: torch.Tensor
+        jacobian: torch.Tensor
+        position_errors: torch.Tensor
+        orientation_errors: torch.Tensor
+
+    def _select_state_values(
+        self, current_state: SeedIKState, candidate_state: SeedIKState, accepted: torch.Tensor
+    ) -> "SeedIterationStateManager.SelectedStateValues":
+        mask_1d = accepted.reshape(-1)
+        mask_2d = mask_1d[:, None]
+        mask_3d = mask_1d[:, None, None]
+        return self.SelectedStateValues(
+            torch.where(mask_2d, candidate_state.joint_position, current_state.joint_position),
+            torch.where(mask_2d, candidate_state.jTerror, current_state.jTerror),
+            torch.where(mask_3d, candidate_state.jacobian, current_state.jacobian),
+            torch.where(mask_1d, candidate_state.position_errors, current_state.position_errors),
+            torch.where(mask_1d, candidate_state.orientation_errors, current_state.orientation_errors),
+        )
 
 
 __all__ = ["SeedIterationStateManager"]
