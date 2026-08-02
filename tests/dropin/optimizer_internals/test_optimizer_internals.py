@@ -94,11 +94,12 @@ def test_particle_update_helpers_are_batched_and_normalized():
     actions = torch.arange(24.0).reshape(2, 3, 2, 2)
     weights = jit_calculate_exp_util_from_costs(costs, torch.ones(2), beta=0.5)
     torch.testing.assert_close(weights.sum(-1), torch.ones(2))
-    mean, covariance = jit_mean_cov_diag_a(
-        costs, actions, torch.ones(2), torch.zeros(2, 2, 2), torch.ones(2, 2, 2),
+    mean, covariance, scale = jit_mean_cov_diag_a(
+        costs, actions, torch.ones(2), torch.zeros(2, 2, 2), torch.ones(2, 1, 2),
         1.0, 1.0, 1e-4, 0.5,
     )
-    assert mean.shape == covariance.shape == (2, 2, 2)
+    assert mean.shape == (2, 2, 2)
+    assert covariance.shape == scale.shape == (2, 1, 2)
     assert bool((covariance >= 1e-4).all())
     # ES uses centered z-score utilities rather than MPPI's probability
     # weights.  It therefore has zero mean along the particle dimension.
