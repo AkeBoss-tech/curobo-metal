@@ -2,11 +2,14 @@
 
 `curobo._src.optim.particle.mppi.MPPI` implements the pinned V2 MPPI
 distribution lifecycle with ordinary PyTorch tensors on CPU and Apple MPS.
-It keeps a batched action mean, per-action-dimension diagonal covariance,
-softmax cost weighting, optional null-action particles, deterministic
-CPU-seeded sampling, warm-start shifts, reset/reinitialize operations, and
-recorded rollout/debug state.  Rollout actions and all distribution state stay
-on the requested PyTorch device.
+It keeps a batched action mean, `DIAG_A` and `SIGMA_I` covariance modes,
+softmax cost weighting, the V2 sampled/negated/null particle mix,
+deterministic fixed or per-iteration sample schedules, warm-start shifts,
+reset/reinitialize operations, and recorded rollout/debug state.  When
+`sample_per_problem=False`, all batch items receive the same reproducible
+perturbation population; otherwise each receives an independent deterministic
+population. Rollout actions and all distribution state stay on the requested
+PyTorch device.
 
 The following upstream backend details deliberately remain unsupported rather
 than being misrepresented: CUDA graph capture/replay, Warp sampling kernels,

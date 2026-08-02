@@ -64,6 +64,12 @@ class MPPICfg(PortableOptCfg):
             raise ValueError("null_act_frac must lie in [0, 1]")
         if self.beta <= 0.0 or self.kappa < 0.0:
             raise ValueError("beta must be positive and kappa must be nonnegative")
+        if not 0.0 <= self.step_size_mean <= 1.0:
+            raise ValueError("step_size_mean must lie in [0, 1]")
+        if not 0.0 <= self.step_size_cov <= 1.0:
+            raise ValueError("step_size_cov must lie in [0, 1]")
+        if self.gamma < 0.0:
+            raise ValueError("gamma must be nonnegative")
         if isinstance(self.base_action, str):
             self.base_action = BaseActionType[self.base_action.upper()]
         if isinstance(self.cov_type, str):
@@ -101,6 +107,9 @@ class MPPI(PortableOptimizer):
         self._seed_action: torch.Tensor | None = None
         self._last_rollouts: torch.Tensor | None = None
         self._last_costs: torch.Tensor | None = None
+        self._sample_cursor = 0
+        self._num_steps = 0
+        self._og_num_iters = config.num_iters
 
     # -- Persistent distribution -------------------------------------------------
 
@@ -115,12 +124,20 @@ class MPPI(PortableOptimizer):
     def _covariance(self, problems: int, action_dim: int, *, device, dtype) -> torch.Tensor:
         value = torch.as_tensor(self.config.init_cov, device=device, dtype=dtype)
         if value.ndim == 0:
-            value = value.expand(problems, 1, action_dim)
+            value = value.expand(problems, 1, 1 if self.config.cov_type == CovType.SIGMA_I else action_dim)
         elif value.ndim == 1:
-            if value.numel() != action_dim:
-                raise ValueError("init_cov vector must have action_dim elements")
-            value = value.reshape(1, 1, action_dim).expand(problems, -1, -1)
+            if self.config.cov_type == CovType.SIGMA_I:
+                if value.numel() not in (1, problems):
+                    raise ValueError("SIGMA_I init_cov must be scalar or have one value per problem")
+                value = value.reshape(-1, 1, 1).expand(problems, -1, -1)
+            else:
+                if value.numel() != action_dim:
+                    raise ValueError("init_cov vector must have action_dim elements")
+                value = value.reshape(1, 1, action_dim).expand(problems, -1, -1)
         elif value.ndim == 2:
+            if self.config.cov_type == CovType.SIGMA_I and value.shape in ((problems, 1), (1, 1)):
+                value = value.reshape(value.shape[0], 1, 1).expand(problems, -1, -1)
+                return value.clamp_min(torch.finfo(dtype).eps)
             if value.shape == (problems, action_dim):
                 value = value.unsqueeze(-2)
             elif value.shape == (1, action_dim):
@@ -173,6 +190,9 @@ class MPPI(PortableOptimizer):
             self._dist.scale_tril = torch.sqrt(cov)
             self._dist.inv_cov = cov.reciprocal()
             self._best_action = mean.detach().clone()
+            self._sample_cursor = 0
+            self._sample_set = None
+            self._sample_iter = None
         self.config.num_problems = problems
         return seed
 
@@ -234,12 +254,18 @@ class MPPI(PortableOptimizer):
     def full_scale_tril(self):
         if self._dist is None:
             return None
+        if self.config.cov_type == CovType.SIGMA_I:
+            diagonal = self._dist.scale_tril.expand(-1, -1, self.action_dim).squeeze(-2)
+            return torch.diag_embed(diagonal)
         return torch.diag_embed(self._dist.scale_tril.squeeze(-2))
 
     @property
     def full_inv_cov(self):
         if self._dist is None:
             return None
+        if self.config.cov_type == CovType.SIGMA_I:
+            diagonal = self._dist.inv_cov.expand(-1, -1, self.action_dim).squeeze(-2)
+            return torch.diag_embed(diagonal)
         return torch.diag_embed(self._dist.inv_cov.squeeze(-2))
 
     @property
@@ -260,19 +286,33 @@ class MPPI(PortableOptimizer):
 
     @property
     def sampled_particles_per_problem(self):
-        return self.config.num_particles
+        return self.config.num_particles - self.null_per_problem - self.neg_per_problem
 
     @property
     def null_per_problem(self):
-        return int(round(self.config.num_particles * self.config.null_act_frac))
+        return round(int(self.config.null_act_frac * self.config.num_particles * 0.5))
 
     @property
     def neg_per_problem(self):
-        return 0
+        return round(int(self.config.null_act_frac * self.config.num_particles)) - self.null_per_problem
 
     @property
     def total_num_particles(self):
         return self.config.num_problems * self.config.num_particles
+
+    @property
+    def null_act_seqs(self):
+        if self._dist is None:
+            return None
+        return torch.zeros(
+            (self.null_per_problem, self.action_horizon, self.action_dim),
+            device=self._dist.mean.device,
+            dtype=self._dist.mean.dtype,
+        )
+
+    @property
+    def num_steps(self):
+        return self._num_steps
 
     @property
     def problem_col(self):
@@ -303,6 +343,20 @@ class MPPI(PortableOptimizer):
     def solver_names(self):
         return [self.config.solver_name]
 
+    @property
+    def action_horizon_bounds_lows(self):
+        low = self.action_bound_lows
+        if low is None:
+            return None
+        return torch.as_tensor(low, device=self.device_cfg.device, dtype=self.device_cfg.dtype).reshape(1, -1).expand(self.action_horizon, -1).reshape(-1)
+
+    @property
+    def action_horizon_bounds_highs(self):
+        high = self.action_bound_highs
+        if high is None:
+            return None
+        return torch.as_tensor(high, device=self.device_cfg.device, dtype=self.device_cfg.dtype).reshape(1, -1).expand(self.action_horizon, -1).reshape(-1)
+
     # -- Sampling, evaluation, and update ---------------------------------------
 
     def _noise(self, problems: int, particles: int, horizon: int, action_dim: int, *, device, dtype, iteration: int):
@@ -311,7 +365,37 @@ class MPPI(PortableOptimizer):
         # noise tensor onto MPS avoids a CPU fallback operator.
         generator = torch.Generator(device="cpu")
         generator.manual_seed(int(self.config.seed) + int(iteration))
-        return torch.randn((problems, particles, horizon, action_dim), generator=generator, dtype=dtype, device="cpu").to(device)
+        sample_problems = problems if self.config.sample_per_problem else 1
+        noise = torch.randn(
+            (sample_problems, particles, horizon, action_dim),
+            generator=generator, dtype=dtype, device="cpu",
+        )
+        if sample_problems == 1 and problems > 1:
+            noise = noise.expand(problems, -1, -1, -1).clone()
+        return noise.to(device)
+
+    def _noise_schedule(self, problems: int, particles: int, horizon: int, action_dim: int, *, device, dtype, iteration: int) -> torch.Tensor:
+        """Return the V2-style cached particle perturbations for one iteration.
+
+        ``fixed_samples`` uses the same deterministic population on each
+        iteration.  Otherwise the portable buffer holds one population per
+        configured iteration and wraps after the last entry, matching the
+        upstream GaussianDistribution cursor lifecycle without CUDA buffers.
+        """
+        fixed = bool(getattr(self.config.sample_params, "fixed_samples", True))
+        buffer_iters = 1 if fixed else max(1, int(self.config.num_iters))
+        expected = (buffer_iters, problems, particles, horizon, action_dim)
+        if self._sample_iter is None or tuple(self._sample_iter.shape) != expected or self._sample_iter.device != device or self._sample_iter.dtype != dtype:
+            values = [
+                self._noise(problems, particles, horizon, action_dim, device=device, dtype=dtype, iteration=offset)
+                for offset in range(buffer_iters)
+            ]
+            self._sample_iter = torch.stack(values, dim=0)
+            self._sample_set = self._sample_iter
+            self._sample_cursor = 0
+        index = 0 if fixed else self._sample_cursor % buffer_iters
+        self._sample_cursor = 0 if fixed else (self._sample_cursor + 1) % buffer_iters
+        return self._sample_iter[index]
 
     def _project(self, actions: torch.Tensor) -> torch.Tensor:
         low, high = self.action_bound_lows, self.action_bound_highs
@@ -319,7 +403,34 @@ class MPPI(PortableOptimizer):
             return actions
         low = torch.as_tensor(low, device=actions.device, dtype=actions.dtype)
         high = torch.as_tensor(high, device=actions.device, dtype=actions.dtype)
+        mode = getattr(self.config.squash_fn, "name", str(self.config.squash_fn)).upper()
+        if "TANH" in mode:
+            return low + (torch.tanh(actions) + 1.0) * 0.5 * (high - low)
         return torch.maximum(torch.minimum(actions, high), low)
+
+    def _particle_population(
+        self, problems: int, horizon: int, action_dim: int, *, device, dtype, iteration: int
+    ) -> torch.Tensor:
+        """Compose sampled, negated, and null actions in pinned V2 order."""
+        assert self._dist is not None
+        sampled = self.config.num_particles - self.null_per_problem - self.neg_per_problem
+        if sampled <= 0:
+            raise ValueError("null_act_frac leaves no stochastic MPPI particles")
+        noise = self._noise_schedule(
+            problems, sampled, horizon, action_dim, device=device, dtype=dtype, iteration=iteration
+        )
+        scaled = self._dist.mean[:, None] + noise * self._dist.scale_tril[:, None]
+        # The final sampled particle is the exact current mean, a useful V2
+        # invariant when bounds or covariance make all random candidates bad.
+        scaled[:, -1] = self._dist.mean
+        entries = [scaled]
+        if self.neg_per_problem:
+            entries.append((-self._dist.mean).unsqueeze(1).expand(-1, self.neg_per_problem, -1, -1))
+        if self.null_per_problem:
+            entries.append(torch.zeros(
+                (problems, self.null_per_problem, horizon, action_dim), device=device, dtype=dtype
+            ))
+        return self._project(torch.cat(entries, dim=1))
 
     def _evaluate_costs(self, population: torch.Tensor) -> torch.Tensor:
         objective = _objective(self.rollout_fn)
@@ -343,11 +454,23 @@ class MPPI(PortableOptimizer):
         gamma = self.gamma_seq.to(device=costs.device, dtype=costs.dtype)
         if gamma.numel() != costs.shape[-1]:
             gamma = torch.pow(torch.as_tensor(self.config.gamma, device=costs.device, dtype=costs.dtype), torch.arange(costs.shape[-1], device=costs.device, dtype=costs.dtype))
-        mean, covariance, scale = jit_mean_cov_diag_a(
-            costs, actions, gamma, self._dist.mean, self._dist.cov,
-            self.config.step_size_mean, self.config.step_size_cov,
-            self.config.kappa, self.config.beta,
-        )
+        if self.config.cov_type == CovType.SIGMA_I:
+            weights = jit_calculate_exp_util_from_costs(costs, gamma, self.config.beta)
+            expanded = weights[..., None, None]
+            weighted_mean = (expanded * actions).sum(dim=-3)
+            mean = jit_blend_mean(self._dist.mean, weighted_mean, self.config.step_size_mean)
+            deltas = actions - self._dist.mean.unsqueeze(-3)
+            estimate = (expanded * deltas.square()).sum(dim=-3).mean(dim=(-2, -1), keepdim=True)
+            covariance = jit_blend_cov(
+                self._dist.cov, estimate, self.config.step_size_cov, self.config.kappa
+            )
+            scale = covariance.sqrt()
+        else:
+            mean, covariance, scale = jit_mean_cov_diag_a(
+                costs, actions, gamma, self._dist.mean, self._dist.cov,
+                self.config.step_size_mean, self.config.step_size_cov,
+                self.config.kappa, self.config.beta,
+            )
         self._dist.mean = mean
         if self.config.update_cov:
             self._dist.cov, self._dist.scale_tril = covariance, scale
@@ -369,12 +492,9 @@ class MPPI(PortableOptimizer):
         best_cost = torch.full((problems,), torch.inf, device=seed.device, dtype=seed.dtype)
         best = self._dist.mean.detach().clone()
         for iteration in range(self.config.num_iters):
-            noise = self._noise(problems, particles, horizon, action_dim, device=seed.device, dtype=seed.dtype, iteration=iteration)
-            population = self._dist.mean[:, None] + noise * self._dist.scale_tril[:, None]
-            population[:, 0] = self._dist.mean
-            if self.null_per_problem:
-                population[:, :self.null_per_problem] = 0.0
-            population = self._project(population)
+            population = self._particle_population(
+                problems, horizon, action_dim, device=seed.device, dtype=seed.dtype, iteration=iteration
+            )
             costs = self._evaluate_costs(population)
             total = jit_compute_total_cost(self.gamma_seq.to(costs), costs)
             safe_total = torch.where(torch.isfinite(total), total, torch.full_like(total, torch.inf))
@@ -396,6 +516,7 @@ class MPPI(PortableOptimizer):
                 objective_history.append(best_cost.detach().clone())
                 mean_history.append(self._dist.mean.detach().clone())
                 cov_history.append(self._dist.cov.detach().clone())
+            self._num_steps += 1
         self._best_action = best.detach().clone()
         self._seed_action = seed.detach().clone()
         self.debug = None if not self.config.store_debug else {
@@ -404,19 +525,30 @@ class MPPI(PortableOptimizer):
         if self.config.sample_mode == SampleMode.BEST:
             output = best
         elif self.config.sample_mode == SampleMode.SAMPLE:
-            output = self._project(self._dist.mean + self._noise(problems, 1, horizon, action_dim, device=seed.device, dtype=seed.dtype, iteration=self.config.num_iters)[:, 0] * self._dist.scale_tril)
+            output = self._project(
+                self._dist.mean
+                + self._noise(
+                    problems, 1, horizon, action_dim, device=seed.device, dtype=seed.dtype,
+                    iteration=self.config.num_iters + 123 * self._num_steps,
+                )[:, 0]
+                * self._dist.scale_tril
+            )
         else:
             output = self._dist.mean
         return output.reshape(seed_action.shape)
 
     def sample_actions(self, init_act):
-        seed = self._ensure_distribution(torch.as_tensor(init_act), reset_mean=True)
+        if init_act is None:
+            if self._dist is None:
+                raise RuntimeError("MPPI distribution is initialized by optimize, update_seed, or sample_actions(seed)")
+            seed = self._dist.mean
+        else:
+            seed = self._ensure_distribution(torch.as_tensor(init_act), reset_mean=True)
         assert self._dist is not None
         problems, horizon, action_dim = self._dist.mean.shape
-        noise = self._noise(problems, self.config.num_particles, horizon, action_dim, device=seed.device, dtype=seed.dtype, iteration=0)
-        actions = self._project(self._dist.mean[:, None] + noise * self._dist.scale_tril[:, None])
-        if self.null_per_problem:
-            actions[:, :self.null_per_problem] = 0.0
+        actions = self._particle_population(
+            problems, horizon, action_dim, device=seed.device, dtype=seed.dtype, iteration=self._sample_cursor
+        )
         self._sample_set = actions.reshape(-1, horizon, action_dim)
         return self._sample_set
 
@@ -430,12 +562,38 @@ class MPPI(PortableOptimizer):
         device, dtype = self.mean_action.device, self.mean_action.dtype
         return torch.randn((count, horizon, action_dim), generator=generator, dtype=dtype, device="cpu").to(device)
 
+    def _get_action_seq(self, mode: Any):
+        """Select the current distribution action using the V2 sample mode."""
+        if self._dist is None:
+            return None
+        if isinstance(mode, str):
+            mode = SampleMode[mode.upper()]
+        if mode == SampleMode.BEST:
+            return self.best_traj
+        if mode == SampleMode.SAMPLE:
+            problems, horizon, action_dim = self._dist.mean.shape
+            return self._project(
+                self._dist.mean
+                + self._noise(
+                    problems, 1, horizon, action_dim,
+                    device=self._dist.mean.device, dtype=self._dist.mean.dtype,
+                    iteration=self.config.seed + 123 * self._num_steps,
+                )[:, 0]
+                * self._dist.scale_tril
+            )
+        if mode == SampleMode.MEAN:
+            return self.mean_action
+        raise ValueError(f"unidentified MPPI sample mode: {mode!r}")
+
     # -- Optimizer lifecycle ------------------------------------------------------
 
     def update_num_problems(self, num_problems: int):
         super().update_num_problems(num_problems)
         if self._dist is not None:
             self._dist = None
+        self._sample_set = None
+        self._sample_iter = None
+        self._sample_cursor = 0
 
     def update_init_mean(self, init_mean):
         self.config.init_mean = torch.as_tensor(init_mean).detach().clone()
@@ -447,7 +605,6 @@ class MPPI(PortableOptimizer):
         return self.mean_action
 
     def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False):
-        del reset_num_iters
         seed = self._ensure_distribution(torch.as_tensor(action), reset_mean=False)
         assert self._dist is not None
         if mask is None:
@@ -458,12 +615,22 @@ class MPPI(PortableOptimizer):
         if clear_optimizer_state:
             self._cache.reset()
             self._best_action = self._dist.mean.detach().clone()
+            self._sample_cursor = 0
+        if reset_num_iters:
+            self.config.num_iters = self._og_num_iters
         return self.mean_action
 
     def reset_mean(self, reset_problem_ids=None):
         if self._dist is None:
             return None
-        initial = self._seed_action if self._seed_action is not None else torch.zeros_like(self._dist.mean)
+        if self.config.random_mean:
+            initial = self._noise(
+                self._dist.mean.shape[0], 1, self._dist.mean.shape[-2], self._dist.mean.shape[-1],
+                device=self._dist.mean.device, dtype=self._dist.mean.dtype,
+                iteration=2567 + self._num_steps,
+            )[:, 0]
+        else:
+            initial = self._seed_action if self._seed_action is not None else torch.zeros_like(self._dist.mean)
         if reset_problem_ids is None:
             self._dist.mean.copy_(initial)
         else:
@@ -486,16 +653,23 @@ class MPPI(PortableOptimizer):
 
     def reset_distribution(self, reset_problem_ids=None):
         self.reset_mean(reset_problem_ids)
-        return self.reset_covariance(reset_problem_ids)
+        value = self.reset_covariance(reset_problem_ids)
+        self._sample_cursor = 0
+        return value
 
     def reset_seed(self):
         if self._dist is not None:
             self._dist.reset_seed()
+            self._sample_cursor = 0
+            self._sample_set = None
+            self._sample_iter = None
+        return True
 
     def initialize_samples(self):
         if self.mean_action is None:
             return None
-        return self.sample_actions(self.mean_action)
+        # Keep the current warm-start mean intact while rebuilding samples.
+        return self.sample_actions(None)
 
     update_samples = initialize_samples
 
@@ -521,29 +695,28 @@ class MPPI(PortableOptimizer):
 
     _shift = shift
 
-    def get_all_rollout_instances(self):
-        return self._rollout_list
-
-    def get_rollouts(self):
-        return self.get_all_rollout_instances()
-
-    def compute_metrics(self, action):
-        return _objective(self.rollout_fn)(action)
-
     def reset_shape(self):
+        for rollout in self._rollout_list:
+            callback = getattr(rollout, "reset_shape", None)
+            if callable(callback):
+                callback()
         self._dist = None
         self._distribution_shape = None
+        self._sample_set = None
+        self._sample_iter = None
+        self._sample_cursor = 0
 
     def reset_cuda_graph(self):
         raise NotImplementedError("CUDA Graph capture is unavailable on CPU/MPS")
 
-    def get_recorded_trace(self):
-        return None
-
     def update_solver_params(self, solver_params):
-        for key, value in dict(solver_params).items():
+        values = dict(solver_params)
+        if self.config.solver_name in values:
+            values = dict(values[self.config.solver_name])
+        for key, value in values.items():
             if hasattr(self.config, key):
                 setattr(self.config, key, value)
+        return True
 
     def update_niters(self, niters):
         self.config.update_niters(niters)
@@ -552,6 +725,43 @@ class MPPI(PortableOptimizer):
         if file_path:
             torch.save(self.debug, file_path)
         return self.debug
+
+    def get_recorded_trace(self):
+        if self.debug is None:
+            return {"debug": [], "debug_cost": []}
+        return self.debug
+
+    def get_rollouts(self):
+        """Return visualized/top action trajectories, matching ParticleOptCore."""
+        return self._top_trajs
+
+    def get_all_rollout_instances(self):
+        return self._rollout_list
+
+    def compute_metrics(self, action):
+        callback = getattr(self.rollout_fn, "compute_metrics_from_action", None)
+        return callback(action) if callable(callback) else _objective(self.rollout_fn)(action)
+
+    def update_rollout_params(self, goal):
+        for rollout in self._rollout_list:
+            callback = getattr(rollout, "update_params", None)
+            if callable(callback):
+                try:
+                    callback(goal, num_particles=self.config.num_particles)
+                except TypeError:
+                    callback(goal)
+        return True
+
+    def update_goal_dt(self, goal):
+        for rollout in self._rollout_list:
+            callback = getattr(rollout, "update_goal_dt", None)
+            if callable(callback):
+                callback(goal)
+            else:
+                callback = getattr(rollout, "update_dt", None)
+                if callable(callback):
+                    callback(goal)
+        return True
 
 
 # -- Pinned tensor helpers -------------------------------------------------------
