@@ -12,6 +12,17 @@ collision-sphere loading invariants, step/time tolerances, and reset behavior.
 `solve_sequence` resets first and returns states arranged as
 `[environment, frame, dof]`.
 
+`MotionRetargeterCfg` is also the device-compilation boundary: criteria built
+with the default CPU factory are copied to its declared CPU or MPS
+`DeviceCfg`, without mutating a caller-owned criteria dictionary.  Its
+`batch_shape` reports the fixed `[environment, tracked-tool]` capacity, and
+`with_device(...)` recompiles the same declarative request for CPU or MPS.
+Malformed capacities, empty optimizer lists, device descriptions, and an MPC
+cold-start iteration count below its warm-start count fail while constructing
+the config rather than during a solve.  CUDA device requests are rejected by
+the shared portable device resolver; no CUDA graph, Warp, or Isaac runtime is
+created by configuration compilation.
+
 Both IK and MPC honor the fixed `num_envs` capacity.  In particular, a batched
 MPC retargeter executes the requested number of endpoint steps independently
 for every environment and returns an endpoint trajectory with shape
