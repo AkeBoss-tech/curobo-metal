@@ -51639,9 +51639,9 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
+        "missing_symbols": 22,
         "path": "curobo/_src/perception/mapper/integrator_esdf.py",
-        "resolved_symbols": 11,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.integrator_esdf",
@@ -52829,9 +52829,9 @@
     },
     {
       "local": {
-        "missing_symbols": 32,
+        "missing_symbols": 29,
         "path": "curobo/_src/perception/mapper/integrator_tsdf.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.integrator_tsdf",
