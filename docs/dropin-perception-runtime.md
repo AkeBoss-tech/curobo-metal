@@ -23,8 +23,13 @@ performance and tie behavior need not match those approximate CUDA schedulers.
 high-level lifecycle: camera fusion, resets/imports, AABB and explicit-cell
 clearing, dense ESDF computation, mesh/voxel export, stats, and source-shaped
 checkpoint metadata. The portable ESDF grid must use the TSDF grid's shape and
-voxel size; sliding windows and resampling are rejected rather than silently
-returning an incorrectly registered distance field. `use_cuda_graph=True` is a
+voxel size. Lossless sliding windows at integer-voxel offsets are supported;
+fractional-window resampling remains explicit rather than silently returning
+an incorrectly registered distance field. `blend_esdf=True` uses measured
+observed TSDF values near surfaces and the exact dense EDT away from them. The
+ESDF facade exposes an `is_esdf_current` lifecycle signal and a
+`query(points, padding=...)` path that refreshes invalidated fields through
+the production differentiable voxel sampler. `use_cuda_graph=True` is a
 persistent portable-execution request, not a CUDA Graph object.
 
 The integrator facades keep the V2 component and lifecycle spellings: `.tsdf`

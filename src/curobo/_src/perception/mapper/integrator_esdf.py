@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Callable, Optional, Sequence, Tuple
 
 import torch
 
 from curobo._src.geom.types import VoxelGrid
+from curobo_metal.ops.world_collision import VoxelGrid as NativeVoxelGrid
+from curobo_metal.ops.world_collision import query_esdf
 from .integrator_tsdf import BlockSparseTSDFIntegrator, BlockSparseTSDFIntegratorCfg
 
 
@@ -66,9 +69,35 @@ class BlockSparseESDFIntegratorCfg:
     accumulator_w_max: float = 1000.0
 
     def __post_init__(self) -> None:
+        scalar_values = {
+            "voxel_size": self.voxel_size,
+            "truncation_distance": self.truncation_distance,
+            "depth_minimum_distance": self.depth_minimum_distance,
+            "depth_maximum_distance": self.depth_maximum_distance,
+            "frustum_decay": self.frustum_decay,
+            "time_decay": self.time_decay,
+            "minimum_tsdf_weight": self.minimum_tsdf_weight,
+            "adjacent_skip_steps": self.adjacent_skip_steps,
+            "roughness": self.roughness,
+            "accumulator_w_max": self.accumulator_w_max,
+        }
+        if not all(math.isfinite(float(value)) for value in scalar_values.values()):
+            raise ValueError("ESDF configuration scalars must be finite")
+        if self.voxel_size <= 0 or self.truncation_distance <= 0:
+            raise ValueError("voxel_size and truncation_distance must be positive")
+        if self.depth_minimum_distance < 0 or self.depth_minimum_distance >= self.depth_maximum_distance:
+            raise ValueError("depth_minimum_distance must be nonnegative and less than depth_maximum_distance")
+        if not 0 < self.frustum_decay <= 1 or not 0 < self.time_decay <= 1:
+            raise ValueError("frustum_decay and time_decay must be in (0, 1]")
+        if self.minimum_tsdf_weight < 0 or self.roughness <= 0 or self.accumulator_w_max <= 0:
+            raise ValueError("minimum_tsdf_weight must be nonnegative; roughness and accumulator_w_max positive")
+        if not isinstance(self.blend_esdf, bool) or not isinstance(self.use_cuda_graph, bool):
+            raise TypeError("blend_esdf and use_cuda_graph must be bool")
         if self.esdf_voxel_size is None:
             self.esdf_voxel_size = self.voxel_size
-        if self.esdf_voxel_size != self.voxel_size:
+        if not math.isfinite(float(self.esdf_voxel_size)) or self.esdf_voxel_size <= 0:
+            raise ValueError("esdf_voxel_size must be finite and positive")
+        if not math.isclose(float(self.esdf_voxel_size), float(self.voxel_size), rel_tol=0.0, abs_tol=1e-7):
             raise NotImplementedError("portable ESDF resampling requires a dense resampling backend")
         if self.grid_shape is not None:
             self.grid_shape = tuple(int(n) for n in self.grid_shape)
@@ -118,6 +147,9 @@ class BlockSparseESDFIntegrator:
         self._origin = config.origin.to(device=self.device)
         self._last_esdf_origin = self._origin.clone()
         self._frame_count = 0
+        self._compute_count = 0
+        self._last_compute_generation: Optional[torch.Tensor] = None
+        self._last_window_occupancy: Optional[torch.Tensor] = None
         self._tsdf_integrator = None if config.grid_shape is None else BlockSparseTSDFIntegrator(BlockSparseTSDFIntegratorCfg(
             voxel_size=config.voxel_size, origin=config.origin,
             truncation_distance=config.truncation_distance, max_blocks=config.max_blocks,
@@ -193,6 +225,20 @@ class BlockSparseESDFIntegrator:
     @property
     def dist_field(self): return self._dist_field
 
+    @property
+    def is_esdf_current(self) -> bool:
+        """Whether the public field matches the latest mapper generation.
+
+        The dense portable map does not expose a CUDA event or graph fence.
+        A cloned generation vector provides an honest lifecycle signal instead.
+        """
+        if self._tsdf_integrator is None or self._last_compute_generation is None:
+            return False
+        return bool(torch.equal(
+            self._last_compute_generation,
+            self._tsdf_integrator.mapper._mapper.state.generation,
+        ))
+
     def reset(self):
         if self._tsdf_integrator is None:
             return None
@@ -201,6 +247,9 @@ class BlockSparseESDFIntegrator:
         self._dist_field.zero_()
         self._last_esdf_origin.copy_(self._origin)
         self._frame_count = 0
+        self._compute_count = 0
+        self._last_compute_generation = None
+        self._last_window_occupancy = None
 
     def import_blocks(self, blocks):
         if self._tsdf_integrator is None:
@@ -209,6 +258,8 @@ class BlockSparseESDFIntegrator:
         self._site_index.fill_(-1)
         self._dist_field.zero_()
         self._frame_count = int(result > 0)
+        self._last_compute_generation = None
+        self._last_window_occupancy = None
         return result
 
     def integrate(self, observation=None, *, camera_observation=None, lidar_observation=None):
@@ -219,6 +270,8 @@ class BlockSparseESDFIntegrator:
             lidar_observation=lidar_observation,
         )
         self._frame_count += 1
+        self._last_compute_generation = None
+        self._last_window_occupancy = None
         return result
 
     def clear_region(self, bounds_min, bounds_max):
@@ -228,6 +281,8 @@ class BlockSparseESDFIntegrator:
         if result:
             self._site_index.fill_(-1)
             self._dist_field.zero_()
+            self._last_compute_generation = None
+            self._last_window_occupancy = None
         return result
 
     def clear_blocks(self, pool_indices):
@@ -237,9 +292,39 @@ class BlockSparseESDFIntegrator:
         if result:
             self._site_index.fill_(-1)
             self._dist_field.zero_()
+            self._last_compute_generation = None
+            self._last_window_occupancy = None
         return result
 
-    def _seed_dense_sites(self) -> None:
+    def _window_tensor(self, value: torch.Tensor, origin: torch.Tensor) -> torch.Tensor:
+        """Return a same-resolution window of a fixed dense source grid.
+
+        CUDA's sparse mapper can shift an ESDF window independently of the
+        backing TSDF.  This bounded implementation supports the lossless
+        subset: integer-voxel translations.  Out-of-source cells are empty.
+        """
+        if value.shape != self._esdf_grid_shape:
+            raise RuntimeError("portable ESDF source and output shapes must match")
+        delta = (origin - self._origin) / self.esdf_voxel_size
+        shift = torch.round(delta).to(torch.int64)
+        if not torch.allclose(delta, shift.to(delta.dtype), atol=1e-5, rtol=0):
+            raise NotImplementedError(
+                "portable ESDF sliding windows require an integer-voxel origin shift"
+            )
+        result = torch.zeros_like(value)
+        source_slices, destination_slices = [], []
+        for axis, size in enumerate(self._esdf_grid_shape):
+            amount = int(shift[axis].item())
+            source_start, destination_start = max(amount, 0), max(-amount, 0)
+            extent = min(size - source_start, size - destination_start)
+            if extent <= 0:
+                return result
+            source_slices.append(slice(source_start, source_start + extent))
+            destination_slices.append(slice(destination_start, destination_start + extent))
+        result[tuple(destination_slices)] = value[tuple(source_slices)]
+        return result
+
+    def _seed_dense_sites(self, occupancy: Optional[torch.Tensor] = None) -> None:
         """Populate a deterministic dense nearest-occupied-site diagnostic.
 
         It replaces the upstream packed-Warp site-index buffer.  The exact
@@ -249,8 +334,9 @@ class BlockSparseESDFIntegrator:
         """
         if self._site_index is None:
             return
-        state = self._tsdf_integrator.mapper._mapper.state
-        occupied = torch.nonzero(state.occupancy[0], as_tuple=False)
+        if occupancy is None:
+            occupancy = self._tsdf_integrator.mapper._mapper.state.occupancy[0]
+        occupied = torch.nonzero(occupancy, as_tuple=False)
         self._site_index.fill_(-1)
         if occupied.numel() == 0:
             return
@@ -263,37 +349,66 @@ class BlockSparseESDFIntegrator:
         # than upstream's packed xyz bit field; dense storage has no such ABI.
         self._site_index.copy_(nearest.reshape(self._esdf_grid_shape))
 
-    def _refresh_dist_field(self) -> torch.Tensor:
+    def _refresh_dist_field(self, origin: torch.Tensor) -> torch.Tensor:
         state = self._tsdf_integrator.mapper._mapper.state
-        self._dist_field = state.esdf[0].to(dtype=self._field_dtype)
-        self._seed_dense_sites()
+        occupancy = self._window_tensor(state.occupancy[0], origin)
+        tsdf = self._window_tensor(state.tsdf[0], origin)
+        weight = self._window_tensor(state.weight[0], origin)
+        if torch.equal(origin, self._origin):
+            field = state.esdf[0].to(dtype=self._field_dtype)
+        else:
+            from curobo_metal.ops.perception import dense_esdf
+            compute_dtype = torch.float32 if self._field_dtype == torch.float16 else self._field_dtype
+            field, _ = dense_esdf(
+                occupancy.unsqueeze(0), self.esdf_voxel_size,
+                self._tsdf_integrator.mapper._mapper.config.unobserved_esdf,
+                dtype=compute_dtype,
+            )
+            field = field[0].to(dtype=self._field_dtype)
+        if self.config.blend_esdf:
+            # The measured TSDF is most informative at observed surface cells;
+            # smoothly hand off to the exact dense EDT away from that band.
+            observed = weight >= self.config.minimum_tsdf_weight
+            confidence = (1 - tsdf.abs()).clamp(0, 1) * observed.to(tsdf.dtype)
+            metric_tsdf = tsdf.to(field.dtype) * self.truncation_distance
+            field = confidence.to(field.dtype) * metric_tsdf + (1 - confidence.to(field.dtype)) * field
+        self._dist_field = field
+        self._last_window_occupancy = occupancy
+        self._seed_dense_sites(occupancy)
         return self._dist_field
 
     def compute_esdf(self, esdf_origin: Optional[torch.Tensor] = None,
                      esdf_voxel_size: Optional[torch.Tensor] = None):
         if esdf_voxel_size is not None:
             value = float(torch.as_tensor(esdf_voxel_size).reshape(-1)[0].item())
-            if value != self.config.voxel_size:
+            if not math.isclose(value, self.config.voxel_size, rel_tol=0.0, abs_tol=1e-7):
                 raise NotImplementedError("portable ESDF resampling requires a dense resampling backend")
+        origin = self._last_esdf_origin
         if esdf_origin is not None:
             origin = torch.as_tensor(esdf_origin, device=self.device, dtype=self._origin.dtype)
             if origin.shape != (3,):
                 raise ValueError("esdf_origin must be an xyz vector")
-            if not torch.allclose(origin, self._origin):
-                raise NotImplementedError("portable ESDF sliding windows are not implemented")
-            self._last_esdf_origin.copy_(origin)
         if self._tsdf_integrator is None:
             raise RuntimeError("compute_esdf requires grid_shape at construction")
-        return self._compute_esdf_impl(self._last_esdf_origin, self._esdf_voxel_size)
+        # Keep the public registration transactional: a rejected fractional
+        # shift must not leave a valid field mislabeled with a new origin.
+        field = self._compute_esdf_impl(origin, self._esdf_voxel_size)
+        self._last_esdf_origin.copy_(origin)
+        return field
 
     def _seed_esdf_impl(self, esdf_origin, esdf_voxel_size):
-        del esdf_origin, esdf_voxel_size
-        self._seed_dense_sites()
+        del esdf_voxel_size
+        state = self._tsdf_integrator.mapper._mapper.state
+        self._last_window_occupancy = self._window_tensor(state.occupancy[0], esdf_origin)
+        self._seed_dense_sites(self._last_window_occupancy)
         return None
 
     def _propagate_and_distance_impl(self, esdf_origin, esdf_voxel_size):
-        del esdf_origin, esdf_voxel_size
-        return self._refresh_dist_field()
+        del esdf_voxel_size
+        field = self._refresh_dist_field(esdf_origin)
+        self._compute_count += 1
+        self._last_compute_generation = self._tsdf_integrator.mapper._mapper.state.generation.clone()
+        return field
 
     def _compute_esdf_impl(self, esdf_origin, esdf_voxel_size):
         self._seed_esdf_impl(esdf_origin, esdf_voxel_size)
@@ -367,6 +482,29 @@ class BlockSparseESDFIntegrator:
             feature_dtype=self._field_dtype,
         )
 
+    def query(self, points: torch.Tensor, *, padding: float = 0.0):
+        """Sample the latest ESDF through the production world-query path.
+
+        Queries refresh a stale cache so callers cannot accidentally plan
+        against the zeroed invalidation buffer after map mutation.
+        """
+        if self._tsdf_integrator is None:
+            raise RuntimeError("query requires grid_shape at construction")
+        if not self.is_esdf_current:
+            self.compute_esdf()
+        # World-collision's differentiable sampler deliberately supports only
+        # float32/64.  ESDF storage may be float16 for source compatibility,
+        # so promote only the sampling view rather than changing the field ABI.
+        field = self._dist_field if self._field_dtype != torch.float16 else self._dist_field.float()
+        shape = field.new_tensor(self.esdf_grid_shape)
+        center = self._last_esdf_origin + shape * self.esdf_voxel_size * 0.5
+        grid = NativeVoxelGrid(
+            field, self.esdf_voxel_size, center.to(dtype=field.dtype),
+            torch.eye(3, device=self.device, dtype=field.dtype),
+            self._tsdf_integrator.mapper._mapper.config.unobserved_esdf,
+        )
+        return query_esdf(points, [[grid]], padding=padding)
+
     def get_stats(self, scan_pool: bool = True, scan_hash: bool = False):
         if self._tsdf_integrator is None:
             return {"frame_count": 0, "storage": "external_dense_input"}
@@ -383,6 +521,9 @@ class BlockSparseESDFIntegrator:
             "tsdf_memory_mb": tsdf_memory,
             "esdf_memory_mb": esdf_memory,
             "total_memory_mb": tsdf_memory + esdf_memory,
+            "esdf_compute_count": self._compute_count,
+            "esdf_current": self.is_esdf_current,
+            "esdf_blended": self.config.blend_esdf,
         })
         return stats
 
@@ -397,4 +538,6 @@ class BlockSparseESDFIntegrator:
         result = self._tsdf_integrator.update_static_obstacles(scene, env_idx)
         self._site_index.fill_(-1)
         self._dist_field.zero_()
+        self._last_compute_generation = None
+        self._last_window_occupancy = None
         return result
