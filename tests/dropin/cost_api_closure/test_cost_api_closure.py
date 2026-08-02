@@ -21,6 +21,7 @@ from curobo._src.cost.cost_support_polygon import CostSupportPolygon
 from curobo._src.cost.cost_support_polygon_cfg import CostSupportPolygonCfg
 from curobo._src.cost.cost_tool_pose import ToolPoseCost
 from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCostCfg
+from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
 from curobo._src.cost.cost_cspace_type import CSpaceCostType
 from curobo._src.cost.wp_cspace_position import PositionCSpaceFunction
 from curobo._src.cost.wp_cspace_state import StateCSpaceFunction
@@ -46,6 +47,21 @@ def test_cost_enable_disable_preserves_reusable_config() -> None:
     assert cost.enabled and cost.weight.item() == 2.0
     assert cost.setup_batch_tensors(2, 3)
     assert cost.forward().shape == (2, 3, 1)
+
+
+def test_derived_cost_config_clone_keeps_type_and_independent_tensor_state() -> None:
+    cfg = CSpaceCostCfg(
+        weight=[1.0, 2.0], dof=2, cost_type=CSpaceCostType.POSITION,
+        activation_distance=[0.0, 0.1], joint_limits=_limits(),
+        cspace_target_weight=3.0, cspace_target_dof_weight=[4.0, 5.0],
+    )
+    copied = cfg.clone()
+    assert isinstance(copied, CSpaceCostCfg)
+    assert copied.joint_limits is not cfg.joint_limits
+    copied.weight[0] = 99.0
+    copied.cspace_target_dof_weight[0] = 88.0
+    assert cfg.weight[0].item() == 1.0
+    assert cfg.cspace_target_dof_weight[0].item() == 4.0
 
 
 def test_raw_warp_cost_bridges_fail_precisely() -> None:
@@ -112,10 +128,63 @@ def test_tool_pose_goalset_criteria_and_gradient() -> None:
     assert torch.isfinite(position.grad).all() and torch.isfinite(quat.grad).all()
 
 
+def test_tool_pose_criteria_partial_updates_tolerance_and_goal_frame_projection() -> None:
+    position = torch.tensor([[[[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]]], requires_grad=True)
+    quat = torch.tensor([[[[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]]], requires_grad=True)
+    current = ToolPose(["a", "b"], position, quat)
+    # The goal frame for a is rotated 90 degrees around z.  Tracking only its
+    # goal-frame y axis distinguishes projected from world-frame translation.
+    half = 2**-0.5
+    goals = GoalToolPose(
+        ["a", "b"],
+        torch.zeros((1, 1, 2, 1, 3)),
+        torch.tensor([[[[[half, 0.0, 0.0, half]], [[1.0, 0.0, 0.0, 0.0]]]]]),
+    )
+    cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["a", "b"])
+    cfg.tool_pose_criteria["a"] = ToolPoseCriteria(
+        terminal_pose_axes_weight_factor=[0, 1, 0, 0, 0, 0],
+        non_terminal_pose_axes_weight_factor=[0, 1, 0, 0, 0, 0],
+        project_distance_to_goal=True,
+    )
+    cost = ToolPoseCost(cfg)
+    initial, _, _, _ = cost(current, goals)
+    assert initial[0, 0, 0] > 0  # x-world is y in the rotated goal frame.
+    before_b = cost._stacked_tool_pose_criteria.terminal_pose_axes_weight_factor[1].clone()
+    cost.update_tool_pose_criteria({"a": ToolPoseCriteria.disabled()})
+    assert torch.equal(cost._stacked_tool_pose_criteria.terminal_pose_axes_weight_factor[1], before_b)
+    disabled, _, _, _ = cost(current, goals)
+    assert disabled[0, 0, 0].item() == 0.0
+
+    tolerance_cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["a"])
+    tolerance_cfg.tool_pose_criteria["a"] = ToolPoseCriteria(
+        terminal_pose_convergence_tolerance=[1.0, 0.0],
+    )
+    tolerance_cost = ToolPoseCost(tolerance_cfg)
+    single = ToolPose(["a"], position[:, :, :1], quat[:, :, :1])
+    single_goal = GoalToolPose(
+        ["a"], goals.position[:, :, :1], torch.tensor([[[[[1.0, 0.0, 0.0, 0.0]]]]]),
+    )
+    output, *_ = tolerance_cost(single, single_goal)
+    assert output.item() == 0.0
+    output.sum().backward()
+    assert torch.isfinite(position.grad).all() and torch.isfinite(quat.grad).all()
+
+
 class _Checker:
     def get_sphere_distance(self, spheres, env_query_idx=None):
         del env_query_idx
         return torch.tensor([[[.3, -.2, .3]]], device=spheres.device, dtype=spheres.dtype)
+
+
+class _SweepChecker:
+    def __init__(self):
+        self.speed_metric = None
+
+    def get_swept_sphere_distance(self, state, buffer, weight, *, activation_distance,
+                                  trajectory_dt, enable_speed_metric, env_query_idx, return_loss):
+        del buffer, weight, activation_distance, trajectory_dt, env_query_idx, return_loss
+        self.speed_metric = enable_speed_metric
+        return state.robot_spheres.new_zeros(state.robot_spheres.shape[:2])
 
 
 @dataclass
@@ -142,6 +211,21 @@ def test_scene_and_self_collision_reductions_and_support_polygon() -> None:
     com = torch.tensor([[[2.0, 0.0, 0.0]]])
     support_value = support(com, spheres.detach())
     assert support_value.shape == (1, 1) and support_value.item() > 0
+
+
+def test_scene_swept_cost_forwards_speed_metric_and_validates_lifecycle() -> None:
+    spheres = torch.zeros((1, 3, 1, 4))
+    state = type("State", (), {"robot_spheres": spheres})()
+    checker = _SweepChecker()
+    cost = SceneCollisionCost(SceneCollisionCostCfg(
+        weight=1.0, num_spheres=1, use_sweep=True, use_speed_metric=True,
+        _scene_collision_checker=checker,
+    ))
+    cost.setup_batch_tensors(1, 3)
+    result = cost(state, trajectory_dt=torch.tensor([0.1]))
+    assert result.shape == (1, 3) and checker.speed_metric is True
+    with pytest.raises(ValueError, match="idxs_env_query"):
+        cost(state, idxs_env_query=torch.zeros(2, dtype=torch.long), trajectory_dt=torch.tensor([0.1]))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple Metal")

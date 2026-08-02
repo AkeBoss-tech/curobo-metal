@@ -105,8 +105,24 @@ class StackedToolPoseCriteria:
         )
 
     def update_tool_pose_criteria(self, tool_pose_criteria):
-        updated = type(self).from_tool_pose_criteria(tool_pose_criteria)
-        self.__dict__.update(updated.__dict__)
+        if not isinstance(tool_pose_criteria, dict):
+            raise TypeError("tool_pose_criteria must be a mapping")
+        for name, criteria in tool_pose_criteria.items():
+            if name not in self.tool_frames:
+                raise ValueError(f"link_name {name!r} not found in tool_frames")
+            if not isinstance(criteria, ToolPoseCriteria):
+                raise TypeError(f"criterion for {name!r} must be a ToolPoseCriteria")
+            index = self.tool_frames.index(name)
+            # Keep the stacked tensors allocated by the original setup.  This
+            # mirrors cuRobo's in-place criteria update and lets a long-lived
+            # cost change one link without invalidating the others.
+            self.terminal_pose_axes_weight_factor[index].copy_(criteria.terminal_pose_axes_weight_factor)
+            self.non_terminal_pose_axes_weight_factor[index].copy_(criteria.non_terminal_pose_axes_weight_factor)
+            self.terminal_pose_convergence_tolerance[index].copy_(criteria.terminal_pose_convergence_tolerance)
+            self.non_terminal_pose_convergence_tolerance[index].copy_(criteria.non_terminal_pose_convergence_tolerance)
+            self.project_distance_to_goal[index].copy_(criteria.project_distance_to_goal)
+            if self._tool_pose_criteria is not None:
+                self._tool_pose_criteria[name].copy_(criteria)
 
 
 __all__ = ["ToolPoseCriteria", "StackedToolPoseCriteria"]

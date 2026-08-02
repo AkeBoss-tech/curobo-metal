@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
@@ -47,7 +47,39 @@ class BaseCostCfg:
             self.weight = self.weight.reshape(1)
 
     def clone(self):
-        return replace(self, weight=self.weight.clone())
+        """Return an independent portable configuration of the same concrete type.
+
+        Cost configs are often held by a rollout and then adjusted for a
+        temporary solve (for example, a terminal target weight).  Returning a
+        ``BaseCostCfg`` here, as the early portability shim did, silently
+        discarded all derived configuration.  Copy tensor-backed fields while
+        preserving explicit external resources such as collision checkers.
+        """
+        values = {
+            item.name: _clone_cost_value(getattr(self, item.name))
+            for item in fields(self)
+        }
+        return type(self)(**values)
+
+
+def _clone_cost_value(value):
+    """Clone mutable cost configuration data without duplicating backends."""
+    if isinstance(value, torch.Tensor):
+        return value.clone()
+    if isinstance(value, list):
+        return [_clone_cost_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_cost_value(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _clone_cost_value(item) for key, item in value.items()}
+    if isinstance(value, DeviceCfg):
+        return value.clone()
+    # Joint-limit records and criteria deliberately expose clone().  External
+    # scene checkers do not, and must remain a shared query resource.
+    clone = getattr(value, "clone", None)
+    if callable(clone) and is_dataclass(value):
+        return clone()
+    return value
 
 
 class BaseCost:
@@ -497,9 +529,25 @@ class ToolPoseCost(BaseCost):
         self._out_position_distance = torch.zeros(shape, **self.device_cfg.as_torch_dict())
         self._out_rotation_distance = torch.zeros(shape, **self.device_cfg.as_torch_dict())
         self._out_goalset_idx = torch.zeros(shape, device=self.device_cfg.device, dtype=torch.int32)
+        # These public buffers are useful to consumers that inspect the
+        # latest cost diagnostics.  The portable path uses native autograd for
+        # the returned value, so buffers are detached observations rather than
+        # a custom CUDA backward workspace.
+        self._out_position_gradient = torch.zeros((*shape, 3), **self.device_cfg.as_torch_dict())
+        self._out_rotation_gradient = torch.zeros((*shape, 4), **self.device_cfg.as_torch_dict())
 
     def update_tool_pose_criteria(self, tool_pose_criteria):
-        self.config.tool_pose_criteria = dict(tool_pose_criteria)
+        if not isinstance(tool_pose_criteria, dict):
+            raise TypeError("tool_pose_criteria must be a mapping of tool frame names to criteria")
+        unknown = set(tool_pose_criteria).difference(self.tool_frames)
+        if unknown:
+            raise ValueError(f"tool pose criteria contains unknown configured frames: {sorted(unknown)}")
+        # Match the upstream partial-update lifecycle: callers can alter one
+        # tool without resetting the criteria for every other configured tool.
+        for name, criteria in tool_pose_criteria.items():
+            if not isinstance(criteria, ToolPoseCriteria):
+                raise TypeError(f"criterion for {name!r} must be a ToolPoseCriteria")
+            self.config.tool_pose_criteria[name].copy_(criteria)
         self._stacked_tool_pose_criteria.update_tool_pose_criteria(tool_pose_criteria)
 
     def forward(self, current_tool_poses: ToolPose, goal_tool_poses: GoalToolPose,
@@ -525,6 +573,21 @@ class ToolPoseCost(BaseCost):
             axes[:, :-1] = running_axes
         pos_axes, rotation_axes = axes[..., :3], axes[..., 3:]
         position_delta = current_pos.unsqueeze(-2) - goal_pos
+        # ``project_distance_to_goal`` measures anisotropic translational
+        # errors in the goal frame.  This matters when callers intentionally
+        # relax a Cartesian axis (linear approach/retreat criteria); Euclidean
+        # norms alone would otherwise hide the requested frame convention.
+        project = criteria.project_distance_to_goal.to(current_pos).bool()
+        if bool(project.any().item()):
+            goal_unit = torch.nn.functional.normalize(goal_quat, dim=-1)
+            qw, qx, qy, qz = goal_unit.unbind(-1)
+            rotation = torch.stack((
+                1 - 2 * (qy.square() + qz.square()), 2 * (qx * qy - qz * qw), 2 * (qx * qz + qy * qw),
+                2 * (qx * qy + qz * qw), 1 - 2 * (qx.square() + qz.square()), 2 * (qy * qz - qx * qw),
+                2 * (qx * qz - qy * qw), 2 * (qy * qz + qx * qw), 1 - 2 * (qx.square() + qy.square()),
+            ), dim=-1).reshape(*goal_unit.shape[:-1], 3, 3)
+            projected = torch.matmul(position_delta.unsqueeze(-2), rotation).squeeze(-2)
+            position_delta = torch.where(project.reshape(1, 1, -1, 1, 1), projected, position_delta)
         p_err = (position_delta.square() * pos_axes.unsqueeze(-2)).sum(-1)
         current_quat = torch.nn.functional.normalize(current_quat, dim=-1)
         goal_quat = torch.nn.functional.normalize(goal_quat, dim=-1)
@@ -532,11 +595,36 @@ class ToolPoseCost(BaseCost):
         # The scalar quaternion distance is distributed across rotation axes,
         # preserving sign invariance and differentiability without Warp.
         r_err = (1 - dot.square()) * rotation_axes.mean(-1).unsqueeze(-1)
+        position_tolerance = criteria.terminal_pose_convergence_tolerance[:, 0].to(current_pos)
+        rotation_tolerance = criteria.terminal_pose_convergence_tolerance[:, 1].to(current_pos)
+        if current_pos.shape[1] > 1:
+            position_tolerance = position_tolerance.expand(current_pos.shape[0], current_pos.shape[1], -1).clone()
+            rotation_tolerance = rotation_tolerance.expand(current_pos.shape[0], current_pos.shape[1], -1).clone()
+            position_tolerance[:, :-1] = criteria.non_terminal_pose_convergence_tolerance[:, 0].to(current_pos)
+            rotation_tolerance[:, :-1] = criteria.non_terminal_pose_convergence_tolerance[:, 1].to(current_pos)
+        # Offset the square root by the same epsilon.  ``sqrt(0)`` has an
+        # infinite derivative in PyTorch; the algebraically zero residual at
+        # an exact goal must instead contribute a finite zero gradient.
+        eps = torch.finfo(current_pos.dtype).eps
+        p_norm = (p_err.clamp_min(0) + eps).sqrt() - eps**0.5
+        r_norm = (r_err.clamp_min(0) + eps).sqrt() - eps**0.5
+        p_err = (p_norm - position_tolerance.unsqueeze(-1)).clamp_min(0).square()
+        r_err = (r_norm - rotation_tolerance.unsqueeze(-1)).clamp_min(0).square()
         total = p_err + r_err
         distance, goal_idx = total.min(-1)
         p_min = p_err.gather(-1, goal_idx.unsqueeze(-1)).squeeze(-1)
         r_min = r_err.gather(-1, goal_idx.unsqueeze(-1)).squeeze(-1)
-        return self._apply_weight(distance), p_min, r_min, goal_idx.to(torch.int32)
+        output = self._apply_weight(distance)
+        # Update diagnostics only when a batch workspace was explicitly
+        # allocated.  Copying detached data keeps a reusable output buffer
+        # without retaining a graph across solver iterations.
+        if getattr(self, "_out_goalset_idx", None) is not None and self._out_goalset_idx.shape == goal_idx.shape:
+            self._out_position_distance.copy_(p_min.detach())
+            self._out_rotation_distance.copy_(r_min.detach())
+            self._out_distance[..., 0].copy_(p_min.detach())
+            self._out_distance[..., 1].copy_(r_min.detach())
+            self._out_goalset_idx.copy_(goal_idx.detach().to(torch.int32))
+        return output, p_min, r_min, goal_idx.to(torch.int32)
 
     __call__ = forward
 
@@ -625,15 +713,26 @@ class SceneCollisionCost(BaseCost):
 
     def forward(self, state, idxs_env_query=None, trajectory_dt=None):
         spheres = getattr(state, "link_spheres_tensor", getattr(state, "robot_spheres", state))
+        self.validate_input(state, idxs_env_query)
         checker = self.config.scene_collision_checker
         if checker is None:
             raise ValueError("scene_collision_checker is required")
         if self.config.use_sweep and hasattr(checker, "get_swept_sphere_distance"):
             if trajectory_dt is None:
                 raise ValueError("trajectory_dt is required when use_sweep=True")
-            distance = checker.get_swept_sphere_distance(state, self._collision_buffer, self._weight,
-                                                         activation_distance=self.config.activation_distance,
-                                                         trajectory_dt=trajectory_dt, env_query_idx=idxs_env_query)
+            try:
+                distance = checker.get_swept_sphere_distance(
+                    state, self._collision_buffer, self._weight,
+                    activation_distance=self.config.activation_distance,
+                    trajectory_dt=trajectory_dt, enable_speed_metric=self.config.use_speed_metric,
+                    env_query_idx=idxs_env_query, return_loss=self.use_grad_input,
+                )
+            except TypeError:
+                # Lightweight user checkers commonly only accept raw spheres.
+                # Preserve that duck-typed contract while full SceneCollision
+                # receives the complete portable lifecycle above.
+                distance = checker.get_swept_sphere_distance(spheres, trajectory_dt=trajectory_dt,
+                                                             env_query_idx=idxs_env_query)
         elif hasattr(checker, "get_sphere_distance"):
             try:
                 distance = checker.get_sphere_distance(spheres, env_query_idx=idxs_env_query)

@@ -13,6 +13,15 @@ configured self-collision pairs, and 2-D support-polygon costs. They operate
 on ordinary PyTorch tensors and preserve device residency on fallback-disabled
 MPS for float32 tensors.
 
+Derived configuration `clone()` calls retain their concrete type and clone
+tensor-backed limits, targets, and criteria.  `ToolPoseCost` supports in-place
+updates for a subset of configured tools, terminal/non-terminal convergence
+tolerances, and goal-frame projection for axis-selective Cartesian approach
+criteria.  Its diagnostic buffers are reusable detached observations; returned
+costs remain native differentiable PyTorch tensors.  Swept scene cost forwards
+the public speed-metric and gradient-input controls to the portable collision
+checker and validates the configured batch/sphere lifecycle.
+
 Raw Warp launch helpers remain deliberately unavailable. In particular, this
 does not claim CUDA packed-buffer ABI compatibility, CUDA Graph capture,
 Warp-specific tie layouts, or numerical identity with the NVIDIA kernels.
