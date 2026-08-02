@@ -2077,9 +2077,9 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 10,
         "path": "curobo/_src/cost/cost_cspace_cfg.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 6,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_cfg",
@@ -81890,9 +81890,9 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
+        "missing_symbols": 15,
         "path": "curobo/_src/solver/solver_ik.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 13,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_ik",
