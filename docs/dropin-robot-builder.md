@@ -12,7 +12,10 @@ collects it unchanged (apart from an optional clip plane).  This makes the
 result directly usable by the portable kinematics and collision checker.  The
 method accepts the V2 fitting arguments so callers do not need a separate
 platform branch; values that do not alter an exact primitive are validated but
-otherwise have no effect.
+otherwise have no effect.  Editing a loaded YAML config is round-trippable:
+tensor-backed runtime cspace values are written as plain YAML lists.  The
+builder also exports the portable YAML-shaped XRDF collision representation
+(spheres, buffers, ignores, tool frames, and cspace) with `save_xrdf`.
 
 ## Explicit boundaries
 
@@ -20,8 +23,8 @@ Fitting arbitrary mesh, box, capsule, or cylinder link geometry is not silently
 approximated.  It raises `NotImplementedError` and requires the optional mesh
 sphere-fit backend.  Sampled self-collision pruning has no portable broad phase;
 `compute_collision_matrix` therefore returns neighbouring-link ignores and
-emits a warning.  XRDF export, USD/Isaac assets, and Viser visualization remain
-explicitly unavailable.
+emits a warning.  Mesh-bearing XRDF authoring, USD/Isaac assets, and Viser
+visualization remain explicitly unavailable.
 
 This is a portable implementation boundary, not a CUDA numerical-equivalence
 claim for Warp mesh fitting or collision-pair pruning.

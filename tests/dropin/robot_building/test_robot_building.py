@@ -12,6 +12,9 @@ from curobo._src.robot.kinematics.kinematics_reducer import KinematicsReducer
 from curobo._src.robot.loader import KinematicsLoader
 from curobo._src.robot.types import CSpaceParams, JointLimits, JointType
 from curobo._src.state.state_joint import JointState
+from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.xrdf_util import convert_xrdf_to_curobo
+from curobo._src.util_file import load_yaml
 
 
 URDF = get_assets_path() / "robot/franka_description/franka_panda.urdf"
@@ -102,6 +105,41 @@ def test_builder_collects_exact_primitive_spheres_and_round_trips_yaml(tmp_path)
     assert loaded.collision_spheres == {"base": [{"center": [0.1, 0.0, 0.0], "radius": 0.1}]}
     with pytest.raises(NotImplementedError, match="exact sphere count"):
         builder.refit_link_spheres("base", num_spheres=2, use_collision_mesh=True)
+
+
+def test_builder_save_serializes_runtime_cspace_and_xrdf(tmp_path):
+    """Loaded configs materialize cspace tensors but remain editable/savable."""
+    builder = RobotBuilder.from_config(str(get_assets_path().parent / "configs/robot/franka.yml"))
+    config = builder.build()
+    yaml_path = tmp_path / "franka-edited.yml"
+    builder.save(config, str(yaml_path))
+    saved = load_yaml(str(yaml_path))
+    cspace = saved["robot_cfg"]["kinematics"]["cspace"]
+    assert isinstance(cspace["default_joint_position"], list)
+    assert isinstance(cspace["max_acceleration"], list)
+    reloaded = RobotBuilder.from_config(str(yaml_path))
+    assert reloaded._cspace_config["joint_names"] == builder._cspace_config["joint_names"]
+
+    xrdf_path = tmp_path / "franka.xrdf"
+    builder.save_xrdf(config, str(xrdf_path), geometry_name="portable_collision")
+    xrdf = load_yaml(str(xrdf_path))
+    assert xrdf["format"] == "xrdf"
+    assert "portable_collision" in xrdf["geometry"]
+    converted = convert_xrdf_to_curobo(input_xrdf_dict=xrdf)
+    assert converted["robot_cfg"]["kinematics"]["cspace"]["joint_names"] == cspace["joint_names"]
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_builder_save_materializes_mps_cspace_as_yaml(tmp_path):
+    builder = RobotBuilder.from_config(
+        str(get_assets_path().parent / "configs/robot/franka.yml"),
+        device_cfg=DeviceCfg(torch.device("mps")),
+    )
+    config = builder.build()
+    assert config.cspace.default_joint_position.device.type == "mps"
+    output = tmp_path / "franka-mps.yml"
+    builder.save(config, str(output))
+    assert isinstance(load_yaml(str(output))["robot_cfg"]["kinematics"]["cspace"]["max_jerk"], list)
 
 
 def test_joint_limits_and_cspace_reindex_scale_clone():

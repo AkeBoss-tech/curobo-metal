@@ -9,16 +9,31 @@ by the regular kinematics/collision stack on CPU or MPS.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
 
+import torch
+
+from curobo.content import get_assets_path, get_robot_configs_path
+from curobo._src.cost.cost_self_collision import SelfCollisionCost
+from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg
+from curobo._src.geom.sphere_fit.fit_spheres import fit_spheres_to_mesh
 from curobo._src.geom.sphere_fit import SphereFitMetrics, SphereFitType
 from curobo._src.geom.types import Sphere
+from curobo._src.robot.kinematics.kinematics import Kinematics
+from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.loader import KinematicsLoaderCfg
 from curobo._src.robot.parser import UrdfRobotParser
+from curobo._src.state.state_joint import JointState
+from curobo._src.types.content_path import ContentPath
 from curobo._src.types.device_cfg import DeviceCfg
-from curobo._src.util.logging import log_warn
+from curobo._src.util.sampling.sample_buffer import SampleBuffer
+from curobo._src.util.viser_visualizer import ViserVisualizer
+from curobo._src.util.xrdf_util import convert_curobo_to_xrdf
+from curobo._src.util_file import join_path, load_yaml, write_yaml
+from curobo._src.util.logging import log_and_raise, log_info, log_warn
 from curobo_metal.config.loaders import dump_yaml, load_robot_config
 
 
@@ -222,11 +237,17 @@ class RobotBuilder:
     def save(
         self, config: KinematicsLoaderCfg, output_path: str, include_cspace: bool = True
     ) -> None:
-        value = {"robot_cfg": {"kinematics": {
-            key: item for key, item in config.__dict__.items()
-            if key not in {"device_cfg", "load_collision_spheres", "num_envs"}
-            and item is not None and (include_cspace or key != "cspace")
-        }}}
+        """Write a portable, reloadable cuRobo robot YAML.
+
+        ``KinematicsLoaderCfg`` deliberately materializes ``cspace`` as
+        ``CSpaceParams`` so the runtime has device tensors.  YAML cannot encode
+        that object directly.  Serialize it back to lists here, retaining the
+        configuration data rather than silently omitting cspace during a
+        builder edit/save/reload workflow.
+        """
+        value = {"robot_cfg": {"kinematics": self._config_mapping(
+            config, include_cspace=include_cspace
+        )}}
         value["robot_cfg"]["kinematics"]["format_version"] = 2.0
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -238,8 +259,21 @@ class RobotBuilder:
         output_path: str,
         geometry_name: str = "collision_model",
     ) -> None:
-        del config, output_path, geometry_name
-        raise NotImplementedError("XRDF authoring is not implemented by the portable builder")
+        """Write the portable YAML-shaped XRDF collision representation.
+
+        This covers spheres, collision buffers/ignores, tool frames, and cspace
+        records.  It intentionally does not author mesh assets, USD stages, or
+        Isaac metadata; those require their respective optional backends.
+        """
+        if not geometry_name or not isinstance(geometry_name, str):
+            raise ValueError("geometry_name must be a non-empty string")
+        kinematics = self._config_mapping(config, include_cspace=True)
+        xrdf = convert_curobo_to_xrdf(
+            {"robot_cfg": {"kinematics": kinematics}}, geometry_name=geometry_name
+        )
+        output = Path(output_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        write_yaml(xrdf, str(output))
 
     def visualize(
         self,
@@ -344,6 +378,37 @@ class RobotBuilder:
     def _merge_collision_ignore(self, custom_ignore: Dict[str, List[str]]) -> None:
         for name, values in custom_ignore.items():
             self.add_collision_ignore(name, values)
+
+    @staticmethod
+    def _yaml_value(value: Any) -> Any:
+        """Convert device/runtime values into conservative YAML primitives."""
+        if isinstance(value, torch.Tensor):
+            return value.detach().cpu().tolist()
+        if isinstance(value, dict):
+            return {str(key): RobotBuilder._yaml_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [RobotBuilder._yaml_value(item) for item in value]
+        if hasattr(value, "__dict__"):
+            return {
+                key: RobotBuilder._yaml_value(item)
+                for key, item in vars(value).items()
+                if key != "device_cfg"
+            }
+        return value
+
+    @classmethod
+    def _config_mapping(
+        cls, config: KinematicsLoaderCfg, *, include_cspace: bool
+    ) -> Dict[str, Any]:
+        """Return exactly the serializable subset accepted by ``from_config``."""
+        excluded = {"device_cfg", "load_collision_spheres", "num_envs"}
+        return {
+            key: cls._yaml_value(item)
+            for key, item in vars(config).items()
+            if key not in excluded
+            and item is not None
+            and (include_cspace or key != "cspace")
+        }
 
 
 __all__ = ["RobotBuilder"]
