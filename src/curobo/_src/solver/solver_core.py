@@ -1,4 +1,11 @@
-"""Backend-neutral solver lifecycle shared by portable high-level facades."""
+"""Shared portable solver infrastructure.
+
+This is deliberately a component rather than a solver base class, matching
+cuRoboV2's ownership model.  It owns stable goal/seed state and propagates
+updates to any portable rollout objects supplied by a configuration.  CUDA
+graphs, streams, and Warp packed-buffer kernels are not emulated: their
+explicit methods fail rather than quietly changing execution semantics.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +13,9 @@ from typing import Dict, List, Optional, Union
 
 import torch
 
+from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
+from curobo._src.geom.collision.buffer_collision import CollisionBuffer
+from curobo._src.geom.collision.collision_scene import SceneCollision, create_scene_collision
 from curobo._src.robot.kinematics.kinematics import Kinematics
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.types.kinematics_params import KinematicsParams
@@ -17,11 +27,25 @@ from .solver_core_cfg import SolverCoreCfg
 
 
 class SolverCore:
-    def __init__(self, config: SolverCoreCfg, scene_collision_checker: Optional["SceneCollision"] = None):
+    """Own the portable FK, goal registry, sampling, and rollout lifecycle.
+
+    ``SolverCoreCfg`` can be assembled by a high-level IK/TrajOpt/MPC facade
+    without constructing CUDA objects.  Configured rollout instances are
+    optional because the production portable solvers compose their own
+    objective implementations; callers can also attach normal ``RobotRollout``
+    objects and receive the same update/reset propagation.
+    """
+
+    def __init__(
+        self, config: SolverCoreCfg, scene_collision_checker: Optional[SceneCollision] = None
+    ) -> None:
         if not isinstance(config, SolverCoreCfg):
             raise TypeError("config must be SolverCoreCfg")
         self.config = config
         self._scene_collision_checker = scene_collision_checker
+        if self._scene_collision_checker is None and config.scene_collision_cfg is not None:
+            self._scene_collision_checker = create_scene_collision(config.scene_collision_cfg)
+
         robot = config.robot_config.kinematics
         self._kinematics = Kinematics(KinematicsCfg(
             config.device_cfg, list(robot.tool_frames), KinematicsParams(robot)
@@ -37,38 +61,127 @@ class SolverCore:
             config.device_cfg, len(joints), lower, upper,
             config.random_seed, action_horizon=1,
         )
-
-    kinematics = property(lambda self: self._kinematics)
-    action_dim = property(lambda self: self._kinematics.dof)
-    action_horizon = property(lambda self: 1)
-    joint_names = property(lambda self: self._kinematics.joint_names)
-    tool_frames = property(lambda self: self._kinematics.tool_frames)
-    device_cfg = property(lambda self: self.config.device_cfg)
-    goal_registry_manager = property(lambda self: self._goal_manager)
-    seed_manager = property(lambda self: self._seed_manager)
-    scene_collision_checker = property(lambda self: self._scene_collision_checker)
-    optimizer = property(lambda self: None)
-    metrics_rollout = property(lambda self: None)
-    auxiliary_rollout = property(lambda self: None)
-    transition_model = property(lambda self: None)
-    solve_state = property(lambda self: None)
-
-    @property
-    def default_joint_position(self):
-        return self.config.robot_config.kinematics.cspace.default_joint_position
+        self._goal_buffer = None
+        self._solve_state = None
+        self._task_initialized = False
+        self._tool_pose_criteria: Dict[str, ToolPoseCriteria] = {
+            name: ToolPoseCriteria.disabled() for name in self.tool_frames
+        }
+        self._joint_position_tracking = False
+        # High-level portable solvers generally own their objective/rollout.
+        # Still expose the lifecycle collections used by shared applications.
+        self.metrics_rollout = None
+        self.auxiliary_rollout = None
+        self.optimizer_rollouts: List[object] = []
+        self.additional_metrics_rollouts: Dict[str, object] = {}
+        self.optimizers: List[object] = []
+        self._optimizer = None
 
     @property
-    def default_joint_state(self):
-        return JointState.from_position(
-            self.device_cfg.to_device(self.default_joint_position), self.joint_names
-        )
+    def kinematics(self) -> Kinematics:
+        return self._kinematics
 
-    def compute_kinematics(self, state: JointState) -> "KinematicsState":
-        return self._kinematics.compute_kinematics(state)
+    @property
+    def action_dim(self) -> int:
+        return self._kinematics.dof
+
+    @property
+    def action_horizon(self) -> int:
+        return 1
+
+    @property
+    def joint_names(self) -> List[str]:
+        return self._kinematics.joint_names
+
+    @property
+    def tool_frames(self) -> List[str]:
+        return list(self._kinematics.tool_frames)
+
+    @property
+    def device_cfg(self):
+        return self.config.device_cfg
+
+    @property
+    def goal_registry_manager(self) -> GoalManager:
+        return self._goal_manager
+
+    @property
+    def seed_manager(self) -> SeedManager:
+        return self._seed_manager
+
+    @property
+    def scene_collision_checker(self) -> Optional[SceneCollision]:
+        return self._scene_collision_checker
+
+    @property
+    def optimizer(self):
+        return self._optimizer
+
+    @property
+    def transition_model(self):
+        return None if self.auxiliary_rollout is None else self.auxiliary_rollout.transition_model
+
+    @property
+    def solve_state(self):
+        return self._solve_state
+
+    @property
+    def default_joint_position(self) -> torch.Tensor:
+        return self.device_cfg.to_device(self.config.robot_config.kinematics.cspace.default_joint_position)
+
+    @property
+    def default_joint_state(self) -> JointState:
+        return JointState.from_position(self.default_joint_position, self.joint_names)
+
+    def compute_kinematics(self, state: JointState):
+        return self._kinematics.compute_kinematics(state).clone()
+
     def get_active_js(self, full_js: JointState) -> JointState:
         return self._kinematics.get_active_js(full_js)
+
     def get_full_js(self, active_js: JointState) -> JointState:
-        return active_js
+        return self._kinematics.get_full_js(active_js)
+
+    def _structural_goal_change(self, solve_state) -> bool:
+        old = self._solve_state
+        if old is None:
+            return True
+        keys = ("solve_type", "batch_size", "num_envs", "num_goalset", "num_seeds",
+                "num_ik_seeds", "num_graph_seeds", "num_trajopt_seeds", "tool_frames")
+        return any(getattr(old, key, None) != getattr(solve_state, key, None) for key in keys)
+
+    def prepare_goal_buffer(
+        self, solve_state, goal_tool_poses,
+        current_state: Optional[JointState] = None, use_implicit_goal: bool = False,
+        seed_goal_state: Optional[JointState] = None, goal_state: Optional[JointState] = None,
+    ):
+        """Update and return ``(GoalRegistry, structural_change)``.
+
+        The second item follows V2's contract: it is true when a batch, seed,
+        environment, goal-set, mode, or controlled-link shape changed.  Value
+        updates reuse the registered shape and only refresh payloads.
+        """
+        if solve_state is None:
+            raise TypeError("solve_state must be SolveState")
+        update_reference = self._structural_goal_change(solve_state)
+        result = self._goal_manager.update_goal_buffer(
+            solve_state,
+            goal_tool_poses=goal_tool_poses,
+            current_js=current_state,
+            seed_goal_js=seed_goal_state,
+            goal_js=goal_state,
+            use_implicit_goal=use_implicit_goal,
+        )
+        # GoalManager's older portable API returned a registry alone while
+        # current revisions may return the native pair.  Normalize here.
+        goal = result[0] if isinstance(result, tuple) else result
+        self._solve_state = self._goal_manager.solve_state
+        self._goal_buffer = goal
+        if update_reference:
+            self.reset_shape()
+            self._task_initialized = True
+        return goal, update_reference
+
     def prepare_action_seeds(
         self, batch_size: int, num_seeds: int, seed_config=None,
         current_state: Optional[JointState] = None, seed_traj: Optional[torch.Tensor] = None,
@@ -76,72 +189,189 @@ class SolverCore:
         return self._seed_manager.prepare_action_seeds(
             batch_size, num_seeds, seed_config, current_state, seed_traj
         )
+
     def prepare_trajectory_seeds(
         self, batch_size: int, num_seeds: int, current_state: JointState,
         seed_config=None, seed_traj: Optional[torch.Tensor] = None,
-    ) -> None:
+    ) -> torch.Tensor:
         return self._seed_manager.prepare_trajectory_seeds(
             batch_size, num_seeds, current_state, seed_config, seed_traj
         )
-    def reset_seed(self): return self._seed_manager.reset_seed()
-    def reset_shape(self): return None
-    def reset_cuda_graph(self):
-        raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
-    def destroy(self): return None
+
     def get_all_rollout_instances(
         self, include_optimizer_rollouts: bool = True, include_auxiliary_rollout: bool = True,
-    ) -> List["RobotRollout"]:
-        del include_optimizer_rollouts, include_auxiliary_rollout
-        return []
-    def update_rollout_params(
-        self, goal_buffer: "GoalRegistry", include_auxiliary_rollout: bool = True,
-    ) -> None:
-        del goal_buffer, include_auxiliary_rollout
-        return True
-    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, "ToolPoseCriteria"]) -> None:
-        self.config.tool_pose_criteria = dict(tool_pose_criteria)
+    ) -> List[object]:
+        values: List[object] = []
+        if self.metrics_rollout is not None:
+            values.append(self.metrics_rollout)
+        if include_auxiliary_rollout and self.auxiliary_rollout is not None:
+            values.append(self.auxiliary_rollout)
+        values.extend(self.additional_metrics_rollouts.values())
+        if include_optimizer_rollouts:
+            values.extend(self.optimizer_rollouts)
+        return values
+
+    def update_rollout_params(self, goal_buffer, include_auxiliary_rollout: bool = True) -> None:
+        if goal_buffer is None:
+            raise TypeError("goal_buffer must be GoalRegistry")
+        for rollout in self.get_all_rollout_instances(
+            include_optimizer_rollouts=False,
+            include_auxiliary_rollout=include_auxiliary_rollout,
+        ):
+            update = getattr(rollout, "update_params", None)
+            if callable(update):
+                update(goal_buffer)
+        if self._optimizer is not None:
+            update = getattr(self._optimizer, "update_rollout_params", None)
+            if callable(update):
+                update(goal_buffer)
+
+    def reset_seed(self) -> None:
+        self._seed_manager.reset_seed()
+        for rollout in self.get_all_rollout_instances():
+            reset = getattr(rollout, "reset_seed", None)
+            if callable(reset):
+                reset()
+        if self._optimizer is not None and hasattr(self._optimizer, "reset_seed"):
+            self._optimizer.reset_seed()
+
+    def reset_shape(self) -> None:
+        for rollout in self.get_all_rollout_instances():
+            reset = getattr(rollout, "reset_shape", None)
+            if callable(reset):
+                reset()
+        if self._optimizer is not None and hasattr(self._optimizer, "reset_shape"):
+            self._optimizer.reset_shape()
+
+    def reset_cuda_graph(self) -> None:
+        raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
+
+    def destroy(self) -> None:
+        # No opaque graph/stream handles exist on the portable backend.  Reset
+        # Python references so long-running applications can release tensors.
+        self.optimizer_rollouts.clear()
+        self.additional_metrics_rollouts.clear()
+        self.optimizers.clear()
+        self._optimizer = None
+
+    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]) -> None:
+        if not isinstance(tool_pose_criteria, dict):
+            raise TypeError("tool_pose_criteria must be a mapping")
+        invalid = set(tool_pose_criteria).difference(self.tool_frames)
+        if invalid:
+            raise ValueError(f"unknown tool frame(s): {sorted(invalid)}")
+        for name, value in tool_pose_criteria.items():
+            if not isinstance(value, ToolPoseCriteria):
+                raise TypeError(f"criterion for {name!r} must be ToolPoseCriteria")
+            self._tool_pose_criteria[name] = value.clone()
+        self.config.tool_pose_criteria = dict(self._tool_pose_criteria)
+        for rollout in self.get_all_rollout_instances():
+            update = getattr(rollout, "update_params_cost_managers", None)
+            if callable(update):
+                update(tool_pose_criteria=tool_pose_criteria)
+
     def enable_tool_pose_tracking(
         self, tool_frames: Optional[List[str]] = None, non_terminal_weight_factor: float = 0.0,
     ) -> None:
-        del tool_frames, non_terminal_weight_factor
-        return None
+        frames = self.tool_frames if tool_frames is None else list(tool_frames)
+        self.update_tool_pose_criteria({
+            name: ToolPoseCriteria.track_position_and_orientation(
+                non_terminal_scale=non_terminal_weight_factor
+            ) for name in frames
+        })
+
     def disable_tool_pose_tracking(self, tool_frames: Optional[List[str]] = None) -> None:
-        del tool_frames
-        return None
-    def enable_joint_position_tracking(self) -> None: return None
-    def disable_joint_position_tracking(self) -> None: return None
+        frames = self.tool_frames if tool_frames is None else list(tool_frames)
+        self.update_tool_pose_criteria({name: ToolPoseCriteria.disabled() for name in frames})
+
+    def enable_joint_position_tracking(self) -> None:
+        self._joint_position_tracking = True
+        for rollout in self.get_all_rollout_instances():
+            enable = getattr(rollout, "enable_cost_component", None)
+            if callable(enable):
+                enable("cspace")
+
+    def disable_joint_position_tracking(self) -> None:
+        self._joint_position_tracking = False
+        for rollout in self.get_all_rollout_instances():
+            disable = getattr(rollout, "disable_cost_component", None)
+            if callable(disable):
+                disable("cspace")
+
     def sample_configs(
         self, num_samples: int, rejection_ratio: int = 10,
         optimizer_collision_activation_distance: float = 0.01,
     ) -> torch.Tensor:
-        del rejection_ratio, optimizer_collision_activation_distance
-        return self._seed_manager.generate_random_actions(1, num_samples).squeeze(0)
-    def prepare_goal_buffer(
-        self, solve_state: "SolveState", goal_tool_poses: "GoalToolPose",
-        current_state: Optional[JointState] = None, use_implicit_goal: bool = False,
-        seed_goal_state: Optional[JointState] = None, goal_state: Optional[JointState] = None,
-    ) -> None:
-        del use_implicit_goal
-        return self._goal_manager.create_goal_buffer(
-            solve_state,
-            goal_tool_poses=goal_tool_poses,
-            goal_js=goal_state,
-            current_js=current_state,
-            seed_goal_js=seed_goal_state,
+        if num_samples < 0:
+            raise ValueError("num_samples must be nonnegative")
+        if rejection_ratio < 1:
+            raise ValueError("rejection_ratio must be positive")
+        if num_samples == 0:
+            return torch.empty((0, self.action_dim), **self.device_cfg.as_torch_dict())
+        candidates = self._seed_manager.generate_random_actions(
+            1, num_samples * rejection_ratio
+        ).reshape(-1, self.action_dim)
+        if self._scene_collision_checker is None:
+            return candidates[:num_samples]
+        state = JointState.from_position(candidates[:, None, :], self.joint_names)
+        spheres = self.compute_kinematics(state).robot_spheres
+        if spheres is None or spheres.shape[-2] == 0:
+            return candidates[:num_samples]
+        buffer = CollisionBuffer.from_shape(spheres.shape, self.device_cfg)
+        distance = self._scene_collision_checker.get_sphere_distance_raw(
+            spheres, buffer,
+            torch.ones((), **self.device_cfg.as_torch_dict()),
+            torch.as_tensor(optimizer_collision_activation_distance,
+                            **self.device_cfg.as_torch_dict()),
         )
-    def debug_dump(self, file_path: str) -> None:
-        del file_path
-        return {"backend": "portable", "cuda_graph": False}
+        feasible = distance.amin(dim=(-1, -2)) >= optimizer_collision_activation_distance
+        return candidates[feasible][:num_samples]
+
     def update_link_inertial(
         self, link_name: str, mass: Optional[float] = None,
         com: Optional[torch.Tensor] = None, inertia: Optional[torch.Tensor] = None,
     ) -> None:
-        raise NotImplementedError(f"runtime inertial mutation is unavailable for {link_name}")
+        if mass is None and com is None and inertia is None:
+            raise ValueError("at least one inertial property must be provided")
+        model = self._kinematics._model
+        if link_name not in model.link_names:
+            raise ValueError(f"unknown link {link_name!r}")
+        index = model.link_names.index(link_name)
+        if mass is not None:
+            if not isinstance(mass, (float, int)) or mass < 0:
+                raise ValueError("mass must be a nonnegative scalar")
+            model.mass[index] = float(mass)
+        if com is not None:
+            value = torch.as_tensor(com, **self.device_cfg.as_torch_dict())
+            if value.shape != (3,):
+                raise ValueError("com must have shape [3]")
+            model.com[index].copy_(value)
+        if inertia is not None:
+            value = torch.as_tensor(inertia, **self.device_cfg.as_torch_dict())
+            if value.shape == (6,):
+                xx, yy, zz, xy, xz, yz = value
+                value = torch.stack((
+                    torch.stack((xx, xy, xz)), torch.stack((xy, yy, yz)),
+                    torch.stack((xz, yz, zz)),
+                ))
+            if value.shape != (3, 3):
+                raise ValueError("inertia must have shape [3,3] or [6]")
+            model.inertia[index].copy_(value)
+
     def update_links_inertial(
         self, link_properties: dict[str, dict[str, Union[float, torch.Tensor]]],
     ) -> None:
+        if not link_properties:
+            raise ValueError("link_properties cannot be empty")
         for name, values in link_properties.items():
+            unknown = set(values).difference({"mass", "com", "inertia"})
+            if unknown:
+                raise ValueError(f"unknown inertial properties: {sorted(unknown)}")
             self.update_link_inertial(name, **values)
+
+    def debug_dump(self, file_path: str):
+        del file_path
+        raise NotImplementedError("CUDA graph debug dumps are unavailable on CPU/MPS")
 
 
 __all__ = ["SolverCore"]

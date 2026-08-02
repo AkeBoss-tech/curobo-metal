@@ -65,9 +65,19 @@ def test_solver_core_goal_lifecycle_and_ik_cuda_boundary():
     core = SolverCore(cfg.core_cfg)
     state = core.default_joint_state.unsqueeze(0)
     solve_state = SolveState(SolveMode.SINGLE, 1, 1, num_seeds=2)
-    goal = core.prepare_goal_buffer(solve_state, None, current_state=state, goal_state=state)
+    goal, structural_change = core.prepare_goal_buffer(
+        solve_state, None, current_state=state, goal_state=state
+    )
+    assert structural_change
     assert goal.goal_js.position.shape == (1, 7)
     assert goal.current_js.position.shape == (1, 7)
+
+    # Same planning shape only refreshes goal values; it does not invalidate
+    # shape-keyed portable execution caches.
+    _, structural_change = core.prepare_goal_buffer(
+        solve_state, None, current_state=state, goal_state=state
+    )
+    assert not structural_change
 
     ik = IKSolver(cfg)
     with pytest.raises(NotImplementedError, match="CUDA graph"):

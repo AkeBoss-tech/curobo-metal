@@ -25,3 +25,22 @@ rollout kernels, automatic YAML/USD/Isaac scene-asset loading, and collision
 cost integration into the portable IK/trajectory solve objective. A retained
 scene supports lifecycle and attachment APIs; it is not represented as a hidden
 CUDA collision rollout.
+
+## SolverCore lifecycle
+
+`SolverCore` now retains the V2 component contract independently of a concrete
+IK, TrajOpt, or MPC facade. `prepare_goal_buffer` returns `(GoalRegistry,
+structural_change)`: value-only goal updates preserve the existing shape,
+whereas a batch, seed, environment, goal-set, solve-mode, or tool-frame change
+invalidates shape-keyed portable state. Criteria updates, joint-target toggles,
+seed resets, supplied rollout propagation, deterministic bounded sampling, and
+link inertial mutation all execute on CPU or MPS tensors. The core factory
+resolves bundled robot YAML and mapping inputs into portable optimizer,
+rollout, and scene records.
+
+`use_cuda_graph=True` remains accepted at the configuration boundary for
+source-compatible application defaults, but is recorded then disabled; an
+explicit `reset_cuda_graph()` or `debug_dump()` raises `NotImplementedError`.
+This is intentional: eager Metal execution is not represented as CUDA capture,
+and raw CUDA streams, Warp packed buffers, and NVIDIA numerical parity remain
+outside this portable contract.
