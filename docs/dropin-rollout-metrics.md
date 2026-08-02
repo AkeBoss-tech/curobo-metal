@@ -15,6 +15,14 @@ in these lifecycle operations.  Weight metadata added through `add` stays
 aligned with its named term; missing squared weights use an all-ones portable
 weight when constraint weights are requested.
 
+All four value models also provide portable `to(...)` and `detach()` methods.
+They recursively move or detach tensors in cost terms and ordinary nested debug
+payloads, while a `DeviceCfg` preserves boolean/integer rollout metadata rather
+than casting it to the configured floating dtype.  `JointState` retains its own
+device configuration through the same operation.  An unpopulated
+`RolloutResult` is an empty Python container (`len(result) == 0`), not the
+invalid negative-length sentinel from the upstream implementation.
+
 `CostCollectionSum` remains as the narrow explicit-VJP compatibility helper
 for optimizer internals.  It is implemented using `torch.autograd.Function`;
 normal aggregation uses PyTorch autograd directly.  CUDA graph capture,

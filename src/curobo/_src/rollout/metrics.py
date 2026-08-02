@@ -14,6 +14,7 @@ from typing import Any, List, Optional, Sequence, Tuple, Union
 import torch
 
 from curobo._src.state.state_joint import JointState
+from curobo._src.types.device_cfg import DeviceCfg
 
 
 TensorOrBool = Union[torch.Tensor, bool]
@@ -64,7 +65,67 @@ def _sum(values: Sequence[torch.Tensor], sum_horizon: bool) -> Optional[torch.Te
 
 
 def _clone(value: Any) -> Any:
-    return None if value is None else value.clone() if hasattr(value, "clone") else value
+    """Clone common rollout payloads without retaining mutable debug state."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {key: _clone(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clone(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone(item) for item in value)
+    clone = getattr(value, "clone", None)
+    return clone() if callable(clone) else value
+
+
+def _to(value: Any, *args: Any, **kwargs: Any) -> Any:
+    """Move nested portable rollout payloads while retaining boolean metadata.
+
+    The V2 call sites commonly carry a :class:`DeviceCfg`; ordinary tensors,
+    however, should not be cast from bool/int to the configuration's floating
+    dtype.  State objects own their own device configuration and receive it
+    directly.  This keeps a metrics container internally device-consistent on
+    CPU and MPS without recreating CUDA's packed buffer implementation.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {key: _to(item, *args, **kwargs) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_to(item, *args, **kwargs) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_to(item, *args, **kwargs) for item in value)
+    if isinstance(value, torch.Tensor):
+        if args and isinstance(args[0], DeviceCfg):
+            if len(args) != 1:
+                raise TypeError("DeviceCfg cannot be combined with positional tensor.to arguments")
+            cfg = args[0]
+            tensor_kwargs = dict(kwargs)
+            tensor_kwargs.setdefault("device", cfg.device)
+            if value.is_floating_point() or value.is_complex():
+                tensor_kwargs.setdefault("dtype", cfg.dtype)
+            return value.to(**tensor_kwargs)
+        return value.to(*args, **kwargs)
+    move = getattr(value, "to", None)
+    return move(*args, **kwargs) if callable(move) else value
+
+
+def _detach(value: Any) -> Any:
+    """Detach nested payloads into a new portable value object."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {key: _detach(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_detach(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_detach(item) for item in value)
+    if isinstance(value, torch.Tensor):
+        return value.detach()
+    detach = getattr(value, "detach", None)
+    # The compatibility JointState's detach is intentionally in-place.  A
+    # container-level detach follows PyTorch value semantics instead.
+    return _clone(value).detach() if callable(detach) and hasattr(value, "clone") else value
 
 
 def _index(value: Any, index: Any) -> Any:
@@ -147,6 +208,22 @@ class CostCollection:
             [_clone(weight) for weight in self.sq_weights],
         )
 
+    def to(self, *args: Any, **kwargs: Any) -> "CostCollection":
+        """Return a device/dtype converted collection without sharing buffers."""
+        return type(self)(
+            [_to(value, *args, **kwargs) for value in self.values],
+            self.names.copy(),
+            [_to(weight, *args, **kwargs) for weight in self.weights],
+            [_to(weight, *args, **kwargs) for weight in self.sq_weights],
+        )
+
+    def detach(self) -> "CostCollection":
+        return type(self)(
+            [_detach(value) for value in self.values], self.names.copy(),
+            [_detach(weight) for weight in self.weights],
+            [_detach(weight) for weight in self.sq_weights],
+        )
+
     def __getitem__(self, index: Any) -> "CostCollection":
         return type(self)(
             [_index(value, index) for value in self.values],
@@ -166,10 +243,14 @@ class CostCollection:
     def merge(self, other: "CostCollection") -> "CostCollection":
         if not isinstance(other, CostCollection):
             raise TypeError("can only merge another CostCollection")
+        self.weights.extend([None] * (len(self.values) - len(self.weights)))
+        self.sq_weights.extend([None] * (len(self.values) - len(self.sq_weights)))
+        other_weights = other.weights + [None] * (len(other.values) - len(other.weights))
+        other_sq_weights = other.sq_weights + [None] * (len(other.values) - len(other.sq_weights))
         self.values.extend(other.values)
         self.names.extend(other.names)
-        self.weights.extend(other.weights)
-        self.sq_weights.extend(other.sq_weights)
+        self.weights.extend(other_weights)
+        self.sq_weights.extend(other_sq_weights)
         return self
 
     def copy_at_batch_seed_indices(self, other: "CostCollection", batch_idx: Any, seed_idx: Any):
@@ -251,6 +332,20 @@ class CostsAndConstraints:
             [_clone(value) for value in self._grad_out_values],
         )
 
+    def to(self, *args: Any, **kwargs: Any) -> "CostsAndConstraints":
+        return type(self)(
+            self.costs.to(*args, **kwargs),
+            self.constraints.to(*args, **kwargs),
+            self.hybrid_costs_constraints.to(*args, **kwargs),
+            [_to(value, *args, **kwargs) for value in self._grad_out_values],
+        )
+
+    def detach(self) -> "CostsAndConstraints":
+        return type(self)(
+            self.costs.detach(), self.constraints.detach(), self.hybrid_costs_constraints.detach(),
+            [_detach(value) for value in self._grad_out_values],
+        )
+
     def __getitem__(self, index: Any) -> "CostsAndConstraints":
         return type(self)(
             self.costs[index], self.constraints[index], self.hybrid_costs_constraints[index],
@@ -301,11 +396,25 @@ class RolloutResult(Sequence):
         )
 
     def __len__(self) -> int:
-        return -1 if self.actions is None else len(self.actions)
+        # Python's ``len`` protocol cannot represent the upstream sentinel
+        # ``-1``.  An unpopulated result is a real, empty portable container.
+        return 0 if self.actions is None else len(self.actions)
 
     def clone(self):
         return type(self)(
             _clone(self.actions), _clone(self.costs_and_constraints), _clone(self.state), _clone(self.debug)
+        )
+
+    def to(self, *args: Any, **kwargs: Any):
+        return type(self)(
+            _to(self.actions, *args, **kwargs), _to(self.costs_and_constraints, *args, **kwargs),
+            _to(self.state, *args, **kwargs), _to(self.debug, *args, **kwargs),
+        )
+
+    def detach(self):
+        return type(self)(
+            _detach(self.actions), _detach(self.costs_and_constraints), _detach(self.state),
+            _detach(self.debug),
         )
 
 
@@ -318,6 +427,19 @@ class RolloutMetrics(RolloutResult):
         return type(self)(
             _clone(self.actions), _clone(self.costs_and_constraints), _clone(self.state), _clone(self.debug),
             _clone(self.feasible), _clone(self.convergence),
+        )
+
+    def to(self, *args: Any, **kwargs: Any):
+        return type(self)(
+            _to(self.actions, *args, **kwargs), _to(self.costs_and_constraints, *args, **kwargs),
+            _to(self.state, *args, **kwargs), _to(self.debug, *args, **kwargs),
+            _to(self.feasible, *args, **kwargs), _to(self.convergence, *args, **kwargs),
+        )
+
+    def detach(self):
+        return type(self)(
+            _detach(self.actions), _detach(self.costs_and_constraints), _detach(self.state),
+            _detach(self.debug), _detach(self.feasible), _detach(self.convergence),
         )
 
     def __getitem__(self, index: Any):
