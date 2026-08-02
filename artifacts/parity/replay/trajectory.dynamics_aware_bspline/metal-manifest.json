@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "trajectory.dynamics_aware_bspline",
+  "corpus": {
+    "case_file": "trajectory.dynamics_aware_bspline.json",
+    "case_sha256": "7a4abbda9487dc89e5ce34ce611780c9ef63fc69a2270b447f12fc69aaf900ab",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "endpoint_basis",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": false,
-    "invalid_case": "too_few_knots",
-    "invalid_executed": false,
+    "invalid": {
+      "case": "too_few_knots",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "bspline",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
   },
   "operation": "dynamics_aware_bspline",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "ea8671adbb0f52564fbcc5f870b8861714b4f8be91109e31cfdac25f2eede079"
+    "sha256": "b97a562541fcb1702c562d5180584217a9149f939fbd6b5c7039c649fef0bc17"
   },
   "runtime": {
     "python": "3.13.9",

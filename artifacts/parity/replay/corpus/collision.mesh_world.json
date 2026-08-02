@@ -1,0 +1,20 @@
+{
+  "capability": "collision.mesh_world",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "points",
+    "mesh_vertices",
+    "mesh_faces"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "triangle_face",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "non_watertight_signed",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

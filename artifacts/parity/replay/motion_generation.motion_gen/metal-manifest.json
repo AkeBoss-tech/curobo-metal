@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "motion_generation.motion_gen",
+  "corpus": {
+    "case_file": "motion_generation.motion_gen.json",
+    "case_sha256": "3ee3417fbc44c51a0d103b37a8d62d587c08e6c007fdc40c6fb8b67a6bf27f10",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "minimum_jerk_endpoints",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": false,
-    "invalid_case": "ik_failed",
-    "invalid_executed": false,
+    "invalid": {
+      "case": "ik_failed",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "trajectory",
     "status": true
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
   },
   "operation": "motion_gen",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "cc0a07c1dda8f82e1d3a4fa502a776e48d159f56e8eba45b1997dad9d675e907"
+    "sha256": "d4da110a450b5dacf17217f84476e55b5d6e018c74a94d7c0a7fba03d77470b2"
   },
   "runtime": {
     "python": "3.13.9",

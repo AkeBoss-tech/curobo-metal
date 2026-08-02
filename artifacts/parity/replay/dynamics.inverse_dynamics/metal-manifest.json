@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "dynamics.inverse_dynamics",
+  "corpus": {
+    "case_file": "dynamics.inverse_dynamics.json",
+    "case_sha256": "4e1765787b5c3b543fe159012b39febbb9ec2e49bce1484c3987940f86636c33",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "two_batch_gradients",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": true,
-    "invalid_case": "missing_acceleration",
-    "invalid_executed": true,
+    "invalid": {
+      "case": "missing_acceleration",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "dynamics",
     "status": true
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "618acde9f8f5745b1656ba242618e1182fc59742da2141d86d4cd16a277a3f1c"
   },
   "operation": "inverse_dynamics",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "e0d1617ce0b484aa674de3f9b6dad3b68a3df1da35c5d332f8502118d0504d8a"
+    "sha256": "400d2be34838a1d4a41244a25db1c1c5eca5ff999e4c1f2823a94a12bcbfaf1c"
   },
   "runtime": {
     "python": "3.13.9",

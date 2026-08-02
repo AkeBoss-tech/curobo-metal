@@ -21,29 +21,30 @@ class Case:
     atol: float
     probe: str
     invalid_case: str
+    edge_case: str
     cuda_constraint: str
 
 
 _ROWS = [
-    ("configuration.robot_config_and_loaders", "robot_config", 0, 0, "serialization", "malformed_urdf", "real license-clean serialized URDF RobotCfg CUDA adapter available; execution requires an NVIDIA runtime"),
-    ("types.device_cfg", "device_cfg", 0, 0, "device", "unsupported_device", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
-    ("types.pose", "pose", 1e-6, 1e-7, "pose", "zero_quaternion", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
-    ("types.joint_state", "joint_state", 1e-6, 1e-7, "joint_state", "name_width_mismatch", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
-    ("types.solver_results", "solver_results", 0, 0, "result", "invalid_status", "real asset-independent BaseSolverResult CUDA adapter available; execution requires an NVIDIA runtime"),
-    ("kinematics.forward_kinematics", "forward_kinematics", 8e-5, 8e-5, "fk", "wrong_dof", "real compiled CUDA FK adapter available for the license-clean serialized robot"),
-    ("kinematics.geometric_jacobian", "geometric_jacobian", 1e-4, 1e-5, "fk", "invalid_link", "real compiled CUDA geometric-Jacobian adapter available for the license-clean serialized robot"),
-    ("collision.robot_scene", "robot_scene_collision", 2e-5, 2e-6, "sphere", "bad_pair_index", "real asset-independent CUDA self-collision adapter available; execution requires an NVIDIA runtime"),
-    ("collision.mesh_world", "mesh_world", 2e-5, 2e-6, "mesh", "non_watertight_signed", "requires upstream Warp/CUDA mesh acceleration structures; no portable clean-runner constructor"),
-    ("collision.voxel_esdf_query", "voxel_esdf", 3e-5, 3e-6, "voxel", "bad_environment", "requires upstream CUDA voxel cache allocation and collision buffers"),
-    ("cost.pose_and_composable_costs", "pose_costs", 2e-5, 2e-6, "cost", "invalid_pose_cost_input", "real asset-independent upstream ToolPoseCost CUDA adapter available for position cost and gradient replay"),
-    ("optim.particle_evolution", "particle_evolution", 2e-4, 2e-5, "particle", "bad_covariance", "upstream RNG stream and optimizer construction require CUDA rollout objects"),
-    ("optim.lbfgs", "lbfgs", 2e-4, 2e-5, "lbfgs", "nonfinite_objective", "upstream LBFGSOpt requires CUDA graph/rollout configuration"),
-    ("ik.inverse_kinematics", "inverse_kinematics", 3e-4, 3e-5, "cost", "infeasible_goal", "requires caller-provided robot/world assets and upstream CUDA IK solver compilation"),
-    ("trajectory.trajectory_optimization", "trajectory_optimization", 3e-4, 3e-5, "trajectory", "infeasible_limits", "requires caller-provided robot/world assets and upstream CUDA rollout compilation"),
-    ("trajectory.dynamics_aware_bspline", "dynamics_aware_bspline", 3e-4, 3e-5, "bspline", "too_few_knots", "requires upstream robot dynamics model and fused CUDA rollout"),
-    ("graph.prm_planner", "prm_planner", 0, 0, "graph", "blocked_endpoints", "requires upstream CUDA collision checker and graph buffers"),
-    ("motion_generation.motion_gen", "motion_gen", 5e-4, 5e-5, "trajectory", "ik_failed", "requires caller-provided robot/world assets and compiled upstream CUDA IK/graph/trajopt stack"),
-    ("dynamics.inverse_dynamics", "inverse_dynamics", 2e-4, 2e-5, "dynamics", "missing_acceleration", "real native-CUDA RNEA adapter available for the license-clean serialized inertial robot"),
+    ("configuration.robot_config_and_loaders", "robot_config", 0, 0, "serialization", "malformed_urdf", "two_joint_urdf", "real license-clean serialized URDF RobotCfg CUDA adapter available; execution requires an NVIDIA runtime"),
+    ("types.device_cfg", "device_cfg", 0, 0, "device", "unsupported_device", "empty_tensor", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
+    ("types.pose", "pose", 1e-6, 1e-7, "pose", "zero_quaternion", "empty_points", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
+    ("types.joint_state", "joint_state", 1e-6, 1e-7, "joint_state", "name_width_mismatch", "singleton_batch", "real asset-independent CUDA adapter available; execution requires an NVIDIA runtime"),
+    ("types.solver_results", "solver_results", 0, 0, "result", "invalid_status", "mixed_status", "real asset-independent BaseSolverResult CUDA adapter available; execution requires an NVIDIA runtime"),
+    ("kinematics.forward_kinematics", "forward_kinematics", 8e-5, 8e-5, "fk", "wrong_dof", "empty_batch", "real compiled CUDA FK adapter available for the license-clean serialized robot"),
+    ("kinematics.geometric_jacobian", "geometric_jacobian", 1e-4, 1e-5, "fk", "invalid_link", "noncontiguous_batch", "real compiled CUDA geometric-Jacobian adapter available for the license-clean serialized robot"),
+    ("collision.robot_scene", "robot_scene_collision", 2e-5, 2e-6, "sphere", "bad_pair_index", "tangent_spheres", "real asset-independent CUDA self-collision adapter available; execution requires an NVIDIA runtime"),
+    ("collision.mesh_world", "mesh_world", 2e-5, 2e-6, "mesh", "non_watertight_signed", "triangle_face", "requires upstream Warp/CUDA mesh acceleration structures; no portable clean-runner constructor"),
+    ("collision.voxel_esdf_query", "voxel_esdf", 3e-5, 3e-6, "voxel", "bad_environment", "grid_boundary", "requires upstream CUDA voxel cache allocation and collision buffers"),
+    ("cost.pose_and_composable_costs", "pose_costs", 2e-5, 2e-6, "cost", "invalid_pose_cost_input", "zero_pose_error", "real asset-independent upstream ToolPoseCost CUDA adapter available for position cost and gradient replay"),
+    ("optim.particle_evolution", "particle_evolution", 2e-4, 2e-5, "particle", "bad_covariance", "deterministic_seed", "upstream RNG stream and optimizer construction require CUDA rollout objects"),
+    ("optim.lbfgs", "lbfgs", 2e-4, 2e-5, "lbfgs", "nonfinite_objective", "quadratic_convergence", "upstream LBFGSOpt requires CUDA graph/rollout configuration"),
+    ("ik.inverse_kinematics", "inverse_kinematics", 3e-4, 3e-5, "cost", "infeasible_goal", "two_pose_batch", "requires caller-provided robot/world assets and upstream CUDA IK solver compilation"),
+    ("trajectory.trajectory_optimization", "trajectory_optimization", 3e-4, 3e-5, "trajectory", "infeasible_limits", "exact_endpoints", "requires caller-provided robot/world assets and upstream CUDA rollout compilation"),
+    ("trajectory.dynamics_aware_bspline", "dynamics_aware_bspline", 3e-4, 3e-5, "bspline", "too_few_knots", "endpoint_basis", "requires upstream robot dynamics model and fused CUDA rollout"),
+    ("graph.prm_planner", "prm_planner", 0, 0, "graph", "blocked_endpoints", "zero_length_edge", "requires upstream CUDA collision checker and graph buffers"),
+    ("motion_generation.motion_gen", "motion_gen", 5e-4, 5e-5, "trajectory", "ik_failed", "minimum_jerk_endpoints", "requires caller-provided robot/world assets and compiled upstream CUDA IK/graph/trajopt stack"),
+    ("dynamics.inverse_dynamics", "inverse_dynamics", 2e-4, 2e-5, "dynamics", "missing_acceleration", "two_batch_gradients", "real native-CUDA RNEA adapter available for the license-clean serialized inertial robot"),
 ]
 
 CASES = tuple(Case(*row) for row in _ROWS)

@@ -69,11 +69,20 @@ python3 tools/parity/inventory.py \
 
 Wave 10 adds a turnkey, registry-driven replay corpus at
 `artifacts/parity/replay/`. It has one fallback-disabled MPS output bundle for
-each of the 19 evidence-blocked records. The committed `index.json` hashes every
-manifest, and every manifest hashes its byte-identical portable input corpus and
-local output. The manifests also record device, runtime, operation, tolerance,
-gradient/status coverage, an invalid or edge case, and explicitly set
-`equivalence_claimed` to false.
+each of the 19 evidence-blocked records. Each case owns an explicit JSON corpus
+specification under `artifacts/parity/replay/corpus/`; its input NPZ contains
+only that capability's declared tensors rather than a shared opaque superset.
+The manifest hashes both the input/output data and the common/case corpus JSON
+that produced it. The validator reconstructs those NPZ tensors from the corpus,
+so a hash-consistent but different input cannot be substituted.
+
+Every case has a registry-owned invalid-input case and edge case. Generation
+records executable `invalid_rejected` and `edge_observed` int8 evidence bits;
+the validator fails closed if either output is absent, false, malformed, or its
+metadata no longer matches the corpus and registry. This proves only that the
+portable probes exercised those local conditions—it is not CUDA equivalence
+evidence. `equivalence_claimed` remains explicitly false until an independently
+run pinned CUDA bundle passes comparison.
 
 Replay bundles contain only JSON plus `allow_pickle=False` NPZ tensors. This
 keeps inputs identical across isolated CUDA and macOS environments and records
@@ -178,7 +187,9 @@ Per-capability tolerances are likewise registry-owned: exact structural cases
 use zero tolerance; type/pose cases use `1e-6/1e-7`; collision and costs use
 roughly `2e-5/2e-6`; FK/Jacobian use `8e-5` to `1e-4`; and iterative
 optimization, planning, and dynamics use `2e-4` to `5e-4` relative tolerance.
-The validator requires the manifest values to match this registry exactly.
+The validator requires the manifest values, corpus hashes, decoded tensor
+values, invalid-case outcome, and edge-case outcome to match this registry
+exactly.
 
 A release comparison must cover supported dtypes and devices, explicit fallback
 behavior, first-order gradients, zero-size and singleton/many batches,

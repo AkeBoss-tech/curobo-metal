@@ -1,0 +1,18 @@
+{
+  "capability": "kinematics.forward_kinematics",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "empty_batch",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "wrong_dof",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

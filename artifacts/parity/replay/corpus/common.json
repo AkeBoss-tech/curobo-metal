@@ -1,0 +1,339 @@
+{
+  "format": "curobo-metal-replay-corpus",
+  "tensors": {
+    "collision_pairs": {
+      "data": [
+        [
+          0,
+          1
+        ]
+      ],
+      "dtype": "int64",
+      "shape": [
+        1,
+        2
+      ]
+    },
+    "collision_spheres": {
+      "data": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.5
+        ],
+        [
+          0.75,
+          0.0,
+          0.0,
+          0.5
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        4
+      ]
+    },
+    "dynamics_acceleration": {
+      "data": [
+        [
+          0.4000000059604645,
+          -0.10000000149011612
+        ],
+        [
+          -0.20000000298023224,
+          0.5
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "dynamics_velocity": {
+      "data": [
+        [
+          0.10000000149011612,
+          -0.20000000298023224
+        ],
+        [
+          0.30000001192092896,
+          0.15000000596046448
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "empty": {
+      "data": [],
+      "dtype": "float32",
+      "shape": [
+        0,
+        2
+      ]
+    },
+    "mesh_faces": {
+      "data": [
+        [
+          0,
+          1,
+          2
+        ]
+      ],
+      "dtype": "int64",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "mesh_vertices": {
+      "data": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        3,
+        3
+      ]
+    },
+    "points": {
+      "data": [
+        [
+          0.20000000298023224,
+          0.20000000298023224,
+          0.5
+        ],
+        [
+          2.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        3
+      ]
+    },
+    "pose": {
+      "data": [
+        [
+          1.0,
+          2.0,
+          3.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        1,
+        7
+      ]
+    },
+    "pose_cost_position": {
+      "data": [
+        [
+          0.10000000149011612,
+          -0.20000000298023224,
+          0.30000001192092896
+        ],
+        [
+          -0.4000000059604645,
+          0.20000000298023224,
+          0.15000000596046448
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        3
+      ]
+    },
+    "q": {
+      "data": [
+        [
+          0.0,
+          0.25
+        ],
+        [
+          -0.5,
+          0.75
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        2
+      ]
+    },
+    "robot_urdf_utf8": {
+      "encoding": "utf8",
+      "value": "<robot name=\"paired_two_link\">\n  <link name=\"base\"/>\n  <link name=\"link1\">\n    <inertial>\n      <origin xyz=\"0.5 0 0\"/>\n      <mass value=\"1.0\"/>\n      <inertia ixx=\"0.01\" ixy=\"0\" ixz=\"0\" iyy=\"0.08\" iyz=\"0\" izz=\"0.08\"/>\n    </inertial>\n  </link>\n  <link name=\"tool\">\n    <inertial>\n      <origin xyz=\"0.4 0 0\"/>\n      <mass value=\"0.6\"/>\n      <inertia ixx=\"0.006\" ixy=\"0\" ixz=\"0\" iyy=\"0.04\" iyz=\"0\" izz=\"0.04\"/>\n    </inertial>\n  </link>\n  <joint name=\"j0\" type=\"revolute\">\n    <parent link=\"base\"/><child link=\"link1\"/><origin xyz=\"1 0 0\"/>\n    <axis xyz=\"0 0 1\"/>\n    <limit lower=\"-1.5\" upper=\"1.25\" velocity=\"2.5\" effort=\"12\"/>\n  </joint>\n  <joint name=\"j1\" type=\"revolute\">\n    <parent link=\"link1\"/><child link=\"tool\"/><origin xyz=\"1 0 0\"/>\n    <axis xyz=\"0 1 0\"/>\n    <limit lower=\"-0.75\" upper=\"2.0\" velocity=\"1.5\" effort=\"8\"/>\n  </joint>\n</robot>\n"
+    },
+    "singleton": {
+      "data": [
+        [
+          0.125
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    "voxel_boundary_points": {
+      "data": [
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "voxel_oob_points": {
+      "data": [
+        [
+          100.0,
+          100.0,
+          100.0
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "voxel_out_of_bounds": {
+      "data": [
+        99.0
+      ],
+      "dtype": "float32",
+      "shape": [
+        1
+      ]
+    },
+    "voxel_points": {
+      "data": [
+        [
+          0.10000000149011612,
+          0.10000000149011612,
+          0.10000000149011612
+        ],
+        [
+          -0.25,
+          0.25,
+          0.25
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        3
+      ]
+    },
+    "voxel_rotation": {
+      "data": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        3,
+        3
+      ]
+    },
+    "voxel_size": {
+      "data": [
+        1.0
+      ],
+      "dtype": "float32",
+      "shape": [
+        1
+      ]
+    },
+    "voxel_translation": {
+      "data": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "dtype": "float32",
+      "shape": [
+        3
+      ]
+    },
+    "voxel_values": {
+      "data": [
+        [
+          [
+            0.0,
+            1.0
+          ],
+          [
+            2.0,
+            3.0
+          ]
+        ],
+        [
+          [
+            4.0,
+            5.0
+          ],
+          [
+            6.0,
+            7.0
+          ]
+        ]
+      ],
+      "dtype": "float32",
+      "shape": [
+        2,
+        2,
+        2
+      ]
+    }
+  },
+  "version": 1
+}

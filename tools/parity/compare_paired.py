@@ -61,6 +61,37 @@ def _validate_common(manifest: dict[str, Any], capability: str) -> None:
             )
 
 
+def _validate_required_evidence(
+    manifest: dict[str, Any], outputs: np.lib.npyio.NpzFile, capability: str
+) -> None:
+    """Reject a paired report that silently drops invalid or edge coverage."""
+    case = BY_ID[capability]
+    expected = {
+        "invalid": {
+            "case": case.invalid_case,
+            "output": "invalid_rejected",
+            "executed": True,
+        },
+        "edge": {
+            "case": case.edge_case,
+            "output": "edge_observed",
+            "executed": True,
+        },
+    }
+    evidence = manifest.get("evidence")
+    if not isinstance(evidence, dict) or any(
+        evidence.get(key) != value for key, value in expected.items()
+    ):
+        raise ValueError(f"{capability}: required invalid/edge evidence metadata is missing")
+    for label, record in expected.items():
+        key = record["output"]
+        if key not in outputs.files:
+            raise ValueError(f"{capability}: committed {label}-case evidence is missing")
+        value = outputs[key]
+        if value.shape != (1,) or value.dtype != np.int8 or int(value[0]) != 1:
+            raise ValueError(f"{capability}: committed {label}-case evidence did not execute")
+
+
 def compare_capability(
     metal_root: Path, cuda_root: Path, capability: str
 ) -> dict[str, Any]:
@@ -129,8 +160,7 @@ def compare_capability(
                 f"{capability}: output keys differ: "
                 f"{sorted(set(metal.files) ^ set(cuda.files))}"
             )
-        if "invalid_rejected" not in metal.files:
-            raise ValueError(f"{capability}: committed invalid-case evidence is missing")
+        _validate_required_evidence(metal_manifest, metal, capability)
         declared = cuda_manifest["output"].get("tensors")
         actual = {
             key: {"shape": list(cuda[key].shape), "dtype": str(cuda[key].dtype)}

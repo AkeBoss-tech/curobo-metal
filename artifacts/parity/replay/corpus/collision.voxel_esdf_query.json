@@ -1,0 +1,25 @@
+{
+  "capability": "collision.voxel_esdf_query",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "voxel_values",
+    "voxel_size",
+    "voxel_translation",
+    "voxel_rotation",
+    "voxel_out_of_bounds",
+    "voxel_points",
+    "voxel_oob_points",
+    "voxel_boundary_points"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "grid_boundary",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "bad_environment",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

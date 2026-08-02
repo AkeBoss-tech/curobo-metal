@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "kinematics.geometric_jacobian",
+  "corpus": {
+    "case_file": "kinematics.geometric_jacobian.json",
+    "case_sha256": "f394b87d04411b7c16717d7ff3ba156c2d3c5380cf5135733c6c6c43de348074",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "noncontiguous_batch",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": false,
-    "invalid_case": "invalid_link",
-    "invalid_executed": true,
+    "invalid": {
+      "case": "invalid_link",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "fk",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
   },
   "operation": "geometric_jacobian",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "520f67597d376108119d1a260cba51e7bae424267230ad32b3574d4a0774d9c7"
+    "sha256": "281a376c62494079044b88f82ed64daba434929936fa142eaa2678fdb2e9c7e6"
   },
   "runtime": {
     "python": "3.13.9",

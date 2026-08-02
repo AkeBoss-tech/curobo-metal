@@ -1,0 +1,18 @@
+{
+  "capability": "optim.lbfgs",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "quadratic_convergence",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "nonfinite_objective",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

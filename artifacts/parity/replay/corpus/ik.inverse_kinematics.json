@@ -1,0 +1,19 @@
+{
+  "capability": "ik.inverse_kinematics",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "pose_cost_position",
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "two_pose_batch",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "infeasible_goal",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

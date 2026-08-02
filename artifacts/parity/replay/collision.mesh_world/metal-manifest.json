@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "collision.mesh_world",
+  "corpus": {
+    "case_file": "collision.mesh_world.json",
+    "case_sha256": "2732be711edf1363600c25ab4158168fd4d836f92e071e61750ae1c5b7df2d35",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "triangle_face",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": false,
-    "invalid_case": "non_watertight_signed",
-    "invalid_executed": false,
+    "invalid": {
+      "case": "non_watertight_signed",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "mesh",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "d1e762184627ed8940de7407ea66fd1ad5e86d7c21e87087883dedb33efb426d"
   },
   "operation": "mesh_world",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "c4c7c773321fa78aeef60e359a78e6b3cbfdba420a46da9d757f20c565029c29"
+    "sha256": "4231aab2573ea48b79c223a47e63b32b6cbdcd198a7275af1aa12f088578c7f5"
   },
   "runtime": {
     "python": "3.13.9",

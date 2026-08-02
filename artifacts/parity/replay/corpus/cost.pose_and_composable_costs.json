@@ -1,0 +1,19 @@
+{
+  "capability": "cost.pose_and_composable_costs",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "pose_cost_position",
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "zero_pose_error",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "invalid_pose_cost_input",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

@@ -1,0 +1,18 @@
+{
+  "capability": "configuration.robot_config_and_loaders",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "robot_urdf_utf8"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "two_joint_urdf",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "malformed_urdf",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

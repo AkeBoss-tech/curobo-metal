@@ -1,0 +1,18 @@
+{
+  "capability": "trajectory.dynamics_aware_bspline",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "endpoint_basis",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "too_few_knots",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

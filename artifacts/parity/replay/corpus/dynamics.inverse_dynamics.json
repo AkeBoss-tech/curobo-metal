@@ -1,0 +1,21 @@
+{
+  "capability": "dynamics.inverse_dynamics",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "robot_urdf_utf8",
+    "q",
+    "dynamics_velocity",
+    "dynamics_acceleration"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "two_batch_gradients",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "missing_acceleration",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

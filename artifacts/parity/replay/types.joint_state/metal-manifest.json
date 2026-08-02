@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "types.joint_state",
+  "corpus": {
+    "case_file": "types.joint_state.json",
+    "case_sha256": "2991fc0b55b7b968b40373e1e1a605928af4ca4613b5c2b7858b5e5c6b4a03dd",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "singleton_batch",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": false,
-    "invalid_case": "name_width_mismatch",
-    "invalid_executed": true,
+    "invalid": {
+      "case": "name_width_mismatch",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "joint_state",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
   },
   "operation": "joint_state",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "d1f66cdcfa8c1e2fd404f304d4b8aa666da0421631915985e0e4329dab7145eb"
+    "sha256": "2c806faa089f86f7e811aac4168770eea745bc3b04f6b67d9c0ac2192c9d9dc3"
   },
   "runtime": {
     "python": "3.13.9",

@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "cost.pose_and_composable_costs",
+  "corpus": {
+    "case_file": "cost.pose_and_composable_costs.json",
+    "case_sha256": "7fbe167ed5b07bfc642c656bf9117b38bdcca7b9526913592794a3982abf9795",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "zero_pose_error",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": true,
-    "invalid_case": "invalid_pose_cost_input",
-    "invalid_executed": true,
+    "invalid": {
+      "case": "invalid_pose_cost_input",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "cost",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "aeeac429f639818bea8571947cdab5f358c07a7627cd992f127d961adf45cf9f"
   },
   "operation": "pose_costs",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "253a9aec6191476124f1cf82554c63aaf48d429171f128f0f1934733fc1fea77"
+    "sha256": "945c824175782e8236580ef261b19e077b4b9d41a4721dd66efea1f23f3f7212"
   },
   "runtime": {
     "python": "3.13.9",

@@ -15,6 +15,7 @@ from tools.parity.build_cuda_handoff import build as build_cuda_handoff
 from tools.parity.replay_registry import BY_ID, PIN
 from tools.parity.cuda_adapters import ADAPTERS
 from tools.parity import cuda_runtime
+from tools.parity.replay_corpus import load as load_corpus
 
 
 ROOT = Path(__file__).parents[2]
@@ -40,20 +41,19 @@ def test_committed_corpus_covers_inventory_and_validates():
     assert len(index["cases"]) == 19
 
 
-def test_inputs_are_identical_and_safe_npz():
+def test_inputs_are_capability_owned_and_safe_npz():
     hashes = set()
-    for capability in BY_ID:
+    for capability, case in BY_ID.items():
         path = ARTIFACT / capability / "inputs.npz"
         hashes.add(hashlib.sha256(path.read_bytes()).hexdigest())
+        expected, _ = load_corpus(ARTIFACT / "corpus", case)
         with np.load(path, allow_pickle=False) as data:
-            assert {
-                "q",
-                "empty",
-                "invalid_shape",
-                "inertial_case_json",
-                "robot_urdf_utf8",
-            } <= set(data.files)
-    assert len(hashes) == 1
+            assert set(data.files) == set(expected)
+            for key, value in expected.items():
+                assert np.array_equal(data[key], value)
+    # Several small math probes intentionally share q, but they must no longer
+    # all serialize the prior single opaque 15-tensor input blob.
+    assert len(hashes) > 5
 
 
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
@@ -221,14 +221,20 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
         assert manifest["fallback_enabled"] is False
         assert manifest["equivalence_claimed"] is False
         assert manifest["upstream_revision"] == PIN
-        assert manifest["evidence"]["invalid_case"] == case.invalid_case
-        if capability in ADAPTERS:
-            assert manifest["evidence"]["invalid_executed"] is True
-            with np.load(
-                ARTIFACT / capability / manifest["output"]["file"],
-                allow_pickle=False,
-            ) as output:
-                assert output["invalid_rejected"].shape == (1,)
+        assert manifest["evidence"]["invalid"] == {
+            "case": case.invalid_case, "output": "invalid_rejected", "executed": True,
+        }
+        assert manifest["evidence"]["edge"] == {
+            "case": case.edge_case, "output": "edge_observed", "executed": True,
+        }
+        with np.load(
+            ARTIFACT / capability / manifest["output"]["file"],
+            allow_pickle=False,
+        ) as output:
+            assert output["invalid_rejected"].shape == (1,)
+            assert output["invalid_rejected"].item() == 1
+            assert output["edge_observed"].shape == (1,)
+            assert output["edge_observed"].item() == 1
         gradients += bool(manifest["evidence"]["gradient"])
         statuses += bool(manifest["evidence"]["status"])
     assert gradients >= 4
@@ -273,3 +279,44 @@ def test_generation_refuses_fallback_enabled(tmp_path):
     )
     assert result.returncode != 0
     assert "must be unset or 0" in result.stderr
+
+
+def _rewrite_case(root: Path, capability: str, values: dict[str, np.ndarray]) -> None:
+    """Keep hashes coherent so the validator reaches evidence validation."""
+    folder = root / capability
+    output = folder / "metal-outputs.npz"
+    np.savez(output, **values)
+    manifest_path = folder / "metal-manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["output"]["sha256"] = hashlib.sha256(output.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    index_path = root / "index.json"
+    index = json.loads(index_path.read_text())
+    row = next(item for item in index["cases"] if item["capability"] == capability)
+    row["manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+
+
+def test_validator_fails_closed_when_invalid_or_edge_evidence_is_absent(tmp_path):
+    replay = tmp_path / "replay"
+    shutil.copytree(ARTIFACT, replay)
+    capability = "types.pose"
+    output = replay / capability / "metal-outputs.npz"
+    with np.load(output, allow_pickle=False) as data:
+        values = {key: data[key].copy() for key in data.files}
+    values.pop("invalid_rejected")
+    _rewrite_case(replay, capability, values)
+    result = run("tools.parity.validate_replay", replay)
+    assert result.returncode != 0
+    assert "required invalid-case evidence is missing" in result.stderr
+
+    replay = tmp_path / "replay-edge"
+    shutil.copytree(ARTIFACT, replay)
+    output = replay / capability / "metal-outputs.npz"
+    with np.load(output, allow_pickle=False) as data:
+        values = {key: data[key].copy() for key in data.files}
+    values["edge_observed"] = np.array([0], np.int8)
+    _rewrite_case(replay, capability, values)
+    result = run("tools.parity.validate_replay", replay)
+    assert result.returncode != 0
+    assert "required edge-case evidence did not execute" in result.stderr

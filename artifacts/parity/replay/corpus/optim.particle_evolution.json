@@ -1,0 +1,18 @@
+{
+  "capability": "optim.particle_evolution",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "deterministic_seed",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "bad_covariance",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "types.device_cfg",
+  "corpus": {
+    "case_file": "types.device_cfg.json",
+    "case_sha256": "24698ef28ba75cbdc24a28ce271f920d6deb702b8295c753a959d6649f71da1e",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "empty_tensor",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": false,
-    "invalid_case": "unsupported_device",
-    "invalid_executed": true,
+    "invalid": {
+      "case": "unsupported_device",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "device",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "a04e3803e265bbb47a1c56a9662feae87b5382e1d2f7232d390afd6566dd50e6"
   },
   "operation": "device_cfg",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "513dded2c5db6c18f24759b512d620eb8b3a109af5b66dfbe9bf99a0ec5772b8"
+    "sha256": "348d2dcf56567d4c3d4cd52c5428268447ce29feb44a2a5b44f7f145d360450e"
   },
   "runtime": {
     "python": "3.13.9",

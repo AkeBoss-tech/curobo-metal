@@ -1,0 +1,18 @@
+{
+  "capability": "types.solver_results",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "mixed_status",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "invalid_status",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

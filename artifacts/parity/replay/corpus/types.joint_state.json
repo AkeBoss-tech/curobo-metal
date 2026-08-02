@@ -1,0 +1,18 @@
+{
+  "capability": "types.joint_state",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "singleton_batch",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "name_width_mismatch",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

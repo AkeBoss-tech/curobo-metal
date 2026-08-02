@@ -1,0 +1,18 @@
+{
+  "capability": "graph.prm_planner",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "zero_length_edge",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "blocked_endpoints",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

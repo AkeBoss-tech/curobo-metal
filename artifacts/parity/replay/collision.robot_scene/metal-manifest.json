@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "collision.robot_scene",
+  "corpus": {
+    "case_file": "collision.robot_scene.json",
+    "case_sha256": "c9a87b7dab7c0341c50877a36c2ba60168116f1bbb27d2967f522514b42c2287",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "tangent_spheres",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": true,
-    "invalid_case": "bad_pair_index",
-    "invalid_executed": true,
+    "invalid": {
+      "case": "bad_pair_index",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "sphere",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "9e6a21a221f8a9082f296f42884eafe7048d0788014a24bd3b6949473fee1d84"
   },
   "operation": "robot_scene_collision",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "de2d332bfb09707dfc3feb4739a2c969545cf6323881bb68dd88fba456472896"
+    "sha256": "c7fbd950298a4e4074a98d06750b0221443c89a8c57f0ff8b4b400122d049391"
   },
   "runtime": {
     "python": "3.13.9",

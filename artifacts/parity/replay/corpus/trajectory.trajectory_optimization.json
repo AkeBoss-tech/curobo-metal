@@ -1,0 +1,18 @@
+{
+  "capability": "trajectory.trajectory_optimization",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "exact_endpoints",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "infeasible_limits",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

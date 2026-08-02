@@ -1,0 +1,18 @@
+{
+  "capability": "kinematics.geometric_jacobian",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "noncontiguous_batch",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "invalid_link",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}

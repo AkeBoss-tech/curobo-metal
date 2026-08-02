@@ -1,12 +1,26 @@
 {
   "backend": "metal",
   "capability": "collision.voxel_esdf_query",
+  "corpus": {
+    "case_file": "collision.voxel_esdf_query.json",
+    "case_sha256": "c47e4976f49eaf796ae439899a7887ff3900b84848ca23923cde40ec39f4ed0f",
+    "common_file": "common.json",
+    "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
+  },
   "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
+    "edge": {
+      "case": "grid_boundary",
+      "executed": true,
+      "output": "edge_observed"
+    },
     "gradient": false,
-    "invalid_case": "bad_environment",
-    "invalid_executed": false,
+    "invalid": {
+      "case": "bad_environment",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
     "probe_scope": "voxel",
     "status": false
   },
@@ -14,12 +28,12 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "98dd7f96e8f3a49424b45f47d5dea9d21a617e2d7a455107437d206ff752f63c"
+    "sha256": "cf5a9f2fda86d917ca5a9338ebb3d39e9ed286fd24a8211dd4c9a9667bc70341"
   },
   "operation": "voxel_esdf",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "0abd36d17419d84d2e9c29a8551617c726d690e340f7a07e9b8153de98179eee"
+    "sha256": "78a0b7fd621acfbb1cf1272db44e28aa902f2b0fef675b692f56806ec05fc8b6"
   },
   "runtime": {
     "python": "3.13.9",

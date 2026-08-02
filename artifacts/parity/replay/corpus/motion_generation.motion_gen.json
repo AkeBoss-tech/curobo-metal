@@ -1,0 +1,18 @@
+{
+  "capability": "motion_generation.motion_gen",
+  "format": "curobo-metal-replay-corpus",
+  "inputs": [
+    "q"
+  ],
+  "required_evidence": {
+    "edge": {
+      "case": "minimum_jerk_endpoints",
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "ik_failed",
+      "output": "invalid_rejected"
+    }
+  },
+  "version": 1
+}
