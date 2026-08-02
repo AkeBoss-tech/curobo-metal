@@ -87,3 +87,13 @@ and adds ordinary CPU/MPS result lifecycle helpers: cloning, detaching,
 device/dtype movement, deterministic batch selection, success summaries, and
 device-resident padded path tensors with validity masks. These helpers do not
 expose or emulate raw CUDA graph/path buffers.
+
+`NetworkXPathFinder` now preserves the pinned buffered roadmap lifecycle on
+CPU and Apple Metal callers: Python, CPU-tensor, and MPS-tensor node/edge
+identifiers are staged and materialized at a query/update boundary; repeated
+undirected edges update their weight; graph reset also clears pending records;
+and dense goal-distance slots retain `-1.0` for unreachable vertices. Equal
+cost paths are resolved with a stable lexicographic node sequence, making PRM
+results independent of edge insertion order. This search remains intentionally
+CPU control-plane work, just as upstream NetworkX is; it is not a CUDA/Warp
+kernel and accepts MPS roadmap tensors only at the scalar graph boundary.
