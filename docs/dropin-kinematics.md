@@ -23,6 +23,14 @@ For the packaged Franka model, configured finger locks reduce the nine URDF
 joints to seven active joints, `panda_hand` is the sole tool frame, and 61
 collision spheres are emitted in YAML declaration order.
 
+`KinematicsState` uses the canonical `ToolPose` record: link lookups,
+`to_dict()`, link reordering, and goal conversion all keep the FK
+`[batch, horizon, links, ...]` layout. State `clone()`, `detach()`,
+`contiguous()`, and `to(DeviceCfg(...))` cover tool poses, Jacobians, spheres,
+CoM, and collision-geometry indices on both CPU and MPS. Integer state
+indexing deliberately matches pinned cuRobo: `ToolPose` retains a singleton
+batch axis while the raw tensors use normal PyTorch integer-index views.
+
 Deliberate gaps are explicit: USD/Isaac parsing remains unsupported by the
 portable config loader; nonzero locked revolute joints currently raise
 `NotImplementedError`; mesh-returning helpers and CUDA multi-environment sphere
