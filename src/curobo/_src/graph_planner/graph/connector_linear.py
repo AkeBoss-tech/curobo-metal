@@ -1,16 +1,23 @@
 """Linear swept-validity connector."""
 
+from __future__ import annotations
+
+from typing import Optional
+
 import torch
+
+from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
+from curobo._src.types.device_cfg import DeviceCfg
 
 
 class LinearConnector:
-    def __init__(self, config, device_cfg=None):
+    def __init__(self, config: PRMGraphPlannerCfg, device_cfg: Optional[DeviceCfg] = None):
         self.config = config
         self.device_cfg = device_cfg or config.device_cfg
 
     def set_dependencies(
-        self, action_dim, cspace_distance_weight, check_feasibility_fn,
-        preallocated_idx_buffer,
+        self, action_dim: int, cspace_distance_weight: torch.Tensor, check_feasibility_fn,
+        preallocated_idx_buffer: torch.Tensor,
     ):
         self.action_dim = action_dim
         self.distance_weight = cspace_distance_weight
@@ -27,7 +34,9 @@ class LinearConnector:
             desired_nodes - start_nodes
         )[:, None]
 
-    def steer_until_infeasible(self, start_nodes, desired_nodes):
+    def steer_until_infeasible(
+        self, start_nodes: torch.Tensor, desired_nodes: torch.Tensor
+    ) -> torch.Tensor:
         line = self._compute_steering_line_points(start_nodes, desired_nodes)
         mask = self.check_feasibility_fn(line.reshape(-1, line.shape[-1])).reshape(line.shape[:2])
         prefix = torch.cumprod(mask.to(torch.int64), dim=1).sum(1).clamp_min(1) - 1

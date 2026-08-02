@@ -1,7 +1,9 @@
 """Mutable graph node buffers matching the pinned public lifecycle."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List, Union
+from typing import List, Tuple, Union
 
 import torch
 
@@ -12,7 +14,7 @@ class ConnectedGraph:
     edge_set: torch.Tensor
     shortest_path_lengths: torch.Tensor | None = None
 
-    def set_shortest_path_lengths(self, shortest_path_lengths):
+    def set_shortest_path_lengths(self, shortest_path_lengths: torch.Tensor):
         self.shortest_path_lengths = shortest_path_lengths
 
     def get_node_distance(self):
@@ -20,8 +22,13 @@ class ConnectedGraph:
 
 
 def jit_add_nodes_to_buffer(
-    preallocated_node_buffer, new_nodes, used_node_count, action_dim, device, dtype,
-):
+    preallocated_node_buffer: torch.Tensor,
+    new_nodes: torch.Tensor,
+    used_node_count: int,
+    action_dim: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
     del action_dim, device, dtype
     end = used_node_count + new_nodes.shape[0]
     preallocated_node_buffer[used_node_count:end] = new_nodes
@@ -29,8 +36,8 @@ def jit_add_nodes_to_buffer(
 
 
 def jit_add_all_nodes_to_buffer(
-    all_nodes, preallocated_node_buffer, used_node_count, action_dim,
-):
+    all_nodes, preallocated_node_buffer, used_node_count: int, action_dim: int,
+) -> Tuple[torch.Tensor, torch.Tensor, int]:
     result = jit_add_nodes_to_buffer(
         preallocated_node_buffer, all_nodes, used_node_count, action_dim,
         all_nodes.device, all_nodes.dtype,
@@ -75,16 +82,19 @@ class GraphNodeManager:
         )
         return ConnectedGraph(self.valid_node_buffer, edges.reshape(-1, 2))
 
-    def add_nodes_to_roadmap(self, nodes, add_exact_node=False):
+    def add_nodes_to_roadmap(self, nodes: torch.Tensor, add_exact_node: bool = False) -> torch.Tensor:
         del add_exact_node
         indices = self.add_nodes_to_buffer(nodes)
         if self.graph_path_finder is not None:
             self.graph_path_finder.add_nodes(indices.detach().cpu().tolist())
         return torch.cat((nodes, indices[:, None].to(nodes)), dim=-1)
 
-    add_initial_exact_nodes_to_roadmap = add_nodes_to_roadmap
+    def add_initial_exact_nodes_to_roadmap(self, nodes: torch.Tensor) -> torch.Tensor:
+        return self.add_nodes_to_roadmap(nodes, True)
 
-    def register_nodes_and_connections(self, node_set, start_nodes, add_exact_node=False):
+    def register_nodes_and_connections(
+        self, node_set: torch.Tensor, start_nodes: torch.Tensor, add_exact_node=False
+    ):
         del start_nodes
         return self.add_nodes_to_roadmap(node_set, add_exact_node)
 
@@ -108,9 +118,9 @@ class GraphNodeManager:
             self.graph_path_finder.reset_graph()
 
     @property
-    def action_dim(self): return self._action_dim
+    def action_dim(self) -> int: return self._action_dim
     @property
-    def n_nodes(self): return self._used
+    def n_nodes(self) -> int: return self._used
     @property
     def preallocated_node_buffer(self): return self._buffer
     @property

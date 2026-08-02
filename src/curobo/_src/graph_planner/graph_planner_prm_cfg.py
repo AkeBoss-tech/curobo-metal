@@ -9,6 +9,8 @@ import torch
 
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.robot import RobotCfg
+from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
+from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
 
 
 @dataclass
@@ -55,8 +57,8 @@ class PRMGraphPlannerCfg:
         self_collision_check: bool = True,
         device_cfg: DeviceCfg = DeviceCfg(),
         use_cuda_graph_for_rollout: bool = True,
-        transition_model_config_instance_type: Type = object,
-        cost_manager_config_instance_type: Type = object,
+        transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
+        cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
         graph_path_finder_seed: int = 42,
     ) -> "PRMGraphPlannerCfg":
         del rollout, transition_model, scene_model, collision_cache, self_collision_check

@@ -1,12 +1,20 @@
 """Seeded node sampling compatible with the pinned planner."""
 
+from __future__ import annotations
+
 import torch
 
 
 class NodeSamplingStrategy:
     def __init__(
-        self, config, action_lower_bounds, action_upper_bounds, cspace_distance_weight,
-        action_dim, check_feasibility_fn, device_cfg=None,
+        self,
+        config: PRMGraphPlannerCfg,
+        action_lower_bounds: torch.Tensor,
+        action_upper_bounds: torch.Tensor,
+        cspace_distance_weight: torch.Tensor,
+        action_dim: int,
+        check_feasibility_fn,
+        device_cfg=None,
     ):
         self.config = config
         self.low = action_lower_bounds
@@ -21,7 +29,9 @@ class NodeSamplingStrategy:
         self._generator = torch.Generator(device="cpu")
         self._generator.manual_seed(self.config.sampler_seed)
 
-    def generate_action_samples(self, n_samples: int, bounded: bool = True, unit_ball: bool = False):
+    def generate_action_samples(
+        self, n_samples: int, bounded: bool = True, unit_ball: bool = False
+    ):
         values = torch.rand(
             (n_samples, self.action_dim), generator=self._generator,
             dtype=self.low.dtype, device="cpu",
@@ -40,16 +50,21 @@ class NodeSamplingStrategy:
     def get_feasible_sample_set(self, x_samples):
         return x_samples[self.check_samples_feasibility(x_samples)]
 
-    def generate_feasible_action_samples(self, num_samples):
+    def generate_feasible_action_samples(self, num_samples: int):
         return self.get_feasible_sample_set(
             self.generate_action_samples(num_samples * self.config.sample_rejection_ratio)
         )[:num_samples]
 
-    generate_feasible_samples = generate_feasible_action_samples
+    def generate_feasible_samples(self, num_samples: int) -> torch.Tensor:
+        return self.generate_feasible_action_samples(num_samples)
 
     def generate_feasible_samples_in_ellipsoid(
-        self, x_start, x_goal, num_samples, max_sampling_radius,
-    ):
+        self,
+        x_start: torch.Tensor,
+        x_goal: torch.Tensor,
+        num_samples: int,
+        max_sampling_radius: torch.Tensor,
+    ) -> torch.Tensor:
         sample = self.generate_action_samples(num_samples, unit_ball=True)
         midpoint = (x_start + x_goal) * 0.5
         sample = midpoint + sample * torch.as_tensor(
@@ -57,7 +72,9 @@ class NodeSamplingStrategy:
         )
         return self.get_feasible_sample_set(torch.maximum(torch.minimum(sample, self.high), self.low))
 
-    def compute_distance_from_line(self, vertices, x_start, x_goal):
+    def compute_distance_from_line(
+        self, vertices: torch.Tensor, x_start: torch.Tensor, x_goal: torch.Tensor
+    ):
         segment = x_goal - x_start
         phase = ((vertices - x_start) * segment).sum(-1) / segment.square().sum().clamp_min(1e-12)
         closest = x_start + phase.clamp(0, 1)[:, None] * segment
@@ -66,19 +83,72 @@ class NodeSamplingStrategy:
     # These helpers were TorchScript/Warp acceleration entry points upstream.
     # The portable versions deliberately use ordinary differentiable tensors.
     @staticmethod
-    def jit_compute_distance_from_line(vertices, x_start, x_goal, distance_weight):
+    def jit_compute_distance_from_line(
+        vertices: torch.Tensor, x_start: torch.Tensor, x_goal: torch.Tensor
+    ):
         segment = x_goal - x_start
         phase = ((vertices - x_start) * segment).sum(-1) / segment.square().sum().clamp_min(1e-12)
         closest = x_start + phase.clamp(0, 1).unsqueeze(-1) * segment
-        return torch.linalg.vector_norm((vertices - closest) * distance_weight, dim=-1)
+        return torch.linalg.vector_norm(vertices - closest, dim=-1)
 
     @staticmethod
-    def jit_transform_unit_ball_to_ellipsoid_approximate(samples, x_start, x_goal, max_radius):
-        midpoint = (x_start + x_goal) * 0.5
-        return midpoint + samples * torch.as_tensor(max_radius, dtype=samples.dtype, device=samples.device)
+    def jit_transform_unit_ball_to_ellipsoid_approximate(
+        x_start,
+        x_goal,
+        distance_weight,
+        max_sampling_radius: torch.Tensor,
+        action_dim: int,
+        rot_frame_col: torch.Tensor,
+        unit_ball_samples: torch.Tensor,
+        low_bounds: torch.Tensor,
+        high_bounds: torch.Tensor,
+    ) -> torch.Tensor:
+        """Map unit-ball samples into a clipped prolate ellipsoid.
 
-    jit_transform_unit_ball_to_ellipsoid_householder = jit_transform_unit_ball_to_ellipsoid_approximate
-    jit_transform_unit_ball_to_ellipsoid_svd = jit_transform_unit_ball_to_ellipsoid_approximate
+        The CUDA implementation has three numerically distinct rotation paths.
+        In the portable backend they share a differentiable Householder-free
+        approximation while retaining the exact public invocation layout.
+        """
+        del distance_weight, action_dim, rot_frame_col
+        midpoint = (x_start + x_goal) * 0.5
+        sample = midpoint + unit_ball_samples * max_sampling_radius.to(
+            dtype=unit_ball_samples.dtype, device=unit_ball_samples.device
+        )
+        return torch.maximum(torch.minimum(sample, high_bounds), low_bounds)
+
+    @staticmethod
+    def jit_transform_unit_ball_to_ellipsoid_householder(
+        x_start,
+        x_goal,
+        distance_weight,
+        max_sampling_radius: torch.Tensor,
+        action_dim: int,
+        rot_frame_col: torch.Tensor,
+        unit_ball_samples: torch.Tensor,
+        low_bounds: torch.Tensor,
+        high_bounds: torch.Tensor,
+    ) -> torch.Tensor:
+        return NodeSamplingStrategy.jit_transform_unit_ball_to_ellipsoid_approximate(
+            x_start, x_goal, distance_weight, max_sampling_radius, action_dim,
+            rot_frame_col, unit_ball_samples, low_bounds, high_bounds,
+        )
+
+    @staticmethod
+    def jit_transform_unit_ball_to_ellipsoid_svd(
+        x_start,
+        x_goal,
+        distance_weight,
+        max_sampling_radius: torch.Tensor,
+        action_dim: int,
+        rot_frame_col: torch.Tensor,
+        unit_ball_samples: torch.Tensor,
+        low_bounds: torch.Tensor,
+        high_bounds: torch.Tensor,
+    ) -> torch.Tensor:
+        return NodeSamplingStrategy.jit_transform_unit_ball_to_ellipsoid_approximate(
+            x_start, x_goal, distance_weight, max_sampling_radius, action_dim,
+            rot_frame_col, unit_ball_samples, low_bounds, high_bounds,
+        )
 
 
 __all__ = ["NodeSamplingStrategy"]

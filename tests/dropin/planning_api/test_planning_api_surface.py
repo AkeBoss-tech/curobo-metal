@@ -18,11 +18,14 @@ from curobo._src.solver import IKSolver, TrajOptSolver
 
 def test_planning_namespace_reexports_and_tensor_helpers():
     values = torch.tensor([[0.0], [0.0], [2.0]])
-    unique, indices = DistanceNeighborCalculator.jit_get_unique_nodes_zero_distance(values)
+    unique, indices = DistanceNeighborCalculator.jit_get_unique_nodes_zero_distance(
+        values, torch.ones(1), 1
+    )
     assert unique.tolist() == [[0.0], [2.0]]
     assert indices.tolist() == [0, 2]
     transformed = NodeSamplingStrategy.jit_transform_unit_ball_to_ellipsoid_svd(
-        torch.tensor([[1.0, -1.0]]), torch.zeros(2), torch.ones(2), 0.5
+        torch.zeros(2), torch.ones(2), torch.ones(2), torch.tensor(0.5), 2,
+        torch.eye(2), torch.tensor([[1.0, -1.0]]), torch.full((2,), -10.0), torch.full((2,), 10.0),
     )
     torch.testing.assert_close(transformed, torch.tensor([[1.0, 0.0]]))
 

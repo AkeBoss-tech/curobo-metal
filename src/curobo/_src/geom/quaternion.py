@@ -4,21 +4,27 @@ from typing import Optional
 import torch
 
 
-def normalize_quaternion(quaternion: torch.Tensor) -> torch.Tensor:
-    return quaternion / torch.linalg.vector_norm(quaternion, dim=-1, keepdim=True).clamp_min(
-        torch.finfo(quaternion.dtype).eps
+def normalize_quaternion(in_quaternion: torch.Tensor) -> torch.Tensor:
+    return in_quaternion / torch.linalg.vector_norm(in_quaternion, dim=-1, keepdim=True).clamp_min(
+        torch.finfo(in_quaternion.dtype).eps
     )
 
 
-def quat_multiply(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+def quat_multiply(
+    q1: torch.Tensor, q2: torch.Tensor, q_res: Optional[torch.Tensor] = None
+) -> torch.Tensor:
     w1, x1, y1, z1 = q1.unbind(-1)
     w2, x2, y2, z2 = q2.unbind(-1)
-    return torch.stack((
+    result = torch.stack((
         w1*w2-x1*x2-y1*y2-z1*z2,
         w1*x2+x1*w2+y1*z2-z1*y2,
         w1*y2-x1*z2+y1*w2+z1*x2,
         w1*z2+x1*y2-y1*x2+z1*w2,
     ), -1)
+    if q_res is not None:
+        q_res.copy_(result)
+        return q_res
+    return result
 
 
 def angular_distance_phi3(goal_quat: torch.Tensor, current_quat: torch.Tensor) -> torch.Tensor:

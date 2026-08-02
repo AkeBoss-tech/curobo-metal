@@ -15,7 +15,9 @@ from curobo_metal.ops.graph_planning import GraphPlanningProblem, PersistentRoad
 
 
 class PRMGraphPlanner:
-    def __init__(self, config: PRMGraphPlannerCfg, scene_collision_checker: Optional[object] = None):
+    def __init__(
+        self, config: PRMGraphPlannerCfg, scene_collision_checker: Optional[SceneCollision] = None
+    ):
         if not isinstance(config, PRMGraphPlannerCfg):
             raise TypeError("config must be PRMGraphPlannerCfg")
         self.config = config
@@ -40,7 +42,7 @@ class PRMGraphPlanner:
         interpolation_steps: int = 100,
         interpolation_type: TrajInterpolationType = TrajInterpolationType.LINEAR,
         validate_interpolated_trajectory: bool = True,
-    ):
+    ) -> GraphPlannerResult:
         del validate_interpolated_trajectory
         if interpolation_type == TrajInterpolationType.BSPLINE_KNOTS_CUDA:
             raise NotImplementedError("CUDA B-spline interpolation is unavailable on CPU/MPS")
@@ -102,21 +104,32 @@ class PRMGraphPlanner:
     def reset_buffer(self): self._roadmap.reset()
     def reset_seed(self): self._roadmap.reset()
 
-    def extend_roadmap_with_random_samples(self, num_samples=None):
+    def extend_roadmap_with_random_samples(
+        self, num_samples: int, neighbors_per_node: int = 10
+    ):
         """Reset portable roadmap state and return deterministic free samples.
 
         Unlike upstream this does not mutate a CUDA graph buffer; callers can
         feed the returned samples to their normal planner invocation.
         """
-        count = self.config.new_nodes_per_iteration if num_samples is None else int(num_samples)
+        del neighbors_per_node
+        count = int(num_samples)
         generator = torch.Generator(device="cpu").manual_seed(self.config.sampler_seed)
         values = torch.rand((count, self.action_dim), generator=generator, dtype=self.action_bound_lows.dtype)
         values = values.to(self.action_bound_lows.device)
         return values * (self.action_bound_highs - self.action_bound_lows) + self.action_bound_lows
 
-    def extend_roadmap_with_ellipsoidal_samples(self, x_start, x_goal, num_samples=None, max_sampling_radius=None):
+    def extend_roadmap_with_ellipsoidal_samples(
+        self,
+        x_start: torch.Tensor,
+        x_goal: torch.Tensor,
+        max_sampling_radius: torch.Tensor,
+        num_samples: int,
+        neighbors_per_node: int = 5,
+    ):
+        del neighbors_per_node
         samples = self.extend_roadmap_with_random_samples(num_samples)
-        radius = self.config.connection_radius if max_sampling_radius is None else max_sampling_radius
+        radius = max_sampling_radius
         midpoint = (x_start + x_goal) * 0.5
         return torch.maximum(torch.minimum(
             midpoint + (samples - midpoint) * radius,
@@ -128,7 +141,7 @@ class PRMGraphPlanner:
             "CUDA graph capture has no Metal equivalent; reset_buffer controls portable caches"
         )
 
-    def get_all_rollout_instances(self) -> List[object]:
+    def get_all_rollout_instances(self) -> List[RobotRollout]:
         return []
 
     def warmup(self, num_warmup_iterations: int = 10, max_batch_size: int = 4):
@@ -136,36 +149,36 @@ class PRMGraphPlanner:
         return None
 
     @property
-    def action_dim(self): return int(self.action_bound_lows.numel())
+    def action_dim(self) -> int: return int(self.action_bound_lows.numel())
     @property
-    def action_bound_lows(self): return self.config.action_lower_bounds
+    def action_bound_lows(self) -> torch.Tensor: return self.config.action_lower_bounds
     @property
-    def action_bound_highs(self): return self.config.action_upper_bounds
+    def action_bound_highs(self) -> torch.Tensor: return self.config.action_upper_bounds
     @property
-    def n_nodes(self): return 0
+    def n_nodes(self) -> int: return 0
     @property
-    def cspace_distance_weight(self):
+    def cspace_distance_weight(self) -> torch.Tensor:
         return torch.ones(self.action_dim, **self.device_cfg.as_torch_dict())
     @property
-    def joint_names(self):
+    def joint_names(self) -> List[str]:
         if self.config.robot_config is None:
             return [f"joint_{index}" for index in range(self.action_dim)]
         return list(self.config.robot_config.kinematics.joint_names)
     @property
-    def default_joint_state(self):
+    def default_joint_state(self) -> JointState:
         if self.config.robot_config is None:
             position = (self.action_bound_lows + self.action_bound_highs) * 0.5
         else:
             position = self.config.robot_config.kinematics.retract_config
         return JointState.from_position(position, self.joint_names)
     @property
-    def kinematics(self):
+    def kinematics(self) -> Kinematics:
         raise NotImplementedError("use curobo.kinematics.Kinematics explicitly")
     @property
-    def transition_model(self):
+    def transition_model(self) -> RobotStateTransition:
         raise NotImplementedError("CUDA rollout transition models are not used by portable PRM")
 
-    def compute_kinematics(self, state: JointState):
+    def compute_kinematics(self, state: JointState) -> KinematicsState:
         return self.kinematics.compute_kinematics(state)
 
 
