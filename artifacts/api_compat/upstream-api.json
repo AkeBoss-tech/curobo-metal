@@ -2770,9 +2770,9 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 5,
         "path": "curobo/_src/cost/cost_cspace_position.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 5,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_position",
@@ -2948,9 +2948,9 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 5,
         "path": "curobo/_src/cost/cost_cspace_state.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 5,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_state",
@@ -3526,9 +3526,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 7,
         "path": "curobo/_src/cost/cost_scene_collision_cfg.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 4,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_scene_collision_cfg",
@@ -3922,9 +3922,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 4,
         "path": "curobo/_src/cost/cost_self_collision_cfg.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 4,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_self_collision_cfg",
@@ -4237,9 +4237,9 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 8,
         "path": "curobo/_src/cost/cost_tool_pose.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_tool_pose",
@@ -5270,9 +5270,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 6,
         "path": "curobo/_src/cost/wp_cspace_position.py",
-        "resolved_symbols": 2,
+        "resolved_symbols": 3,
         "status": "partial"
       },
       "name": "curobo._src.cost.wp_cspace_position",
@@ -5649,9 +5649,9 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 8,
         "path": "curobo/_src/cost/wp_cspace_state.py",
-        "resolved_symbols": 2,
+        "resolved_symbols": 3,
         "status": "partial"
       },
       "name": "curobo._src.cost.wp_cspace_state",
@@ -87960,9 +87960,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 14,
         "path": "curobo/_src/state/state_joint.py",
-        "resolved_symbols": 36,
+        "resolved_symbols": 37,
         "status": "partial"
       },
       "name": "curobo._src.state.state_joint",
@@ -91787,9 +91787,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 13,
         "path": "curobo/_src/transition/robot_state_transition.py",
-        "resolved_symbols": 10,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.transition.robot_state_transition",
@@ -93323,9 +93323,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 2,
         "path": "curobo/_src/types/camera.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 10,
         "status": "partial"
       },
       "name": "curobo._src.types.camera",
@@ -94492,9 +94492,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 13,
         "path": "curobo/_src/types/pose.py",
-        "resolved_symbols": 18,
+        "resolved_symbols": 20,
         "status": "partial"
       },
       "name": "curobo._src.types.pose",
