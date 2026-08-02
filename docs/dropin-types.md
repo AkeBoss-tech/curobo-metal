@@ -33,7 +33,12 @@ falling back to CPU.
 `Pose` preserves the pinned constructor field order, wxyz convention, batch
 shapes, list/NumPy/matrix/Euler construction, clone/index behavior, in-place
 `to`, matrix and caller-owned output buffers, inverse, composition, distance,
-point transformation, and repeat helpers. `JointState` preserves its field order, derivative tensor layout,
+point transformation, and repeat helpers. Its `curobo._src.types.pose`
+tensor helper re-exports accept the pinned raw `(position, quaternion, ...)`
+forms (including caller-owned buffers) as well as the earlier portable
+`Pose` convenience form. Matrix-backed poses retain their materialized
+rotation and link name through stack/cat/repeat/contiguous operations; all
+paths are ordinary differentiable PyTorch on CPU and MPS. `JointState` preserves its field order, derivative tensor layout,
 zero/from-position/from-NumPy/from-state-tensor constructors, clone, in-place
 detach, conversion, indexing/assignment, shape helpers, reordering, and state
 tensor concatenation, stack/cat, and seed repeat. `ControlSpace` preserves all
@@ -58,7 +63,9 @@ or specialized internal operations: `JointState` blend, kernel application,
 time scaling, augmentation/append, trajectory gather/copy/trim, DOF indexing,
 and pinned finite-difference operator parity. Pose gradient scratch-buffer
 arguments are accepted for signature compatibility, while portable Torch
-autograd allocates its own intermediates. Camera projection uses portable
+autograd allocates its own intermediates. Zero-norm quaternions raise a
+deterministic `ValueError` instead of invoking undefined CUDA/Warp behavior.
+Camera projection uses portable
 Torch rather than fused CUDA. `RobotState.copy_at_batch_seed_indices` copies
 joints and torques but not backend-specific kinematics buffers.
 

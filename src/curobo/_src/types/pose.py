@@ -244,9 +244,22 @@ class Pose(_MetalPose):
         return self
 
     def stack(self, other_pose: Pose):
+        if not isinstance(other_pose, Pose):
+            raise TypeError("other_pose must be a Pose")
+        if self.position is None or self.quaternion is None:
+            raise ValueError("cannot stack an empty Pose")
+        if other_pose.position is None or other_pose.quaternion is None:
+            raise ValueError("cannot stack an empty Pose")
+        if self.device != other_pose.device or self.position.dtype != other_pose.position.dtype:
+            raise ValueError("poses must share device and dtype")
+        rotation = None
+        if self.rotation is not None and other_pose.rotation is not None:
+            rotation = torch.vstack((self.rotation, other_pose.rotation))
         return type(self)(
             torch.vstack((self.position, other_pose.position)),
             torch.vstack((self.quaternion, other_pose.quaternion)),
+            rotation=rotation,
+            name=self.name,
         )
 
     def unsqueeze(self, dim=-1):
@@ -271,19 +284,32 @@ class Pose(_MetalPose):
     def repeat(self, n):
         if n <= 1:
             return self
-        return type(self)(self.position.repeat(n, 1), self.quaternion.repeat(n, 1))
+        rotation = None if self.rotation is None else self.rotation.repeat(n, 1, 1)
+        return type(self)(
+            self.position.repeat(n, 1), self.quaternion.repeat(n, 1), rotation=rotation, name=self.name
+        )
 
     def repeat_seeds(self, num_seeds: int) -> "Pose":
         if self.position is None or self.quaternion is None or num_seeds <= 1:
-            return type(self)(self.position, self.quaternion)
-        return type(self)(
-            self.position.view(self.batch_size, 1, 3)
+            return type(self)(self.position, self.quaternion, self.rotation, name=self.name)
+        position = (
+            self.position.reshape(self.batch_size, 1, 3)
             .repeat(1, num_seeds, 1)
-            .reshape(self.batch_size * num_seeds, 3),
-            self.quaternion.view(self.batch_size, 1, 4)
-            .repeat(1, num_seeds, 1)
-            .reshape(self.batch_size * num_seeds, 4),
+            .reshape(self.batch_size * num_seeds, 3)
         )
+        quaternion = (
+            self.quaternion.reshape(self.batch_size, 1, 4)
+            .repeat(1, num_seeds, 1)
+            .reshape(self.batch_size * num_seeds, 4)
+        )
+        rotation = None
+        if self.rotation is not None:
+            rotation = (
+                self.rotation.reshape(self.batch_size, 1, 3, 3)
+                .repeat(1, num_seeds, 1, 1)
+                .reshape(self.batch_size * num_seeds, 3, 3)
+            )
+        return type(self)(position, quaternion, rotation=rotation, name=self.name)
 
     def __getitem__(self, index) -> "Pose":
         """Index every materialized representation while retaining batch form."""
@@ -301,6 +327,8 @@ class Pose(_MetalPose):
     def __setitem__(self, idx: int | torch.Tensor, value: "Pose"):
         self.position[idx] = value.position
         self.quaternion[idx] = value.quaternion
+        if self.rotation is not None and value.rotation is not None:
+            self.rotation[idx] = value.rotation
 
     def apply_kernel(self, kernel_mat):
         if self.position is None:
@@ -334,11 +362,28 @@ class Pose(_MetalPose):
         if self.position.shape != pose.position.shape or self.quaternion.shape != pose.quaternion.shape:
             raise ValueError(f"Copy not possible due to shape mismatch: {pose.position.shape} != {self.position.shape}")
         self.position.copy_(pose.position); self.quaternion.copy_(pose.quaternion)
+        if self.rotation is not None and pose.rotation is not None:
+            if self.rotation.shape != pose.rotation.shape:
+                raise ValueError(
+                    f"Copy not possible due to rotation shape mismatch: {pose.rotation.shape} != {self.rotation.shape}"
+                )
+            self.rotation.copy_(pose.rotation)
 
     @staticmethod
     def cat(pose_list: List[Pose]):
-        return Pose(torch.cat([x.position for x in pose_list]),
-                    torch.cat([x.quaternion for x in pose_list]))
+        if not pose_list:
+            raise ValueError("pose_list cannot be empty")
+        if any(x.position is None or x.quaternion is None for x in pose_list):
+            raise ValueError("cannot concatenate an empty Pose")
+        rotations = [x.rotation for x in pose_list]
+        rotation = torch.cat(rotations) if all(x is not None for x in rotations) else None
+        first = pose_list[0]
+        return type(first)(
+            torch.cat([x.position for x in pose_list]),
+            torch.cat([x.quaternion for x in pose_list]),
+            rotation=rotation,
+            name=first.name,
+        )
 
     def linear_distance(self, other_pose: Pose):
         return torch.linalg.norm(self.position - other_pose.position, dim=-1)
@@ -372,7 +417,7 @@ class Pose(_MetalPose):
                          gq_out: Optional[torch.Tensor] = None,
                          gpt_out: Optional[torch.Tensor] = None):
         if points.ndim > 2:
-            points = points.view(-1, 3)
+            points = points.reshape(-1, 3)
         output = super().transform_points(points)
         if out_buffer is not None:
             out_buffer.copy_(output); return out_buffer
@@ -384,8 +429,8 @@ class Pose(_MetalPose):
                                gpt_out: Optional[torch.Tensor] = None):
         if points.ndim <= 2:
             raise ValueError("batch_transform requires points to be b,n,3 shape")
-        rotation = self.get_rotation().view(-1, 3, 3)
-        output = torch.einsum("bij,b...j->b...i", rotation, points) + self.position.view(-1, 1, 3)
+        rotation = self.get_rotation().reshape(-1, 3, 3)
+        output = torch.einsum("bij,b...j->b...i", rotation, points) + self.position.reshape(-1, 1, 3)
         if out_buffer is not None:
             out_buffer.copy_(output); return out_buffer
         return output
@@ -395,9 +440,9 @@ class Pose(_MetalPose):
                                        gp_out: Optional[torch.Tensor] = None,
                                        gq_out: Optional[torch.Tensor] = None,
                                        gpt_out: Optional[torch.Tensor] = None):
-        rotation = self.get_rotation().view(-1, 3, 3).transpose(-1, -2)
+        rotation = self.get_rotation().reshape(-1, 3, 3).transpose(-1, -2)
         output = torch.einsum("bij,b...j->b...i", rotation,
-                              points - self.position.view(-1, 1, 3))
+                              points - self.position.reshape(-1, 1, 3))
         if out_buffer is not None:
             out_buffer.copy_(output); return out_buffer
         return output
@@ -409,7 +454,12 @@ class Pose(_MetalPose):
         return self.inverse().multiply(world_pose)
 
     def contiguous(self) -> "Pose":
-        return type(self)(self.position.contiguous(), self.quaternion.contiguous())
+        return type(self)(
+            self.position.contiguous(),
+            self.quaternion.contiguous(),
+            None if self.rotation is None else self.rotation.contiguous(),
+            name=self.name,
+        )
 
     def to_list(self, q_xyzw=False):
         return self.tolist(q_xyzw)
@@ -468,32 +518,177 @@ def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
     return torch.where(quaternion[..., :1] < 0, -quaternion, quaternion)
 
 
-def pose_to_matrix(pose: Pose) -> torch.Tensor:
-    return pose.get_matrix()
+def pose_to_matrix(
+    position: Pose | torch.Tensor,
+    quaternion: Optional[torch.Tensor] = None,
+    out_matrix: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    """Return a homogeneous matrix from either a Pose or raw ``(p, q)`` tensors.
+
+    The raw form has the pinned cuRobo signature.  The Pose form is retained
+    as a backwards-compatible convenience for the earlier portable facade.
+    """
+    if isinstance(position, Pose):
+        if out_matrix is not None and quaternion is not None:
+            raise TypeError("Pose form accepts one output buffer")
+        return position.get_matrix(out_matrix if out_matrix is not None else quaternion)
+    if quaternion is None:
+        raise TypeError("raw pose_to_matrix requires position and quaternion")
+    rotation = quaternion_to_matrix(quaternion)
+    matrix = torch.zeros(
+        rotation.shape[:-2] + (4, 4), dtype=rotation.dtype, device=rotation.device
+    )
+    matrix[..., :3, :3] = rotation
+    matrix[..., :3, 3] = position
+    matrix[..., 3, 3] = 1
+    if out_matrix is not None:
+        out_matrix.copy_(matrix)
+        return out_matrix
+    return matrix
 
 
-def pose_to_affine_matrix(pose: Pose) -> torch.Tensor:
-    return pose.get_affine_matrix()
+def pose_to_affine_matrix(
+    position: Pose | torch.Tensor,
+    quaternion: Optional[torch.Tensor] = None,
+    out_matrix: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    if isinstance(position, Pose):
+        if out_matrix is not None and quaternion is not None:
+            raise TypeError("Pose form accepts one output buffer")
+        return position.get_affine_matrix(out_matrix if out_matrix is not None else quaternion)
+    if quaternion is None:
+        raise TypeError("raw pose_to_affine_matrix requires position and quaternion")
+    matrix = pose_to_matrix(position, quaternion)[..., :3, :]
+    if out_matrix is not None:
+        out_matrix.copy_(matrix)
+        return out_matrix
+    return matrix
 
 
-def pose_inverse(pose: Pose) -> Pose:
-    return pose.inverse()
+def pose_inverse(
+    position: Pose | torch.Tensor,
+    quaternion: Optional[torch.Tensor] = None,
+    out_position: Optional[torch.Tensor] = None,
+    out_quaternion: Optional[torch.Tensor] = None,
+) -> Pose | tuple[torch.Tensor, torch.Tensor]:
+    if isinstance(position, Pose):
+        if quaternion is not None or out_position is not None or out_quaternion is not None:
+            raise TypeError("Pose form of pose_inverse does not accept tensor buffers")
+        return position.inverse()
+    if quaternion is None:
+        raise TypeError("raw pose_inverse requires position and quaternion")
+    normalized = normalize_quaternion(quaternion)
+    inverse_quaternion = torch.cat((normalized[..., :1], -normalized[..., 1:]), dim=-1)
+    inverse_position = -torch.matmul(
+        position.unsqueeze(-2), quaternion_to_matrix(inverse_quaternion).transpose(-1, -2)
+    ).squeeze(-2)
+    if out_position is not None:
+        out_position.copy_(inverse_position)
+        inverse_position = out_position
+    if out_quaternion is not None:
+        out_quaternion.copy_(inverse_quaternion)
+        inverse_quaternion = out_quaternion
+    return inverse_position, inverse_quaternion
 
 
-def pose_multiply(left: Pose, right: Pose) -> Pose:
-    return left.multiply(right)
+def pose_multiply(
+    position: Pose | torch.Tensor,
+    quaternion: Pose | torch.Tensor,
+    position2: Optional[torch.Tensor] = None,
+    quaternion2: Optional[torch.Tensor] = None,
+    out_position: Optional[torch.Tensor] = None,
+    out_quaternion: Optional[torch.Tensor] = None,
+) -> Pose | tuple[torch.Tensor, torch.Tensor]:
+    if isinstance(position, Pose):
+        if not isinstance(quaternion, Pose) or any(x is not None for x in (position2, quaternion2, out_position, out_quaternion)):
+            raise TypeError("Pose form requires exactly two Pose arguments")
+        return position.multiply(quaternion)
+    if not isinstance(quaternion, torch.Tensor) or position2 is None or quaternion2 is None:
+        raise TypeError("raw pose_multiply requires position, quaternion, position2, quaternion2")
+    composed_position = transform_points(position, quaternion, position2.unsqueeze(-2)).squeeze(-2)
+    lw, lx, ly, lz = quaternion.unbind(-1)
+    rw, rx, ry, rz = quaternion2.unbind(-1)
+    composed_quaternion = normalize_quaternion(torch.stack((
+        lw * rw - lx * rx - ly * ry - lz * rz,
+        lw * rx + lx * rw + ly * rz - lz * ry,
+        lw * ry - lx * rz + ly * rw + lz * rx,
+        lw * rz + lx * ry - ly * rx + lz * rw,
+    ), dim=-1))
+    if out_position is not None:
+        out_position.copy_(composed_position)
+        composed_position = out_position
+    if out_quaternion is not None:
+        out_quaternion.copy_(composed_quaternion)
+        composed_quaternion = out_quaternion
+    return composed_position, composed_quaternion
 
 
-def transform_points(pose: Pose, points: torch.Tensor) -> torch.Tensor:
-    return pose.transform_points(points)
+def transform_points(
+    position: Pose | torch.Tensor,
+    quaternion: torch.Tensor,
+    points: Optional[torch.Tensor] = None,
+    out_points: Optional[torch.Tensor] = None,
+    adj_position: Optional[torch.Tensor] = None,
+    adj_quaternion: Optional[torch.Tensor] = None,
+    adj_points: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    if isinstance(position, Pose):
+        if out_points is not None and points is not None:
+            raise TypeError("Pose form accepts one output buffer")
+        return position.transform_points(quaternion, out_points if out_points is not None else points)
+    if points is None:
+        raise TypeError("raw transform_points requires position, quaternion, points")
+    del adj_position, adj_quaternion, adj_points
+    output = torch.matmul(points, quaternion_to_matrix(quaternion).transpose(-1, -2)) + position.unsqueeze(-2)
+    if out_points is not None:
+        out_points.copy_(output)
+        return out_points
+    return output
 
 
-def batch_transform_points(pose: Pose, points: torch.Tensor) -> torch.Tensor:
-    return pose.batch_transform_points(points)
+def batch_transform_points(
+    position: Pose | torch.Tensor,
+    quaternion: torch.Tensor,
+    points: Optional[torch.Tensor] = None,
+    out_points: Optional[torch.Tensor] = None,
+    adj_position: Optional[torch.Tensor] = None,
+    adj_quaternion: Optional[torch.Tensor] = None,
+    adj_points: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    if isinstance(position, Pose):
+        if out_points is not None and points is not None:
+            raise TypeError("Pose form accepts one output buffer")
+        return position.batch_transform_points(quaternion, out_points if out_points is not None else points)
+    if points is None:
+        raise TypeError("raw batch_transform_points requires position, quaternion, points")
+    return transform_points(
+        position, quaternion, points, out_points, adj_position, adj_quaternion, adj_points
+    )
 
 
-def batch_transform_points_inverse(pose: Pose, points: torch.Tensor) -> torch.Tensor:
-    return pose.batch_transform_points_inverse(points)
+def batch_transform_points_inverse(
+    position: Pose | torch.Tensor,
+    quaternion: torch.Tensor,
+    points: Optional[torch.Tensor] = None,
+    out_points: Optional[torch.Tensor] = None,
+    adj_position: Optional[torch.Tensor] = None,
+    adj_quaternion: Optional[torch.Tensor] = None,
+    adj_points: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    if isinstance(position, Pose):
+        if out_points is not None and points is not None:
+            raise TypeError("Pose form accepts one output buffer")
+        return position.batch_transform_points_inverse(quaternion, out_points if out_points is not None else points)
+    if points is None:
+        raise TypeError("raw batch_transform_points_inverse requires position, quaternion, points")
+    del adj_position, adj_quaternion, adj_points
+    output = torch.matmul(
+        points - position.unsqueeze(-2), quaternion_to_matrix(quaternion)
+    )
+    if out_points is not None:
+        out_points.copy_(output)
+        return out_points
+    return output
 
 
 def angular_distance_phi3(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
