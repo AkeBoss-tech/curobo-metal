@@ -17522,9 +17522,9 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 5,
         "path": "curobo/_src/geom/data/data_scene.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 18,
         "status": "partial"
       },
       "name": "curobo._src.geom.data.data_scene",
@@ -22972,9 +22972,9 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
+        "missing_symbols": 15,
         "path": "curobo/_src/geom/types.py",
-        "resolved_symbols": 24,
+        "resolved_symbols": 25,
         "status": "partial"
       },
       "name": "curobo._src.geom.types",
@@ -91787,9 +91787,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 12,
         "path": "curobo/_src/transition/robot_state_transition.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 13,
         "status": "partial"
       },
       "name": "curobo._src.transition.robot_state_transition",
