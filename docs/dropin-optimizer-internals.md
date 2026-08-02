@@ -19,3 +19,10 @@ Numerical equivalence to the pinned NVIDIA implementation is not claimed
 without paired replay. Floating-point reduction order, random-number streams,
 line-search tie handling, and low-level buffer layout may differ even when the
 portable optimizer has the same mathematical contract.
+
+`ParticleOptCore` also owns a real portable particle lifecycle: deterministic
+batched populations, sampled/negative/null action composition, bounded action
+projection, callback-owned distribution updates, best/sample/mean extraction,
+partial reset, warm-start shifting, batch resize, and debug traces.  It uses
+ordinary PyTorch CPU/MPS tensors.  CUDA graph capture, Warp samplers, and the
+packed CUDA rollout-result ABI remain deliberate unsupported boundaries.
