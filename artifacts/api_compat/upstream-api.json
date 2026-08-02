@@ -3228,9 +3228,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 4,
         "path": "curobo/_src/cost/cost_scene_collision.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_scene_collision",
@@ -78146,9 +78146,9 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 2,
         "path": "curobo/_src/solver/manager_seed.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 8,
         "status": "partial"
       },
       "name": "curobo._src.solver.manager_seed",
