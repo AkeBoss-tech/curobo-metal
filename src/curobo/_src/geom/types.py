@@ -8,6 +8,84 @@ from typing import Any, Iterator, List, Optional, Sequence
 import torch
 
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.types.pose import Pose
+
+
+def _portable_tensor(value: Any, device_cfg: DeviceCfg) -> torch.Tensor:
+    """Convert a geometry value while preserving an existing tensor's graph."""
+    if isinstance(value, torch.Tensor):
+        return value.to(device=device_cfg.device, dtype=device_cfg.dtype)
+    return torch.as_tensor(value, device=device_cfg.device, dtype=device_cfg.dtype)
+
+
+def tensor_sphere(
+    pt: Sequence[float] | torch.Tensor,
+    radius: float | torch.Tensor,
+    tensor: Optional[torch.Tensor] = None,
+    device_cfg: DeviceCfg = DeviceCfg(),
+) -> torch.Tensor:
+    """Return portable ``[x, y, z, radius]`` sphere storage."""
+    point = _portable_tensor(pt, device_cfg)
+    if point.shape[-1:] != (3,):
+        raise ValueError("sphere point must end in dimension 3")
+    radius_t = _portable_tensor(radius, device_cfg).reshape(1)
+    if tensor is None:
+        return torch.cat((point, radius_t), dim=-1)
+    if tensor.shape[-1:] != (4,):
+        raise ValueError("sphere tensor must end in dimension 4")
+    tensor[..., :3].copy_(point)
+    tensor[..., 3].copy_(radius_t.expand_as(tensor[..., 3]))
+    return tensor
+
+
+def tensor_capsule(
+    base: Sequence[float] | torch.Tensor,
+    tip: Sequence[float] | torch.Tensor,
+    radius: float | torch.Tensor,
+    tensor: Optional[torch.Tensor] = None,
+    device_cfg: DeviceCfg = DeviceCfg(),
+) -> torch.Tensor:
+    """Return portable ``[base_xyz, tip_xyz, radius]`` capsule storage."""
+    base_t, tip_t = _portable_tensor(base, device_cfg), _portable_tensor(tip, device_cfg)
+    if base_t.shape[-1:] != (3,) or tip_t.shape[-1:] != (3,):
+        raise ValueError("capsule base and tip must end in dimension 3")
+    radius_t = _portable_tensor(radius, device_cfg).reshape(1)
+    if tensor is None:
+        return torch.cat((base_t, tip_t, radius_t), dim=-1)
+    if tensor.shape[-1:] != (7,):
+        raise ValueError("capsule tensor must end in dimension 7")
+    tensor[..., :3].copy_(base_t)
+    tensor[..., 3:6].copy_(tip_t)
+    tensor[..., 6].copy_(radius_t.expand_as(tensor[..., 6]))
+    return tensor
+
+
+def tensor_cube(
+    pose: Sequence[float] | torch.Tensor,
+    dims: Sequence[float] | torch.Tensor,
+    device_cfg: DeviceCfg = DeviceCfg(),
+) -> list[torch.Tensor]:
+    """Return ``[dimensions, inverse_pose]`` for one centered cuboid."""
+    pose_t = _portable_tensor(pose, device_cfg)
+    dims_t = _portable_tensor(dims, device_cfg)
+    if pose_t.shape != (7,) or dims_t.shape != (3,):
+        raise ValueError("cube pose and dims must have shapes [7] and [3]")
+    forward = Pose(pose_t[:3], pose_t[3:])
+    return [dims_t, forward.inverse().get_pose_vector().squeeze(0)]
+
+
+def batch_tensor_cube(
+    pose: Sequence[Sequence[float]] | torch.Tensor,
+    dims: Sequence[Sequence[float]] | torch.Tensor,
+    device_cfg: DeviceCfg = DeviceCfg(),
+) -> list[torch.Tensor]:
+    """Vectorized ``tensor_cube`` for ``[batch, 7]`` cuboid poses."""
+    pose_t = _portable_tensor(pose, device_cfg)
+    dims_t = _portable_tensor(dims, device_cfg)
+    if pose_t.ndim != 2 or pose_t.shape[-1] != 7 or dims_t.shape != (pose_t.shape[0], 3):
+        raise ValueError("cube batches require pose [B,7] and dims [B,3]")
+    forward = Pose(pose_t[:, :3], pose_t[:, 3:])
+    return [dims_t, forward.inverse().get_pose_vector()]
 
 
 @dataclass
@@ -224,4 +302,5 @@ WorldConfig = SceneCfg
 __all__ = [
     "Capsule", "Cuboid", "Cylinder", "Material", "Mesh", "Obstacle",
     "PointCloud", "SceneCfg", "Sphere", "VoxelGrid", "WorldConfig",
+    "batch_tensor_cube", "tensor_capsule", "tensor_cube", "tensor_sphere",
 ]
