@@ -105,8 +105,14 @@ def _interpolate_state(
     batch = raw.position.unsqueeze(0) if raw.position.ndim == 2 else raw.position
     if out.position.ndim == 2:
         out = out.unsqueeze(0)
+    # ``calculate_traj_steps`` returns a scalar for a shared scalar dt and a
+    # per-batch vector otherwise.  Normalize both contracts here so a batched
+    # trajectory with one common dt does not try to index a 0-D tensor.
+    step_values = steps.reshape(-1)
+    if step_values.numel() not in (1, batch.shape[0]):
+        raise ValueError("trajectory step counts must be scalar or per-batch")
     for index in range(batch.shape[0]):
-        count = int(steps[index].item())
+        count = int(step_values[0 if step_values.numel() == 1 else index].item())
         values = _interpolate_values(batch[index], count, kind)
         out.position[index, :count] = values
         out.position[index, count:] = values[-1]
