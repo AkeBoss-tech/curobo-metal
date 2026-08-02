@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 from curobo_metal.types.math import Pose as _MetalPose
+from curobo_metal.types.math import _matrix_to_quaternion, _quaternion_to_matrix
 
 from .device_cfg import DeviceCfg
 
@@ -281,4 +282,64 @@ class Pose(_MetalPose):
         return type(self)(self.position.contiguous(), self.quaternion.contiguous())
 
 
-__all__ = ["Pose"]
+def normalize_quaternion(quaternion: torch.Tensor) -> torch.Tensor:
+    """Normalize wxyz quaternions with a deterministic zero-norm error."""
+    norm = torch.linalg.vector_norm(quaternion, dim=-1, keepdim=True)
+    if bool((norm == 0).any().item()):
+        raise ValueError("quaternion must be nonzero")
+    return quaternion / norm
+
+
+def quaternion_to_matrix(quaternion: torch.Tensor) -> torch.Tensor:
+    return _quaternion_to_matrix(normalize_quaternion(quaternion))
+
+
+def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
+    if matrix.shape[-2:] != (3, 3):
+        raise ValueError("matrix must end in shape [3,3]")
+    return _matrix_to_quaternion(matrix)
+
+
+def pose_to_matrix(pose: Pose) -> torch.Tensor:
+    return pose.get_matrix()
+
+
+def pose_to_affine_matrix(pose: Pose) -> torch.Tensor:
+    return pose.get_affine_matrix()
+
+
+def pose_inverse(pose: Pose) -> Pose:
+    return pose.inverse()
+
+
+def pose_multiply(left: Pose, right: Pose) -> Pose:
+    return left.multiply(right)
+
+
+def transform_points(pose: Pose, points: torch.Tensor) -> torch.Tensor:
+    return pose.transform_points(points)
+
+
+def batch_transform_points(pose: Pose, points: torch.Tensor) -> torch.Tensor:
+    return pose.batch_transform_points(points)
+
+
+def batch_transform_points_inverse(pose: Pose, points: torch.Tensor) -> torch.Tensor:
+    return pose.batch_transform_points_inverse(points)
+
+
+def angular_distance_phi3(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+    left, right = normalize_quaternion(left), normalize_quaternion(right)
+    return 1 - torch.abs(torch.sum(left * right, dim=-1)).clamp(max=1)
+
+
+def angular_distance_axis_angle(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+    left, right = normalize_quaternion(left), normalize_quaternion(right)
+    return 2 * torch.acos(torch.abs(torch.sum(left * right, dim=-1)).clamp(max=1))
+
+
+__all__ = [
+    "Pose", "angular_distance_axis_angle", "angular_distance_phi3", "batch_transform_points",
+    "batch_transform_points_inverse", "matrix_to_quaternion", "normalize_quaternion", "pose_inverse",
+    "pose_multiply", "pose_to_affine_matrix", "pose_to_matrix", "quaternion_to_matrix", "transform_points",
+]
