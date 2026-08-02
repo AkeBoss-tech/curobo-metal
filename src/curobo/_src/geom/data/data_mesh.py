@@ -18,17 +18,19 @@ class MeshDataWarp(PortableWarpStruct): pass
 @dataclass(init=False)
 class MeshData(PortableObstacleData):
     @classmethod
-    def create_cache(cls,max_n,num_envs,device_cfg):
+    def create_cache(cls,max_n,num_envs,device_cfg,max_dist=0.1):
+        if max_n < 1 or num_envs < 1:
+            raise ValueError("max_n and num_envs must be positive")
         o=cls._base(max_n,num_envs,device_cfg)
         o.mesh_ids=torch.zeros((num_envs,max_n),dtype=torch.int64,device=device_cfg.device)
         o.dims=torch.zeros((num_envs,max_n,4),**device_cfg.as_torch_dict())
-        o._mesh_cache={};o.wp_cache=o._mesh_cache;o.max_dist=10.;o._wp_device=None; return o
+        o._mesh_cache={};o.wp_cache=o._mesh_cache;o.max_dist=float(max_dist);o._wp_device=None; return o
     @classmethod
-    def from_scene_cfg(cls,scene_cfg,device_cfg,env_idx=0,num_envs=1,max_n=None):
-        o=cls.create_cache(max_n or max(len(scene_cfg.mesh),1),num_envs,device_cfg); o.load_batch(scene_cfg.mesh,env_idx); return o
+    def from_scene_cfg(cls,scene_cfg,device_cfg,env_idx=0,num_envs=1,max_n=None,max_dist=0.1):
+        o=cls.create_cache(max_n or max(len(scene_cfg.mesh),1),num_envs,device_cfg,max_dist); o.load_batch(scene_cfg.mesh,env_idx); return o
     @classmethod
-    def from_batch_scene_cfg(cls,scene_cfg_list,device_cfg,max_n=None):
-        o=cls.create_cache(max_n or max([len(x.mesh) for x in scene_cfg_list]+[1]),len(scene_cfg_list),device_cfg)
+    def from_batch_scene_cfg(cls,scene_cfg_list,device_cfg,max_n=None,max_dist=0.1):
+        o=cls.create_cache(max_n or max([len(x.mesh) for x in scene_cfg_list]+[1]),len(scene_cfg_list),device_cfg,max_dist)
         for i,s in enumerate(scene_cfg_list): o.load_batch(s.mesh,i)
         return o
     def _load_mesh_into_cache(self,mesh):
@@ -47,8 +49,13 @@ class MeshData(PortableObstacleData):
         self.mesh_ids[env_idx,i]=i; lo,hi=self._mesh_cache[mesh.name].get_bounds();self.dims[env_idx,i,:3]=hi-lo
         self.inv_pose[env_idx,i,:7]=inverse_pose(mesh.pose or [0,0,0,1,0,0,0],self.device_cfg)
         self.enable[env_idx,i]=1; self.count[env_idx]+=1; return i
+    def update_pose(self, name, w_obj_pose=None, obj_w_pose=None, env_idx=0):
+        return super().update_pose(name, w_obj_pose, obj_w_pose, env_idx)
     def get_cached_mesh_names(self): return list(self._mesh_cache)
-    def update_from_warp_id(self,*args,**kwargs): raise NotImplementedError("Warp mesh ids are unavailable")
+    def update_from_warp_id(self,warp_mesh_id,name,w_obj_pose=None,obj_w_pose=None,env_idx=0,mesh_idx=None):
+        raise NotImplementedError(
+            "Warp mesh ids are unavailable on the portable backend; create Mesh with vertices/faces instead"
+        )
     def clear(self,env_idx=None,clear_warp_cache=False):
         super().clear(env_idx)
         if clear_warp_cache:self._mesh_cache.clear()

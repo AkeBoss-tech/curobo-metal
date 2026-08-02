@@ -1,12 +1,30 @@
 """Shared storage implementation for portable obstacle datasets."""
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any
 import torch
 from curobo._src.types.device_cfg import DeviceCfg
 
-def inverse_pose(value, cfg):
+def pose_vector(value, cfg):
+    """Return one ``xyzw``-position / ``wxyz``-quaternion pose row.
+
+    The public data stores accept both cuRobo :class:`Pose` values and the
+    serialisable seven-value world representation.  Keeping this conversion in
+    tensor space is important: pose updates remain on MPS and preserve a
+    caller's autograd graph until it reaches a mutable cache buffer.
+    """
+    if hasattr(value, "get_pose_vector"):
+        value = value.get_pose_vector()
+    elif hasattr(value, "position") and hasattr(value, "quaternion"):
+        value = torch.cat((value.position, value.quaternion), dim=-1)
     p = torch.as_tensor(value, **cfg.as_torch_dict())
+    if p.shape[-1:] != (7,):
+        raise ValueError("pose must end in [x, y, z, qw, qx, qy, qz]")
+    return p.reshape(-1, 7)[0]
+
+
+def inverse_pose(value, cfg):
+    """Return the inverse of one portable pose row without CPU/Warp calls."""
+    p = pose_vector(value, cfg)
     q = p[3:7] / p[3:7].norm().clamp_min(1e-12)
     qi = q * q.new_tensor([1, -1, -1, -1])
     w, x, y, z = qi
@@ -36,18 +54,25 @@ class PortableObstacleData:
     def has_name(self, name, env_idx=0): return name in self.names[env_idx]
     def get_active_count(self, env_idx=0): return int(self.count[env_idx].item())
     def get_names(self, env_idx=0): return [x for x in self.names[env_idx] if x is not None]
-    def set_enabled(self, name, enabled, env_idx=0): self.enable[env_idx,self.get_idx(name,env_idx)] = int(enabled)
+    def _check_env(self, env_idx):
+        if not 0 <= int(env_idx) < self.num_envs:
+            raise IndexError(f"environment index {env_idx} is outside [0, {self.num_envs})")
+
+    def set_enabled(self, name, enabled, env_idx=0):
+        self._check_env(env_idx)
+        self.enable[env_idx,self.get_idx(name,env_idx)] = int(bool(enabled))
     def clear(self, env_idx=None):
         ids = range(self.num_envs) if env_idx is None else [env_idx]
         for i in ids:
+            self._check_env(i)
             self.enable[i].zero_(); self.count[i]=0; self.names[i]=[None]*self.max_n
     def update_pose(self, name, w_obj_pose=None, obj_w_pose=None, env_idx=0):
+        self._check_env(env_idx)
         idx=self.get_idx(name,env_idx)
         if obj_w_pose is not None:
-            p=torch.cat((obj_w_pose.position.reshape(-1,3)[0],obj_w_pose.quaternion.reshape(-1,4)[0]))
+            p=pose_vector(obj_w_pose, self.device_cfg)
         elif w_obj_pose is not None:
-            p=inverse_pose(torch.cat((w_obj_pose.position.reshape(-1,3)[0],w_obj_pose.quaternion.reshape(-1,4)[0])),self.device_cfg)
-            self.inv_pose[env_idx,idx,:7]=p; return
+            p=inverse_pose(w_obj_pose,self.device_cfg)
         else: raise ValueError("w_obj_pose or obj_w_pose is required")
         self.inv_pose[env_idx,idx,:7]=p
     def to_warp(self, *args, **kwargs): raise NotImplementedError("Warp is unavailable on the portable backend")

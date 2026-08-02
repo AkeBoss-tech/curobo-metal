@@ -209,22 +209,56 @@ class VoxelData(PortableObstacleData):
         self.clear(env_idx)
         for g in grids:self.update_data(g,env_idx)
     def update_data(self,g:VoxelGrid,env_idx=0,name=None):
+        self._check_env(env_idx)
         key=name or g.name
         if self.has_name(key,env_idx):i=self.get_idx(key,env_idx)
         else:
             i=self.get_active_count(env_idx)
             if i>=self.max_n:raise ValueError("voxel cache capacity exceeded")
             self.names[env_idx][i]=key;self.count[env_idx]+=1
-        if g.feature_tensor is not None:self.features[env_idx,i,:g.feature_tensor.numel()]=g.feature_tensor.reshape(-1).to(self.device_cfg.device)
-        if g.xyzr_tensor is not None:self.xyzr[env_idx,i,:g.xyzr_tensor.reshape(-1,4).shape[0]]=g.xyzr_tensor.reshape(-1,4).to(self.device_cfg.device)
+        if g.feature_tensor is not None:
+            features = g.feature_tensor.reshape(-1)
+            if features.numel() > self.max_voxels:
+                raise ValueError(
+                    f"feature tensor has {features.numel()} entries; cache holds {self.max_voxels}"
+                )
+            shape = g.get_grid_shape()[0]
+            if features.numel() != shape[0] * shape[1] * shape[2]:
+                raise ValueError("feature tensor size does not match VoxelGrid dimensions")
+            self.features[env_idx,i].zero_()
+            self.features[env_idx,i,:features.numel()] = features.to(**self.device_cfg.as_torch_dict())
+        if g.xyzr_tensor is not None:
+            xyzr = g.xyzr_tensor.reshape(-1,4)
+            if xyzr.shape[0] > self.max_voxels:
+                raise ValueError("xyzr tensor exceeds voxel cache capacity")
+            self.xyzr[env_idx,i].zero_()
+            self.xyzr[env_idx,i,:xyzr.shape[0]]=xyzr.to(**self.device_cfg.as_torch_dict())
         self.dims[env_idx,i,:3]=torch.as_tensor(g.dims,**self.device_cfg.as_torch_dict());self.dims[env_idx,i,3]=g.voxel_size
         self.params[env_idx,i]=self.dims[env_idx,i]
         self.inv_pose[env_idx,i,:7]=inverse_pose(g.pose or [0,0,0,1,0,0,0],self.device_cfg);self.enable[env_idx,i]=1;self._grids[(env_idx,key)]=g
     def update_features(self,features,name,env_idx=0):
-        i=self.get_idx(name,env_idx);self.features[env_idx,i,:features.numel()]=features.reshape(-1)
+        i=self.get_idx(name,env_idx)
+        features = torch.as_tensor(features, device=self.device_cfg.device, dtype=self.features.dtype).reshape(-1)
+        if features.numel() > self.max_voxels:
+            raise ValueError("feature tensor exceeds voxel cache capacity")
+        self.features[env_idx,i].zero_()
+        self.features[env_idx,i,:features.numel()] = features
     def get_voxel_grid(self,name,env_idx=0):return self._grids[(env_idx,name)]
     def get_grid_shape(self,env_idx=0,name=None,idx=0):
         if name is not None:idx=self.get_idx(name,env_idx)
-        d=self.dims[env_idx,idx];return torch.Size([round(float(d[j]/d[3])) for j in range(3)])
+        d=self.dims[env_idx,idx]
+        return torch.Size([round(float(d[j]/d[3])) for j in range(3)])
+
+    def clear(self, env_idx=None):
+        ids = range(self.num_envs) if env_idx is None else [env_idx]
+        for index in ids:
+            self._check_env(index)
+            self.features[index].fill_(self.max_esdf_distance)
+            self.xyzr[index].zero_()
+            self.params[index].zero_()
+            self.dims[index].zero_()
+            for key in [item for item in self._grids if item[0] == index]:
+                del self._grids[key]
+        super().clear(env_idx)
 is_obs_enabled=load_obstacle_transform=compute_local_sdf=compute_local_sdf_with_grad=raw_warp
 __all__=["VoxelData","VoxelDataWarp","is_voxel_valid","sample_voxel_sdf","sample_voxel_sdf_with_grad","voxel_idx_to_flat","world_to_voxel_idx","is_obs_enabled","load_obstacle_transform","compute_local_sdf","compute_local_sdf_with_grad"]
