@@ -20344,9 +20344,9 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
+        "missing_symbols": 5,
         "path": "curobo/_src/geom/sphere_fit/fit_spheres.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 13,
         "status": "partial"
       },
       "name": "curobo._src.geom.sphere_fit.fit_spheres",
@@ -58230,9 +58230,9 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
+        "missing_symbols": 10,
         "path": "curobo/_src/perception/mapper/mapper.py",
-        "resolved_symbols": 18,
+        "resolved_symbols": 19,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mapper",
@@ -64921,9 +64921,9 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 13,
         "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector.py",
-        "resolved_symbols": 12,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.sdf_pose_detector",
