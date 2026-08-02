@@ -28,6 +28,14 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
     def setup_batch_tensors(self, batch_size: int, horizon: int):
         if batch_size < 1 or horizon < 1:
             raise ValueError("batch_size and horizon must be positive")
+        if self.cspace_cost is not None:
+            self.cspace_cost.setup_batch_tensors(batch_size, horizon)
+        if self.self_collision_cost is not None:
+            self.self_collision_cost.setup_batch_tensors(batch_size, horizon)
+        for cost in (self.collision_cost, self.collision_constraint):
+            if cost is not None:
+                cost.config.update_num_spheres(self.kinematics.total_spheres)
+                cost.setup_batch_tensors(batch_size, horizon)
         self._collision_buffer = CollisionBuffer.from_shape(
             torch.Size((batch_size, horizon, self.kinematics.total_spheres, 4)),
             self.device_cfg,
@@ -55,8 +63,16 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         if self.scene_model is None:
             return x_sph.new_zeros(x_sph.shape[:-1])
         settings = self.collision_cost
+        if settings is None:
+            return x_sph.new_zeros(x_sph.shape[:-1])
+        if x_sph.ndim != 4 or x_sph.shape[-1] != 4:
+            raise ValueError("x_sph must have shape [batch,horizon,spheres,4]")
+        if env_query_idx is not None and (
+            env_query_idx.ndim != 1 or env_query_idx.shape[0] != x_sph.shape[0]
+        ):
+            raise ValueError("env_query_idx must have shape [batch]")
         return self.scene_model.get_sphere_distance_raw(
-            x_sph, self._buffer(x_sph), settings.weight, settings.activation_distance,
+            x_sph, self._buffer(x_sph), settings.weight, settings.config.activation_distance,
             env_query_idx, False,
         )
 
@@ -70,7 +86,18 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return self._collision_buffer
 
     def get_collision_constraint(self, x_sph, env_query_idx=None):
-        value = self.get_collision_distance(x_sph, env_query_idx)
+        if isinstance(x_sph, KinematicsState):
+            x_sph = x_sph.robot_spheres
+        if self.scene_model is None or self.collision_constraint is None:
+            return x_sph.new_zeros(x_sph.shape[:-1])
+        value = self.scene_model.get_sphere_distance_raw(
+            x_sph,
+            self._buffer(x_sph),
+            self.collision_constraint.weight,
+            self.collision_constraint.config.activation_distance,
+            env_query_idx,
+            False,
+        )
         return (-value).clamp_min(0)
 
     def get_self_collision_distance(self, x_sph) -> torch.Tensor:
@@ -79,12 +106,24 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         cost = self.self_collision_cost
         if cost is None:
             return x_sph.new_zeros((*x_sph.shape[:2], 1))
-        pairs = getattr(cost, "pairs", None)
+        pairs = getattr(getattr(cost, "config", None), "self_collision_kin_config", None)
+        pairs = getattr(pairs, "collision_pairs", getattr(cost, "pairs", None))
         if pairs is None:
-            raise NotImplementedError("self_collision_cost must expose a pairs tensor")
+            return cost(x_sph).squeeze(-1)
+        if pairs.numel() == 0:
+            return x_sph.new_zeros(x_sph.shape[:2])
         prefix = x_sph.shape[:-2]
-        result = sphere_sphere_signed_distance(x_sph.reshape(-1, *x_sph.shape[-2:]), pairs)
-        return (-result.reduced_distance).clamp_min(0).reshape(prefix)
+        result = sphere_sphere_signed_distance(
+            x_sph.reshape(-1, *x_sph.shape[-2:]), pairs.to(device=x_sph.device, dtype=torch.int64)
+        )
+        activation = getattr(getattr(cost, "config", None), "activation_distance", None)
+        # The portable high-level API exposes collision violation, preserving
+        # the established [batch,horizon] result while the reusable cost keeps
+        # its CUDA-compatible [batch,horizon,1] output internally.
+        value = (-result.reduced_distance).clamp_min(0)
+        if activation is not None:
+            value = (value - torch.as_tensor(activation, device=value.device, dtype=value.dtype)).clamp_min(0)
+        return value.reshape(prefix)
 
     def get_self_collision(self, x_sph):
         return self.get_self_collision_distance(x_sph)
@@ -126,6 +165,18 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return lower, upper
 
     def sample(self, sample_size, mask_valid=True, env_query_idx=None):
+        if not isinstance(sample_size, int) or sample_size < 0:
+            raise ValueError("sample_size must be a nonnegative integer")
+        if sample_size == 0:
+            return torch.empty((0, self.kinematics.dof), **self.device_cfg.as_torch_dict())
+        if self.sampler is not None:
+            count = sample_size if not mask_valid else sample_size * self.rejection_ratio
+            samples = self.sampler.get_samples(count, bounded=True)
+            if not mask_valid:
+                return samples
+            accepted = samples[self.validate(samples, env_query_idx)]
+            if len(accepted) >= sample_size:
+                return accepted[:sample_size]
         limits = self.kinematics.get_joint_limits()
         reference = torch.empty((), **self.device_cfg.as_torch_dict())
         lower, upper = self._position_bounds(limits, reference)
@@ -200,7 +251,13 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
     def update_world(self, scene_cfg) -> None:
         if self.scene_model is None:
             raise RuntimeError("scene_model is not configured")
-        self.scene_model.load_collision_model(scene_cfg)
+        if isinstance(scene_cfg, (list, tuple)):
+            if len(scene_cfg) != self.scene_model.num_envs:
+                raise ValueError("scene_cfg list must contain one scene per environment")
+            for environment, scene in enumerate(scene_cfg):
+                self.scene_model.load_collision_model(scene, environment)
+        else:
+            self.scene_model.load_collision_model(scene_cfg)
 
     @property
     def tool_frames(self):
