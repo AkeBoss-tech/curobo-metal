@@ -70823,10 +70823,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
+        "missing_symbols": 0,
         "path": "curobo/_src/robot/types/collision_geometry.py",
-        "resolved_symbols": 3,
-        "status": "partial"
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.robot.types.collision_geometry",
       "path": "curobo/_src/robot/types/collision_geometry.py",
@@ -71213,9 +71213,9 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
+        "missing_symbols": 1,
         "path": "curobo/_src/robot/types/joint_limits.py",
-        "resolved_symbols": 8,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.robot.types.joint_limits",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 243,
-    "resolved_modules": 118,
+    "partial_modules": 242,
+    "resolved_modules": 119,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 243,
-    "resolved_modules": 118,
+    "partial_modules": 242,
+    "resolved_modules": 119,
     "symbols": 7182
   },
   "upstream": {
