@@ -104,6 +104,34 @@ def test_mpc_retargeting_has_global_initialization_then_executed_endpoints():
     assert retargeter._prev_solution.shape == (1, retargeter.action_dim)
 
 
+def test_batched_mpc_retargeting_preserves_each_environment_and_endpoint_stream():
+    retargeter = MotionRetargeter(_config(use_mpc=True, num_envs=2))
+    state = JointState.from_position(
+        retargeter.default_joint_state.position.repeat(2, 1), retargeter.joint_names
+    )
+    goal = _goal_from_state(retargeter, state)
+    first = retargeter.solve_frame(goal)
+    second = retargeter.solve_frame(goal)
+
+    assert first.joint_state.position.shape == (2, retargeter.action_dim)
+    assert second.joint_state.position.shape == (2, retargeter.action_dim)
+    assert second.trajectory is not None
+    assert second.trajectory.position.shape == (2, 1, retargeter.action_dim)
+    assert torch.allclose(second.joint_state.position, second.trajectory.position[:, -1])
+    assert retargeter._mpc_solver._trajopt.config.max_batch_size == 2
+
+
+def test_retargeter_rejects_multi_frame_goal_at_frame_api_boundary():
+    retargeter = MotionRetargeter(_config())
+    goal = _goal_from_state(retargeter, retargeter.default_joint_state)
+    multi_frame = GoalToolPose(
+        goal.tool_frames, goal.position.repeat(1, 2, 1, 1, 1),
+        goal.quaternion.repeat(1, 2, 1, 1, 1),
+    )
+    with pytest.raises(ValueError, match="exactly one target frame"):
+        retargeter.solve_frame(multi_frame)
+
+
 def test_mpc_multi_tool_boundary_and_goal_type_errors_are_explicit():
     criteria = {
         "panda_hand": ToolPoseCriteria.track_position(),
@@ -128,3 +156,19 @@ def test_mps_retargeter_runs_with_fallback_disabled(monkeypatch):
     second = retargeter.solve_frame(goal)
     assert first.joint_state.device.type == "mps"
     assert second.joint_state.device.type == "mps"
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_mps_batched_mpc_retargeter_runs_with_fallback_disabled(monkeypatch):
+    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")
+    device = DeviceCfg(torch.device("mps"), torch.float32)
+    retargeter = MotionRetargeter(_config(device_cfg=device, use_mpc=True, num_envs=2))
+    state = JointState.from_position(
+        retargeter.default_joint_state.position.repeat(2, 1), retargeter.joint_names
+    )
+    goal = _goal_from_state(retargeter, state)
+    retargeter.solve_frame(goal)
+    output = retargeter.solve_frame(goal)
+    assert output.joint_state.device.type == "mps"
+    assert output.trajectory is not None
+    assert output.trajectory.device.type == "mps"

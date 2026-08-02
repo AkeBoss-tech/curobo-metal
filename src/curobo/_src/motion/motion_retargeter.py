@@ -86,6 +86,11 @@ class MotionRetargeter:
             raise ValueError(
                 f"goal batch size ({goal_tool_poses.batch_size}) must match num_envs ({self._num_envs})"
             )
+        if goal_tool_poses.horizon != 1:
+            raise ValueError(
+                "solve_frame accepts exactly one target frame; use solve_sequence "
+                "for a [frame, environment, ...] target clip"
+            )
         if self._prev_solution is None:
             return self._solve_global_ik(goal_tool_poses)
         if self._config.use_mpc:
@@ -237,6 +242,14 @@ class MotionRetargeter:
             max_batch_size=cfg.num_envs,
         ))
         solver.update_tool_pose_criteria(self._tool_pose_criteria)
+        # MPCSolver correctly retains the requested batch capacity, but its
+        # portable TrajOpt child is deliberately constructed lazily with the
+        # standalone default.  A retargeter has a fixed ``num_envs`` lifetime,
+        # so carry that declared capacity into the child before the first
+        # rollout.  This makes ``num_envs > 1`` MPC retargeting genuinely
+        # batched rather than accepting the configuration and failing on the
+        # second (MPC) frame.  No CUDA graph buffer is resized here.
+        solver._trajopt.config.max_batch_size = cfg.num_envs
         return solver
 
 
