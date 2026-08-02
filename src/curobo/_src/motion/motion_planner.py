@@ -8,6 +8,9 @@ from typing import Dict, List, Optional
 import torch
 
 from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
+from curobo._src.collision.attachment_manager import AttachmentManager
+from curobo._src.geom.collision.collision_scene import SceneCollision, SceneCollisionCfg
+from curobo._src.geom.types import SceneCfg
 from curobo._src.solver.solver_ik import IKSolver
 from curobo._src.solver.solver_trajopt import TrajOptSolver
 from curobo._src.state.state_joint import JointState
@@ -25,10 +28,40 @@ class MotionPlanner:
         self._initialize_components()
 
     def _initialize_components(self):
-        self.ik_solver = IKSolver(self.config.ik_solver_config)
-        self.trajopt_solver = TrajOptSolver(self.config.trajopt_solver_config)
+        self._scene_collision = self._make_scene_collision(self.config.scene_collision_cfg)
+        self.ik_solver = IKSolver(
+            self.config.ik_solver_config, self._scene_collision
+        )
+        self.trajopt_solver = TrajOptSolver(
+            self.config.trajopt_solver_config, self._scene_collision
+        )
         self.graph_planner = None
         self._tool_pose_criteria: Dict[str, ToolPoseCriteria] = {}
+        self._attachment_manager = AttachmentManager(
+            self.ik_solver.kinematics, self._scene_collision, self.config.device_cfg
+        )
+
+    def _make_scene_collision(self, scene):
+        """Build the portable scene adapter when a concrete scene is supplied."""
+        if scene is None:
+            return None
+        if isinstance(scene, SceneCollision):
+            return scene
+        if isinstance(scene, SceneCollisionCfg):
+            return SceneCollision.from_config(scene)
+        if isinstance(scene, SceneCfg) or (
+            isinstance(scene, list) and all(isinstance(value, SceneCfg) for value in scene)
+        ):
+            return SceneCollision(SceneCollisionCfg(
+                self.config.device_cfg, scene,
+                len(scene) if isinstance(scene, list) else 1,
+            ))
+        # Upstream configuration names may refer to YAML/Isaac scene assets.
+        # Those are intentionally not parsed implicitly on Metal.
+        raise NotImplementedError(
+            "portable MotionPlanner scene_model must be SceneCfg, a list of SceneCfg, "
+            "or SceneCollisionCfg; YAML/USD scene asset loading is unavailable"
+        )
 
     def destroy(self):
         self.ik_solver.destroy()
@@ -46,7 +79,7 @@ class MotionPlanner:
         return False
 
     @property
-    def attachment_manager(self): return None
+    def attachment_manager(self) -> AttachmentManager: return self._attachment_manager
     @property
     def joint_names(self): return self.ik_solver.joint_names
     @property
@@ -70,7 +103,8 @@ class MotionPlanner:
         goal = current.clone()
         goal.position = goal.position.clone()
         goal.position[..., warmup_joint_index] += warmup_joint_delta
-        return self.plan_cspace(goal, current, max_attempts=1)
+        result = self.plan_cspace(goal, current, max_attempts=1)
+        return bool(result is not None and result.success.all().item())
 
     def plan_pose(
         self, goal_tool_poses: GoalToolPose, current_state: JointState,
@@ -194,11 +228,20 @@ class MotionPlanner:
         )
 
     def update_world(self, scene_cfg):
-        raise NotImplementedError(
-            "MotionPlanner world mutation requires a portable SceneCollision adapter"
-        )
+        if self._scene_collision is None:
+            self._scene_collision = self._make_scene_collision(scene_cfg)
+            self.ik_solver._scene_collision_checker = self._scene_collision
+            self.trajopt_solver._scene_collision_checker = self._scene_collision
+            self._attachment_manager = AttachmentManager(
+                self.ik_solver.kinematics, self._scene_collision, self.config.device_cfg
+            )
+        else:
+            self._scene_collision.load_collision_model(scene_cfg)
+        self.config.scene_collision_cfg = scene_cfg
 
-    def clear_scene_cache(self): return None
+    def clear_scene_cache(self):
+        if self._scene_collision is not None:
+            self._scene_collision.clear_cache()
     def reset_seed(self):
         self.ik_solver.reset_seed()
         self.trajopt_solver.reset_seed()

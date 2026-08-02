@@ -30,7 +30,7 @@ class BaseSolverResult:
     solution_state: object = None
     feasible: Optional[torch.Tensor] = None
 
-    def clone(self):
+    def clone(self) -> "BaseSolverResult":
         values = {}
         for key, value in self.__dict__.items():
             values[key] = value.clone() if hasattr(value, "clone") else (
@@ -38,19 +38,30 @@ class BaseSolverResult:
             )
         return type(self)(**values)
 
-    def copy_successful_solutions(self, other):
+    def copy_successful_solutions(self, other: "BaseSolverResult") -> None:
         mask = other.success
-        self.success[mask] = True
-        for name in ("solution", "position_error", "rotation_error", "goalset_index", "seed_cost"):
+        self.success[mask] = other.success[mask]
+        for name in (
+            "solution", "position_error", "rotation_error", "cspace_error",
+            "goalset_index", "seed_rank", "seed_cost", "total_cost_reshaped",
+            "optimized_seeds", "feasible",
+        ):
             left, right = getattr(self, name), getattr(other, name)
             if left is not None and right is not None:
                 left[mask] = right[mask]
+        if self.js_solution is not None and other.js_solution is not None:
+            self.js_solution.position[mask] = other.js_solution.position[mask]
 
-    def copy_at_batch_indices(self, other, mask):
-        for name in ("success", "solution", "position_error", "rotation_error", "goalset_index"):
+    def copy_at_batch_indices(self, other: "BaseSolverResult", mask: torch.Tensor) -> None:
+        for name in (
+            "success", "solution", "position_error", "rotation_error", "cspace_error",
+            "goalset_index", "seed_rank", "seed_cost", "total_cost_reshaped", "feasible",
+        ):
             left, right = getattr(self, name), getattr(other, name)
             if left is not None and right is not None:
                 left[mask] = right[mask]
+        if self.js_solution is not None and other.js_solution is not None:
+            self.js_solution.position[mask] = other.js_solution.position[mask]
 
 
 __all__ = ["BaseSolverResult"]

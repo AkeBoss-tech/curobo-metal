@@ -22,9 +22,11 @@ class IKSolver:
     def __init__(self, config: IKSolverCfg, scene_collision_checker=None):
         if not isinstance(config, IKSolverCfg):
             raise TypeError("config must be IKSolverCfg")
-        if scene_collision_checker is not None:
-            raise NotImplementedError("external SceneCollision injection is not yet portable")
         self.config = config
+        # Retain the supplied portable SceneCollision for lifecycle parity.  IK
+        # collision costs remain a documented future composition, rather than
+        # silently treating a supplied scene as active.
+        self._scene_collision_checker = scene_collision_checker
         robot = config.robot_config.kinematics
         kin_cfg = KinematicsCfg(
             config.device_cfg, list(robot.tool_frames), KinematicsParams(robot)
@@ -57,7 +59,7 @@ class IKSolver:
     solve_state = property(lambda self: None)
     seed_manager = property(lambda self: None)
     goal_registry_manager = property(lambda self: None)
-    scene_collision_checker = property(lambda self: None)
+    scene_collision_checker = property(lambda self: self._scene_collision_checker)
     problem_batch_size = property(lambda self: self.config.max_batch_size)
 
     def compute_kinematics(self, state: JointState):
@@ -66,7 +68,8 @@ class IKSolver:
     def get_full_js(self, active_js): return active_js
     def reset_seed(self): return None
     def reset_shape(self): return None
-    def reset_cuda_graph(self): return None
+    def reset_cuda_graph(self):
+        raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
     def destroy(self): return None
 
     def get_all_rollout_instances(self, **kwargs):
@@ -175,11 +178,19 @@ class IKSolver:
             rot_error = 2 * torch.acos(dot)
             cost = pos_error.square() + 4 * (1 - dot.square())
             grad = torch.autograd.grad(cost.sum(), q)[0]
+            # Exact quaternion alignment and degenerate rotational Jacobians can
+            # produce a non-finite intermediate gradient on eager MPS/CPU.
+            # Preserve a finite projected solve instead of feeding NaNs into
+            # the next FK evaluation.
+            grad = torch.nan_to_num(grad, nan=0.0, posinf=0.0, neginf=0.0)
             first = 0.9 * first + 0.1 * grad
             second = 0.999 * second + 0.001 * grad.square()
             q = (q - 0.05 * first / (1 - 0.9**step) / (
                 (second / (1 - 0.999**step)).sqrt() + 1e-8
-            )).clamp(lower, upper).detach()
+            )).clamp(lower, upper)
+            q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0).clamp(
+                lower, upper
+            ).detach()
         state = self.compute_kinematics(JointState(q.reshape(-1, self.action_dim), joint_names=self.joint_names))
         position = state.tool_poses.position[:, 0, -1].reshape(batch, -1, 3)
         quaternion = state.tool_poses.quaternion[:, 0, -1].reshape(batch, -1, 4)

@@ -50,7 +50,7 @@ class TrajOptSolverResult:
         horizon = 0 if self.js_solution is None else self.js_solution.position.shape[-2] - 1
         return dt * horizon
 
-    def clone(self):
+    def clone(self) -> "TrajOptSolverResult":
         values = {}
         for item in fields(self):
             value = getattr(self, item.name)
@@ -59,10 +59,10 @@ class TrajOptSolverResult:
             )
         return type(self)(**values)
 
-    def get_interpolated_plan(self):
+    def get_interpolated_plan(self) -> JointState:
         return self.interpolated_trajectory
 
-    def copy_at_batch_indices(self, other, mask):
+    def copy_at_batch_indices(self, other: "TrajOptSolverResult", mask: torch.Tensor) -> None:
         for name in (
             "success", "solution", "position_error", "rotation_error", "cspace_error",
             "goalset_index", "seed_rank", "seed_cost", "total_cost_reshaped",
@@ -71,12 +71,40 @@ class TrajOptSolverResult:
             if left is not None and right is not None:
                 left[mask] = right[mask]
 
-    def get_topk_seeds(self, topk: int):
+    def get_topk_seeds(self, topk: int) -> "TrajOptSolverResult":
         if self.seed_cost is None:
             raise ValueError("seed_cost is unavailable")
-        return torch.topk(self.seed_cost, topk, dim=-1, largest=False).indices
+        if topk < 1 or topk > self.seed_cost.shape[-1]:
+            raise ValueError("topk must be between 1 and the available seed count")
+        indices = torch.topk(self.seed_cost, topk, dim=-1, largest=False).indices
+        result = self.clone()
+        # Seed-shaped tensors uniformly use [batch, seed, ...].  Keep scalar
+        # batch tensors unchanged and select every tensor with that layout.
+        for item in fields(result):
+            value = getattr(result, item.name)
+            if not isinstance(value, torch.Tensor) or value.ndim < 2:
+                continue
+            if value.shape[:2] != self.seed_cost.shape[:2]:
+                continue
+            expanded = indices.reshape(indices.shape + (1,) * (value.ndim - 2))
+            expanded = expanded.expand(indices.shape + value.shape[2:])
+            setattr(result, item.name, value.gather(1, expanded))
+        if result.js_solution is not None and result.js_solution.position.shape[:2] == self.seed_cost.shape[:2]:
+            value = result.js_solution.position
+            expanded = indices.reshape(indices.shape + (1,) * (value.ndim - 2)).expand(indices.shape + value.shape[2:])
+            result.js_solution.position = value.gather(1, expanded)
+        result.num_seeds = topk
+        return result
 
-    def copy_successful_solutions(self, other):
+    def process_metrics_and_rank_seeds(self) -> None:
+        """Rank portable seed outputs deterministically by total seed cost."""
+        if self.seed_cost is None:
+            return
+        self.seed_rank = self.seed_cost.argsort(dim=-1)
+        if self.feasible is not None:
+            self.success = self.success & self.feasible
+
+    def copy_successful_solutions(self, other: "TrajOptSolverResult") -> None:
         self.copy_at_batch_indices(other, other.success)
 
 

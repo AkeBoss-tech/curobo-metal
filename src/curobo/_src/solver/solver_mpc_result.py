@@ -19,7 +19,7 @@ class MPCSolverResult(BaseSolverResult):
     action_buffer: Optional[torch.Tensor] = None
     action_dt: Optional[float] = None
 
-    def clone(self):
+    def clone(self) -> "MPCSolverResult":
         values = {}
         for item in fields(self):
             value = getattr(self, item.name)

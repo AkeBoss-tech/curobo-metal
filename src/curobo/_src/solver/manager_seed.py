@@ -22,8 +22,11 @@ class SeedManager:
         self.random_seed = random_seed
         self.action_horizon = action_horizon
         self._generator = torch.Generator(device="cpu").manual_seed(random_seed)
+        # IK/one-step rollouts still use an action horizon of one.  The shared
+        # interpolation helper needs two knots, so keep that internal detail
+        # separate from the public action-horizon contract.
         self._trajectory = TrajectorySeedGenerator(
-            action_horizon, action_dim, device_cfg
+            max(2, action_horizon), action_dim, device_cfg
         )
 
     def prepare_action_seeds(

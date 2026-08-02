@@ -6,9 +6,12 @@ import time
 
 import torch
 
+from curobo._src.solver.solver_ik import IKSolver
+from curobo._src.solver.solver_ik_cfg import IKSolverCfg
 from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
 from curobo._src.solver.solver_trajopt_result import TrajOptSolverResult
 from curobo._src.state.state_joint import JointState
+from curobo._src.types.tool_pose import GoalToolPose
 from curobo._src.util.trajectory import (
     TrajInterpolationType, get_batch_interpolated_trajectory,
 )
@@ -35,6 +38,20 @@ class TrajOptSolver:
         self._seed_generator = TrajectorySeedGenerator(
             config.action_horizon, self._chain.dof, config.device_cfg
         )
+        # Pose planning is a composition of the portable IK and c-space
+        # trajectory solvers.  Keeping it private avoids changing the existing
+        # configuration model while making the upstream ``solve_pose`` entry
+        # point usable instead of requiring a nonstandard ``goal_state``.
+        self._pose_ik = IKSolver(IKSolverCfg.create(
+            config.robot_config,
+            device_cfg=config.device_cfg,
+            num_seeds=max(config.num_seeds, 1),
+            position_tolerance=config.position_tolerance,
+            orientation_tolerance=config.orientation_tolerance,
+            use_cuda_graph=False,
+            random_seed=config.random_seed,
+            self_collision_check=config.self_collision_check,
+        ), scene_collision_checker=scene_collision_checker)
 
     def prepare_action_seeds(
         self, batch_size, num_seeds, seed_config=None, current_state=None, seed_traj=None,
@@ -72,7 +89,18 @@ class TrajOptSolver:
         start = current_state.position
         goal = goal_state.position
         if start.ndim == 1:
-            start, goal = start[None], goal[None]
+            start = start[None]
+        if goal.ndim == 1:
+            goal = goal[None]
+        if start.shape[-1] != goal.shape[-1]:
+            raise ValueError("current_state and goal_state must have the same dof")
+        if start.shape[0] != goal.shape[0]:
+            if start.shape[0] == 1:
+                start = start.expand(goal.shape[0], -1)
+            elif goal.shape[0] == 1:
+                goal = goal.expand(start.shape[0], -1)
+            else:
+                raise ValueError("current_state and goal_state batch sizes must match")
         seeds = None
         if seed_traj is not None:
             seeds = seed_traj.position if isinstance(seed_traj, JointState) else seed_traj
@@ -121,15 +149,61 @@ class TrajOptSolver:
             ),
         )
 
-    def solve_pose(self, *args, **kwargs):
-        goal_state = kwargs.pop("goal_state", None)
-        current_state = kwargs.pop("current_state", args[1] if len(args) > 1 else None)
+    def solve_pose(
+        self,
+        goal_tool_poses: GoalToolPose,
+        current_state: JointState,
+        seed_config=None,
+        seed_traj=None,
+        return_seeds: int = 1,
+        num_seeds=None,
+        dt=None,
+        use_implicit_goal: bool = False,
+        finetune_attempts: int = 1,
+        goal_state: JointState | None = None,
+        initial_iters=None,
+        time_optimal_iters=None,
+        finetune_iters=None,
+        finetune_dt_scale: float = 0.55,
+    ) -> TrajOptSolverResult:
+        """Solve a pose request through portable IK followed by trajectory optimization.
+
+        Supplying ``goal_state`` preserves the upstream override path.  Otherwise
+        the best IK seed becomes the c-space endpoint.  CUDA graph execution is
+        deliberately not emulated; both stages retain normal CPU/MPS autograd.
+        """
+        del use_implicit_goal
         if goal_state is None:
-            raise NotImplementedError(
-                "portable solve_pose requires goal_state; pose-to-joint IK belongs to IKSolver"
+            ik_result = self._pose_ik.solve_pose(
+                goal_tool_poses,
+                current_state=current_state,
+                seed_config=seed_config,
+                return_seeds=1,
             )
-        kwargs.pop("goal_tool_poses", None)
-        return self.solve_cspace(goal_state, current_state, **kwargs)
+            goal_state = JointState.from_position(
+                ik_result.solution[:, 0], self.joint_names
+            )
+        else:
+            ik_result = None
+        result = self.solve_cspace(
+            goal_state,
+            current_state,
+            seed_traj=seed_traj,
+            return_seeds=return_seeds,
+            num_seeds=num_seeds,
+            dt=dt,
+            finetune_attempts=finetune_attempts,
+            initial_iters=initial_iters,
+            time_optimal_iters=time_optimal_iters,
+            finetune_iters=finetune_iters,
+            finetune_dt_scale=finetune_dt_scale,
+        )
+        if ik_result is not None:
+            result.debug_info["ik_result"] = ik_result
+            # An infeasible pose must not be reported as a successful pose plan
+            # merely because the c-space rollout reached its IK endpoint.
+            result.success = result.success & ik_result.success[..., :result.success.shape[-1]]
+        return result
 
     def get_interpolated_trajectory(self, js_optimized: JointState):
         kind = self.config.interpolation_type
@@ -148,7 +222,8 @@ class TrajOptSolver:
 
     def reset_seed(self): return None
     def reset_shape(self): return None
-    def destroy(self): return None
+    def destroy(self):
+        self._pose_ik.destroy()
     def reset_cuda_graph(self):
         raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
 
@@ -162,6 +237,8 @@ class TrajOptSolver:
     def opt_dim(self): return self.action_dim
     @property
     def joint_names(self): return list(self.config.robot_config.kinematics.joint_names)
+    @property
+    def tool_frames(self): return list(self.config.robot_config.kinematics.tool_frames)
     @property
     def default_joint_position(self): return self.config.robot_config.kinematics.retract_config
     @property
