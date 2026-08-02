@@ -49188,9 +49188,9 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 3,
         "path": "curobo/_src/perception/mapper/checkpoint_blocks.py",
-        "resolved_symbols": 47,
+        "resolved_symbols": 48,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.checkpoint_blocks",
@@ -58230,9 +58230,9 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
+        "missing_symbols": 13,
         "path": "curobo/_src/perception/mapper/mapper.py",
-        "resolved_symbols": 11,
+        "resolved_symbols": 16,
         "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mapper",
@@ -73030,9 +73030,9 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
+        "missing_symbols": 10,
         "path": "curobo/_src/rollout/cost_manager/cost_manager_robot.py",
-        "resolved_symbols": 2,
+        "resolved_symbols": 14,
         "status": "partial"
       },
       "name": "curobo._src.rollout.cost_manager.cost_manager_robot",
@@ -74258,9 +74258,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 11,
         "path": "curobo/_src/rollout/metrics.py",
-        "resolved_symbols": 13,
+        "resolved_symbols": 15,
         "status": "partial"
       },
       "name": "curobo._src.rollout.metrics",
