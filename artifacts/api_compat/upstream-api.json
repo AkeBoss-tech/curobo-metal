@@ -33177,9 +33177,9 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
+        "missing_symbols": 9,
         "path": "curobo/_src/optim/components/particle_opt_core.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 19,
         "status": "partial"
       },
       "name": "curobo._src.optim.components.particle_opt_core",
@@ -37502,9 +37502,9 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
+        "missing_symbols": 22,
         "path": "curobo/_src/optim/gradient/gradient_descent.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.gradient_descent",
