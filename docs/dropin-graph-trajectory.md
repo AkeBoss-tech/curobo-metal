@@ -66,6 +66,22 @@ silently discard the caller-owned roadmap.  CUDA graph capture, Warp steering,
 and analytic CCD remain unavailable, so edge validity is whatever the supplied
 portable connector and feasibility callback establish.
 
+### Linear connector
+
+`curobo._src.graph_planner.graph.connector_linear.LinearConnector` performs
+endpoint-inclusive, weighted C-space interpolation in a single batched tensor
+operation on CPU or MPS.  It asks the configured feasibility callback for every
+sample and deterministically returns the sample immediately before the first
+infeasible one (or the endpoint when all samples are feasible).  Connector rows
+retain the pinned `[action..., graph_index]` layout; graph-index padding is
+metadata and is not interpolated.  Resolution is
+`cspace_similarity_threshold`, bounded explicitly by `steer_buffer_size`.
+
+This is discrete swept validation, not analytic continuous collision detection.
+Warp kernels, CUDA graph-owned buffers, and CUDA-only raw connector APIs remain
+unsupported; existing production collision/rollout functions supply feasibility
+on the same CPU/MPS device.
+
 `GraphPlannerResult` retains the pinned variable-length per-query path list
 and adds ordinary CPU/MPS result lifecycle helpers: cloning, detaching,
 device/dtype movement, deterministic batch selection, success summaries, and
