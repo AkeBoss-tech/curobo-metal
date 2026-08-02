@@ -1,38 +1,53 @@
-"""Pinned trajectory optimization result model."""
+"""Portable result lifecycle for the pinned trajectory optimiser API.
+
+The CUDA implementation owns packed rollout buffers and CUDA-graph state.  A
+result object should not expose either implementation detail: callers need a
+stable, regular PyTorch value object that can select seeds, copy a successful
+candidate into an existing result, and retain the timing/state metadata on CPU
+or MPS.  This module deliberately implements that public lifecycle with normal
+tensor operations.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
-from typing import Dict, Optional
+from dataclasses import dataclass, fields
+from typing import Any, Optional
 
 import torch
 
+from curobo._src.solver.solver_base_result import BaseSolverResult
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_trajectory_ops import (
+    copy_joint_state_at_batch_seed_indices,
+    gather_joint_state_by_seed,
+)
+
+
+def _clone_value(value: Any) -> Any:
+    """Clone value-like result data without aliasing tensor/state payloads."""
+    if hasattr(value, "clone"):
+        return value.clone()
+    if isinstance(value, dict):
+        return {key: _clone_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clone_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_value(item) for item in value)
+    return value
 
 
 @dataclass
-class TrajOptSolverResult:
-    success: torch.Tensor
+class TrajOptSolverResult(BaseSolverResult):
+    """Trajectory optimisation output with portable batch/seed operations.
+
+    Tensor data follows cuRobo's public ``[batch, seed, ...]`` convention.  The
+    methods below preserve that convention on both CPU and MPS and leave raw
+    CUDA graph, stream, and packed result-buffer APIs deliberately outside the
+    Metal compatibility surface.
+    """
+
     solution: Optional[torch.Tensor] = None
     js_solution: Optional[JointState] = None
-    position_error: Optional[torch.Tensor] = None
-    rotation_error: Optional[torch.Tensor] = None
-    cspace_error: Optional[torch.Tensor] = None
-    goalset_index: Optional[torch.Tensor] = None
-    solve_time: float = 0.0
-    total_time: float = 0.0
-    debug_info: Dict = field(default_factory=dict)
-    optimized_seeds: Optional[torch.Tensor] = None
-    metrics: Optional[object] = None
-    position_tolerance: float = 0.0
-    orientation_tolerance: float = 0.0
-    seed_rank: Optional[torch.Tensor] = None
-    seed_cost: Optional[torch.Tensor] = None
-    batch_size: int = 0
-    num_seeds: int = 0
-    total_cost_reshaped: Optional[torch.Tensor] = None
-    solution_state: Optional[object] = None
-    feasible: Optional[torch.Tensor] = None
     interpolated_trajectory: Optional[JointState] = None
     interpolated_last_tstep: Optional[torch.Tensor] = None
     interpolated_metrics: Optional[object] = None
@@ -40,72 +55,221 @@ class TrajOptSolverResult:
     minimum_trajectory_dt: Optional[torch.Tensor] = None
 
     @property
+    def device(self) -> torch.device:
+        """Device owning the result's primary tensor payload."""
+        for value in (self.solution, self.success, self.seed_cost):
+            if isinstance(value, torch.Tensor):
+                return value.device
+        if self.js_solution is not None:
+            return self.js_solution.position.device
+        return torch.device("cpu")
+
+    @property
+    def dtype(self) -> torch.dtype:
+        for value in (self.solution, self.seed_cost, self.position_error, self.success):
+            if isinstance(value, torch.Tensor):
+                return value.dtype
+        return torch.get_default_dtype()
+
     def motion_time(self) -> torch.Tensor:
-        if self.maximum_trajectory_dt is None:
-            if self.js_solution is None or self.js_solution.dt is None:
-                return self.success.new_zeros(self.success.shape, dtype=torch.float32)
+        """Return trajectory duration for each returned batch/seed plan.
+
+        The pinned public API spells this as a method.  ``dt`` can be scalar,
+        per batch, or per batch/seed; ordinary broadcasting keeps all forms
+        device-resident and differentiable.
+        """
+        if self.js_solution is None:
+            raise ValueError("js_solution is not set")
+        dt = self.maximum_trajectory_dt
+        if dt is None:
             dt = self.js_solution.dt
-        else:
-            dt = self.maximum_trajectory_dt
-        horizon = 0 if self.js_solution is None else self.js_solution.position.shape[-2] - 1
-        return dt * horizon
+        if dt is None:
+            raise ValueError("trajectory dt is not set")
+        horizon = self.js_solution.position.shape[-2]
+        return dt * (horizon - 1)
 
     def clone(self) -> "TrajOptSolverResult":
-        values = {}
-        for item in fields(self):
-            value = getattr(self, item.name)
-            values[item.name] = value.clone() if hasattr(value, "clone") else (
-                dict(value) if isinstance(value, dict) else value
-            )
-        return type(self)(**values)
+        """Deep-clone materialised portable result state on its current device."""
+        return type(self)(**{item.name: _clone_value(getattr(self, item.name)) for item in fields(self)})
 
-    def get_interpolated_plan(self) -> JointState:
-        return self.interpolated_trajectory
+    def get_interpolated_plan(self) -> Optional[JointState]:
+        """Return an interpolated plan trimmed to its recorded final timestep."""
+        trajectory = self.interpolated_trajectory
+        if trajectory is None or self.interpolated_last_tstep is None:
+            return trajectory
+        final_step = self.interpolated_last_tstep
+        # A single returned plan is the upstream supported trimming form.  For
+        # a batch with equal lengths, the same trim is well-defined and useful
+        # to portable callers; ragged batches remain explicit rather than
+        # silently dropping different final states.
+        flat = final_step.reshape(-1)
+        if flat.numel() == 0:
+            return trajectory
+        if not torch.equal(flat, flat[0].expand_as(flat)):
+            raise ValueError("ragged interpolated trajectories cannot be represented as one JointState")
+        end = int(flat[0].item())
+        trimmed = trajectory.clone()
+        # ``dt`` is commonly [batch, seed], not a time-series tensor, and so
+        # must remain intact while the kinematic channels are shortened.
+        for name in ("position", "velocity", "acceleration", "jerk", "knot"):
+            value = getattr(trimmed, name, None)
+            if value is not None and value.ndim >= 2:
+                setattr(trimmed, name, value[..., :end, :])
+        return trimmed
+
+    @staticmethod
+    def _copy_tensor_at_mask(target: Optional[torch.Tensor], source: Optional[torch.Tensor], mask: torch.Tensor) -> None:
+        if target is None or source is None:
+            return
+        if target.device != source.device:
+            raise ValueError("result tensors must share a device")
+        if target.shape != source.shape:
+            raise ValueError(f"result tensor shapes differ: {tuple(target.shape)} != {tuple(source.shape)}")
+        target[mask] = source[mask]
 
     def copy_at_batch_indices(self, other: "TrajOptSolverResult", mask: torch.Tensor) -> None:
-        for name in (
-            "success", "solution", "position_error", "rotation_error", "cspace_error",
-            "goalset_index", "seed_rank", "seed_cost", "total_cost_reshaped",
-        ):
+        """Copy complete results for selected batch entries.
+
+        ``mask`` indexes the leading batch dimension; seed dimensions are
+        retained.  This is the composition operation used by graph/trajectory
+        retry logic, distinct from :meth:`copy_successful_solutions` which
+        selects individual seed candidates.
+        """
+        if mask.dtype != torch.bool or mask.ndim != 1:
+            raise ValueError("mask must be a one-dimensional boolean batch mask")
+        if self.success.shape[0] != mask.numel() or other.success.shape[0] != mask.numel():
+            raise ValueError("mask length must match result batch size")
+        for item in fields(self):
+            name = item.name
+            if name in {"metrics", "interpolated_metrics", "debug_info", "solution_state"}:
+                continue
             left, right = getattr(self, name), getattr(other, name)
-            if left is not None and right is not None:
-                left[mask] = right[mask]
+            if isinstance(left, torch.Tensor) and isinstance(right, torch.Tensor):
+                self._copy_tensor_at_mask(left, right, mask)
+        for name in ("js_solution", "interpolated_trajectory"):
+            left, right = getattr(self, name), getattr(other, name)
+            if left is None or right is None:
+                continue
+            for field_name in left._tensor_fields():
+                dst, src = getattr(left, field_name), getattr(right, field_name)
+                if dst is not None and src is not None and dst.shape == src.shape:
+                    dst[mask] = src[mask]
+
+    @staticmethod
+    def _gather_seed_tensor(value: Optional[torch.Tensor], indices: torch.Tensor, seed_shape: tuple[int, int]) -> Optional[torch.Tensor]:
+        if value is None or value.ndim < 2 or tuple(value.shape[:2]) != seed_shape:
+            return value
+        expanded = indices.reshape(indices.shape + (1,) * (value.ndim - 2))
+        return value.gather(1, expanded.expand(indices.shape + value.shape[2:]))
+
+    def _seed_indices(self, topk: int) -> torch.Tensor:
+        costs = self.total_cost_reshaped if self.total_cost_reshaped is not None else self.seed_cost
+        if costs is None or costs.ndim != 2:
+            raise ValueError("seed_cost or total_cost_reshaped [batch, seed] is required")
+        if topk < 1 or topk > costs.shape[1]:
+            raise ValueError("topk must be between 1 and the available seed count")
+        if self.seed_rank is not None:
+            if self.seed_rank.shape != costs.shape:
+                raise ValueError("seed_rank must have the same [batch, seed] shape as seed cost")
+            return self.seed_rank[:, :topk]
+        # Stable sorting gives deterministic first-seed tie resolution across
+        # CPU and MPS, unlike a backend-specific topk tie order.
+        return torch.argsort(costs, dim=1, stable=True)[:, :topk]
 
     def get_topk_seeds(self, topk: int) -> "TrajOptSolverResult":
-        if self.seed_cost is None:
-            raise ValueError("seed_cost is unavailable")
-        if topk < 1 or topk > self.seed_cost.shape[-1]:
-            raise ValueError("topk must be between 1 and the available seed count")
-        indices = torch.topk(self.seed_cost, topk, dim=-1, largest=False).indices
+        """Select the best ``topk`` seeds while retaining all result channels."""
+        indices = self._seed_indices(topk)
+        # ``num_seeds`` can be omitted by callers constructing a bare result;
+        # derive it from the cost tensor in that case.
+        original_count = self.seed_cost.shape[1] if self.seed_cost is not None else self.total_cost_reshaped.shape[1]
+        seed_shape = (indices.shape[0], original_count)
         result = self.clone()
-        # Seed-shaped tensors uniformly use [batch, seed, ...].  Keep scalar
-        # batch tensors unchanged and select every tensor with that layout.
         for item in fields(result):
             value = getattr(result, item.name)
-            if not isinstance(value, torch.Tensor) or value.ndim < 2:
-                continue
-            if value.shape[:2] != self.seed_cost.shape[:2]:
-                continue
-            expanded = indices.reshape(indices.shape + (1,) * (value.ndim - 2))
-            expanded = expanded.expand(indices.shape + value.shape[2:])
-            setattr(result, item.name, value.gather(1, expanded))
-        if result.js_solution is not None and result.js_solution.position.shape[:2] == self.seed_cost.shape[:2]:
-            value = result.js_solution.position
-            expanded = indices.reshape(indices.shape + (1,) * (value.ndim - 2)).expand(indices.shape + value.shape[2:])
-            result.js_solution.position = value.gather(1, expanded)
+            if isinstance(value, torch.Tensor):
+                setattr(result, item.name, self._gather_seed_tensor(value, indices, seed_shape))
+        for name in ("js_solution", "interpolated_trajectory"):
+            value = getattr(self, name)
+            if value is not None and value.position.ndim >= 2 and tuple(value.position.shape[:2]) == seed_shape:
+                setattr(result, name, gather_joint_state_by_seed(value, indices))
+        # Metrics describe the original flattened rollout buffers and cannot
+        # safely be selected without their CUDA/rollout allocator.  Seed-level
+        # tensors above remain complete, so clear these stale views explicitly.
+        result.metrics = None
+        result.interpolated_metrics = None
+        result.batch_size = indices.shape[0]
         result.num_seeds = topk
         return result
 
+    @staticmethod
+    def _jit_compute_rank(
+        trajectory_dt: torch.Tensor,
+        acceleration: Optional[torch.Tensor],
+        jerk: Optional[torch.Tensor],
+        seed_rollout_cost: torch.Tensor,
+        success: torch.Tensor,
+        batch_size: int,
+        num_seeds: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Rank costs with portable smoothness and feasibility penalties."""
+        if seed_rollout_cost.numel() != batch_size * num_seeds:
+            raise ValueError("seed_rollout_cost does not match batch_size * num_seeds")
+        cost = seed_rollout_cost.reshape(batch_size, num_seeds).clone()
+        dt_cost = trajectory_dt.reshape(batch_size, num_seeds).to(cost.dtype)
+        smooth = dt_cost * 1000.0
+        for weight, value in ((0.01, acceleration), (0.001, jerk)):
+            if value is None:
+                continue
+            # Average over the usable interior.  Short horizons use every
+            # timestep rather than creating an empty reduction/NaN.
+            horizon = value.shape[-2]
+            interior = value[..., 8:-8, :] if horizon > 16 else value
+            smooth = smooth + weight * interior.abs().mean(dim=(-1, -2)).reshape(batch_size, num_seeds)
+        cost = cost + smooth
+        cost = torch.where(success.reshape(batch_size, num_seeds), cost, cost + 1.0e16)
+        return cost, torch.argsort(cost, dim=1, stable=True)
+
     def process_metrics_and_rank_seeds(self) -> None:
-        """Rank portable seed outputs deterministically by total seed cost."""
+        """Apply feasibility and deterministically rank available seed costs."""
+        if self.feasible is not None:
+            self.success = self.success & self.feasible.to(dtype=torch.bool)
         if self.seed_cost is None:
             return
-        self.seed_rank = self.seed_cost.argsort(dim=-1)
-        if self.feasible is not None:
-            self.success = self.success & self.feasible
+        if self.seed_cost.ndim != 2:
+            raise ValueError("seed_cost must have shape [batch, seed]")
+        self.batch_size, self.num_seeds = self.seed_cost.shape
+        ranked_cost = self.seed_cost.clone()
+        # A failed seed must never beat a successful candidate just because
+        # its raw rollout error happened to be smaller.  Some portable solve
+        # paths already return only their selected seeds; preserve those
+        # mismatched payloads rather than inventing a mapping to all seeds.
+        if self.success.shape == ranked_cost.shape:
+            ranked_cost = torch.where(self.success, ranked_cost, ranked_cost + 1.0e16)
+        self.seed_rank = torch.argsort(ranked_cost, dim=1, stable=True)
+        self.total_cost_reshaped = ranked_cost
 
     def copy_successful_solutions(self, other: "TrajOptSolverResult") -> None:
-        self.copy_at_batch_indices(other, other.success)
+        """Copy successful individual batch/seed candidates from ``other``."""
+        if self.success.shape != other.success.shape:
+            raise ValueError("success tensors must share shape")
+        if self.success.ndim != 2:
+            # Base-style result values without a seed dimension are still
+            # useful for callers selecting whole batch entries.
+            self.copy_at_batch_indices(other, other.success.to(dtype=torch.bool))
+            return
+        batch_idx, seed_idx = other.success.nonzero(as_tuple=True)
+        for item in fields(self):
+            name = item.name
+            if name in {"metrics", "interpolated_metrics", "debug_info", "solution_state"}:
+                continue
+            left, right = getattr(self, name), getattr(other, name)
+            if isinstance(left, torch.Tensor) and isinstance(right, torch.Tensor) and left.ndim >= 2:
+                if left.shape == right.shape:
+                    left[batch_idx, seed_idx] = right[batch_idx, seed_idx]
+        for name in ("js_solution", "interpolated_trajectory"):
+            left, right = getattr(self, name), getattr(other, name)
+            if left is not None and right is not None:
+                copy_joint_state_at_batch_seed_indices(left, right, batch_idx, seed_idx)
 
 
 __all__ = ["TrajOptSolverResult"]
