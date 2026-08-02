@@ -54,3 +54,14 @@ pairs, connectivity triples, optional rollout states, and shortest-path debug
 distances.  The raw CUDA graph/rollout buffers, Warp neighbour kernels, and
 analytic CCD remain unavailable; graph connectivity uses the portable path
 finder and its sampled checks.
+
+`GraphConstructor` now composes those pieces into the pinned terminal lifecycle:
+it validates device-resident batched inputs, installs and caches a feasible
+default posture once per graph generation, assigns exact stable terminal
+indices, creates bidirectional terminal/default edges, and expands each new
+candidate to a deterministic nearest-neighbor batch.  Action-only connector
+outputs are normalized back to action-plus-index rows before registration.  A
+constructor reset intentionally clears only the default-node cache; it does not
+silently discard the caller-owned roadmap.  CUDA graph capture, Warp steering,
+and analytic CCD remain unavailable, so edge validity is whatever the supplied
+portable connector and feasibility callback establish.
