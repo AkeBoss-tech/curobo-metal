@@ -50,28 +50,68 @@ def calculate_traj_steps(
     horizon: int,
     nearest_int: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    if horizon < 2:
+        raise ValueError("horizon must be at least two")
     dt = torch.as_tensor(opt_dt)
     target = torch.as_tensor(interpolation_dt, device=dt.device, dtype=dt.dtype)
-    per_waypoint = (dt + target) / target if nearest_int else (dt + torch.remainder(dt, target)) / target
+    if target.numel() != 1 or bool((dt <= 0).any().item()) or bool((target <= 0).any().item()):
+        raise ValueError("opt_dt and interpolation_dt must be positive")
+    per_waypoint = (
+        (dt + target) / target
+        if nearest_int
+        else (dt + torch.remainder(dt, target)) / target
+    )
     count = ((horizon - 1) * per_waypoint.to(torch.int64) + 1).to(torch.int32)
     return count, count.max().to(torch.int32)
 
 
-def _linear_state(raw: JointState, steps: torch.Tensor, out: JointState) -> JointState:
+def _interpolate_values(values: torch.Tensor, count: int, kind: TrajInterpolationType) -> torch.Tensor:
+    """Retiming kernel shared by CPU/MPS paths, preserving endpoint values.
+
+    CUBIC uses a Catmull--Rom Hermite stencil and QUINTIC uses a smoothstep
+    blend.  Both are composed Torch operations, so their output remains on the
+    caller's device and differentiable with respect to waypoint positions.
+    """
+    horizon = values.shape[-2]
+    coordinate = torch.linspace(0, horizon - 1, count, device=values.device, dtype=values.dtype)
+    low = coordinate.floor().to(torch.int64).clamp_max(horizon - 2)
+    fraction = (coordinate - low).unsqueeze(-1)
+    p1, p2 = values[low], values[low + 1]
+    if kind in (TrajInterpolationType.LINEAR, TrajInterpolationType.LINEAR_CUDA):
+        return p1 * (1 - fraction) + p2 * fraction
+    if kind == TrajInterpolationType.CUBIC:
+        p0 = values[(low - 1).clamp_min(0)]
+        p3 = values[(low + 2).clamp_max(horizon - 1)]
+        u, u2, u3 = fraction, fraction.square(), fraction.pow(3)
+        return 0.5 * (
+            2 * p1 + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2
+            + (-p0 + 3 * p1 - 3 * p2 + p3) * u3
+        )
+    if kind == TrajInterpolationType.QUINTIC:
+        smooth = fraction.pow(3) * (10 + fraction * (-15 + 6 * fraction))
+        return p1 * (1 - smooth) + p2 * smooth
+    if kind == TrajInterpolationType.QUARTIC:
+        raise NotImplementedError("cuRoboV2 QUARTIC interpolation is not implemented upstream")
+    raise ValueError(f"Unsupported interpolation type: {kind}")
+
+
+def _interpolate_state(
+    raw: JointState,
+    steps: torch.Tensor,
+    out: JointState,
+    kind: TrajInterpolationType,
+    interpolation_dt: torch.Tensor,
+) -> JointState:
     batch = raw.position.unsqueeze(0) if raw.position.ndim == 2 else raw.position
+    if out.position.ndim == 2:
+        out = out.unsqueeze(0)
     for index in range(batch.shape[0]):
         count = int(steps[index].item())
-        coordinate = torch.linspace(
-            0, batch.shape[1] - 1, count, device=batch.device, dtype=batch.dtype
-        )
-        low = coordinate.floor().to(torch.int64).clamp_max(batch.shape[1] - 2)
-        fraction = (coordinate - low).unsqueeze(-1)
-        values = batch[index, low] * (1 - fraction) + batch[index, low + 1] * fraction
+        values = _interpolate_values(batch[index], count, kind)
         out.position[index, :count] = values
         out.position[index, count:] = values[-1]
-    return out.finite_difference(
-        torch.as_tensor(1.0, device=out.position.device, dtype=out.position.dtype)
-    )
+    output_dt = torch.as_tensor(interpolation_dt, device=out.position.device, dtype=out.position.dtype)
+    return out.finite_difference(output_dt)
 
 
 def get_batch_interpolated_trajectory(
@@ -98,11 +138,14 @@ def get_batch_interpolated_trajectory(
     if raw_dt is None:
         raw_dt = torch.ones(raw.position.shape[0], device=raw.position.device, dtype=raw.position.dtype)
     steps, maximum = calculate_traj_steps(raw_dt, interpolation_dt, raw.position.shape[1])
+    if int(maximum.item()) > 10000:
+        raise ValueError("interpolated trajectory exceeds the portable 10000-step limit")
     size = (raw.position.shape[0], int(maximum.item()), raw.position.shape[-1])
     if out_traj_state is None or out_traj_state.position.shape[1] < size[1]:
-        out_traj_state = JointState.zeros(size, device_cfg, joint_names=raw.joint_names)
+        output_cfg = DeviceCfg(raw.position.device, raw.position.dtype)
+        out_traj_state = JointState.zeros(size, output_cfg, joint_names=raw.joint_names)
     if kind == TrajInterpolationType.LINEAR_CUDA:
-        return get_cuda_linear_interpolation(raw, steps, out_traj_state), steps
+        return get_cuda_linear_interpolation(raw, steps, out_traj_state, interpolation_dt), steps
     return get_cpu_linear_interpolation(raw, steps, out_traj_state, kind, interpolation_dt), steps
 
 
@@ -113,13 +156,18 @@ def get_cpu_linear_interpolation(
     kind: TrajInterpolationType,
     interpolation_dt=None,
 ):
-    del kind, interpolation_dt
-    return _linear_state(raw_traj, traj_steps, out_traj_state)
+    if interpolation_dt is None:
+        interpolation_dt = torch.ones((), device=raw_traj.position.device, dtype=raw_traj.position.dtype)
+    return _interpolate_state(raw_traj, traj_steps, out_traj_state, kind, interpolation_dt)
 
 
-def get_cuda_linear_interpolation(raw_traj, traj_tsteps, out_traj):
+def get_cuda_linear_interpolation(raw_traj, traj_tsteps, out_traj, interpolation_dt=None):
     """Portable implementation of the historical CUDA-named interpolation entry point."""
-    return _linear_state(raw_traj, traj_tsteps, out_traj)
+    if interpolation_dt is None:
+        interpolation_dt = torch.ones((), device=raw_traj.position.device, dtype=raw_traj.position.dtype)
+    return _interpolate_state(
+        raw_traj, traj_tsteps, out_traj, TrajInterpolationType.LINEAR_CUDA, interpolation_dt
+    )
 
 
 def get_bspline_interpolation(*args, **kwargs):
@@ -140,15 +188,40 @@ def linear_smooth(
     opt_dt=None,
     interpolation_dt=None,
 ):
-    del opt_dt, interpolation_dt
     values = np.asarray(x)
     count = n if last_step is None else last_step
     source = np.arange(values.shape[0], dtype=np.float64) if y is None else np.asarray(y)
-    target = np.linspace(source[0], source[-1], count)
+    if values.ndim != 1 or source.ndim != 1 or values.shape != source.shape:
+        raise ValueError("x and y must be matching one-dimensional arrays")
+    if count < 1:
+        raise ValueError("n must be positive")
+    if opt_dt is not None and interpolation_dt is not None:
+        target = np.arange(count, dtype=np.float64) * float(interpolation_dt)
+    else:
+        target = np.linspace(source[0], source[-1], count)
     if kind == TrajInterpolationType.QUARTIC:
         raise NotImplementedError("cuRoboV2 QUARTIC interpolation is not implemented upstream")
-    # Linear is deterministic and dependency-free; higher-order labels retain the same endpoints.
-    return np.interp(target, source, values)
+    # This NumPy-facing helper has no differentiable input.  Use the exact same
+    # portable Torch interpolation stencil as the batched CPU/MPS routine.
+    tensor = torch.as_tensor(values, dtype=torch.float64).unsqueeze(-1)
+    # Nonuniform source coordinates are represented by first mapping target to
+    # the segment coordinate; trajectory execution normally uses uniform time.
+    coordinate = np.interp(target, source, np.arange(source.size, dtype=np.float64))
+    coordinate_t = torch.as_tensor(coordinate, dtype=tensor.dtype)
+    low = coordinate_t.floor().to(torch.int64).clamp(0, tensor.shape[0] - 2)
+    fraction = (coordinate_t - low).unsqueeze(-1)
+    p1, p2 = tensor[low], tensor[low + 1]
+    if kind in (TrajInterpolationType.LINEAR, TrajInterpolationType.LINEAR_CUDA):
+        result = p1 * (1 - fraction) + p2 * fraction
+    elif kind == TrajInterpolationType.CUBIC:
+        p0 = tensor[(low - 1).clamp_min(0)]
+        p3 = tensor[(low + 2).clamp_max(tensor.shape[0] - 1)]
+        u, u2, u3 = fraction, fraction.square(), fraction.pow(3)
+        result = 0.5 * (2 * p1 + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (-p0 + 3 * p1 - 3 * p2 + p3) * u3)
+    else:
+        smooth = fraction.pow(3) * (10 + fraction * (-15 + 6 * fraction))
+        result = p1 * (1 - smooth) + p2 * smooth
+    return result.squeeze(-1)
 
 
 def get_interpolated_trajectory(
@@ -160,12 +233,33 @@ def get_interpolated_trajectory(
     device_cfg: DeviceCfg = DeviceCfg(),
     max_joint_velocity: Optional[torch.Tensor] = None,
 ) -> JointState:
-    del interpolation_dt, device_cfg, max_joint_velocity
-    raw = JointState.from_position(torch.stack(trajectory), out_traj_state.joint_names)
-    steps = torch.tensor(
-        [des_horizon or out_traj_state.position.shape[-2]], device=raw.position.device
-    )
-    return get_cpu_linear_interpolation(raw.unsqueeze(0), steps, out_traj_state, kind)
+    del max_joint_velocity
+    if not trajectory:
+        raise ValueError("trajectory must contain at least one batch item")
+    horizon = des_horizon or out_traj_state.position.shape[-2]
+    if horizon < 2:
+        raise ValueError("des_horizon must be at least two")
+    if kind not in (
+        TrajInterpolationType.LINEAR, TrajInterpolationType.CUBIC,
+        TrajInterpolationType.QUARTIC, TrajInterpolationType.QUINTIC,
+    ):
+        raise ValueError(f"Unsupported interpolation type: {kind}")
+    if kind == TrajInterpolationType.QUARTIC:
+        raise NotImplementedError("cuRoboV2 QUARTIC interpolation is not implemented upstream")
+    if len(trajectory) != out_traj_state.position.shape[0]:
+        raise ValueError("trajectory batch must match out_traj_state")
+    for batch_index, item in enumerate(trajectory):
+        values = item.reshape(-1, item.shape[-1]).to(
+            device=out_traj_state.position.device, dtype=out_traj_state.position.dtype
+        )
+        actual_kind = TrajInterpolationType.LINEAR if values.shape[0] < 4 and kind == TrajInterpolationType.CUBIC else kind
+        retimed = _interpolate_values(values, horizon, actual_kind)
+        out_traj_state.position[batch_index, :horizon] = retimed
+        out_traj_state.position[batch_index, horizon:] = retimed[-1]
+    out_traj_state = out_traj_state.finite_difference(interpolation_dt)
+    last_steps = [horizon] * len(trajectory)
+    dt = device_cfg.to_device([interpolation_dt] * len(trajectory))
+    return out_traj_state, last_steps, dt
 
 
 __all__ = [
