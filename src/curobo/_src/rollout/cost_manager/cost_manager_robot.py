@@ -67,6 +67,8 @@ class RobotCostManager:
         return self.costs
 
     def setup_batch_tensors(self, batch_size: int, horizon: int) -> None:
+        if batch_size < 0 or horizon < 0:
+            raise ValueError("batch_size and horizon must be non-negative")
         if (batch_size, horizon) == (self._batch_size, self._horizon):
             return
         for cost in self.costs.values():
@@ -83,20 +85,54 @@ class RobotCostManager:
 
     def initialize_from_config(self, config, transition_model=None, scene_collision_checker=None, **kwargs):
         """Instantiate configured cost terms, using only portable components."""
+        if config is None:
+            raise TypeError("config must be RobotCostManagerCfg, not None")
         self.config = config
+        # Reconfiguration is a normal solver lifecycle operation (for
+        # example when an MPC world changes).  CUDA replaces its component
+        # instances at construction time; eagerly replacing them here avoids
+        # stale weights/checkers and makes the portable path safely
+        # idempotent.
         self.costs.clear()
+        self._batch_size = self._horizon = None
         robot_model = getattr(transition_model, "robot_model", None)
+        total_spheres = getattr(robot_model, "total_spheres", None)
+        interpolation_steps = int(getattr(transition_model, "interpolation_steps", 1) or 1)
 
         if config.self_collision_cfg is not None:
+            self_collision_kin_config = None
             if robot_model is not None and hasattr(robot_model, "get_self_collision_config"):
-                config.self_collision_cfg.self_collision_kin_config = robot_model.get_self_collision_config()
-            self.register_cost("self_collision", SelfCollisionCost(config.self_collision_cfg))
-        if config.scene_collision_cfg is not None:
-            if scene_collision_checker is not None:
-                config.scene_collision_cfg.scene_collision_checker = scene_collision_checker
-            if robot_model is not None and hasattr(robot_model, "total_spheres"):
-                config.scene_collision_cfg.update_num_spheres(robot_model.total_spheres)
-            self.register_cost("scene_collision", SceneCollisionCost(config.scene_collision_cfg))
+                self_collision_kin_config = robot_model.get_self_collision_config()
+                config.self_collision_cfg.self_collision_kin_config = self_collision_kin_config
+            # A configured self-collision cost is meaningful for the
+            # standalone portable sphere API too.  A transition-backed
+            # configuration follows V2 exactly and only registers when its
+            # robot model supplies collision metadata.
+            if transition_model is None or self_collision_kin_config is not None:
+                if transition_model is not None and interpolation_steps > 1:
+                    # Do not mutate caller-owned configuration on repeated
+                    # initialization.  The cost owns a cloned execution
+                    # weight, so scale that after construction instead.
+                    component = SelfCollisionCost(config.self_collision_cfg)
+                    component._weight.div_(interpolation_steps)
+                else:
+                    component = SelfCollisionCost(config.self_collision_cfg)
+                if total_spheres == 0:
+                    component.disable_cost()
+                self.register_cost("self_collision", component)
+
+        # V2 deliberately does not create an unusable scene cost without a
+        # checker.  Retaining that rule keeps unconfigured planning rollouts
+        # executable instead of failing later inside an otherwise optional
+        # term.
+        if config.scene_collision_cfg is not None and scene_collision_checker is not None:
+            config.scene_collision_cfg.scene_collision_checker = scene_collision_checker
+            if total_spheres is not None:
+                config.scene_collision_cfg.update_num_spheres(total_spheres)
+            component = SceneCollisionCost(config.scene_collision_cfg)
+            if total_spheres == 0:
+                component.disable_cost()
+            self.register_cost("scene_collision", component)
         if config.cspace_cfg is not None:
             if transition_model is not None:
                 config.cspace_cfg.initialize_from_transition_model(transition_model)
@@ -128,9 +164,46 @@ class RobotCostManager:
             raise ValueError("cost manager expects a JointState/RobotState shaped [batch,horizon,dof]")
         return joint_state, joint_state.position.shape[:2]
 
+    def _validate_state_device(self, joint_state: JointState) -> None:
+        """Reject accidental host/device mixing before an expensive rollout.
+
+        This is intentionally a validation boundary rather than a hidden
+        copy: callers planning on MPS must retain a device-resident autograd
+        graph, and moving state inside a cost manager would silently break it.
+        """
+        expected = torch.device(self.device_cfg.device)
+        if not self.device_cfg.is_same_torch_device(joint_state.position.device):
+            raise ValueError(
+                "robot state device does not match cost manager device: "
+                f"{joint_state.position.device} != {expected}"
+            )
+
+    def _validate_collision_horizon(self, state, batch: int, horizon: int) -> None:
+        """Ensure kinematics and trajectory buffers refer to the same rollout."""
+        enabled_collision = any(
+            self.has_cost(name) and self.get_cost(name).enabled
+            for name in ("self_collision", "scene_collision")
+        )
+        if not enabled_collision:
+            return
+        spheres = getattr(state, "robot_spheres", None)
+        if spheres is None:
+            raise ValueError("enabled collision costs require state.robot_spheres")
+        if not isinstance(spheres, torch.Tensor) or spheres.ndim != 4:
+            raise ValueError("state.robot_spheres must have shape [batch,horizon,spheres,4]")
+        if tuple(spheres.shape[:2]) != (batch, horizon):
+            raise ValueError(
+                "state.robot_spheres batch/horizon must match state.joint_state: "
+                f"{tuple(spheres.shape[:2])} != {(batch, horizon)}"
+            )
+        if not self.device_cfg.is_same_torch_device(spheres.device):
+            raise ValueError("state.robot_spheres device does not match cost manager device")
+
     def compute_costs(self, state, cost_collection: Optional[CostCollection] = None,
                       goal: Optional[GoalRegistry] = None, **kwargs) -> CostCollection:
         joint_state, (batch, horizon) = self._shape(state)
+        self._validate_state_device(joint_state)
+        self._validate_collision_horizon(state, batch, horizon)
         self.setup_batch_tensors(batch, horizon)
         output = CostCollection() if cost_collection is None else cost_collection
 
@@ -166,6 +239,7 @@ class RobotCostManager:
 
     def compute_convergence(self, state, goal: Optional[GoalRegistry] = None, **kwargs) -> CostCollection:
         joint_state, (batch, horizon) = self._shape(state)
+        self._validate_state_device(joint_state)
         self.setup_batch_tensors(batch, horizon)
         output = CostCollection()
         if goal is None:
@@ -189,6 +263,10 @@ class RobotCostManager:
         return output
 
     def update_params(self, **kwargs) -> None:
+        # Preserve the V2 lifecycle: early solver setup may broadcast update
+        # requests before this manager has been configured.
+        if not self._initialized:
+            return
         if "dt" in kwargs:
             self.update_dt(kwargs["dt"])
         criteria = kwargs.get("tool_pose_criteria")
