@@ -36,3 +36,21 @@ class BlockSparseTSDFRenderer:
     def render_normal_colormap(self, intrinsics, pose, image_shape):
         _, normals, valid = self.render(intrinsics, pose, image_shape)
         return normals_to_colormap(normals, valid)
+
+    def render_color(self, intrinsics, pose, image_shape):
+        if hasattr(self.integrator, "render_color"):
+            return self.integrator.render_color(intrinsics, pose, image_shape)
+        depth, normals, valid = self.render(intrinsics, pose, image_shape)
+        return depth, normals, torch.zeros(depth.shape + (3,), device=depth.device, dtype=torch.uint8), valid
+
+    def render_color_only(self, intrinsics, pose, image_shape):
+        return self.render_color(intrinsics, pose, image_shape)[2]
+
+    def render_shaded(self, intrinsics, pose, image_shape, light_direction=(0.0, 0.0, 1.0), ambient=0.3, use_color=True):
+        if hasattr(self.integrator, "render_shaded"):
+            return self.integrator.render_shaded(intrinsics, pose, image_shape, light_direction, ambient, use_color)
+        _, normals, valid = self.render(intrinsics, pose, image_shape)
+        light = normals.new_tensor(light_direction)
+        light = light / torch.linalg.vector_norm(light).clamp_min(torch.finfo(normals.dtype).eps)
+        intensity = (normals * light).sum(-1).clamp_min(0) * (1 - ambient) + ambient
+        return torch.where(valid[..., None], (255 * intensity[..., None]).to(torch.uint8), torch.zeros_like(normals, dtype=torch.uint8))

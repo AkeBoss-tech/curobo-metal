@@ -64,6 +64,20 @@ class MapperCfg:
         return tuple(max(2, int(math.ceil(x/self.voxel_size))) for x in self.extent_meters_xyz)
 
     @property
+    def max_blocks(self):
+        from .block_allocation import calculate_tsdf_max_blocks
+        return calculate_tsdf_max_blocks(
+            self.grid_shape, self.voxel_size, self.block_size,
+            self.truncation_distance, self.roughness,
+        )
+
+    @property
+    def hash_capacity(self):
+        # Dense storage does not use a hash table, but callers use this value
+        # for memory planning.  Keep the same positive sizing relationship.
+        return max(1, int(math.ceil(self.max_blocks / self.hash_load_factor)))
+
+    @property
     def origin(self):
         center = torch.zeros(3) if self.grid_center is None else torch.as_tensor(self.grid_center)
         return center - torch.tensor(self.get_actual_extent()) / 2

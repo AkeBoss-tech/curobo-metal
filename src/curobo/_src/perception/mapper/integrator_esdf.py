@@ -29,3 +29,24 @@ class BlockSparseESDFIntegrator:
 
     integrate = compute
     __call__ = compute
+
+    def compute_esdf(self, esdf_origin=None, esdf_voxel_size=None):
+        if not hasattr(self, "mapper"):
+            raise RuntimeError("compute_esdf requires a Mapper-backed integrator")
+        return self.mapper.compute_esdf(esdf_origin, esdf_voxel_size)
+
+    @property
+    def grid_shape(self):
+        return None if self.cfg.grid_shape is None else tuple(self.cfg.grid_shape)
+
+    @property
+    def esdf_grid_shape(self):
+        return self.grid_shape
+
+    @property
+    def voxel_size(self):
+        return self.cfg.voxel_size
+
+    @property
+    def esdf_voxel_size(self):
+        return self.cfg.voxel_size
