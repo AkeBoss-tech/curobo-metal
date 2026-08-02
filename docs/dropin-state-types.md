@@ -47,3 +47,13 @@ buffers are independently mutable, and clone/copy/index/device-transfer
 preserve `dt`, knot buffers, control-space metadata, and user auxiliary data.
 These operations are differentiable standard PyTorch composition on CPU and
 float32 MPS; no CUDA packed-buffer ABI is exposed.
+
+`RobotState` additionally treats the upstream-named `cuda_robot_model_state`
+field as a portable `KinematicsState`.  It preserves joint torque and all
+materialized FK outputs (tool poses, Jacobians, collision spheres, and centre
+of mass) through clone, detach, contiguous, device transfer, leading-index,
+and preallocated copy lifecycles.  Solver buffers may store joints as
+`[batch, seed, dof]` while flattening FK as `[batch * seed, horizon, ...]`;
+batch/seed copies detect that layout and update the corresponding linear FK
+entries.  CUDA model handles, packed output buffers, and raw pointer ABI are
+not represented by this portable record.
