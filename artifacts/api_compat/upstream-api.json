@@ -45113,9 +45113,9 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
+        "missing_symbols": 14,
         "path": "curobo/_src/optim/particle/mppi.py",
-        "resolved_symbols": 15,
+        "resolved_symbols": 22,
         "status": "partial"
       },
       "name": "curobo._src.optim.particle.mppi",
@@ -75572,9 +75572,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 10,
         "path": "curobo/_src/rollout/rollout_robot.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.rollout.rollout_robot",

@@ -30,7 +30,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --extra test
-      - run: PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
+      - run: PYTHONPATH=.:src PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
       - name: Test installed wheel namespace and assets
         run: |
           uv build --wheel --out-dir dist
@@ -54,7 +54,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --extra test
-      - run: PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
+      - run: PYTHONPATH=.:src PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
       - name: Test installed wheel namespace and assets
         run: |
           uv build --wheel --out-dir dist
