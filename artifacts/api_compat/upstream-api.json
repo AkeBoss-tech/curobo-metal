@@ -80129,9 +80129,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 7,
         "path": "curobo/_src/solver/solver_base_result.py",
-        "resolved_symbols": 7,
+        "resolved_symbols": 8,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_base_result",
@@ -90568,9 +90568,9 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 5,
         "path": "curobo/_src/state/state_robot.py",
-        "resolved_symbols": 10,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.state.state_robot",
@@ -100060,10 +100060,10 @@
     },
     {
       "local": {
-        "missing_symbols": 0,
+        "missing_symbols": 1,
         "path": "curobo/_src/util/state_filter.py",
-        "resolved_symbols": 10,
-        "status": "resolved"
+        "resolved_symbols": 9,
+        "status": "partial"
       },
       "name": "curobo._src.util.state_filter",
       "path": "curobo/_src/util/state_filter.py",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 242,
-    "resolved_modules": 119,
+    "partial_modules": 243,
+    "resolved_modules": 118,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 242,
-    "resolved_modules": 119,
+    "partial_modules": 243,
+    "resolved_modules": 118,
     "symbols": 7182
   },
   "upstream": {
