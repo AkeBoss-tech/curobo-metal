@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -25,6 +25,134 @@ def _offset_pose(base_pose: Sequence[float] | None, local_translation: torch.Ten
     base = Pose.from_list(list(base_pose or [0, 0, 0, 1, 0, 0, 0]), cfg)
     offset = Pose(local_translation.to(**cfg.as_torch_dict()), torch.tensor([1, 0, 0, 0], **cfg.as_torch_dict()))
     return base.multiply(offset).tolist()
+
+
+def _copy_visual_fields(source: "Obstacle", target: "Obstacle") -> "Obstacle":
+    """Copy portable visual metadata when converting an obstacle to a mesh.
+
+    Geometry conversion is used by both collision-scene construction and
+    mapper export.  Keeping this in one place avoids silently dropping
+    per-vertex fields just because the caller is running without trimesh.
+    """
+    for name in (
+        "texture_id", "texture", "vertex_colors", "vertex_normals",
+        "texture_uvs", "texture_image", "face_colors",
+    ):
+        if hasattr(source, name):
+            value = getattr(source, name)
+            if isinstance(value, torch.Tensor):
+                value = value.clone()
+            elif isinstance(value, list):
+                value = value.copy()
+            setattr(target, name, value)
+    return target
+
+
+def _triangulate_polygon_faces(
+    faces: Sequence[Any] | torch.Tensor,
+    face_counts: Sequence[int] | torch.Tensor | None = None,
+) -> list[list[int]]:
+    """Fan-triangulate flat or nested polygon buffers deterministically."""
+    if isinstance(faces, torch.Tensor):
+        faces = faces.detach().cpu().tolist()
+    if face_counts is not None:
+        if isinstance(face_counts, torch.Tensor):
+            face_counts = face_counts.detach().cpu().tolist()
+        flat = [int(index) for index in faces]
+        triangles: list[list[int]] = []
+        offset = 0
+        for count in face_counts:
+            count = int(count)
+            if count < 3 or offset + count > len(flat):
+                raise ValueError("face_counts must partition a flat buffer into polygons of at least three vertices")
+            polygon = flat[offset : offset + count]
+            triangles.extend([[polygon[0], polygon[index], polygon[index + 1]] for index in range(1, count - 1)])
+            offset += count
+        if offset != len(flat):
+            raise ValueError("face_counts must consume every entry in faces")
+        return triangles
+    triangles = []
+    for face in faces:
+        polygon = [int(index) for index in face]
+        if len(polygon) < 3:
+            raise ValueError("polygon faces must contain at least three indices")
+        triangles.extend([[polygon[0], polygon[index], polygon[index + 1]] for index in range(1, len(polygon) - 1)])
+    return triangles
+
+
+def _primitive_mesh(vertices: torch.Tensor, faces: torch.Tensor, obstacle: "Obstacle") -> "Mesh":
+    """Construct a local-space mesh retaining portable obstacle metadata."""
+    result = Mesh(
+        obstacle.name,
+        pose=list(obstacle._pose_or_identity()),
+        vertices=vertices.detach().cpu().tolist(),
+        faces=faces.detach().cpu().tolist(),
+        color=None if obstacle.color is None else list(obstacle.color),
+        texture_id=obstacle.texture_id,
+        texture=obstacle.texture,
+        material=obstacle.material,
+        device_cfg=obstacle.device_cfg,
+    )
+    return _copy_visual_fields(obstacle, result)  # type: ignore[return-value]
+
+
+def _sphere_surface(radius: float, *, latitude_segments: int = 8, longitude_segments: int = 16) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return a deterministic latitude/longitude sphere mesh in local space."""
+    if latitude_segments < 2 or longitude_segments < 3:
+        raise ValueError("sphere tessellation requires at least 2 latitude and 3 longitude segments")
+    dtype = torch.float64
+    theta = torch.arange(longitude_segments, dtype=dtype) * (2.0 * torch.pi / longitude_segments)
+    rings = torch.arange(1, latitude_segments, dtype=dtype) * (torch.pi / latitude_segments)
+    sin_phi = torch.sin(rings).unsqueeze(-1)
+    ring_vertices = torch.stack(
+        (
+            sin_phi * torch.cos(theta),
+            sin_phi * torch.sin(theta),
+            torch.cos(rings).unsqueeze(-1).expand(-1, longitude_segments),
+        ),
+        dim=-1,
+    ).reshape(-1, 3)
+    vertices = torch.cat(
+        (
+            torch.tensor([[0.0, 0.0, 1.0]], dtype=dtype),
+            ring_vertices,
+            torch.tensor([[0.0, 0.0, -1.0]], dtype=dtype),
+        ),
+        dim=0,
+    ) * float(radius)
+    faces: list[list[int]] = []
+    for index in range(longitude_segments):
+        following = (index + 1) % longitude_segments
+        faces.append([0, 1 + following, 1 + index])
+    for ring in range(latitude_segments - 2):
+        start = 1 + ring * longitude_segments
+        next_start = start + longitude_segments
+        for index in range(longitude_segments):
+            following = (index + 1) % longitude_segments
+            faces.extend([[start + index, start + following, next_start + following], [start + index, next_start + following, next_start + index]])
+    bottom = vertices.shape[0] - 1
+    last = 1 + (latitude_segments - 2) * longitude_segments
+    for index in range(longitude_segments):
+        following = (index + 1) % longitude_segments
+        faces.append([bottom, last + index, last + following])
+    return vertices, torch.tensor(faces, dtype=torch.long)
+
+
+def _cylinder_surface(radius: float, height: float, *, segments: int = 16) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return a closed z-axis cylinder mesh in local space."""
+    if segments < 3:
+        raise ValueError("cylinder tessellation requires at least three segments")
+    theta = torch.arange(segments, dtype=torch.float64) * (2.0 * torch.pi / segments)
+    circle = torch.stack((radius * torch.cos(theta), radius * torch.sin(theta)), dim=-1)
+    lower = torch.cat((circle, torch.full((segments, 1), -0.5 * height, dtype=torch.float64)), dim=-1)
+    upper = torch.cat((circle, torch.full((segments, 1), 0.5 * height, dtype=torch.float64)), dim=-1)
+    vertices = torch.cat((lower, upper, torch.tensor([[0.0, 0.0, -0.5 * height], [0.0, 0.0, 0.5 * height]], dtype=torch.float64)), dim=0)
+    lower_center, upper_center = 2 * segments, 2 * segments + 1
+    faces: list[list[int]] = []
+    for index in range(segments):
+        following = (index + 1) % segments
+        faces.extend([[index, following, segments + following], [index, segments + following, segments + index], [lower_center, following, index], [upper_center, segments + index, segments + following]])
+    return vertices, torch.tensor(faces, dtype=torch.long)
 
 
 def tensor_sphere(
@@ -142,7 +270,7 @@ class Obstacle:
         vertices = torch.as_tensor(mesh.vertices, dtype=torch.float64)
         if transform_with_pose:
             pose = Pose.from_list(mesh._pose_or_identity(), self.device_cfg)
-            vertices = pose.transform_points(vertices.to(**self.device_cfg.as_torch_dict())).cpu()
+            vertices = pose.transform_points(vertices.to(**self.device_cfg.as_torch_dict())).detach().cpu()
         faces = torch.as_tensor(mesh.faces, dtype=torch.long)
         with Path(file_path).open("w", encoding="utf-8") as output:
             for vertex in vertices.tolist():
@@ -167,6 +295,8 @@ class Obstacle:
                              device_cfg: DeviceCfg = DeviceCfg()) -> list["Sphere"]:
         if num_spheres not in (None, 1):
             raise NotImplementedError("multi-sphere fitting requires the optional fitting backend")
+        if surface_radius < 0:
+            raise ValueError("surface_radius must be nonnegative")
         sphere = self.get_sphere()
         sphere.radius += surface_radius
         if pre_transform_pose is not None:
@@ -200,8 +330,7 @@ class Cuboid(Obstacle):
         ], dtype=torch.float32)
         faces = [[0,1,3],[0,3,2],[4,6,7],[4,7,5],[0,4,5],[0,5,1],
                  [2,3,7],[2,7,6],[0,2,6],[0,6,4],[1,5,7],[1,7,3]]
-        return Mesh(self.name, pose=list(self.pose), vertices=(signs * half).tolist(), faces=faces,
-                    color=self.color, material=self.material, device_cfg=self.device_cfg)
+        return _primitive_mesh(signs * half, torch.tensor(faces, dtype=torch.long), self)
 
 
 @dataclass
@@ -225,13 +354,8 @@ class Sphere(Obstacle):
                       material=self.material, device_cfg=self.device_cfg)
 
     def get_mesh(self, process: bool = True) -> "Mesh":
-        # An octahedron is deterministic, adequate for portable scene serialisation,
-        # and avoids an optional trimesh dependency.
-        r = self.radius
-        vertices = [[r,0,0],[-r,0,0],[0,r,0],[0,-r,0],[0,0,r],[0,0,-r]]
-        faces = [[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]]
-        return Mesh(self.name, pose=self._pose_or_identity(), vertices=vertices, faces=faces,
-                    color=self.color, material=self.material, device_cfg=self.device_cfg)
+        vertices, faces = _sphere_surface(self.radius)
+        return _primitive_mesh(vertices, faces, self)
 
 
 @dataclass
@@ -253,8 +377,61 @@ class Capsule(Obstacle):
                       material=self.material, device_cfg=self.device_cfg)
 
     def get_mesh(self, process: bool = True) -> "Mesh":
-        # Collision support uses mesh/cuboid layers; a conservative box preserves safety.
-        return self.get_cuboid().get_mesh(process)
+        base = torch.as_tensor(self.base, dtype=torch.float64)
+        tip = torch.as_tensor(self.tip, dtype=torch.float64)
+        axis = tip - base
+        length = torch.linalg.vector_norm(axis)
+        # A zero-length capsule is exactly a sphere.  This is common for a
+        # sphere encoded in a capsule buffer and should not create NaNs.
+        if bool(length <= torch.finfo(length.dtype).eps):
+            vertices, faces = _sphere_surface(self.radius)
+            vertices = vertices + base
+            return _primitive_mesh(vertices, faces, self)
+        direction = axis / length
+        reference = torch.tensor([1.0, 0.0, 0.0], dtype=base.dtype)
+        if bool(torch.abs(direction[0]) > 0.9):
+            reference = torch.tensor([0.0, 1.0, 0.0], dtype=base.dtype)
+        first = torch.linalg.cross(direction, reference)
+        first = first / torch.linalg.vector_norm(first)
+        second = torch.linalg.cross(direction, first)
+        segments, hemispheres = 16, 6
+        angle = torch.arange(segments, dtype=base.dtype) * (2.0 * torch.pi / segments)
+        radial = torch.cos(angle).unsqueeze(-1) * first + torch.sin(angle).unsqueeze(-1) * second
+        rings: list[torch.Tensor] = [base - direction * self.radius]
+        # Bottom hemisphere excludes its pole and its equator; the two
+        # cylinder rings below provide the equators exactly once.
+        for index in range(1, hemispheres):
+            phi = torch.as_tensor(-0.5 * torch.pi + index * (0.5 * torch.pi / hemispheres), dtype=base.dtype)
+            rings.append(base + direction * (self.radius * torch.sin(phi)) + radial * (self.radius * torch.cos(phi)))
+        rings.append(base + radial * self.radius)
+        rings.append(tip + radial * self.radius)
+        for index in range(1, hemispheres):
+            phi = torch.as_tensor(index * (0.5 * torch.pi / hemispheres), dtype=base.dtype)
+            rings.append(tip + direction * (self.radius * torch.sin(phi)) + radial * (self.radius * torch.cos(phi)))
+        rings.append(tip + direction * self.radius)
+        vertices: list[torch.Tensor] = []
+        ring_starts: list[int] = []
+        for ring in rings:
+            ring_starts.append(len(vertices))
+            if ring.ndim == 1:
+                vertices.append(ring)
+            else:
+                vertices.extend(ring.unbind(0))
+        faces: list[list[int]] = []
+        for ring_index in range(len(rings) - 1):
+            lower, upper = rings[ring_index], rings[ring_index + 1]
+            lower_start, upper_start = ring_starts[ring_index], ring_starts[ring_index + 1]
+            if lower.ndim == 1:
+                for index in range(segments):
+                    faces.append([lower_start, upper_start + (index + 1) % segments, upper_start + index])
+            elif upper.ndim == 1:
+                for index in range(segments):
+                    faces.append([upper_start, lower_start + index, lower_start + (index + 1) % segments])
+            else:
+                for index in range(segments):
+                    following = (index + 1) % segments
+                    faces.extend([[lower_start + index, lower_start + following, upper_start + following], [lower_start + index, upper_start + following, upper_start + index]])
+        return _primitive_mesh(torch.stack(vertices), torch.tensor(faces, dtype=torch.long), self)
 
 
 @dataclass
@@ -272,7 +449,8 @@ class Cylinder(Obstacle):
                       color=self.color, material=self.material, device_cfg=self.device_cfg)
 
     def get_mesh(self, process: bool = True) -> "Mesh":
-        return self.get_cuboid().get_mesh(process)
+        vertices, faces = _cylinder_surface(self.radius, self.height)
+        return _primitive_mesh(vertices, faces, self)
 
 
 @dataclass
@@ -284,18 +462,31 @@ class PointCloud(Obstacle):
         super().__post_init__()
         if self.points is None:
             raise ValueError("PointCloud requires points")
+        points = torch.as_tensor(self.points)
+        if points.ndim < 2 or points.shape[-1] != 3:
+            raise ValueError("points must end in dimension 3")
+        if self.scale is not None:
+            dtype = points.dtype if points.is_floating_point() else torch.get_default_dtype()
+            scale = torch.as_tensor(self.scale, dtype=dtype, device=points.device)
+            if scale.shape not in (torch.Size([]), torch.Size([3])):
+                raise ValueError("point-cloud scale must be scalar or contain three values")
+            self.points = points.to(dtype=dtype) * scale
+            self.scale = None
 
     def get_mesh_data(self, process: bool = True):
-        points = torch.as_tensor(self.points).reshape(-1, 3)
-        if points.shape[0] < 3:
-            raise ValueError("at least three point-cloud points are needed for a triangle mesh")
-        faces = torch.arange(1, points.shape[0] - 1, dtype=torch.long).unsqueeze(-1) + torch.tensor([0, 0, 1])
-        return points.tolist(), faces.tolist()
+        mesh = Mesh.from_pointcloud(torch.as_tensor(self.points).reshape(-1, 3), name=self.name, pose=self._pose_or_identity())
+        return mesh.get_mesh_data(process)
 
     def get_mesh(self, process: bool = True) -> "Mesh":
-        vertices, faces = self.get_mesh_data(process)
-        return Mesh(self.name, pose=self._pose_or_identity(), vertices=vertices, faces=faces,
-                    color=self.color, material=self.material, device_cfg=self.device_cfg)
+        mesh = Mesh.from_pointcloud(
+            torch.as_tensor(self.points).reshape(-1, 3),
+            name=self.name,
+            pose=self._pose_or_identity(),
+        )
+        mesh.color = None if self.color is None else list(self.color)
+        mesh.material = self.material
+        mesh.device_cfg = self.device_cfg
+        return mesh
 
     @staticmethod
     def from_camera_observation(camera_obs, name: str = "pc_obstacle", pose: list[float] | None = None) -> "PointCloud":
@@ -330,20 +521,115 @@ class Mesh(Obstacle):
             raise ValueError("portable world collision supports triangulated faces [F, 3]")
         if faces.numel() and (int(faces.min()) < 0 or int(faces.max()) >= vertices.shape[0]):
             raise ValueError("mesh face indices are outside vertices")
+        if self.scale is not None:
+            dtype = vertices.dtype if vertices.is_floating_point() else torch.get_default_dtype()
+            scale = torch.as_tensor(self.scale, dtype=dtype, device=vertices.device)
+            if scale.shape not in (torch.Size([]), torch.Size([3])):
+                raise ValueError("mesh scale must be scalar or contain three values")
+            # Preserve an incoming tensor's graph and device.  The dataclass
+            # remains serialisable because list/ndarray callers retain their
+            # original representation through the multiplication below.
+            self.vertices = vertices.to(dtype=dtype) * scale
+            self.scale = None
 
     @classmethod
-    def from_polygon_faces(cls, name: str, vertices, faces, **kwargs) -> "Mesh":
-        triangles: list[list[int]] = []
-        for face in faces:
-            indices = list(face)
-            if len(indices) < 3:
-                raise ValueError("polygon faces must contain at least three indices")
-            triangles.extend([[indices[0], indices[index], indices[index + 1]] for index in range(1, len(indices) - 1)])
-        return cls(name=name, vertices=vertices, faces=triangles, **kwargs)
+    def from_polygon_faces(
+        cls,
+        name: str,
+        vertices,
+        faces,
+        face_counts: Sequence[int] | torch.Tensor | None = None,
+        pose: Optional[List[float]] = None,
+        scale: Optional[List[float]] = None,
+        color: Optional[List[float]] = None,
+        device_cfg: DeviceCfg = DeviceCfg(),
+        **kwargs,
+    ) -> "Mesh":
+        """Create triangulated mesh storage from flat or nested polygons.
+
+        The pinned V2 entry point supplies a flat face buffer plus
+        ``face_counts``.  Earlier portable callers supplied a nested list.
+        Supporting both is deterministic and avoids an incidental API break.
+        """
+        return cls(
+            name=name,
+            vertices=vertices,
+            faces=_triangulate_polygon_faces(faces, face_counts),
+            pose=pose,
+            scale=scale,
+            color=color,
+            device_cfg=device_cfg,
+            **kwargs,
+        )
+
+    @staticmethod
+    def from_pointcloud(
+        pointcloud: np.ndarray | torch.Tensor | Sequence[Sequence[float]],
+        pitch: float = 0.02,
+        name: str = "world_pc",
+        pose: List[float] = [0, 0, 0, 1, 0, 0, 0],
+        filter_close_points: float = 0.0,
+    ) -> "Mesh":
+        """Create a deterministic voxel-surface mesh from a point cloud.
+
+        This is a deliberately dense, dependency-free replacement for the
+        trimesh voxelisation path.  It creates boundary quads for occupied
+        voxels, triangulates each quad consistently, and is useful for
+        mapper/collision export on CPU and MPS.  Surface extraction is
+        discrete, therefore the returned topology is not differentiable with
+        respect to input point positions.
+        """
+        if pitch <= 0:
+            raise ValueError("pitch must be positive")
+        points = torch.as_tensor(pointcloud, dtype=torch.float64).reshape(-1, 3)
+        if filter_close_points < 0:
+            raise ValueError("filter_close_points must be nonnegative")
+        if filter_close_points:
+            points = points[torch.linalg.vector_norm(points, dim=-1) > filter_close_points]
+        if points.numel() == 0:
+            return Mesh(name, pose=pose, vertices=[[0.0, 0.0, 0.0]], faces=[[0, 0, 0]])
+        # Voxel connectivity is host-side discrete configuration work.  The
+        # resulting mesh vertices/faces are normal portable tensors/arrays.
+        points_cpu = points.detach().cpu()
+        origin = points_cpu.amin(dim=0) - pitch
+        cells = torch.floor((points_cpu - origin) / pitch).to(torch.long)
+        occupied = {tuple(int(value) for value in row) for row in cells.tolist()}
+        templates = (
+            ((0, 0, 0), (0, 1, 0), (0, 1, 1), (0, 0, 1)),
+            ((1, 0, 0), (1, 0, 1), (1, 1, 1), (1, 1, 0)),
+            ((0, 0, 0), (0, 0, 1), (1, 0, 1), (1, 0, 0)),
+            ((0, 1, 0), (1, 1, 0), (1, 1, 1), (0, 1, 1)),
+            ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)),
+            ((0, 0, 1), (0, 1, 1), (1, 1, 1), (1, 0, 1)),
+        )
+        directions = ((-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1))
+        vertices: list[list[float]] = []
+        faces: list[list[int]] = []
+        for cell in sorted(occupied):
+            for direction, template in zip(directions, templates):
+                neighbor = tuple(cell[index] + direction[index] for index in range(3))
+                if neighbor in occupied:
+                    continue
+                offset = len(vertices)
+                for corner in template:
+                    coordinate = origin + pitch * torch.tensor([cell[index] + corner[index] for index in range(3)], dtype=origin.dtype)
+                    vertices.append(coordinate.tolist())
+                faces.extend([[offset, offset + 1, offset + 2], [offset, offset + 2, offset + 3]])
+        return Mesh(name, pose=pose, vertices=vertices, faces=faces)
 
     def get_mesh(self, process: bool = True) -> "Mesh":
-        return Mesh(self.name, pose=None if self.pose is None else list(self.pose), vertices=torch.as_tensor(self.vertices).clone(),
-                    faces=torch.as_tensor(self.faces).clone(), color=self.color, material=self.material, device_cfg=self.device_cfg)
+        result = Mesh(
+            self.name,
+            pose=None if self.pose is None else list(self.pose),
+            vertices=torch.as_tensor(self.vertices).clone(),
+            faces=torch.as_tensor(self.faces).clone(),
+            color=None if self.color is None else list(self.color),
+            texture_id=self.texture_id,
+            texture=self.texture,
+            material=self.material,
+            device_cfg=self.device_cfg,
+        )
+        return _copy_visual_fields(self, result)  # type: ignore[return-value]
 
     def get_cuboid(self) -> Cuboid:
         vertices = torch.as_tensor(self.vertices, dtype=torch.float32)
@@ -469,6 +755,38 @@ class SceneCfg(Sequence[Obstacle]):
             voxel=[VoxelGrid(name=n, **v) for n, v in raw.get("voxel", {}).items()],
         )
 
+    @staticmethod
+    def get_scene_graph(current_world: "SceneCfg", process_color: bool = True):
+        """Return an external trimesh scene graph when that optional package exists.
+
+        Collision and planning never need trimesh, so it remains optional on
+        Metal-only installations.  This method deliberately refuses to
+        fabricate a Warp/trimesh scene graph; callers can use
+        :meth:`save_scene_as_mesh` for a portable OBJ export instead.
+        """
+        try:
+            import trimesh  # type: ignore[import-not-found]
+        except ImportError as error:
+            raise NotImplementedError(
+                "trimesh scene graphs are an optional visualization dependency; "
+                "use save_scene_as_mesh() for portable OBJ export"
+            ) from error
+        graph = trimesh.Scene(base_frame="world_origin")
+        for mesh in SceneCfg.create_mesh_scene(current_world).mesh:
+            try:
+                visual_mesh = mesh.get_trimesh_mesh(process_color=process_color)
+            except NotImplementedError as error:
+                raise NotImplementedError(
+                    "portable Mesh cannot create a trimesh object; use save_scene_as_mesh()"
+                ) from error
+            graph.add_geometry(
+                visual_mesh,
+                geom_name=mesh.name,
+                parent_node_name="world_origin",
+                transform=mesh.get_transform_matrix(),
+            )
+        return graph
+
     def clone(self) -> "SceneCfg":
         return SceneCfg(
             sphere=self.sphere.copy(), cuboid=self.cuboid.copy(),
@@ -524,6 +842,26 @@ class SceneCfg(Sequence[Obstacle]):
     def get_collision_check_world(self, mesh_process: bool = False) -> "SceneCfg":
         return self.create_collision_support_world(self, process=mesh_process)
 
+    def save_scene_as_mesh(
+        self,
+        file_path: str,
+        save_as_scene_graph: bool = False,
+        process_color: bool = True,
+    ) -> None:
+        """Export all analytic/mesh obstacles as one deterministic OBJ file.
+
+        OBJ is intentionally selected because it needs no external graphics
+        package.  The ``save_as_scene_graph`` and ``process_color`` arguments
+        are accepted for source compatibility; OBJ stores merged geometry and
+        does not represent a scene graph or material textures.
+        """
+        if save_as_scene_graph:
+            raise NotImplementedError(
+                "portable OBJ export contains merged geometry; trimesh is required for scene-graph export"
+            )
+        merged = self.create_merged_mesh_world(self, process=not process_color)
+        merged.mesh[0].save_as_mesh(file_path, transform_with_pose=True)
+
     def add_color(self, rgba=[0.0, 0.0, 0.0, 1.0]) -> None:
         if len(rgba) not in (3, 4):
             raise ValueError("color must be RGB or RGBA")
@@ -551,7 +889,9 @@ class SceneCfg(Sequence[Obstacle]):
                 obstacle.file_path = Path(obstacle.file_path).name
 
     def get_cache_dict(self) -> dict[str, int]:
-        return {"cuboid": len(self.cuboid), "mesh": len(self.mesh), "voxel": len(self.voxel)}
+        # ``obb`` is the pinned public spelling; ``cuboid`` keeps compatibility
+        # with portable collision cache call sites added before the audit.
+        return {"obb": len(self.cuboid), "cuboid": len(self.cuboid), "mesh": len(self.mesh), "voxel": len(self.voxel)}
 
     def add_obstacle(self, obstacle: Obstacle) -> None:
         mapping = {
