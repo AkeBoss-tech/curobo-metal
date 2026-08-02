@@ -18,3 +18,13 @@ this portable surface.
 optimizers.  `use_cuda_graph=True`, raw CUDA graph dumps, and CUDA/Warp
 line-search ABI assumptions remain explicit unsupported boundaries; portable
 execution instead maintains regular reusable shape state.
+
+The gradient-descent facade additionally accepts V2's flattened and
+``[problem, horizon, action_dim]`` seeds, runs under an enclosing
+``torch.no_grad()`` scope, applies rollout-published hard action bounds,
+maintains finite best-action fallback and per-problem non-fixed convergence,
+and exposes reset/shift/metric/timing lifecycle methods.  It uses the V2
+``gradient_descent_step_scale`` exclusively for the GD update; ``step_scale``
+remains a rollout-bound configuration value rather than an alternate learning
+rate.  CUDA graph capture and packed rollout-buffer ABI entry points are not
+implemented on CPU/MPS.
