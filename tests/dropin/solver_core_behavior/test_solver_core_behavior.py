@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
-from curobo._src.geom.types import Cuboid, SceneCfg
+from curobo._src.geom.types import Cuboid, SceneCfg, Sphere
 from curobo._src.solver.solve_mode import SolveMode
 from curobo._src.solver.solve_state import SolveState
 from curobo._src.solver.solver_core import SolverCore
@@ -95,3 +95,102 @@ def test_resolve_yaml_configs_accepts_robot_yaml_and_mapping_inputs():
     assert metrics["rollout"] == {}
     assert transition["transition_model_cfg"] == {}
     assert scene == {"cuboid": {}}
+
+
+class _RolloutProbe:
+    def __init__(self):
+        self.batch_sizes = []
+        self.goals = []
+        self.shape_resets = 0
+        self.scene_collision_checker = None
+
+    def update_batch_size(self, value):
+        self.batch_sizes.append(value)
+
+    def update_params(self, value):
+        self.goals.append(value)
+
+    def reset_shape(self):
+        self.shape_resets += 1
+
+
+class _OptimizerProbe:
+    def __init__(self):
+        self.problem_sizes = []
+        self.goals = []
+        self.shape_resets = 0
+
+    def update_num_problems(self, value):
+        self.problem_sizes.append(value)
+
+    def update_rollout_params(self, value):
+        self.goals.append(value)
+
+    def reset_shape(self):
+        self.shape_resets += 1
+
+
+def test_goal_shape_updates_attached_execution_consumers_and_value_updates_refresh_goals():
+    core = SolverCore(SolverCoreCfg(_robot(), optimizer_configs=[]))
+    rollout = _RolloutProbe()
+    optimizer = _OptimizerProbe()
+    core.metrics_rollout = rollout
+    core._optimizer = optimizer
+    state = core.default_joint_state.unsqueeze(0)
+    solve_state = SolveState(SolveMode.SINGLE, 2, 1, num_ik_seeds=3)
+
+    goal, changed = core.prepare_goal_buffer(
+        solve_state, None, current_state=state.repeat_seeds(2), goal_state=state.repeat_seeds(2)
+    )
+    assert changed
+    assert core.problem_batch_size == 6
+    assert rollout.batch_sizes == [6]
+    assert optimizer.problem_sizes == [6]
+    assert rollout.goals == [goal]
+    assert optimizer.goals == [goal]
+    assert core.task_initialized
+
+    refreshed, changed = core.prepare_goal_buffer(
+        solve_state, None, current_state=state.repeat_seeds(2), goal_state=state.repeat_seeds(2)
+    )
+    assert not changed
+    assert len(rollout.goals) == len(optimizer.goals) == 2
+    assert refreshed is core.goal_buffer
+
+
+def test_world_replacement_propagates_to_attached_rollouts_and_clears_lifecycle_state():
+    core = SolverCore(SolverCoreCfg(_robot(), optimizer_configs=[]))
+    rollout = _RolloutProbe()
+    core.metrics_rollout = rollout
+    state = core.default_joint_state.unsqueeze(0)
+    core.prepare_goal_buffer(SolveState(SolveMode.SINGLE, 1, 1), None, current_state=state)
+    scene = SceneCfg(sphere=[Sphere("guard", position=[2.0, 0.0, 0.0], radius=0.1)])
+
+    core.update_world(scene)
+    assert core.scene_collision_checker is rollout.scene_collision_checker
+    assert core.scene_generation == 1
+    assert rollout.shape_resets >= 2  # goal shape + world cache invalidation
+    assert core.config.scene_collision_cfg.scene_model is scene
+    with pytest.raises(NotImplementedError, match="YAML/USD/Warp"):
+        core.update_world("scene.yml")
+
+    core.destroy()
+    assert core.goal_buffer is None
+    assert core.solve_state is None
+    assert not core.task_initialized
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_solver_core_goal_and_world_lifecycle_stays_on_mps_without_fallback():
+    device = DeviceCfg(device=torch.device("mps"))
+    core = SolverCore(SolverCoreCfg(_robot(device), device_cfg=device, optimizer_configs=[]))
+    state = core.default_joint_state.unsqueeze(0)
+    goal, changed = core.prepare_goal_buffer(
+        SolveState(SolveMode.SINGLE, 1, 1, num_seeds=2), None,
+        current_state=state, goal_state=state,
+    )
+    assert changed
+    assert goal.goal_js.position.device.type == "mps"
+    core.update_world(SceneCfg(sphere=[Sphere("guard", position=[2.0, 0.0, 0.0], radius=0.1)]))
+    samples = core.sample_configs(2)
+    assert samples.device.type == "mps"

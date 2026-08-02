@@ -64,6 +64,10 @@ class SolverCore:
         self._goal_buffer = None
         self._solve_state = None
         self._task_initialized = False
+        # Bumped for every world replacement.  Eager CPU/MPS callers can use
+        # this to invalidate their own shape-keyed objective/scene caches
+        # without pretending there is a CUDA graph to reset.
+        self._scene_generation = 0
         self._tool_pose_criteria: Dict[str, ToolPoseCriteria] = {
             name: ToolPoseCriteria.disabled() for name in self.tool_frames
         }
@@ -126,6 +130,28 @@ class SolverCore:
         return self._solve_state
 
     @property
+    def goal_buffer(self):
+        """Most recently prepared goal registry, or ``None`` before setup."""
+        return self._goal_buffer
+
+    @property
+    def task_initialized(self) -> bool:
+        """Whether a goal shape has been prepared for this core instance."""
+        return self._task_initialized
+
+    @property
+    def scene_generation(self) -> int:
+        """Monotonic portable-world lifecycle generation."""
+        return self._scene_generation
+
+    @property
+    def problem_batch_size(self) -> int:
+        """Optimizer-facing batch size for the currently prepared problem."""
+        if self._solve_state is None:
+            return 0
+        return self._get_problem_batch_size(self._solve_state)
+
+    @property
     def default_joint_position(self) -> torch.Tensor:
         return self.device_cfg.to_device(self.config.robot_config.kinematics.cspace.default_joint_position)
 
@@ -149,6 +175,45 @@ class SolverCore:
         keys = ("solve_type", "batch_size", "num_envs", "num_goalset", "num_seeds",
                 "num_ik_seeds", "num_graph_seeds", "num_trajopt_seeds", "tool_frames")
         return any(getattr(old, key, None) != getattr(solve_state, key, None) for key in keys)
+
+    @staticmethod
+    def _get_problem_batch_size(solve_state) -> int:
+        """Return the seed-expanded number of independently solved problems.
+
+        The native component uses IK seed expansion when present and trajectory
+        seed expansion otherwise.  A few high-level portable facades only set
+        ``num_seeds``; treating that as a one-step fallback keeps their output
+        buffers correctly sized instead of silently selecting a zero-sized
+        execution cache.
+        """
+        if solve_state is None:
+            raise TypeError("solve_state must be SolveState")
+        batch_size = getattr(solve_state, "batch_size", None)
+        if not isinstance(batch_size, int) or batch_size < 1:
+            raise ValueError("solve_state.batch_size must be a positive integer")
+        for attribute in ("num_ik_seeds", "num_trajopt_seeds", "num_seeds"):
+            seeds = getattr(solve_state, attribute, None)
+            if seeds is not None:
+                if not isinstance(seeds, int) or seeds < 1:
+                    raise ValueError(f"solve_state.{attribute} must be a positive integer")
+                return batch_size * seeds
+        return batch_size
+
+    def _update_execution_shape(self, problem_batch_size: int) -> None:
+        """Synchronize optional eager rollout/optimizer consumers.
+
+        This deliberately uses small duck-typed hooks: the compact portable
+        SolverCore can serve production solvers that own their rollouts and
+        also direct applications that attach native-style rollout objects.
+        """
+        for rollout in self.get_all_rollout_instances():
+            update = getattr(rollout, "update_batch_size", None)
+            if callable(update):
+                update(problem_batch_size)
+        if self._optimizer is not None:
+            update = getattr(self._optimizer, "update_num_problems", None)
+            if callable(update):
+                update(problem_batch_size)
 
     def prepare_goal_buffer(
         self, solve_state, goal_tool_poses,
@@ -179,7 +244,13 @@ class SolverCore:
         self._goal_buffer = goal
         if update_reference:
             self.reset_shape()
+            self._update_execution_shape(self._get_problem_batch_size(solve_state))
             self._task_initialized = True
+        # Goal values must reach attached eager rollouts even when their
+        # preallocated shape is unchanged.  Native V2 calls this from every
+        # solver path; centralizing it here prevents stale pose/state targets
+        # for standalone portable SolverCore users.
+        self.update_rollout_params(goal)
         return goal, update_reference
 
     def prepare_action_seeds(
@@ -246,6 +317,58 @@ class SolverCore:
     def reset_cuda_graph(self) -> None:
         raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
 
+    def update_world(self, scene_cfg) -> None:
+        """Replace the portable collision world and propagate it to rollouts.
+
+        ``SceneCfg``, a per-environment list of ``SceneCfg``, a
+        ``SceneCollisionCfg``, or a prebuilt ``SceneCollision`` are supported.
+        Asset-path/USD/Warp objects are deliberately rejected rather than
+        interpreted as an empty scene.
+        """
+        from curobo._src.geom.collision.collision_scene import SceneCollisionCfg
+        from curobo._src.geom.types import SceneCfg
+
+        if isinstance(scene_cfg, SceneCollision):
+            scene = scene_cfg
+            cfg = None
+        elif isinstance(scene_cfg, SceneCollisionCfg):
+            scene = create_scene_collision(scene_cfg)
+            cfg = scene_cfg
+        elif isinstance(scene_cfg, SceneCfg) or (
+            isinstance(scene_cfg, list) and all(isinstance(value, SceneCfg) for value in scene_cfg)
+        ):
+            cfg = SceneCollisionCfg(
+                device_cfg=self.device_cfg,
+                scene_model=scene_cfg,
+                num_envs=len(scene_cfg) if isinstance(scene_cfg, list) else 1,
+            )
+            scene = create_scene_collision(cfg)
+        else:
+            raise NotImplementedError(
+                "portable SolverCore world updates require SceneCfg, a list of SceneCfg, "
+                "SceneCollisionCfg, or SceneCollision; YAML/USD/Warp assets are unavailable"
+            )
+
+        self._scene_collision_checker = scene
+        if cfg is not None:
+            self.config.scene_collision_cfg = cfg
+        for rollout in self.get_all_rollout_instances():
+            # The public attribute is enough for eager portable rollouts; a
+            # named hook lets richer adapters rebuild their cost managers.
+            if hasattr(rollout, "scene_collision_checker"):
+                rollout.scene_collision_checker = scene
+            update = getattr(rollout, "update_world", None)
+            if callable(update):
+                update(scene)
+        if self._optimizer is not None:
+            update = getattr(self._optimizer, "update_world", None)
+            if callable(update):
+                update(scene)
+        self._scene_generation += 1
+        # Scene values, unlike goal values, can invalidate persistent rollout
+        # state even when the batch shape did not change.
+        self.reset_shape()
+
     def destroy(self) -> None:
         # No opaque graph/stream handles exist on the portable backend.  Reset
         # Python references so long-running applications can release tensors.
@@ -253,6 +376,9 @@ class SolverCore:
         self.additional_metrics_rollouts.clear()
         self.optimizers.clear()
         self._optimizer = None
+        self._goal_buffer = None
+        self._solve_state = None
+        self._task_initialized = False
 
     def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]) -> None:
         if not isinstance(tool_pose_criteria, dict):
