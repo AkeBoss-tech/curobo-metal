@@ -44,6 +44,10 @@ class TrajectorySeedGenerator:
         self, start_position: torch.Tensor, goal_position: torch.Tensor, num_seeds: int
     ):
         self._validate_interpolation_inputs(start_position, goal_position, num_seeds)
+        # V2 documents a singleton start state as valid for a batch of goal
+        # sets. Expanding it preserves autograd and MPS residency.
+        if start_position.shape[0] == 1 and goal_position.shape[0] != 1:
+            start_position = start_position.expand(goal_position.shape[0], -1)
         starts = start_position[:, None].expand(-1, num_seeds, -1)
         return self._interpolate_trajectory(starts, goal_position)
 
@@ -52,6 +56,12 @@ class TrajectorySeedGenerator:
     ) -> torch.Tensor:
         if start_position_seeds.shape != goal_position_seeds.shape or start_position_seeds.ndim != 3:
             raise ValueError("start_position_seeds and goal_position_seeds must both be [B,N,J]")
+        if start_position_seeds.shape[-1] != self.action_dim:
+            raise ValueError("start_position_seeds and goal_position_seeds must end in action_dim")
+        if start_position_seeds.device != goal_position_seeds.device:
+            raise ValueError("start_position_seeds and goal_position_seeds must share a device")
+        if start_position_seeds.dtype != goal_position_seeds.dtype:
+            raise ValueError("start_position_seeds and goal_position_seeds must share a dtype")
         weights = self._interpolation_weights.to(
             device=start_position_seeds.device, dtype=start_position_seeds.dtype
         )
@@ -96,6 +106,10 @@ class TrajectorySeedGenerator:
         value = torch.as_tensor(value, device=position.device, dtype=position.dtype)
         if value.ndim == 0:
             value = value.expand(position.shape[0])
+        elif value.ndim == 2 and value.shape == (position.shape[0], 1):
+            # State/trajectory code commonly represents a per-problem scalar
+            # dt as [B, 1]. It is unambiguous for seed integration.
+            value = value[:, 0]
         if value.ndim != 1 or value.numel() not in (1, position.shape[0]):
             raise ValueError("current_state.dt must be scalar or [batch]")
         if value.numel() == 1:
@@ -131,35 +145,63 @@ class TrajectorySeedGenerator:
         dt: torch.Tensor,
         deceleration_time: Optional[float] = None,
     ) -> torch.Tensor:
-        """Produce bounded acceleration that brings every moving joint to rest.
+        """Return a discrete, velocity-integrating deceleration schedule.
 
-        A normalized profile distributes the required velocity reduction over
-        the requested horizon.  Direction clipping in the integrator prevents
-        an overshoot from reversing a joint.
+        The first ``action_horizon - 1`` values are interval accelerations;
+        the final zero preserves V2's historical ``[B,H,J]`` layout. Every
+        moving joint integrates to rest at a knot, including with per-problem
+        ``dt``. CUDA's graph-captured rollout buffer is not emulated here.
         """
-        profile = self._profile_steps(self.action_horizon - 1, deceleration_profile).to(
-            current_vel
-        )
-        if deceleration_time is not None:
-            if deceleration_time <= 0:
-                raise ValueError("deceleration_time must be positive")
-            duration = torch.full_like(dt, float(deceleration_time))
+        if current_vel.ndim != 2 or current_acc.shape != current_vel.shape:
+            raise ValueError("current_vel and current_acc must both be [B,J]")
+        if dt.ndim != 1 or dt.numel() != current_vel.shape[0]:
+            raise ValueError("dt must be [B]")
+        if deceleration_profile not in ("linear", "exponential", "smooth"):
+            raise ValueError("deceleration_profile must be linear, exponential, or smooth")
+
+        intervals = self.action_horizon - 1
+        profile = self._profile_steps(intervals, deceleration_profile).to(current_vel)
+        batch_size = current_vel.shape[0]
+        full_duration = dt * intervals
+        if deceleration_time is None:
+            duration = full_duration
         else:
-            duration = dt * (self.action_horizon - 1)
-        # Per-batch normalized weights integrate to exactly -current_vel.
-        weighted_dt = (profile[None, :] * dt[:, None]).sum(dim=1, keepdim=True).clamp_min(
+            requested = torch.as_tensor(
+                deceleration_time, device=current_vel.device, dtype=current_vel.dtype
+            )
+            if requested.ndim == 0:
+                requested = requested.expand(batch_size)
+            if requested.ndim != 1 or requested.numel() not in (1, batch_size):
+                raise ValueError("deceleration_time must be a positive scalar or [batch]")
+            if requested.numel() == 1:
+                requested = requested.expand(batch_size)
+            if bool((requested <= 0).any().item()):
+                raise ValueError("deceleration_time must be positive")
+            duration = torch.minimum(requested, full_duration)
+
+        # Fractional final intervals support a requested duration that is not
+        # a multiple of dt. The correction keeps the discrete integral exact.
+        elapsed = torch.arange(intervals, device=current_vel.device, dtype=current_vel.dtype)
+        elapsed = elapsed[None, :] * dt[:, None]
+        active_fraction = ((duration[:, None] - elapsed) / dt[:, None]).clamp(0, 1)
+        weights = profile[None, :] * active_fraction
+        weighted_dt = (weights * dt[:, None]).sum(dim=1, keepdim=True).clamp_min(
             torch.finfo(current_vel.dtype).eps
         )
-        desired = -current_vel[:, None, :] * profile[None, :, None] / weighted_dt[:, :, None]
-        # Respect a nonzero initial acceleration without introducing a jump;
-        # the correction is then redistributed so its integral stays exact.
-        blend = torch.linspace(0, 1, profile.numel(), device=current_vel.device, dtype=current_vel.dtype)
-        candidate = current_acc[:, None, :] * (1 - blend)[None, :, None] + desired * blend[None, :, None]
-        correction = (candidate * dt[:, None, None]).sum(dim=1, keepdim=True) + current_vel[:, None, :]
-        candidate = candidate - correction / duration[:, None, None].clamp_min(
-            torch.finfo(current_vel.dtype).eps
-        )
-        return torch.cat((candidate[:, :1], candidate), dim=1)
+        desired = -current_vel[:, None, :] * weights[:, :, None] / weighted_dt[:, :, None]
+
+        # Fade an observed acceleration into the target profile, then project
+        # it so the exact discrete integral cancels the incoming velocity.
+        blend = torch.linspace(0, 1, intervals, device=current_vel.device, dtype=current_vel.dtype)
+        candidate = desired * blend[None, :, None] + current_acc[:, None, :] * (
+            1 - blend
+        )[None, :, None]
+        candidate = candidate * active_fraction[:, :, None]
+        correction = (candidate * dt[:, None, None]).sum(dim=1) + current_vel
+        candidate = candidate - correction[:, None, :] * weights[:, :, None] / weighted_dt[:, :, None]
+        moving = current_vel.abs() > torch.finfo(current_vel.dtype).eps
+        candidate = torch.where(moving[:, None, :], candidate, torch.zeros_like(candidate))
+        return torch.cat((candidate, torch.zeros_like(candidate[:, :1])), dim=1)
 
     def _integrate_acceleration_to_trajectory(
         self,
@@ -183,10 +225,12 @@ class TrajectorySeedGenerator:
             raise ValueError("num_seeds must be positive")
         if start_position.ndim != 2 or goal_position.ndim != 3:
             raise ValueError("expected start [B,J] and goal [B,N,J]")
-        if start_position.shape[0] != goal_position.shape[0] or start_position.shape[-1] != self.action_dim:
+        if start_position.shape[0] not in (1, goal_position.shape[0]) or start_position.shape[-1] != self.action_dim:
             raise ValueError("start and goal batch/dof dimensions are invalid")
         if goal_position.shape[1:] != (num_seeds, self.action_dim):
             raise ValueError("goal_position must have shape [B,num_seeds,action_dim]")
+        if start_position.device != goal_position.device or start_position.dtype != goal_position.dtype:
+            raise ValueError("start_position and goal_position must share device and dtype")
 
     def _validate_constant_inputs(self, constant_position, num_seeds):
         if num_seeds < 1:
@@ -199,6 +243,14 @@ class TrajectorySeedGenerator:
             raise ValueError("num_seeds must be positive")
         if current_state.position.ndim != 2 or current_state.position.shape[-1] != self.action_dim:
             raise ValueError("current_state.position must have shape [B,J]")
+        for name in ("velocity", "acceleration"):
+            value = getattr(current_state, name, None)
+            if value is not None and (
+                value.shape != current_state.position.shape
+                or value.device != current_state.position.device
+                or value.dtype != current_state.position.dtype
+            ):
+                raise ValueError(f"current_state.{name} must match position shape, device, and dtype")
 
 
 __all__ = ["TrajectorySeedGenerator", "interpolate_kernel"]

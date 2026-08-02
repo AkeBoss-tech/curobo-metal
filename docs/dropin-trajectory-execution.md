@@ -19,8 +19,13 @@ capture a CUDA graph; callers own that transport boundary.
 Linear, cubic (Catmull--Rom), and quintic (smoothstep) retiming preserve
 endpoints, batching, device residency, and position autograd.  Seed generation
 provides constant, endpoint-interpolated, and acceleration-integrated
-deceleration seeds.  This is a portable behavioral implementation, not a claim
-of byte-identical SciPy/CUDA numerical output.
+deceleration seeds. Endpoint interpolation accepts a singleton start state for
+a batch of goal sets. Deceleration accepts scalar, per-batch, or ``[batch, 1]``
+timing data; a requested stop time is clipped to the seed horizon and creates a
+stationary suffix. The discrete acceleration integral is normalized per batch
+so every nonzero velocity reaches a rest knot without reversing direction. This
+is a portable behavioral implementation, not a claim of byte-identical
+SciPy/CUDA numerical output.
 
 `QUARTIC` remains unavailable because the pinned upstream implementation itself
 raises for it. `BSPLINE_KNOTS_CUDA` and raw Warp interpolation kernels remain
