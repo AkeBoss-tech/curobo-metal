@@ -28491,10 +28491,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/motion/motion_planner.py",
-        "resolved_symbols": 17,
-        "status": "partial"
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo._src.motion.motion_planner",
       "path": "curobo/_src/motion/motion_planner.py",
@@ -29215,9 +29215,9 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 1,
         "path": "curobo/_src/motion/motion_planner_batch.py",
-        "resolved_symbols": 11,
+        "resolved_symbols": 23,
         "status": "partial"
       },
       "name": "curobo._src.motion.motion_planner_batch",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 233,
-    "resolved_modules": 128,
+    "partial_modules": 232,
+    "resolved_modules": 129,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 233,
-    "resolved_modules": 128,
+    "partial_modules": 232,
+    "resolved_modules": 129,
     "symbols": 7182
   },
   "upstream": {
