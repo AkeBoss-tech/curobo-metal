@@ -9,21 +9,36 @@ explicit methods fail rather than quietly changing execution semantics.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, TypeVar, Union
 
 import torch
+import torch.autograd.profiler as profiler
 
+import curobo._src.runtime as curobo_runtime
 from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
+from curobo._src.collision.attachment_manager import AttachmentManager
 from curobo._src.geom.collision.buffer_collision import CollisionBuffer
 from curobo._src.geom.collision.collision_scene import SceneCollision, create_scene_collision
-from curobo._src.robot.kinematics.kinematics import Kinematics
+from curobo._src.optim.multi_stage_optimizer import MultiStageOptimizer
+from curobo._src.optim.optimizer_protocol import Optimizer
+from curobo._src.optim.optim_factory import create_optimizer
+from curobo._src.robot.kinematics.kinematics import Kinematics, KinematicsState
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.types.kinematics_params import KinematicsParams
+from curobo._src.rollout.goal_registry import GoalRegistry
+from curobo._src.rollout.rollout_robot import RobotRollout
 from curobo._src.solver.manager_goal import GoalManager
 from curobo._src.solver.manager_seed import SeedManager
+from curobo._src.solver.solve_state import SolveState
 from curobo._src.state.state_joint import JointState
+from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.util.logging import log_and_raise, log_warn
+from curobo._src.util.torch_util import is_cuda_graph_reset_available
 
 from .solver_core_cfg import SolverCoreCfg
+
+
+T_BDOF = TypeVar("T_BDOF", bound=torch.Tensor)
 
 
 class SolverCore:
@@ -80,6 +95,68 @@ class SolverCore:
         self.additional_metrics_rollouts: Dict[str, object] = {}
         self.optimizers: List[object] = []
         self._optimizer = None
+        self._initialize_configured_components()
+        self.attachment_manager = AttachmentManager(
+            self._kinematics, self._scene_collision_checker, self.device_cfg
+        )
+        self.init_state = JointState.from_position(
+            self.default_joint_position.unsqueeze(0), self.joint_names
+        )
+
+    @staticmethod
+    def _is_executable_rollout_config(value: object) -> bool:
+        """Return whether a config can build a real eager ``RobotRollout``.
+
+        V2's YAML factory may intentionally carry an uncompiled ``object``
+        sentinel until a higher-level facade supplies concrete component
+        classes.  Treating that placeholder as a transition model would fail
+        at a distant optimization call.  We therefore build direct core
+        components only when a typed transition record is present.
+        """
+        transition = getattr(value, "transition_model_cfg", None)
+        return value is not None and transition is not None and hasattr(transition, "robot_config")
+
+    def _initialize_configured_components(self) -> None:
+        """Build configured eager rollouts and optimizer stages when possible.
+
+        High-level portable solvers may own their own objective implementation
+        and leave these records as uncompiled YAML-shaped transport values.
+        Direct users of the V2 ``SolverCoreCfg`` factory, however, expect the
+        component to own the fully materialized rollout/optimizer lifecycle.
+        This path preserves that useful behavior without fabricating a CUDA
+        graph or accepting a raw CUDA/Warp rollout configuration.
+        """
+        metrics_cfg = self.config.metrics_rollout_config
+        if not self._is_executable_rollout_config(metrics_cfg):
+            return
+
+        self.metrics_rollout = RobotRollout(metrics_cfg, self._scene_collision_checker)
+        self.metrics_rollout.rollout_instance_name = "metrics_rollout"
+        self.auxiliary_rollout = RobotRollout(metrics_cfg, self._scene_collision_checker)
+        self.auxiliary_rollout.rollout_instance_name = "auxiliary_rollout"
+
+        optimizer_cfgs = list(self.config.optimizer_configs)
+        rollout_cfgs = list(self.config.optimizer_rollout_configs)
+        if len(optimizer_cfgs) != len(rollout_cfgs):
+            raise ValueError(
+                "optimizer_configs and optimizer_rollout_configs must have the same length "
+                "when metrics_rollout_config is executable"
+            )
+        for index, (optimizer_cfg, rollout_cfg) in enumerate(zip(optimizer_cfgs, rollout_cfgs)):
+            if not self._is_executable_rollout_config(rollout_cfg):
+                raise TypeError(
+                    f"optimizer_rollout_configs[{index}] must contain a typed transition_model_cfg"
+                )
+            count = getattr(optimizer_cfg, "num_rollout_instances", None)
+            if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+                raise ValueError(f"optimizer_configs[{index}].num_rollout_instances must be positive")
+            rollouts = [RobotRollout(rollout_cfg, self._scene_collision_checker) for _ in range(count)]
+            for subindex, rollout in enumerate(rollouts):
+                rollout.rollout_instance_name = f"optimizer_rollout_{index}_{subindex}"
+            self.optimizer_rollouts.extend(rollouts)
+            self.optimizers.append(create_optimizer(optimizer_cfg, rollouts, use_cuda_graph=False))
+        if self.optimizers:
+            self._optimizer = MultiStageOptimizer(self.optimizers, self.optimizer_rollouts)
 
     @property
     def kinematics(self) -> Kinematics:
@@ -91,7 +168,7 @@ class SolverCore:
 
     @property
     def action_horizon(self) -> int:
-        return 1
+        return 1 if self.auxiliary_rollout is None else int(self.auxiliary_rollout.action_horizon)
 
     @property
     def joint_names(self) -> List[str]:
@@ -116,6 +193,12 @@ class SolverCore:
     @property
     def scene_collision_checker(self) -> Optional[SceneCollision]:
         return self._scene_collision_checker
+
+    @scene_collision_checker.setter
+    def scene_collision_checker(self, value: Optional[SceneCollision]) -> None:
+        if value is not None and not isinstance(value, SceneCollision):
+            raise TypeError("scene_collision_checker must be SceneCollision or None")
+        self._scene_collision_checker = value
 
     @property
     def optimizer(self):
@@ -159,7 +242,7 @@ class SolverCore:
     def default_joint_state(self) -> JointState:
         return JointState.from_position(self.default_joint_position, self.joint_names)
 
-    def compute_kinematics(self, state: JointState):
+    def compute_kinematics(self, state: JointState) -> KinematicsState:
         return self._kinematics.compute_kinematics(state).clone()
 
     def get_active_js(self, full_js: JointState) -> JointState:
@@ -216,7 +299,7 @@ class SolverCore:
                 update(problem_batch_size)
 
     def prepare_goal_buffer(
-        self, solve_state, goal_tool_poses,
+        self, solve_state: SolveState, goal_tool_poses: Optional[GoalToolPose],
         current_state: Optional[JointState] = None, use_implicit_goal: bool = False,
         seed_goal_state: Optional[JointState] = None, goal_state: Optional[JointState] = None,
     ):
@@ -313,9 +396,30 @@ class SolverCore:
                 reset()
         if self._optimizer is not None and hasattr(self._optimizer, "reset_shape"):
             self._optimizer.reset_shape()
+        self.reset_cuda_graph()
 
     def reset_cuda_graph(self) -> None:
-        raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
+        """Reset portable persistent execution state.
+
+        Direct CUDA-graph controls are unavailable, but V2 normally calls this
+        hook as part of a shape reset.  Treating the eager cache reset as an
+        error made ordinary goal updates fail merely because a caller retained
+        the upstream ``use_cuda_graph=True`` default.  Explicit capture/debug
+        APIs remain unsupported elsewhere.
+        """
+        if self._optimizer is not None:
+            reset = getattr(self._optimizer, "reset_cuda_graph", None)
+            if callable(reset):
+                reset()
+        for rollout in self.get_all_rollout_instances():
+            reset = getattr(rollout, "reset_cuda_graph", None)
+            if callable(reset):
+                try:
+                    reset()
+                except NotImplementedError:
+                    # A portable rollout has no graph; its ordinary shape
+                    # reset above is the semantically relevant operation.
+                    continue
 
     def update_world(self, scene_cfg) -> None:
         """Replace the portable collision world and propagate it to rollouts.
@@ -365,6 +469,9 @@ class SolverCore:
             if callable(update):
                 update(scene)
         self._scene_generation += 1
+        # Preserve attached robot-sphere state while replacing the world
+        # object against which those spheres are checked.
+        self.attachment_manager = AttachmentManager(self._kinematics, scene, self.device_cfg)
         # Scene values, unlike goal values, can invalidate persistent rollout
         # state even when the batch shape did not change.
         self.reset_shape()
@@ -379,6 +486,8 @@ class SolverCore:
         self._goal_buffer = None
         self._solve_state = None
         self._task_initialized = False
+        self._scene_collision_checker = None
+        self.attachment_manager = None
 
     def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]) -> None:
         if not isinstance(tool_pose_criteria, dict):
@@ -483,6 +592,14 @@ class SolverCore:
             if value.shape != (3, 3):
                 raise ValueError("inertia must have shape [3,3] or [6]")
             model.inertia[index].copy_(value)
+        # Configured rollouts compile independent robot-model copies.  Keep
+        # their inertial state coherent with the core model, just as V2 does
+        # when an application updates payload mass after solver construction.
+        for rollout in self.get_all_rollout_instances():
+            transition = getattr(rollout, "transition_model", None)
+            update = getattr(transition, "update_link_inertial", None)
+            if callable(update):
+                update(link_name, mass, com, inertia)
 
     def update_links_inertial(
         self, link_properties: dict[str, dict[str, Union[float, torch.Tensor]]],

@@ -7,17 +7,21 @@ upstream option so applications do not need a platform branch; it is recorded
 and disabled rather than being mistaken for an eager graph implementation.
 """
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from curobo._src.geom.collision.collision_scene import SceneCollisionCfg
 from curobo._src.geom.types import SceneCfg
 from curobo._src.optim.optim_factory import create_optimization_config
+from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
 from curobo._src.rollout.rollout_robot_cfg import RobotRolloutCfg
+from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.robot import RobotCfg
 from curobo._src.util.config_io import join_path, resolve_config
+from curobo._src.util.logging import log_and_raise, log_warn
 from curobo.content import (
     get_robot_configs_path,
     get_scene_configs_path,
@@ -46,8 +50,14 @@ class SolverCoreCfg:
             raise TypeError("device_cfg must be DeviceCfg")
         if not isinstance(self.robot_config, RobotCfg):
             raise TypeError("robot_config must be RobotCfg")
+        if isinstance(self.random_seed, bool) or not isinstance(self.random_seed, int):
+            raise TypeError("random_seed must be an integer")
         if self.random_seed < 0:
             raise ValueError("random_seed must be nonnegative")
+        if not isinstance(self.use_cuda_graph, bool):
+            raise TypeError("use_cuda_graph must be a bool")
+        if not isinstance(self.store_debug, bool):
+            raise TypeError("store_debug must be a bool")
         if self.optimizer_configs is None:
             self.optimizer_configs = []
         if not isinstance(self.optimizer_configs, list):
@@ -68,6 +78,36 @@ class SolverCoreCfg:
         # normal high-level configurations executable on Metal while exposing
         # explicit failure through SolverCore.reset_cuda_graph().
         self.use_cuda_graph = False
+
+    def clone(self, **updates: Any) -> "SolverCoreCfg":
+        """Return an independent portable configuration copy.
+
+        Solver facades regularly adjust a seed or scene setting between
+        solves.  Deep-copy transport records here so a clone cannot mutate the
+        rollout/optimizer configuration owned by its source core.
+        """
+        valid = {
+            "robot_config", "device_cfg", "optimizer_configs",
+            "optimizer_rollout_configs", "metrics_rollout_config",
+            "scene_collision_cfg", "use_cuda_graph", "random_seed", "store_debug",
+        }
+        unknown = set(updates).difference(valid)
+        if unknown:
+            raise TypeError(f"unknown SolverCoreCfg field(s): {sorted(unknown)}")
+        values = {
+            "robot_config": self.robot_config,
+            "device_cfg": self.device_cfg,
+            "optimizer_configs": deepcopy(self.optimizer_configs),
+            "optimizer_rollout_configs": deepcopy(self.optimizer_rollout_configs),
+            "metrics_rollout_config": deepcopy(self.metrics_rollout_config),
+            "scene_collision_cfg": deepcopy(self.scene_collision_cfg),
+            # Preserve user intent, not the eagerly compiled false value.
+            "use_cuda_graph": self.requested_use_cuda_graph,
+            "random_seed": self.random_seed,
+            "store_debug": self.store_debug,
+        }
+        values.update(updates)
+        return SolverCoreCfg(**values)
 
 
 def resolve_yaml_configs(

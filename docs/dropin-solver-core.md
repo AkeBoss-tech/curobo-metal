@@ -5,6 +5,14 @@ orchestration component used by the portable solver facades.  It owns the
 robot kinematics, deterministic seed manager, goal registry, optional scene
 collision object, and any caller-attached rollout/optimizer consumers.
 
+When `SolverCoreCfg` contains typed `RobotRolloutCfg` and optimizer records,
+the core also constructs its own metrics/auxiliary rollouts, optimizer stages,
+`MultiStageOptimizer`, initial joint state, and attachment manager. This is
+the direct V2 composition path. YAML-shaped placeholder rollout records remain
+valid transport configuration for higher-level portable solvers, which own
+their objective themselves; they are not misinterpreted as executable CUDA
+rollouts.
+
 Preparing a goal detects structural changes (solve mode, batch, environment,
 goal-set, seed count, or controlled links).  Structural changes reset
 shape-keyed consumers and size them to the seed-expanded problem batch.  A
@@ -18,6 +26,11 @@ the scene, propagates it to attached eager rollouts, and increments
 USD, Warp collision objects, CUDA graph capture, streams, and graph debug
 dumps remain explicit unsupported boundaries; they are never silently mapped
 to an empty or CPU fallback scene.
+
+The upstream `reset_cuda_graph()` lifecycle hook is safe to call during a
+portable shape reset: it clears ordinary stage/rollout execution state and
+does not claim to reset a CUDA graph. Explicit graph capture and graph debug
+dump requests remain unsupported.
 
 ## Seed preparation
 
