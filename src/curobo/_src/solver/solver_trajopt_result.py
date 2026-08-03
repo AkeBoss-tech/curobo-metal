@@ -10,12 +10,12 @@ tensor operations.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
-from typing import Any, Optional
+from dataclasses import dataclass, fields, is_dataclass
+from typing import Any, Mapping, Optional, Sequence, Union
 
 import torch
 
-from curobo._src.solver.solver_base_result import BaseSolverResult
+from curobo._src.solver.solver_base_result import BaseSolverResult, _select_batch_value
 from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_joint_trajectory_ops import (
     copy_joint_state_at_batch_seed_indices,
@@ -33,6 +33,44 @@ def _clone_value(value: Any) -> Any:
         return [_clone_value(item) for item in value]
     if isinstance(value, tuple):
         return tuple(_clone_value(item) for item in value)
+    return value
+
+
+_TensorIndex = Union[torch.Tensor, Sequence[int], int]
+
+
+def _gather_seed_value(value: Any, indices: torch.Tensor, seed_shape: tuple[int, int]) -> Any:
+    """Gather nested values whose public prefix is ``[batch, seed]``.
+
+    Result debug payloads frequently contain a small collection of optimizer
+    tensors.  Selecting only the headline solution while retaining those
+    tensors at the old seed count is a subtle source of misleading traces, so
+    the same rank-preserving gather is applied recursively to normal value
+    containers.  Opaque CUDA/Warp objects are deliberately left untouched.
+    """
+    if isinstance(value, torch.Tensor):
+        if value.ndim < 2 or tuple(value.shape[:2]) != seed_shape:
+            return value
+        expanded = indices.reshape(indices.shape + (1,) * (value.ndim - 2))
+        return value.gather(1, expanded.expand(indices.shape + value.shape[2:]))
+    if isinstance(value, JointState):
+        clone = value.clone()
+        for name in clone._tensor_fields():
+            item = getattr(clone, name)
+            if isinstance(item, torch.Tensor):
+                setattr(clone, name, _gather_seed_value(item, indices, seed_shape))
+        return clone
+    if isinstance(value, Mapping):
+        return type(value)((key, _gather_seed_value(item, indices, seed_shape)) for key, item in value.items())
+    if isinstance(value, list):
+        return [_gather_seed_value(item, indices, seed_shape) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_gather_seed_value(item, indices, seed_shape) for item in value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return type(value)(**{
+            item.name: _gather_seed_value(getattr(value, item.name), indices, seed_shape)
+            for item in fields(value)
+        })
     return value
 
 
@@ -66,8 +104,10 @@ class TrajOptSolverResult(BaseSolverResult):
 
     @property
     def dtype(self) -> torch.dtype:
-        for value in (self.solution, self.seed_cost, self.position_error, self.success):
-            if isinstance(value, torch.Tensor):
+        for value in (self.solution, self.seed_cost, self.position_error, self.js_solution):
+            if isinstance(value, torch.Tensor) and (value.is_floating_point() or value.is_complex()):
+                return value.dtype
+            if isinstance(value, JointState):
                 return value.dtype
         return torch.get_default_dtype()
 
@@ -90,6 +130,17 @@ class TrajOptSolverResult(BaseSolverResult):
         if dt is None:
             raise ValueError("trajectory dt is not set")
         horizon = self.js_solution.position.shape[-2]
+        # A scalar/per-batch/per-seed dt is the usual optimisation contract.
+        # Interpolated callers may instead supply a true per-timestep schedule
+        # with the same prefix as position excluding DOF; sum the intervals in
+        # that unambiguous form instead of multiplying an entire schedule.
+        state_prefix = self.js_solution.position.shape[:-1]
+        if dt.ndim == len(state_prefix) and tuple(dt.shape) == tuple(state_prefix):
+            if horizon <= 1:
+                return dt[..., :0].sum(dim=-1)
+            return dt[..., : horizon - 1].sum(dim=-1)
+        if dt.ndim == len(state_prefix) and dt.shape[-1] == horizon - 1:
+            return dt.sum(dim=-1)
         return dt * (horizon - 1)
 
     def clone(self) -> "TrajOptSolverResult":
@@ -112,6 +163,13 @@ class TrajOptSolverResult(BaseSolverResult):
         if not torch.equal(flat, flat[0].expand_as(flat)):
             raise ValueError("ragged interpolated trajectories cannot be represented as one JointState")
         end = int(flat[0].item())
+        horizon = trajectory.position.shape[-2]
+        # V2's lower-level trim helper uses zero as the sentinel for the full
+        # horizon.  Preserve that meaning instead of returning an empty plan.
+        if end == 0:
+            end = horizon
+        if end < 0 or end > horizon:
+            raise ValueError("interpolated_last_tstep is outside the trajectory horizon")
         trimmed = trajectory.clone()
         # ``dt`` is commonly [batch, seed], not a time-series tensor, and so
         # must remain intact while the kinematic channels are shortened.
@@ -195,39 +253,84 @@ class TrajOptSolverResult(BaseSolverResult):
         if self.seed_rank is not None:
             if self.seed_rank.shape != costs.shape:
                 raise ValueError("seed_rank must have the same [batch, seed] shape as seed cost")
-            return self.seed_rank[:, :topk]
+            # Top-k results preserve original optimizer ids in seed_rank.  A
+            # later request for top-k therefore cannot treat those ids as
+            # local columns; recompute local deterministic order from cost.
+            is_local = (
+                self.seed_rank.dtype in (torch.int8, torch.int16, torch.int32, torch.int64)
+                and bool(torch.all((self.seed_rank >= 0) & (self.seed_rank < costs.shape[1])).item())
+                and bool(torch.all(
+                    torch.sort(self.seed_rank, dim=1).values
+                    == torch.arange(costs.shape[1], device=costs.device).expand_as(self.seed_rank)
+                ).item())
+            )
+            if is_local:
+                return self.seed_rank[:, :topk]
         # Stable sorting gives deterministic first-seed tie resolution across
         # CPU and MPS, unlike a backend-specific topk tie order.
         return torch.argsort(costs, dim=1, stable=True)[:, :topk]
 
+    def select_seed_indices(self, indices: _TensorIndex) -> "TrajOptSolverResult":
+        """Select local seed columns while preserving batch and debug layout."""
+        costs = self.total_cost_reshaped if self.total_cost_reshaped is not None else self.seed_cost
+        if costs is None or costs.ndim != 2:
+            raise ValueError("seed_cost or total_cost_reshaped [batch, seed] is required")
+        batch, seeds = costs.shape
+        tensor = torch.as_tensor(indices, device=costs.device, dtype=torch.long)
+        if tensor.ndim == 0:
+            tensor = tensor.reshape(1)
+        if tensor.ndim == 1:
+            tensor = tensor.unsqueeze(0).expand(batch, -1)
+        if tensor.ndim != 2 or tensor.shape[0] != batch:
+            raise ValueError("indices must have shape [selected_seed] or [batch, selected_seed]")
+        if tensor.numel() and (tensor.min() < 0 or tensor.max() >= seeds):
+            raise IndexError("seed index is outside the available seed range")
+        seed_shape = (batch, seeds)
+        values = {
+            item.name: _gather_seed_value(getattr(self, item.name), tensor, seed_shape)
+            for item in fields(self)
+        }
+        values["batch_size"] = batch
+        values["num_seeds"] = tensor.shape[1]
+        # Metrics own flattened allocator layouts in the CUDA backend.  A
+        # regular materialised value cannot honestly preserve that view after
+        # arbitrary gathering; callers can keep metrics before selection.
+        values["metrics"] = None
+        values["interpolated_metrics"] = None
+        return type(self)(**values)
+
+    def best_seed(self) -> "TrajOptSolverResult":
+        """Return one deterministic lowest-cost local seed per batch."""
+        return self.select_seed_indices(self._seed_indices(1))
+
+    def select_batch(self, indices: _TensorIndex) -> "TrajOptSolverResult":
+        """Select batch entries without collapsing their leading batch axis."""
+        batch = self.result_batch_size
+        if batch < 1:
+            raise ValueError("batch_size must be positive for batch selection")
+        tensor = torch.as_tensor(indices, device=self.device, dtype=torch.long)
+        if tensor.ndim == 0:
+            tensor = tensor.reshape(1)
+        if tensor.ndim != 1:
+            raise ValueError("batch indices must be one-dimensional")
+        if tensor.numel() and (tensor.min() < 0 or tensor.max() >= batch):
+            raise IndexError("batch index is outside the available batch range")
+        values = {
+            item.name: _select_batch_value(getattr(self, item.name), tensor, batch)
+            for item in fields(self)
+        }
+        values["batch_size"] = int(tensor.numel())
+        return type(self)(**values)
+
     def get_topk_seeds(self, topk: int) -> "TrajOptSolverResult":
         """Select the best ``topk`` seeds while retaining all result channels."""
         indices = self._seed_indices(topk)
-        # ``num_seeds`` can be omitted by callers constructing a bare result;
-        # derive it from the cost tensor in that case.
         original_count = self.seed_cost.shape[1] if self.seed_cost is not None else self.total_cost_reshaped.shape[1]
         # Preserve V2's identity fast path.  Besides avoiding needless copies,
         # this retains metric views when callers request every available seed.
         if topk == original_count:
             return self
-        seed_shape = (indices.shape[0], original_count)
-        result = self.clone()
-        for item in fields(result):
-            value = getattr(result, item.name)
-            if isinstance(value, torch.Tensor):
-                setattr(result, item.name, self._gather_seed_tensor(value, indices, seed_shape))
-        for name in ("js_solution", "interpolated_trajectory"):
-            value = getattr(self, name)
-            if value is not None and value.position.ndim >= 2 and tuple(value.position.shape[:2]) == seed_shape:
-                setattr(result, name, gather_joint_state_by_seed(value, indices))
-        # Metrics describe the original flattened rollout buffers and cannot
-        # safely be selected without their CUDA/rollout allocator.  Seed-level
-        # tensors above remain complete, so clear these stale views explicitly.
-        result.metrics = None
-        result.interpolated_metrics = None
-        result.batch_size = indices.shape[0]
-        result.num_seeds = topk
-        return result
+        return self.select_seed_indices(indices)
 
     @staticmethod
     def _jit_compute_rank(
@@ -275,6 +378,41 @@ class TrajOptSolverResult(BaseSolverResult):
             ranked_cost = torch.where(self.success, ranked_cost, ranked_cost + 1.0e16)
         self.seed_rank = torch.argsort(ranked_cost, dim=1, stable=True)
         self.total_cost_reshaped = ranked_cost
+        self._normalise_return_seed_buffers()
+
+    def _normalise_return_seed_buffers(self) -> None:
+        """Align full optimizer diagnostics with already-materialised outputs.
+
+        Production solve paths may materialise ``return_seeds`` trajectories
+        immediately, while the optimizer's cost/rank/seed buffer still has all
+        attempted seeds.  Keeping those different axes in one public result
+        makes a later copy or top-k request unsafe.  This is the same logical
+        narrowing performed by V2's ``get_topk_seeds``: preserve original seed
+        ids in ``seed_rank`` but gather all full-seed diagnostics to the
+        returned trajectory count.
+        """
+        if self.seed_cost is None or self.seed_rank is None or self.success.ndim != 2:
+            return
+        batch, total_seeds = self.seed_cost.shape
+        if self.seed_rank.shape != (batch, total_seeds):
+            raise ValueError("seed_rank must have the same [batch, seed] shape as seed_cost")
+        returned_seeds = self.success.shape[1]
+        if returned_seeds > total_seeds:
+            raise ValueError("success cannot contain more seeds than seed_cost")
+        if returned_seeds == total_seeds:
+            return
+        chosen = self.seed_rank[:, :returned_seeds]
+        shape = (batch, total_seeds)
+        # Only values that still own the *full* optimizer seed axis are
+        # gathered.  Materialised output channels already have return_seeds
+        # and are deliberately retained in their solve order.
+        for name in ("seed_cost", "total_cost_reshaped", "optimized_seeds"):
+            value = getattr(self, name)
+            setattr(self, name, _gather_seed_value(value, chosen, shape))
+        self.debug_info = _gather_seed_value(self.debug_info, chosen, shape)
+        self.seed_rank = chosen
+        self.batch_size = batch
+        self.num_seeds = returned_seeds
 
     def copy_successful_solutions(self, other: "TrajOptSolverResult") -> None:
         """Copy successful individual batch/seed candidates from ``other``."""

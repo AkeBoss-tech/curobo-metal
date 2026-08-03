@@ -72,6 +72,53 @@ def _move_value(value: Any, device_cfg: DeviceCfg) -> Any:
     return value
 
 
+def _detach_value(value: Any) -> Any:
+    """Detach a cloned portable result payload without mutating its owner."""
+    if value is None or isinstance(value, (str, bytes, int, float, bool, torch.dtype, torch.device)):
+        return value
+    if isinstance(value, torch.Tensor):
+        # Tensor.detach is a view and would let a later in-place update to the
+        # live result mutate the supposedly value-like detached result.
+        return value.detach().clone()
+    if isinstance(value, Mapping):
+        return type(value)((key, _detach_value(item)) for key, item in value.items())
+    if isinstance(value, list):
+        return [_detach_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_detach_value(item) for item in value)
+    clone = getattr(value, "clone", None)
+    detach = getattr(value, "detach", None)
+    if callable(clone) and callable(detach):
+        # JointState.detach is intentionally in-place, so detaching a clone is
+        # essential for result objects that still own an autograd graph.
+        return clone().detach()
+    if is_dataclass(value) and not isinstance(value, type):
+        return type(value)(**{item.name: _detach_value(getattr(value, item.name)) for item in fields(value)})
+    return value
+
+
+def _select_batch_value(value: Any, indices: torch.Tensor, batch_size: int) -> Any:
+    """Select value payloads that actually carry a leading result batch."""
+    if value is None:
+        return None
+    if isinstance(value, torch.Tensor):
+        return value[indices] if value.ndim > 0 and value.shape[0] == batch_size else value
+    if isinstance(value, JointState):
+        return value[indices] if value.position.ndim > 0 and value.position.shape[0] == batch_size else value
+    if isinstance(value, Mapping):
+        return type(value)((key, _select_batch_value(item, indices, batch_size)) for key, item in value.items())
+    if isinstance(value, list):
+        return [_select_batch_value(item, indices, batch_size) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_select_batch_value(item, indices, batch_size) for item in value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return type(value)(**{
+            item.name: _select_batch_value(getattr(value, item.name), indices, batch_size)
+            for item in fields(value)
+        })
+    return value
+
+
 def _copy_masked_tensor(
     target: Optional[torch.Tensor], source: Optional[torch.Tensor], mask: torch.Tensor
 ) -> None:
@@ -82,6 +129,8 @@ def _copy_masked_tensor(
         raise ValueError("both result fields must be tensors or both must be None")
     if target.device != source.device:
         raise ValueError("result tensors must share a device")
+    if mask.device != target.device:
+        raise ValueError("result mask must share the result tensor device")
     if target.shape != source.shape:
         raise ValueError(f"result tensor shapes differ: {tuple(target.shape)} != {tuple(source.shape)}")
     if target.ndim < mask.ndim or tuple(target.shape[: mask.ndim]) != tuple(mask.shape):
@@ -95,7 +144,24 @@ def _copy_joint_state_masked(target: Optional[JointState], source: Optional[Join
     if target is None or source is None:
         raise ValueError("both joint solutions must be set or both must be None")
     for name in target._tensor_fields():
-        _copy_masked_tensor(getattr(target, name), getattr(source, name), mask)
+        left, right = getattr(target, name), getattr(source, name)
+        if left is None and right is None:
+            continue
+        if left is None or right is None:
+            raise ValueError("joint solution channels must be set on both results or neither")
+        # dt/knot_dt can be per batch even when the position tensors are
+        # per-batch/per-seed.  A successful seed then selects its owning batch
+        # row; it must not make an otherwise valid result merge fail merely
+        # because the timing value has no seed axis.
+        if (
+            mask.ndim == 2
+            and left.ndim >= 1
+            and left.shape[0] == mask.shape[0]
+            and (left.ndim < 2 or left.shape[1] != mask.shape[1])
+        ):
+            _copy_masked_tensor(left, right, mask.any(dim=1))
+        else:
+            _copy_masked_tensor(left, right, mask)
 
 
 def _copy_object_masked(target: Any, source: Any, mask: torch.Tensor) -> None:
@@ -207,11 +273,15 @@ class BaseSolverResult:
     @property
     def seed_shape(self) -> Optional[torch.Size]:
         """Return the canonical ``[batch, seed]`` shape, if this is a seeded result."""
-        if isinstance(self.success, torch.Tensor) and self.success.ndim >= 2:
-            return self.success.shape[:2]
+        # A solver may already have materialised only ``return_seeds`` while
+        # retaining a full optimizer cost table for diagnostics.  The latter
+        # is the authoritative optimizer seed axis until TrajOpt normalises
+        # it, so do not infer stale metadata from the compact success buffer.
         for value in (self.seed_cost, self.seed_rank, self.total_cost_reshaped):
             if isinstance(value, torch.Tensor) and value.ndim >= 2:
                 return value.shape[:2]
+        if isinstance(self.success, torch.Tensor) and self.success.ndim >= 2:
+            return self.success.shape[:2]
         return None
 
     def refresh_batch_metadata(self) -> "BaseSolverResult":
@@ -248,6 +318,11 @@ class BaseSolverResult:
                 raise ValueError(f"{name} must share the success tensor device")
         if self.feasible is not None and self.feasible.shape != self.success.shape:
             raise ValueError("feasible and success must have identical shapes")
+        if self.js_solution is not None:
+            if self.js_solution.device != self.success.device:
+                raise ValueError("js_solution must share the success tensor device")
+            if self.js_solution.position.ndim < 1 or self.js_solution.position.shape[0] != batch:
+                raise ValueError("js_solution must have the result batch as its leading dimension")
         return self
 
     def clone(self) -> "BaseSolverResult":
@@ -259,6 +334,34 @@ class BaseSolverResult:
         if not isinstance(device_cfg, DeviceCfg):
             raise TypeError("device_cfg must be a DeviceCfg")
         return type(self)(**{item.name: _move_value(getattr(self, item.name), device_cfg) for item in fields(self)})
+
+    def detach(self) -> "BaseSolverResult":
+        """Return a detached value copy suitable for non-differentiable reuse.
+
+        This intentionally keeps the public value semantics of solver results;
+        it does not expose or attempt to detach CUDA graph/result-buffer state.
+        """
+        return type(self)(**{item.name: _detach_value(getattr(self, item.name)) for item in fields(self)})
+
+    def select_batch(self, indices: torch.Tensor | int | list[int]) -> "BaseSolverResult":
+        """Select batch entries while retaining a leading batch dimension."""
+        batch = self.result_batch_size
+        if batch < 1:
+            raise ValueError("batch_size must be positive for batch selection")
+        device = self.device if self.device is not None else torch.device("cpu")
+        tensor = torch.as_tensor(indices, device=device, dtype=torch.long)
+        if tensor.ndim == 0:
+            tensor = tensor.reshape(1)
+        if tensor.ndim != 1:
+            raise ValueError("batch indices must be one-dimensional")
+        if tensor.numel() and (tensor.min() < 0 or tensor.max() >= batch):
+            raise IndexError("batch index is outside the available batch range")
+        values = {
+            item.name: _select_batch_value(getattr(self, item.name), tensor, batch)
+            for item in fields(self)
+        }
+        values["batch_size"] = int(tensor.numel())
+        return type(self)(**values)
 
     def copy_successful_solutions(self, other: "BaseSolverResult") -> None:
         """Merge every successful batch/seed candidate from ``other`` in-place.
