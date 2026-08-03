@@ -129,6 +129,8 @@ class SeedManager:
             raise ValueError("seed_config must have shape [batch, seed, dof]")
         if value.shape[1] < 1:
             raise ValueError("seed_config must contain at least one seed")
+        if not bool(torch.isfinite(value).all().item()):
+            raise ValueError("seed_config must be finite")
         return value
 
     def _normalise_trajectory(
@@ -147,6 +149,8 @@ class SeedManager:
             )
         if value.shape[1] < 1:
             raise ValueError("seed_traj must contain at least one seed")
+        if not bool(torch.isfinite(value).all().item()):
+            raise ValueError("seed_traj must be finite")
         return value
 
     def _normalise_current_state(self, current_state: JointState, batch_size: int) -> JointState:
@@ -157,9 +161,17 @@ class SeedManager:
             raise ValueError(f"current_state must be on {self.device_cfg.device}")
         if position.ndim != 2 or position.shape != (batch_size, self.action_dim):
             raise ValueError("current_state.position must have shape [batch, dof]")
+        for field in ("position", "velocity", "acceleration", "jerk", "dt", "knot", "knot_dt"):
+            value = getattr(current_state, field)
+            if value is not None and not self.device_cfg.is_same_torch_device(value.device):
+                raise ValueError(f"current_state.{field} must be on {self.device_cfg.device}")
+        if not bool(torch.isfinite(position).all().item()):
+            raise ValueError("current_state.position must be finite")
         if position.dtype != self.device_cfg.dtype:
-            current_state = current_state.clone()
-            current_state.position = position.to(dtype=self.device_cfg.dtype)
+            # ``JointState.to`` converts every materialized derivative and
+            # timing channel together, preserving the invariant required by
+            # deceleration seed generation rather than mutating position only.
+            current_state = current_state.to(self.device_cfg)
         return current_state
 
     def prepare_action_seeds(

@@ -53,20 +53,40 @@ class GoalManager:
         return 1 if seeds is None else GoalManager._require_positive_int(seeds, "solve_state.num_seeds")
 
     def _validate_device(self, value, name: str) -> None:
-        """Reject hidden cross-device copies at the portable solver boundary."""
+        """Reject hidden cross-device copies at the portable solver boundary.
+
+        ``JointState`` and ``GoalToolPose`` are compound values.  Checking only
+        their leading position tensor would let a caller construct a mixed
+        device payload which then fails (or, worse, triggers an implicit copy)
+        in an unrelated rollout operation.  Validate every materialized tensor
+        at this public boundary instead.
+        """
         if value is None:
             return
-        tensor = value.position if isinstance(value, (JointState, GoalToolPose)) else value
-        if not isinstance(tensor, torch.Tensor):
+        if isinstance(value, JointState):
+            tensors = [
+                (field, getattr(value, field))
+                for field in ("position", "velocity", "acceleration", "jerk", "dt", "knot", "knot_dt")
+                if getattr(value, field) is not None
+            ]
+        elif isinstance(value, GoalToolPose):
+            tensors = [("position", value.position), ("quaternion", value.quaternion)]
+        elif isinstance(value, torch.Tensor):
+            tensors = [("tensor", value)]
+        else:
             raise TypeError(f"{name} must be a tensor or a supported cuRobo value type")
-        if not self.device_cfg.is_same_torch_device(tensor.device):
-            raise ValueError(
-                f"{name} is on {tensor.device}, expected {self.device_cfg.device}; "
-                "move inputs explicitly instead of relying on an implicit host copy"
-            )
+        for field, tensor in tensors:
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError(f"{name}.{field} must be a torch.Tensor")
+            if not self.device_cfg.is_same_torch_device(tensor.device):
+                raise ValueError(
+                    f"{name}.{field} is on {tensor.device}, expected {self.device_cfg.device}; "
+                    "move inputs explicitly instead of relying on an implicit host copy"
+                )
 
     def _validate_inputs(
         self,
+        solve_state,
         goal_tool_poses: Optional[GoalToolPose],
         goal_js: Optional[JointState],
         current_js: Optional[JointState],
@@ -78,8 +98,25 @@ class GoalManager:
         self._validate_device(current_js, "current_js")
         self._validate_device(seed_goal_js, "seed_goal_js")
         self._validate_device(current_state_dt, "current_state_dt")
+        if goal_tool_poses is not None:
+            if not goal_tool_poses.tool_frames or len(set(goal_tool_poses.tool_frames)) != len(goal_tool_poses.tool_frames):
+                raise ValueError("goal_tool_poses.tool_frames must be a non-empty unique sequence")
+            if goal_tool_poses.batch_size != solve_state.batch_size:
+                raise ValueError("goal_tool_poses batch size must match solve_state.batch_size")
+            if goal_tool_poses.num_goalset != solve_state.num_goalset:
+                raise ValueError("goal_tool_poses goalset size must match solve_state.num_goalset")
+        for name, state in (("goal_js", goal_js), ("current_js", current_js)):
+            if state is not None and (state.position.ndim < 2 or state.position.shape[0] != solve_state.batch_size):
+                raise ValueError(f"{name} batch size must match solve_state.batch_size")
         if seed_goal_js is not None and seed_goal_js.position.ndim != 3:
             raise ValueError("seed_goal_js must have shape [batch, seeds, dof]")
+        if seed_goal_js is not None and seed_goal_js.position.shape[0] != solve_state.batch_size:
+            raise ValueError("seed_goal_js batch size must match solve_state.batch_size")
+        if current_state_dt is not None:
+            if current_state_dt.ndim > 2 or (
+                current_state_dt.ndim > 0 and current_state_dt.shape[0] not in (1, solve_state.batch_size)
+            ):
+                raise ValueError("current_state_dt must be scalar, [1], [batch], or [batch, 1]")
 
     def create_goal_buffer(
         self,
@@ -92,7 +129,7 @@ class GoalManager:
     ) -> GoalRegistry:
         """Create a seed-expanded registry without storing it as the active one."""
         self._require_solve_state(solve_state)
-        self._validate_inputs(goal_tool_poses, goal_js, current_js, seed_goal_js, current_state_dt)
+        self._validate_inputs(solve_state, goal_tool_poses, goal_js, current_js, seed_goal_js, current_state_dt)
         registry = GoalRegistry.create_idx(
             pose_batch_size=solve_state.batch_size,
             multi_env=solve_state.multi_env,
@@ -160,7 +197,7 @@ class GoalManager:
     ) -> Tuple[GoalRegistry, bool]:
         """Update the active registry and report whether its backing shape changed."""
         self._require_solve_state(solve_state)
-        self._validate_inputs(goal_tool_poses, goal_js, current_js, seed_goal_js, current_state_dt)
+        self._validate_inputs(solve_state, goal_tool_poses, goal_js, current_js, seed_goal_js, current_state_dt)
         update_reference = self._goal_buffer is None or self._solve_state is None
         if not update_reference:
             update_reference = self._new_payload_requires_reference(
@@ -229,6 +266,7 @@ class GoalManager:
         if not isinstance(goal, GoalRegistry):
             raise TypeError("goal must be a GoalRegistry")
         self._validate_inputs(
+            solve_state,
             goal.link_goal_poses, goal.goal_js, goal.current_js,
             goal.seed_goal_js, goal.current_state_dt,
         )
