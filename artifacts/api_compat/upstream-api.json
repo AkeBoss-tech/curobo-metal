@@ -1089,10 +1089,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
-        "resolved_symbols": 21,
-        "status": "partial"
+        "resolved_symbols": 27,
+        "status": "resolved"
       },
       "name": "curobo._src.collision.collision_robot_scene_cfg",
       "path": "curobo/_src/collision/collision_robot_scene_cfg.py",
@@ -80427,10 +80427,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
+        "missing_symbols": 0,
         "path": "curobo/_src/solver/solver_core.py",
-        "resolved_symbols": 15,
-        "status": "partial"
+        "resolved_symbols": 31,
+        "status": "resolved"
       },
       "name": "curobo._src.solver.solver_core",
       "path": "curobo/_src/solver/solver_core.py",
@@ -81399,9 +81399,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 1,
         "path": "curobo/_src/solver/solver_core_cfg.py",
-        "resolved_symbols": 25,
+        "resolved_symbols": 29,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_core_cfg",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 239,
-    "resolved_modules": 122,
+    "partial_modules": 237,
+    "resolved_modules": 124,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 239,
-    "resolved_modules": 122,
+    "partial_modules": 237,
+    "resolved_modules": 124,
     "symbols": 7182
   },
   "upstream": {
