@@ -45,6 +45,12 @@ class MotionRetargeter:
         self._prev_solution: Optional[torch.Tensor] = None
         self._prev_velocity: Optional[torch.Tensor] = None
         self._mpc_state: Optional[JointState] = None
+        self._last_result: Optional[RetargetResult] = None
+        self._last_ik_result = None
+        self._last_mpc_result = None
+        self._last_failure_mask: Optional[torch.Tensor] = None
+        self._world_generation = 0
+        self._destroyed = False
 
     @property
     def joint_names(self) -> List[str]:
@@ -74,12 +80,129 @@ class MotionRetargeter:
     def config(self) -> MotionRetargeterCfg:
         return self._config
 
+    @property
+    def scene_collision_checker(self):
+        """Portable collision adapter shared by every active retargeting stage."""
+        return self._global_ik_solver.scene_collision_checker
+
+    @property
+    def world_generation(self) -> int:
+        """Monotonic generation incremented after each successful world swap."""
+        return self._world_generation
+
+    @property
+    def is_destroyed(self) -> bool:
+        """Whether reusable solver state has been released."""
+        return self._destroyed
+
+    @property
+    def last_result(self) -> Optional[RetargetResult]:
+        """Most recently materialized output, or ``None`` after reset/destroy."""
+        return self._last_result
+
+    @property
+    def last_failure_mask(self) -> Optional[torch.Tensor]:
+        """Per-environment failure mask from the last IK/MPC stage.
+
+        The mask is detached diagnostic state.  Retargeting still returns a
+        continuous joint stream: failed warm-started IK rows retain their last
+        known-safe position while successful rows advance independently.
+        """
+        return None if self._last_failure_mask is None else self._last_failure_mask.clone()
+
+    def _assert_live(self) -> None:
+        if self._destroyed:
+            raise RuntimeError("MotionRetargeter has been destroyed")
+
     def reset(self) -> None:
+        self._assert_live()
         self._prev_solution = None
         self._prev_velocity = None
         self._mpc_state = None
+        self._last_result = None
+        self._last_ik_result = None
+        self._last_mpc_result = None
+        self._last_failure_mask = None
+
+    def destroy(self) -> None:
+        """Release solver caches and reject further mutable operations.
+
+        This is deliberately idempotent.  CPU/MPS execution owns ordinary
+        PyTorch state rather than CUDA graph executables, but applications
+        still need a reliable lifecycle boundary when changing robot clips or
+        worlds.
+        """
+        if self._destroyed:
+            return
+        self._destroyed = True
+        self._global_ik_solver.destroy()
+        if self._local_ik_solver is not None:
+            self._local_ik_solver.destroy()
+        if self._mpc_solver is not None:
+            self._mpc_solver.destroy()
+        self._prev_solution = None
+        self._prev_velocity = None
+        self._mpc_state = None
+        self._last_result = None
+        self._last_ik_result = None
+        self._last_mpc_result = None
+        self._last_failure_mask = None
+
+    def update_world(self, scene_cfg) -> None:
+        """Install one concrete portable collision world across all stages.
+
+        The world is first validated by global IK, then that same adapter is
+        supplied to local IK or MPC.  Sharing one object preserves in-place
+        obstacle cache mutations and prevents global/local frames from seeing
+        different worlds.  A world swap invalidates the previous warm start,
+        which may have crossed an obstacle that did not exist when it was
+        generated.
+
+        ``SceneCfg``, ``SceneCollisionCfg``, and ``SceneCollision`` are
+        supported.  YAML/USD/Warp assets remain an explicit boundary in the
+        underlying portable solvers.
+        """
+        self._assert_live()
+        if not self._config.load_collision_spheres:
+            raise RuntimeError(
+                "update_world requires load_collision_spheres=True at retargeter construction; "
+                "a collision-free solver cannot acquire robot sphere geometry after setup"
+            )
+        self._global_ik_solver.update_world(scene_cfg)
+        world = self._global_ik_solver.scene_collision_checker
+        if self._local_ik_solver is not None:
+            self._local_ik_solver.update_world(world)
+        if self._mpc_solver is not None:
+            self._mpc_solver.update_world(world)
+        self._config = self._config.with_scene_model(world)
+        self._world_generation += 1
+        self.reset()
+
+    def update_tool_pose_criteria(self, tool_pose_criteria) -> None:
+        """Atomically update same-topology criteria and invalidate warm starts.
+
+        Link dimensions determine solver cost layouts.  Replacing weights for
+        the existing ordered tracked links is safe; adding/removing/reordering
+        links requires constructing a new retargeter rather than silently
+        changing an active problem's shape.
+        """
+        self._assert_live()
+        replacement = self._config.with_tool_pose_criteria(tool_pose_criteria)
+        if replacement.tool_frames != self.tool_frames:
+            raise ValueError(
+                "updated tool_pose_criteria must preserve the configured ordered tool frames"
+            )
+        self._config = replacement
+        self._tool_pose_criteria = dict(replacement.tool_pose_criteria)
+        self._global_ik_solver.update_tool_pose_criteria(self._tool_pose_criteria)
+        if self._local_ik_solver is not None:
+            self._local_ik_solver.update_tool_pose_criteria(self._tool_pose_criteria)
+        if self._mpc_solver is not None:
+            self._mpc_solver.update_tool_pose_criteria(self._tool_pose_criteria)
+        self.reset()
 
     def solve_frame(self, goal_tool_poses: GoalToolPose) -> RetargetResult:
+        self._assert_live()
         if not isinstance(goal_tool_poses, GoalToolPose):
             raise TypeError("goal_tool_poses must be GoalToolPose")
         if goal_tool_poses.batch_size != self._num_envs:
@@ -98,6 +221,7 @@ class MotionRetargeter:
         return self._solve_local_ik(goal_tool_poses)
 
     def solve_sequence(self, tool_poses: SequenceGoalToolPose) -> RetargetResult:
+        self._assert_live()
         if not isinstance(tool_poses, SequenceGoalToolPose):
             raise TypeError("tool_poses must be SequenceGoalToolPose")
         if tool_poses.num_envs != self._num_envs:
@@ -118,18 +242,24 @@ class MotionRetargeter:
             self._stack_states(trajectories, torch.cat, dim=1)
             if trajectories else None
         )
-        return RetargetResult(joint_state, trajectory)
+        result = RetargetResult(joint_state, trajectory)
+        self._last_result = result
+        return result
 
     def _solve_global_ik(self, goal_tool_poses: GoalToolPose) -> RetargetResult:
         result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+        self._last_ik_result = result
         solution = result.solution[:, 0]
+        self._last_failure_mask = ~self._success_by_environment(result, solution.shape[0])
         self._prev_solution = solution.detach().clone()
         self._prev_velocity = None
         joint_state = JointState.from_position(solution, self.joint_names)
         if self._mpc_solver is not None:
             self._mpc_state = joint_state.clone()
             self._mpc_solver.setup(self._mpc_state)
-        return RetargetResult(joint_state)
+        output = RetargetResult(joint_state)
+        self._last_result = output
+        return output
 
     def _solve_local_ik(self, goal_tool_poses: GoalToolPose) -> RetargetResult:
         assert self._local_ik_solver is not None
@@ -140,11 +270,25 @@ class MotionRetargeter:
             goal_tool_poses, current_state=current,
             seed_config=self._prev_solution[:, None], return_seeds=1,
         )
-        solution = result.solution[:, 0]
+        self._last_ik_result = result
+        candidate = result.solution[:, 0]
+        success = self._success_by_environment(result, candidate.shape[0])
+        self._last_failure_mask = ~success
+        # Retaining the prior row for a failed local solve keeps the
+        # retargeting stream continuous without disguising the failure: the
+        # public diagnostic mask identifies every held environment.
+        solution = torch.where(success[:, None], candidate, self._prev_solution)
         if result.js_solution is not None and result.js_solution.velocity is not None:
-            self._prev_velocity = result.js_solution.velocity[:, 0].detach().clone()
+            velocity = result.js_solution.velocity[:, 0]
+            if self._prev_velocity is None:
+                previous_velocity = torch.zeros_like(velocity)
+            else:
+                previous_velocity = self._prev_velocity
+            self._prev_velocity = torch.where(success[:, None], velocity, previous_velocity).detach().clone()
         self._prev_solution = solution.detach().clone()
-        return RetargetResult(JointState.from_position(solution, self.joint_names))
+        output = RetargetResult(JointState.from_position(solution, self.joint_names))
+        self._last_result = output
+        return output
 
     def _solve_mpc_frame(self, goal_tool_poses: GoalToolPose) -> RetargetResult:
         assert self._mpc_solver is not None and self._mpc_state is not None
@@ -159,15 +303,37 @@ class MotionRetargeter:
         endpoints = []
         for _ in range(self._config.steps_per_target):
             result = self._mpc_solver.optimize_action_sequence(self._mpc_state)
+            self._last_mpc_result = result
             if result.action_sequence is None or result.action_sequence.position.shape[1] < 1:
                 raise RuntimeError("portable MPC returned an empty action sequence")
             self._mpc_state = self._endpoint_state(result.action_sequence)
             endpoints.append(self._mpc_state)
         self._prev_solution = self._mpc_state.position.detach().clone()
-        return RetargetResult(
+        success = getattr(self._last_mpc_result, "success", None)
+        self._last_failure_mask = self._success_mask_from_tensor(success, self._num_envs)
+        output = RetargetResult(
             joint_state=self._mpc_state.clone(),
             trajectory=self._stack_states(endpoints, torch.stack, dim=1),
         )
+        self._last_result = output
+        return output
+
+    @staticmethod
+    def _success_mask_from_tensor(success, batch_size: int) -> Optional[torch.Tensor]:
+        if not isinstance(success, torch.Tensor):
+            return None
+        if success.ndim < 1 or success.shape[0] != batch_size:
+            return None
+        # Result layouts may include seeds or horizons.  A row is successful
+        # only when every reported subproblem is successful, which keeps a
+        # mixed result conservative for the next warm-started frame.
+        return ~success.reshape(batch_size, -1).all(dim=-1).detach()
+
+    def _success_by_environment(self, result, batch_size: int) -> torch.Tensor:
+        failure = self._success_mask_from_tensor(getattr(result, "success", None), batch_size)
+        if failure is None:
+            return torch.ones(batch_size, device=self._prev_solution.device if self._prev_solution is not None else result.solution.device, dtype=torch.bool)
+        return ~failure
 
     def _endpoint_state(self, action_sequence: JointState) -> JointState:
         def endpoint(value):
@@ -240,7 +406,7 @@ class MotionRetargeter:
             warm_start_optimization_num_iters=cfg.mpc_warm_start_num_iters,
             cold_start_optimization_num_iters=cfg.mpc_cold_start_num_iters,
             max_batch_size=cfg.num_envs,
-        ))
+        ), scene_collision_checker=self._global_ik_solver.scene_collision_checker)
         solver.update_tool_pose_criteria(self._tool_pose_criteria)
         # MPCSolver correctly retains the requested batch capacity, but its
         # portable TrajOpt child is deliberately constructed lazily with the

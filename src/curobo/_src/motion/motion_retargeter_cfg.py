@@ -12,6 +12,23 @@ from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.util.config_io import resolve_device_cfg
 
 
+def _is_portable_scene_model(value: Any) -> bool:
+    """Return whether ``value`` is an already-compiled portable world.
+
+    Importing the collision records lazily keeps this lightweight config module
+    usable in applications that only construct retargeting YAML records.  The
+    retargeter itself routes these records through its real IK/MPC collision
+    backends; CUDA/Warp scene objects are deliberately not accepted by name.
+    """
+    from curobo._src.geom.collision.collision_scene import (
+        SceneCollision,
+        SceneCollisionCfg,
+    )
+    from curobo._src.geom.types import SceneCfg
+
+    return isinstance(value, (SceneCfg, SceneCollisionCfg, SceneCollision))
+
+
 def _criterion_on_device(
     criterion: ToolPoseCriteria, device_cfg: DeviceCfg
 ) -> ToolPoseCriteria:
@@ -77,7 +94,7 @@ class MotionRetargeterCfg:
     num_envs: int = 1
     use_mpc: bool = False
     self_collision_check: bool = True
-    scene_model: Optional[Union[str, Dict[str, Any]]] = None
+    scene_model: Optional[Any] = None
     optimization_dt: float = 0.05
     num_seeds_global: int = 64
     position_tolerance: float = 0.005
@@ -166,8 +183,12 @@ class MotionRetargeterCfg:
             if not self.robot:
                 raise ValueError("robot configuration mapping cannot be empty")
             self.robot = dict(self.robot)
-        if self.scene_model is not None and not isinstance(self.scene_model, (str, Mapping)):
-            raise TypeError("scene_model must be a YAML path, configuration mapping, or None")
+        if self.scene_model is not None and not isinstance(self.scene_model, (str, Mapping)) \
+                and not _is_portable_scene_model(self.scene_model):
+            raise TypeError(
+                "scene_model must be a YAML path, configuration mapping, SceneCfg, "
+                "SceneCollisionCfg, SceneCollision, or None"
+            )
         if isinstance(self.scene_model, str) and not self.scene_model.strip():
             raise ValueError("scene_model cannot be an empty YAML path")
         if isinstance(self.scene_model, Mapping):
@@ -264,8 +285,33 @@ class MotionRetargeterCfg:
         :func:`resolve_device_cfg`, so this method cannot accidentally create
         a configuration that silently falls back to CPU on a Metal host.
         """
-        device_cfg = resolve_device_cfg(device_cfg)
-        return type(self)(
+        return self._copy_with(device_cfg=resolve_device_cfg(device_cfg))
+
+    def with_tool_pose_criteria(
+        self, tool_pose_criteria: Mapping[str, ToolPoseCriteria]
+    ) -> "MotionRetargeterCfg":
+        """Return a recompiled configuration with new per-tool criteria.
+
+        The replacement is compiled into this configuration's device and
+        dtype, retaining the source mapping as caller-owned data.  A running
+        :class:`MotionRetargeter` accepts only the same ordered tool topology;
+        changing tracked links requires a fresh solver because its cost and
+        collision layout are shape-dependent.
+        """
+        return self._copy_with(tool_pose_criteria=tool_pose_criteria)
+
+    def with_scene_model(self, scene_model: Optional[Any]) -> "MotionRetargeterCfg":
+        """Return an equivalent configuration referring to a portable world.
+
+        This is useful after :meth:`MotionRetargeter.update_world`; the
+        collision object itself is intentionally retained, rather than
+        serialized into a lossy YAML-shaped mapping.
+        """
+        return self._copy_with(scene_model=scene_model)
+
+    def _copy_with(self, **updates: Any) -> "MotionRetargeterCfg":
+        """Build a fully validated independent config without aliasing lists."""
+        values = dict(
             robot=self.robot,
             tool_pose_criteria=self.tool_pose_criteria,
             num_envs=self.num_envs,
@@ -276,7 +322,7 @@ class MotionRetargeterCfg:
             num_seeds_global=self.num_seeds_global,
             position_tolerance=self.position_tolerance,
             orientation_tolerance=self.orientation_tolerance,
-            device_cfg=device_cfg,
+            device_cfg=self.device_cfg,
             load_collision_spheres=self.load_collision_spheres,
             ik_optimizer_configs=self.ik_optimizer_configs,
             mpc_optimizer_configs=self.mpc_optimizer_configs,
@@ -291,6 +337,11 @@ class MotionRetargeterCfg:
             mpc_warm_start_num_iters=self.mpc_warm_start_num_iters,
             mpc_cold_start_num_iters=self.mpc_cold_start_num_iters,
         )
+        unknown = sorted(set(updates).difference(values))
+        if unknown:
+            raise TypeError(f"unknown MotionRetargeterCfg fields: {unknown}")
+        values.update(updates)
+        return type(self)(**values)
 
 
 __all__ = ["MotionRetargeterCfg"]
