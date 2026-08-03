@@ -9,8 +9,36 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 import torch
+from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg as _PublicSelfCollisionCostCfg
 from curobo._src.cost.portable import *
 from curobo._src.types.device_cfg import DeviceCfg
+
+
+_COST_CONFIG_TYPES = {
+    "self_collision_cfg": SelfCollisionCostCfg,
+    "scene_collision_cfg": SceneCollisionCostCfg,
+    "cspace_cfg": CSpaceCostCfg,
+    "start_cspace_dist_cfg": CSpaceDistCostCfg,
+    "target_cspace_dist_cfg": CSpaceDistCostCfg,
+    "tool_pose_cfg": ToolPoseCostCfg,
+}
+
+# The public self-collision config carries extra portable validation and does
+# not subclass the original lightweight record.  Both forms are accepted by
+# the cost implementation, so preserve that source-compatible distinction.
+_ACCEPTED_COST_CONFIG_TYPES = {
+    **_COST_CONFIG_TYPES,
+    "self_collision_cfg": (SelfCollisionCostCfg, _PublicSelfCollisionCostCfg),
+}
+
+
+def _config_update_tensor(value, target: torch.Tensor, name: str) -> torch.Tensor:
+    """Create an update on the configured device without hidden tensor moves."""
+    if isinstance(value, torch.Tensor) and value.device != target.device:
+        raise ValueError(f"{name} tensor device must match the configured cost device")
+    return torch.as_tensor(value, device=target.device, dtype=target.dtype)
+
+
 @dataclass
 class RobotCostManagerCfg:
     class_type: type = None
@@ -22,6 +50,15 @@ class RobotCostManagerCfg:
     tool_pose_cfg: Optional[ToolPoseCostCfg] = None
     def __post_init__(self):
         from .cost_manager_robot import RobotCostManager
+        for name, config_type in _ACCEPTED_COST_CONFIG_TYPES.items():
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, config_type):
+                description = (
+                    "/".join(item.__name__ for item in config_type)
+                    if isinstance(config_type, tuple)
+                    else config_type.__name__
+                )
+                raise TypeError(f"{name} must be a {description}")
         self.class_type = RobotCostManager
     @classmethod
     def create(cls, data_dict: Dict, scene_collision_checker=None, device_cfg: DeviceCfg = DeviceCfg()):
@@ -29,19 +66,23 @@ class RobotCostManagerCfg:
             raise TypeError("data_dict must be a dictionary")
         if not isinstance(device_cfg, DeviceCfg):
             raise TypeError("device_cfg must be a DeviceCfg")
-        mapping = {"self_collision_cfg": SelfCollisionCostCfg, "scene_collision_cfg": SceneCollisionCostCfg,
-                   "cspace_cfg": CSpaceCostCfg, "start_cspace_dist_cfg": CSpaceDistCostCfg,
-                   "target_cspace_dist_cfg": CSpaceDistCostCfg, "tool_pose_cfg": ToolPoseCostCfg}
         values = {}
-        for name, kind in mapping.items():
+        for name, kind in _COST_CONFIG_TYPES.items():
             raw = data_dict.get(name)
             if raw is not None:
-                if isinstance(raw, kind):
+                if isinstance(raw, _ACCEPTED_COST_CONFIG_TYPES[name]):
                     if not device_cfg.is_same_torch_device(raw.device_cfg.device):
                         raise ValueError(f"{name} device does not match device_cfg")
                     values[name] = raw
                 elif isinstance(raw, dict):
-                    values[name] = kind(device_cfg=device_cfg, **raw)
+                    payload = dict(raw)
+                    declared_device_cfg = payload.pop("device_cfg", None)
+                    if declared_device_cfg is not None:
+                        if not isinstance(declared_device_cfg, DeviceCfg):
+                            raise TypeError(f"{name}.device_cfg must be a DeviceCfg")
+                        if not device_cfg.is_same_torch_device(declared_device_cfg.device):
+                            raise ValueError(f"{name}.device_cfg does not match device_cfg")
+                    values[name] = kind(device_cfg=device_cfg, **payload)
                 else:
                     raise TypeError(f"{name} must be a dict or {kind.__name__}")
         if values.get("scene_collision_cfg") is not None:
@@ -50,7 +91,7 @@ class RobotCostManagerCfg:
     def update_collision_activation_distance(self, distance):
         if self.scene_collision_cfg:
             value = self.scene_collision_cfg.activation_distance
-            update = torch.as_tensor(distance, device=value.device, dtype=value.dtype)
+            update = _config_update_tensor(distance, value, "collision activation distance")
             if update.numel() not in (1, value.numel()):
                 raise ValueError("collision activation distance must be scalar or match configured shape")
             value.copy_(update.reshape(-1).expand_as(value))
@@ -62,14 +103,14 @@ class RobotCostManagerCfg:
     def update_regularization_weight(self, l2_weight=None, distance_weight=None):
         """Update c-space L2 and distance weights without rebuilding the rollout."""
         if self.cspace_cfg is not None and l2_weight is not None:
-            value = torch.as_tensor(l2_weight, device=self.cspace_cfg.squared_l2_regularization_weight.device,
-                                    dtype=self.cspace_cfg.squared_l2_regularization_weight.dtype)
+            target = self.cspace_cfg.squared_l2_regularization_weight
+            value = _config_update_tensor(l2_weight, target, "l2_weight")
             if value.numel() not in (1, self.cspace_cfg.squared_l2_regularization_weight.numel()):
                 raise ValueError("l2_weight must be scalar or match cspace regularization shape")
             self.cspace_cfg.squared_l2_regularization_weight.copy_(value.expand_as(self.cspace_cfg.squared_l2_regularization_weight))
         for cfg in (self.start_cspace_dist_cfg, self.target_cspace_dist_cfg):
             if cfg is not None and distance_weight is not None:
-                value = torch.as_tensor(distance_weight, device=cfg.weight.device, dtype=cfg.weight.dtype)
+                value = _config_update_tensor(distance_weight, cfg.weight, "distance_weight")
                 if value.numel() not in (1, cfg.weight.numel()):
                     raise ValueError("distance_weight must be scalar or match cspace-distance weight shape")
                 cfg.weight.copy_(value.expand_as(cfg.weight))

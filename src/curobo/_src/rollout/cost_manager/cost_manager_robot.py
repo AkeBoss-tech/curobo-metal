@@ -290,12 +290,81 @@ class RobotCostManager:
         if poses is not None and not self.device_cfg.is_same_torch_device(poses.position.device):
             raise ValueError("goal.link_goal_poses device does not match cost manager device")
 
+    @staticmethod
+    def _integer_index_dtype(value: torch.Tensor) -> bool:
+        return value.dtype in (
+            torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8,
+        )
+
+    def _validate_goal_layout(self, goal, batch: int, horizon: int, dof: int,
+                              dtype: torch.dtype) -> None:
+        """Validate goal tables at the rollout boundary.
+
+        The pinned registry stores selection tensors as ``[batch, 1]`` and
+        the CUDA kernels flatten them internally. Validate that portable eager
+        execution can make exactly that conversion before a later operation
+        raises an incidental broadcasting or ``index_select`` error.
+        """
+        if goal is None:
+            return
+        for name in ("goal_js", "current_js"):
+            value = getattr(goal, name, None)
+            if value is None:
+                continue
+            if not isinstance(value, JointState):
+                raise TypeError(f"goal.{name} must be a JointState")
+            position = value.position
+            if position.ndim not in (1, 2, 3) or position.shape[-1] != dof:
+                raise ValueError(f"goal.{name}.position must end in the rollout DOF")
+            if position.dtype != dtype:
+                raise TypeError(f"goal.{name}.position dtype must match state.joint_state")
+
+        for name in ("idxs_link_pose", "idxs_goal_js", "idxs_current_js", "idxs_env"):
+            value = getattr(goal, name, None)
+            if value is None:
+                continue
+            if not isinstance(value, torch.Tensor) or not self._integer_index_dtype(value):
+                raise TypeError(f"goal.{name} must be an integer tensor")
+            if value.ndim not in (1, 2) or value.numel() != batch:
+                raise ValueError(f"goal.{name} must contain one index per rollout batch")
+
+        dt = getattr(goal, "current_state_dt", None)
+        if dt is None:
+            return
+        if not isinstance(dt, torch.Tensor) or not (dt.is_floating_point() or dt.is_complex()):
+            raise TypeError("goal.current_state_dt must be a floating tensor")
+        if dt.dtype != dtype:
+            raise TypeError("goal.current_state_dt dtype must match state.joint_state")
+        valid_layout = (
+            dt.ndim == 0
+            or (dt.ndim == 1 and dt.numel() in (1, batch))
+            or (dt.ndim == 2 and dt.shape[0] in (1, batch) and dt.shape[1] in (1, horizon))
+        )
+        if not valid_layout:
+            raise ValueError(
+                "goal.current_state_dt must be scalar, [batch], [batch,1], or [batch,horizon]"
+            )
+
+    @staticmethod
+    def _rollout_current_state_dt(dt: Optional[torch.Tensor], batch: int) -> Optional[torch.Tensor]:
+        """Turn a per-problem ``[batch]`` time step into ``[batch, 1]``.
+
+        Costs append one final singleton DOF axis. Leaving a ``[batch]``
+        tensor untouched therefore aligns it with the horizon axis, which is
+        wrong whenever ``batch != horizon``. The shared registry is not
+        mutated because it can be reused with a different horizon.
+        """
+        if dt is None or dt.ndim != 1 or dt.numel() != batch:
+            return dt
+        return dt.reshape(batch, 1)
+
     def compute_costs(self, state, cost_collection: Optional[CostCollection] = None,
                       goal: Optional[GoalRegistry] = None, **kwargs) -> CostCollection:
         joint_state, (batch, horizon) = self._shape(state)
         self._validate_state_device(joint_state)
         self._validate_optional_state_tensors(state, joint_state)
         self._validate_goal_device(goal)
+        self._validate_goal_layout(goal, batch, horizon, joint_state.position.shape[-1], joint_state.dtype)
         self._validate_collision_horizon(state, batch, horizon)
         self.setup_batch_tensors(batch, horizon)
         output = CostCollection() if cost_collection is None else cost_collection
@@ -309,7 +378,9 @@ class RobotCostManager:
                 idxs_target_joint_state=None if goal is None else goal.idxs_goal_js,
                 current_joint_state=None if goal is None else goal.current_js,
                 idxs_current_joint_state=None if goal is None else goal.idxs_current_js,
-                current_state_dt=None if goal is None else goal.current_state_dt,
+                current_state_dt=None if goal is None else self._rollout_current_state_dt(
+                    goal.current_state_dt, batch
+                ),
             ), "cspace")
 
         if goal is not None:
@@ -336,6 +407,7 @@ class RobotCostManager:
         self._validate_state_device(joint_state)
         self._validate_optional_state_tensors(state, joint_state)
         self._validate_goal_device(goal)
+        self._validate_goal_layout(goal, batch, horizon, joint_state.position.shape[-1], joint_state.dtype)
         self.setup_batch_tensors(batch, horizon)
         output = CostCollection()
         if goal is None:
