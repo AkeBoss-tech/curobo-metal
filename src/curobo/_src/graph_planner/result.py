@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+import math
 from typing import Any, List, Optional, Union
 
 import torch
@@ -125,6 +126,25 @@ class GraphPlannerResult:
                 raise ValueError("path_length must be a tensor with shape [batch]")
             if self.path_length.device != self.success.device:
                 raise ValueError("path_length must be on the success device")
+            if not self.path_length.is_floating_point():
+                raise TypeError("path_length must have a floating-point dtype")
+            # ``inf`` is the canonical pinned marker for a disconnected
+            # member.  NaN is never meaningful result data and otherwise
+            # makes ordering/selection non-deterministic.
+            if bool(torch.isnan(self.path_length).any().item()):
+                raise ValueError("path_length must not contain NaN")
+        if self.joint_names is not None:
+            if not isinstance(self.joint_names, list) or not all(
+                isinstance(name, str) and name for name in self.joint_names
+            ):
+                raise TypeError("joint_names must be a list of nonempty strings or None")
+            if len(set(self.joint_names)) != len(self.joint_names):
+                raise ValueError("joint_names must be unique")
+        if isinstance(self.solve_time, bool) or not isinstance(self.solve_time, (int, float)):
+            raise TypeError("solve_time must be a finite nonnegative scalar")
+        self.solve_time = float(self.solve_time)
+        if not math.isfinite(self.solve_time) or self.solve_time < 0:
+            raise ValueError("solve_time must be a finite nonnegative scalar")
         if not isinstance(self.valid_query, bool):
             raise TypeError("valid_query must be a bool")
 
@@ -139,6 +159,16 @@ class GraphPlannerResult:
     @property
     def num_success(self) -> int:
         return int(self.success.sum().item())
+
+    @property
+    def success_indices(self) -> torch.Tensor:
+        """Indices of successful members on the result's own device."""
+        return torch.nonzero(self.success, as_tuple=False).flatten()
+
+    @property
+    def failure_indices(self) -> torch.Tensor:
+        """Indices of failed members on the result's own device."""
+        return torch.nonzero(~self.success, as_tuple=False).flatten()
 
     @property
     def success_ratio(self) -> float:

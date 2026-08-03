@@ -11,6 +11,7 @@ not an object that this module pretends to create.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import copy
 import math
 from os import PathLike
 from pathlib import Path
@@ -251,6 +252,16 @@ class PRMGraphPlannerCfg:
             self.scene_collision_cfg, SceneCollisionCfg
         ):
             raise TypeError("scene_collision_cfg must be a SceneCollisionCfg or None")
+        if self.scene_collision_cfg is not None and self.scene_collision_cfg.device_cfg != self.device_cfg:
+            raise ValueError("scene_collision_cfg device_cfg must match PRM device_cfg")
+        if self.rollout_config is not None:
+            rollout_device = getattr(self.rollout_config, "device_cfg", self.device_cfg)
+            if rollout_device != self.device_cfg:
+                raise ValueError("rollout_config device_cfg must match PRM device_cfg")
+        if self.robot_config is not None:
+            robot_device = getattr(self.robot_config, "device_cfg", self.device_cfg)
+            if robot_device != self.device_cfg:
+                raise ValueError("robot_config device_cfg must match PRM device_cfg")
 
     def _canonicalize_bounds(self) -> None:
         lower, upper = self.action_lower_bounds, self.action_upper_bounds
@@ -278,12 +289,13 @@ class PRMGraphPlannerCfg:
     def clone(self, **updates: Any) -> "PRMGraphPlannerCfg":
         """Return a validated copy suitable for independent persistent planners."""
         values = {
-            name: getattr(self, name)
+            name: copy.copy(getattr(self, name))
             for name in self.__dataclass_fields__
         }
         for name in ("action_lower_bounds", "action_upper_bounds"):
             if values[name] is not None:
                 values[name] = values[name].clone()
+        values["device_cfg"] = self.device_cfg.clone()
         values.update(updates)
         return type(self)(**values)
 

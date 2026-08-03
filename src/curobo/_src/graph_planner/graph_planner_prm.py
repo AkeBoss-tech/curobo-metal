@@ -16,6 +16,8 @@ import torch
 
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
 from curobo._src.graph_planner.result import GraphPlannerResult
+from curobo._src.geom.collision.collision_scene import create_scene_collision
+from curobo._src.rollout.rollout_robot import RobotRollout
 from curobo._src.state.state_joint import JointState
 from curobo._src.util.trajectory import TrajInterpolationType, linear_smooth
 from curobo_metal.ops.graph_planning import GraphPlanningProblem, PersistentRoadmap
@@ -40,7 +42,36 @@ class PRMGraphPlanner:
             raise ValueError("max_nodes must be at least two")
         self.config = config
         self.device_cfg = config.device_cfg
+        # Match V2 ownership: an explicitly supplied checker wins, otherwise
+        # the serializable scene config owns the long-lived checker.  The
+        # factory is CPU/MPS PyTorch and does not create a Warp world.
         self.scene_collision_checker = scene_collision_checker
+        if self.scene_collision_checker is None and config.scene_collision_cfg is not None:
+            self.scene_collision_checker = create_scene_collision(config.scene_collision_cfg)
+
+        # A direct bounds-only PRM config is intentionally supported.  A
+        # factory-built config, on the other hand, may carry real rollout
+        # constraints (joint limits, self collision, and a scene), which must
+        # participate in feasibility rather than being silently discarded.
+        self.feasibility_rollout: RobotRollout | None = None
+        self.auxiliary_rollout: RobotRollout | None = None
+        if config.rollout_config is not None:
+            feasibility = RobotRollout(
+                config.rollout_config,
+                self.scene_collision_checker,
+                use_cuda_graph=config.use_cuda_graph_for_rollout,
+            )
+            auxiliary = RobotRollout(config.rollout_config, self.scene_collision_checker)
+            if feasibility.action_dim not in (0, self.action_dim):
+                raise ValueError(
+                    "rollout action dimension must match PRM action bounds: "
+                    f"{feasibility.action_dim} != {self.action_dim}"
+                )
+            # A YAML may intentionally omit its rollout transition model.
+            # Keep the direct-bounds planner viable in that case, but retain
+            # the instances for V2 lifecycle/introspection compatibility.
+            self.feasibility_rollout = feasibility
+            self.auxiliary_rollout = auxiliary
         self._roadmap = PersistentRoadmap(capacity=config.max_nodes)
         self._roadmap_samples: torch.Tensor | None = None
         self._roadmap_neighbors_per_node = int(config.neighbors_per_node)
@@ -70,6 +101,31 @@ class PRMGraphPlanner:
     def check_samples_feasibility(self, action_samples: torch.Tensor) -> torch.Tensor:
         """Return a device-resident boolean feasibility mask of shape ``[N]``."""
         self._validate_actions(action_samples)
+        feasible = torch.ones(
+            action_samples.shape[0], dtype=torch.bool, device=action_samples.device
+        )
+        if self.feasibility_rollout is not None and self.feasibility_rollout.action_dim:
+            # Metrics are intentionally evaluated at a horizon of one, just
+            # like V2's graph feasibility rollout.  Reduction handles both
+            # ordinary [batch, horizon] and seed-expanded manager layouts.
+            metrics = self.feasibility_rollout.compute_metrics_from_action(
+                action_samples.unsqueeze(1)
+            )
+            rollout_feasible = metrics.costs_and_constraints.get_feasible(
+                sum_horizon=True, include_all_hybrid=False
+            )
+            if isinstance(rollout_feasible, bool):
+                feasible &= rollout_feasible
+            elif isinstance(rollout_feasible, torch.Tensor):
+                if rollout_feasible.shape[0] != action_samples.shape[0]:
+                    raise ValueError(
+                        "rollout feasibility must preserve the PRM sample batch dimension"
+                    )
+                feasible &= rollout_feasible.to(dtype=torch.bool).reshape(
+                    action_samples.shape[0], -1
+                ).all(dim=-1)
+            else:
+                raise TypeError("rollout feasibility must be bool or a torch tensor")
         if self.config.check_feasibility_fn is not None:
             result = self.config.check_feasibility_fn(action_samples)
             if not isinstance(result, torch.Tensor):
@@ -78,9 +134,9 @@ class PRMGraphPlanner:
                 raise ValueError("check_feasibility_fn must return bool shape [N]")
             if result.device != action_samples.device:
                 raise ValueError("check_feasibility_fn must return a mask on the input device")
-            return result
+            return feasible & result
         # A world-less graph planner is a valid all-free-space configuration.
-        return torch.ones(action_samples.shape[:-1], dtype=torch.bool, device=action_samples.device)
+        return feasible
 
     def _append_samples(self, samples: torch.Tensor) -> None:
         if samples.numel() == 0:
@@ -343,7 +399,9 @@ class PRMGraphPlanner:
         lengths = torch.where(similar, torch.zeros_like(lengths), lengths)
         return GraphPlannerResult(
             success, plans, None, self.joint_names, lengths,
-            time.perf_counter() - begin, bool(success.all()),
+            # The query has already passed endpoint feasibility.  A missing
+            # path is a planner outcome, not invalid input.
+            time.perf_counter() - begin, True,
             {
                 "status": backend.status,
                 "metrics": backend.metrics,
@@ -378,7 +436,9 @@ class PRMGraphPlanner:
                 success &= mask.reshape(x_start.shape[0], interpolation_steps).all(dim=1)
         path_result.success = success
         path_result.interpolated_waypoints = interpolated
-        path_result.valid_query = bool(success.all())
+        # ``valid_query`` records start/end validity, not planner success.
+        # A valid but disconnected roadmap is therefore a valid failed query,
+        # matching V2's result contract.
         return path_result
 
     def get_interpolated_trajectory(
@@ -433,9 +493,8 @@ class PRMGraphPlanner:
         )
 
     def get_all_rollout_instances(self) -> List[Any]:
-        # There is no CUDA RobotRollout.  Returning an empty list is the
-        # pinned-compatible capability signal for portable direct PRM users.
-        return []
+        return [rollout for rollout in (self.feasibility_rollout, self.auxiliary_rollout)
+                if rollout is not None]
 
     def warmup(self, num_warmup_iterations: int = 10, max_batch_size: int = 4) -> None:
         if not isinstance(num_warmup_iterations, int) or num_warmup_iterations < 0:
@@ -498,6 +557,8 @@ class PRMGraphPlanner:
 
     @property
     def kinematics(self) -> Any:
+        if self.auxiliary_rollout is not None and self.auxiliary_rollout.transition_model is not None:
+            return self.auxiliary_rollout.transition_model.robot_model
         if self.config.robot_config is None:
             raise NotImplementedError("PRM kinematics requires a portable RobotCfg")
         from curobo.kinematics import Kinematics
@@ -506,7 +567,11 @@ class PRMGraphPlanner:
 
     @property
     def transition_model(self) -> Any:
-        raise NotImplementedError("CUDA rollout transition models are not used by portable PRM")
+        if self.auxiliary_rollout is not None and self.auxiliary_rollout.transition_model is not None:
+            return self.auxiliary_rollout.transition_model
+        raise NotImplementedError(
+            "PRM transition_model requires a compiled portable rollout transition config"
+        )
 
     def compute_kinematics(self, state: JointState) -> Any:
         return self.kinematics.compute_kinematics(state)
