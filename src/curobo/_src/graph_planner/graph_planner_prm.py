@@ -16,11 +16,16 @@ import torch
 
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
 from curobo._src.graph_planner.result import GraphPlannerResult
+from curobo._src.graph_planner.search.path_finder_networkx import NetworkXPathFinder
 from curobo._src.geom.collision.collision_scene import create_scene_collision
 from curobo._src.rollout.rollout_robot import RobotRollout
 from curobo._src.state.state_joint import JointState
 from curobo._src.util.trajectory import TrajInterpolationType, linear_smooth
-from curobo_metal.ops.graph_planning import GraphPlanningProblem, PersistentRoadmap
+from curobo_metal.ops.graph_planning import (
+    GraphPlanningProblem,
+    PersistentRoadmap,
+    interpolate_edge,
+)
 
 
 class PRMGraphPlanner:
@@ -76,6 +81,13 @@ class PRMGraphPlanner:
         self._roadmap_samples: torch.Tensor | None = None
         self._roadmap_neighbors_per_node = int(config.neighbors_per_node)
         self._cspace_distance_weight: torch.Tensor | None = None
+        # The production graph operator owns the query-specific terminal
+        # graph.  V2 also exposes a small persistent NetworkX graph through
+        # private-but-widely-used inspection helpers.  Keep that meaningful
+        # for callers that extend a roadmap and inspect/find paths by node
+        # index, without pretending that it is a CUDA/Warp graph buffer.
+        self.graph_path_finder = NetworkXPathFinder(seed=int(config.graph_path_finder_seed))
+        self._compat_graph_generation = -1
         self._last_backend: Any | None = None
         self._generation = 0
         self._reset_sampler()
@@ -156,6 +168,127 @@ class PRMGraphPlanner:
         # shape entries without discarding the PersistentRoadmap object itself.
         self._roadmap.cache.reset()
         self._generation += 1
+        self._refresh_compat_graph()
+
+    def _compat_candidate_pairs(self, samples: torch.Tensor) -> list[tuple[int, int]]:
+        """Return stable weighted-kNN pairs for the observable PRM graph.
+
+        This is deliberately a control-plane operation.  The actual points
+        and all collision checks remain device tensors; only the small
+        deterministic neighbour ordering is materialized on CPU, exactly as
+        the portable graph planner already does for shortest-path control
+        flow.  It supports the useful ``connection_radius``/``k`` policy but
+        does not claim upstream CUDA neighbour-kernel equivalence.
+        """
+        count = int(samples.shape[0])
+        if count < 2:
+            return []
+        weighted = (samples * self.cspace_distance_weight).detach().cpu().double()
+        distances = torch.cdist(weighted, weighted).tolist()
+        pairs: set[tuple[int, int]] = set()
+        radius = self.config.connection_radius
+        for index, row in enumerate(distances):
+            candidates = sorted(
+                ((float(distance), other) for other, distance in enumerate(row) if other != index),
+                key=lambda item: (item[0], item[1]),
+            )
+            if radius is not None:
+                candidates = [item for item in candidates if item[0] <= float(radius)]
+            candidates = candidates[: max(1, int(self._roadmap_neighbors_per_node))]
+            for _, other in candidates:
+                pairs.add((min(index, other), max(index, other)))
+        return sorted(pairs)
+
+    def _refresh_compat_graph(self) -> None:
+        """Rebuild the persistent, inspectable PRM graph after node changes.
+
+        ``PersistentRoadmap`` caches query samples rather than graph indices,
+        so it cannot service V2's ``_find_path_for_index_pairs`` contract by
+        itself.  This bounded companion graph is updated only when explicit
+        roadmap nodes change.  Edge validation is routed through the same
+        feasibility callback used by normal CPU/MPS planning.
+        """
+        if self._compat_graph_generation == self._generation:
+            return
+        self.graph_path_finder.reset_graph()
+        samples = self._roadmap_samples
+        if samples is None or samples.shape[0] == 0:
+            self._compat_graph_generation = self._generation
+            return
+        self.graph_path_finder.add_nodes(range(samples.shape[0]))
+        pairs = self._compat_candidate_pairs(samples)
+        if pairs:
+            pieces = [interpolate_edge(samples[left], samples[right], self.config.edge_step)
+                      for left, right in pairs]
+            lengths = [piece.shape[0] for piece in pieces]
+            mask = self.check_samples_feasibility(torch.cat(pieces, dim=0))
+            for (left, right), valid in zip(pairs, torch.split(mask, lengths)):
+                if bool(valid.all().item()):
+                    distance = torch.linalg.vector_norm(
+                        (samples[right] - samples[left]) * self.cspace_distance_weight
+                    )
+                    self.graph_path_finder.add_edge(left, right, float(distance.item()))
+        self.graph_path_finder.update_graph()
+        self._compat_graph_generation = self._generation
+
+    def _set_roadmap_neighbors_per_node(self, value: int) -> None:
+        """Increase the persistent roadmap's neighbour policy and rebuild it.
+
+        Extension APIs accept a per-call neighbour count.  The portable query
+        cache does not encode that count, so changing it must also invalidate
+        the inspectable indexed graph instead of leaving callers with stale
+        connectivity.
+        """
+        updated = max(self._roadmap_neighbors_per_node, int(value))
+        if updated == self._roadmap_neighbors_per_node:
+            return
+        self._roadmap_neighbors_per_node = updated
+        self._compat_graph_generation = -1
+        self._refresh_compat_graph()
+
+    def _find_path_for_index_pairs(
+        self,
+        start_idx_list: List[int],
+        goal_idx_list: List[int],
+        return_length: bool = False,
+    ) -> Any:
+        """Find indexed roadmap paths through the persistent portable graph.
+
+        This preserves V2's private debugging hook: path entries are lists of
+        roadmap indices (or ``None`` when disconnected), with optional
+        weighted c-space lengths.  Terminal query paths still use the
+        production graph operator in :meth:`find_path`.
+        """
+        if len(start_idx_list) != len(goal_idx_list):
+            raise ValueError("Start and Goal idx length are not equal")
+        self._refresh_compat_graph()
+        paths: list[list[int] | None] = []
+        lengths: list[float] = []
+        for start, goal in zip(start_idx_list, goal_idx_list):
+            outcome = self.graph_path_finder.get_shortest_path(start, goal, return_length=True)
+            assert isinstance(outcome, tuple)
+            path, length = outcome
+            paths.append(path)
+            lengths.append(float(length))
+        return (paths, lengths) if return_length else paths
+
+    def _check_paths_exist(
+        self,
+        start_idx_list: List[int],
+        goal_idx_list: List[int],
+        require_all_paths: bool = False,
+    ) -> tuple[bool, list[bool]]:
+        """Check indexed persistent-roadmap connectivity deterministically."""
+        if len(start_idx_list) != len(goal_idx_list):
+            raise ValueError("Start and Goal idx length are not equal")
+        if not isinstance(require_all_paths, bool):
+            raise TypeError("require_all_paths must be bool")
+        self._refresh_compat_graph()
+        labels = [
+            self.graph_path_finder.path_exists(start, goal)
+            for start, goal in zip(start_idx_list, goal_idx_list)
+        ]
+        return (all(labels) if require_all_paths else any(labels)), labels
 
     def _random_samples(self, count: int) -> torch.Tensor:
         if not isinstance(count, int) or count < 0:
@@ -298,7 +431,7 @@ class PRMGraphPlanner:
             if samples.shape[0] == 0:
                 break
             self._append_samples(samples)
-            self._roadmap_neighbors_per_node = max(neighbors, self._roadmap_neighbors_per_node)
+            self._set_roadmap_neighbors_per_node(neighbors)
             problem = self._make_problem(x_start, x_goal)
             self._inject_roadmap_samples(problem, x_start.shape[0])
             backend = self._roadmap.plan(problem)
@@ -311,7 +444,7 @@ class PRMGraphPlanner:
                 1,
                 int(round(neighbors * float(self.config.neighbors_per_node_growth_factor))),
             )
-            self._roadmap_neighbors_per_node = max(self._roadmap_neighbors_per_node, neighbors)
+            self._set_roadmap_neighbors_per_node(neighbors)
         return backend
 
     def _interpolate_paths(
@@ -457,10 +590,13 @@ class PRMGraphPlanner:
         self._roadmap_neighbors_per_node = int(self.config.neighbors_per_node)
         self._last_backend = None
         self._generation += 1
+        self.graph_path_finder.reset_graph()
+        self._compat_graph_generation = self._generation
 
     def reset_seed(self) -> None:
         """Reset sampling streams while preserving the explicitly built roadmap."""
         self._reset_sampler()
+        self.graph_path_finder.reset_seed()
         # Fresh random query samples must be regenerated after seed reset.
         self._roadmap.cache.reset()
 
@@ -469,8 +605,8 @@ class PRMGraphPlanner:
     ) -> None:
         if not isinstance(neighbors_per_node, int) or neighbors_per_node <= 0:
             raise ValueError("neighbors_per_node must be positive")
+        self._set_roadmap_neighbors_per_node(neighbors_per_node)
         self._append_samples(self._feasible_random_samples(num_samples))
-        self._roadmap_neighbors_per_node = max(self._roadmap_neighbors_per_node, neighbors_per_node)
 
     def extend_roadmap_with_ellipsoidal_samples(
         self,
@@ -482,10 +618,10 @@ class PRMGraphPlanner:
     ) -> None:
         if not isinstance(neighbors_per_node, int) or neighbors_per_node <= 0:
             raise ValueError("neighbors_per_node must be positive")
+        self._set_roadmap_neighbors_per_node(neighbors_per_node)
         self._append_samples(
             self._ellipsoidal_samples(x_start, x_goal, max_sampling_radius, num_samples)
         )
-        self._roadmap_neighbors_per_node = max(self._roadmap_neighbors_per_node, neighbors_per_node)
 
     def reset_cuda_graph(self) -> None:
         raise NotImplementedError(
