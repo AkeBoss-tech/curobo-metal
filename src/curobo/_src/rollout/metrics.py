@@ -59,7 +59,27 @@ def _sum(values: Sequence[torch.Tensor], sum_horizon: bool) -> Optional[torch.Te
         raise TypeError("cost collection values must be torch tensors")
     if any(value.ndim == 0 for value in values):
         raise ValueError("cost collection values must include a batch dimension")
-    normalized = [value if value.ndim >= 3 else value.unsqueeze(-1) for value in values]
+    # A scalar term per batch has shape ``[B]`` rather than ``[B, H, C]``.
+    # It represents a single-horizon/single-component value, *not* a horizon
+    # whose reduction would accidentally collapse the batch axis.  Two-rank
+    # legacy terms are ``[B, H]`` and get a component axis.  All richer terms
+    # already follow the normal ``[..., H, C]`` layout.
+    normalized = [
+        value[:, None, None] if value.ndim == 1
+        else value[..., None] if value.ndim == 2
+        else value
+        for value in values
+    ]
+    reference = normalized[0]
+    prefix, horizon = reference.shape[:-2], reference.shape[-2]
+    for value in normalized[1:]:
+        if value.device != reference.device:
+            raise ValueError("cost collection values must be on the same device")
+        if value.shape[:-2] != prefix or value.shape[-2] != horizon:
+            raise ValueError(
+                "cost collection values must share batch/seed and horizon dimensions; "
+                f"expected {tuple(reference.shape[:-1])}, got {tuple(value.shape[:-1])}"
+            )
     result = torch.cat(normalized, dim=-1).sum(dim=-1)
     return result.sum(dim=-1, keepdim=True) if sum_horizon else result
 
@@ -131,6 +151,18 @@ def _detach(value: Any) -> Any:
 def _index(value: Any, index: Any) -> Any:
     if value is None:
         return None
+    if isinstance(value, (str, bytes, int, float, bool)):
+        return value
+    # Debug payloads regularly contain nested trace tensors.  Preserve the
+    # same batch/seed selection for those tensors while retaining strings and
+    # scalar metadata unchanged.  CUDA's opaque debug buffers are not
+    # reproduced; this gives portable callers a predictable value lifecycle.
+    if isinstance(value, dict):
+        return {key: _index(item, index) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_index(item, index) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_index(item, index) for item in value)
     try:
         return value[index]
     except (IndexError, KeyError, TypeError):
@@ -454,7 +486,7 @@ class RolloutMetrics(RolloutResult):
         convergence = None if self.convergence is None else self.convergence.get_only_batch_seed_indices(batch_idx, seed_idx)
         return type(self)(
             _index(self.actions, (batch_idx, seed_idx)), cc, _index(self.state, (batch_idx, seed_idx)),
-            self.debug, _index(self.feasible, (batch_idx, seed_idx)), convergence,
+            _index(self.debug, (batch_idx, seed_idx)), _index(self.feasible, (batch_idx, seed_idx)), convergence,
         )
 
     def copy_at_batch_seed_indices(self, other: "RolloutMetrics", batch_idx: Any, seed_idx: Any):
