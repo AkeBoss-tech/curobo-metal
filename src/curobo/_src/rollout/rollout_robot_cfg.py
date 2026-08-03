@@ -11,11 +11,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
+from curobo._src.geom.collision.collision_scene import SceneCollisionCfg
 from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
 from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.types.robot import RobotCfg
+from curobo._src.util.logging import log_and_raise
 
 
 _MANAGER_FIELDS = (
@@ -47,7 +50,7 @@ class RobotRolloutCfg:
     constraint_cfg: Optional[RobotCostManagerCfg] = None
     hybrid_cost_constraint_cfg: Optional[RobotCostManagerCfg] = None
     convergence_cfg: Optional[RobotCostManagerCfg] = None
-    scene_collision_cfg: Optional[Any] = None
+    scene_collision_cfg: Optional[SceneCollisionCfg] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.device_cfg, DeviceCfg):
@@ -124,8 +127,8 @@ class RobotRolloutCfg:
     @classmethod
     def create_with_component_types(
         cls,
-        data_dict: Mapping[str, Any],
-        robot_cfg: Any,
+        data_dict: Dict[str, Any],
+        robot_cfg: Union[Dict[str, Any], RobotCfg],
         device_cfg: DeviceCfg = DeviceCfg(),
         transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
         cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
@@ -166,4 +169,8 @@ class RobotRolloutCfg:
         return [value for value in values if value is not None]
 
 
-__all__ = ["RobotRolloutCfg"]
+__all__ = [
+    "Dict", "List", "RobotCfg", "RobotCostManagerCfg", "RobotRolloutCfg",
+    "RobotStateTransitionCfg", "SceneCollisionCfg", "Type", "Union", "DeviceCfg",
+    "log_and_raise",
+]

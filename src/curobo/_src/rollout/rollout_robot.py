@@ -10,15 +10,24 @@ Raw CUDA graph, stream, and packed-buffer interfaces remain unsupported.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, List, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
+from curobo._src.cost.cost_base import BaseCost
+from curobo._src.geom.collision.collision_scene import (
+    SceneCollision,
+    create_scene_collision,
+)
 from curobo._src.rollout.goal_registry import GoalRegistry
 from curobo._src.rollout.metrics import CostCollection, CostsAndConstraints, RolloutMetrics, RolloutResult
 from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_robot import RobotState
 from curobo._src.transition.robot_state_transition import RobotStateTransition
+from curobo._src.util.cuda_graph_util import GraphExecutor, create_graph_executor
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.sampling.sample_buffer import SampleBuffer
 
 from .cost_manager.cost_manager_robot import RobotCostManager
 from .rollout_robot_cfg import RobotRolloutCfg
@@ -86,6 +95,13 @@ class RobotRollout:
         return cls(device_cfg)
 
     def _initialize_components(self):
+        # Preserve V2's ownership rule: an explicitly supplied collision
+        # checker wins, otherwise a serializable scene configuration owns a
+        # checker for the lifetime of this rollout.  The factory is the
+        # portable CPU/MPS implementation, so this does not instantiate a
+        # Warp world or a CUDA-only collision object.
+        if self.scene_collision_checker is None and self.config.scene_collision_cfg is not None:
+            self.scene_collision_checker = create_scene_collision(self.config.scene_collision_cfg)
         self.transition_model = self._new_transition()
         self.metrics_transition_model = self._new_transition()
         for cfg_name, manager_name, metrics_name in (
@@ -156,7 +172,15 @@ class RobotRollout:
     def action_bounds(self):
         if self.transition_model is None:
             return (None, None)
-        return torch.stack((self.action_bound_lows, self.action_bound_highs))
+        # Third-party transition adapters sometimes expose CPU constants even
+        # when the rollout is configured for MPS.  Normalizing configuration
+        # constants is safe; unlike user actions/states this does not insert a
+        # hidden copy into an autograd graph.
+        low, high = self.action_bound_lows, self.action_bound_highs
+        if self.device_cfg is not None:
+            low = low.to(**self.device_cfg.as_torch_dict())
+            high = high.to(**self.device_cfg.as_torch_dict())
+        return torch.stack((low, high))
 
     @property
     def state_bounds(self):
@@ -335,6 +359,7 @@ class RobotRollout:
     def update_params(self, goal: GoalRegistry, num_particles=None):
         if not isinstance(goal, GoalRegistry):
             raise TypeError("goal must be GoalRegistry")
+        self._validate_goal_device(goal)
         # A hand-constructed GoalRegistry may carry only a current/seed joint
         # state (no pose or target state from which its dataclass derives the
         # batch size).  Infer that ordinary planning shape before expansion.
@@ -368,6 +393,32 @@ class RobotRollout:
             self.update_batch_size(self._num_particles_goal.batch_size * self._num_particles_goal.num_seeds)
         return True
 
+    def _validate_goal_device(self, goal: GoalRegistry) -> None:
+        """Reject mixed-device goal payloads before caching mutable buffers.
+
+        CUDA's packed goal buffers effectively enforced this at construction.
+        On portable eager execution an implicit ``copy_`` can otherwise fail
+        much later (or hide a CPU/MPS residency mistake behind an unrelated
+        cost call).  Goal objects with no tensor payload remain valid.
+        """
+        if self.device_cfg is None:
+            return
+        for name in (
+            "idxs_link_pose", "idxs_goal_js", "idxs_current_js", "idxs_seed_goal_js",
+            "idxs_enable", "idxs_env", "seed_enable_implicit_goal_js", "current_state_dt",
+        ):
+            value = getattr(goal, name, None)
+            if isinstance(value, torch.Tensor) and not self.device_cfg.is_same_torch_device(value.device):
+                raise ValueError(f"goal.{name} device does not match rollout device")
+        for name in ("goal_js", "seed_goal_js", "current_js"):
+            value = getattr(goal, name, None)
+            if value is not None and not self.device_cfg.is_same_torch_device(value.position.device):
+                raise ValueError(f"goal.{name} device does not match rollout device")
+        poses = getattr(goal, "link_goal_poses", None)
+        for value in (() if poses is None else (poses.position, poses.quaternion)):
+            if isinstance(value, torch.Tensor) and not self.device_cfg.is_same_torch_device(value.device):
+                raise ValueError("goal.link_goal_poses device does not match rollout device")
+
     def update_goal_dt(self, goal):
         """Update cached seed dt, or accept a scalar for legacy optimizer hooks."""
         if not isinstance(goal, GoalRegistry):
@@ -385,9 +436,13 @@ class RobotRollout:
         return True
 
     def update_batch_size(self, batch_size):
+        if isinstance(batch_size, bool):
+            raise TypeError("batch_size must be an integer")
         batch_size = int(batch_size)
         if batch_size < 0:
             raise ValueError("batch_size must be non-negative")
+        if batch_size == 0 and self.transition_model is not None:
+            raise ValueError("batch_size must be positive for a configured transition model")
         if self._batch_size == batch_size:
             return
         self._batch_size = batch_size
@@ -466,6 +521,8 @@ class RobotRollout:
     def sample_random_actions(self, n=0, bounded=True, horizon=None, num_samples=None):
         if num_samples is not None:
             n = num_samples
+        if isinstance(n, bool):
+            raise TypeError("number of action samples must be an integer")
         n = int(n or self.batch_size or 1)
         if n < 0:
             raise ValueError("number of action samples must be non-negative")
@@ -500,4 +557,10 @@ class RobotRollout:
         return self.sample_random_actions(self.batch_size or 1) if use_random else None
 
 
-__all__ = ["RobotRollout", "RobotRolloutCfg"]
+__all__ = [
+    "BaseCost", "CostCollection", "CostsAndConstraints", "Dict", "GoalRegistry",
+    "GraphExecutor", "JointState", "List", "Optional", "RobotRollout", "RobotRolloutCfg",
+    "RobotState", "RobotStateTransition", "RolloutMetrics", "RolloutResult", "SampleBuffer",
+    "SceneCollision", "create_graph_executor", "create_scene_collision", "log_and_raise",
+    "profiler", "torch",
+]
