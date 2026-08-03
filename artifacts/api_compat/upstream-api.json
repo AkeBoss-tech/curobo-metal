@@ -15762,9 +15762,9 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 8,
         "path": "curobo/_src/geom/data/data_cuboid.py",
-        "resolved_symbols": 13,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.geom.data.data_cuboid",
@@ -18241,9 +18241,9 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 6,
         "path": "curobo/_src/geom/data/data_voxel.py",
-        "resolved_symbols": 15,
+        "resolved_symbols": 18,
         "status": "partial"
       },
       "name": "curobo._src.geom.data.data_voxel",
@@ -31423,9 +31423,9 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 2,
         "path": "curobo/_src/optim/components/best_tracker.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 5,
         "status": "partial"
       },
       "name": "curobo._src.optim.components.best_tracker",
@@ -31650,9 +31650,9 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 2,
         "path": "curobo/_src/optim/components/debug_recorder.py",
-        "resolved_symbols": 1,
+        "resolved_symbols": 4,
         "status": "partial"
       },
       "name": "curobo._src.optim.components.debug_recorder",
