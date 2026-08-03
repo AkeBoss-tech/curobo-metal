@@ -36285,9 +36285,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 14,
         "path": "curobo/_src/optim/gradient/conjugate_gradient.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 10,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.conjugate_gradient",
@@ -38514,9 +38514,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 13,
         "path": "curobo/_src/optim/gradient/lbfgs.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 11,
         "status": "partial"
       },
       "name": "curobo._src.optim.gradient.lbfgs",
