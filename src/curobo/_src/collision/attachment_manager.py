@@ -15,6 +15,7 @@ from curobo._src.robot.types.kinematics_params import KinematicsParams
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.pose import Pose
+from curobo._src.util.logging import log_and_raise, log_info
 
 
 class _VertexMesh:
@@ -64,6 +65,14 @@ def _primitive_vertices(obstacle: Obstacle, device_cfg: DeviceCfg) -> torch.Tens
 
 
 class AttachmentManager:
+    """Own the single portable object attachment associated with a robot model.
+
+    The pinned V2 manager owns one attachment at a time.  This implementation
+    retains that ownership model, but makes the mutation transactional across
+    environment banks: a failed validation cannot resize the robot spheres or
+    partially disable a world object.  The actual sphere fitting and FK remain
+    ordinary PyTorch operations and therefore work on CPU and MPS.
+    """
     def __init__(
         self,
         kinematics: Kinematics,
@@ -84,6 +93,21 @@ class AttachmentManager:
     def kinematics_params(self) -> KinematicsParams:
         return self._kinematics.config.kinematics_config
 
+    @property
+    def attached_link_name(self) -> Optional[str]:
+        """Name of the currently attached link, or ``None`` when detached.
+
+        This is an additive portable lifecycle inspection helper.  Callers
+        needing the exact V2 private field can continue using
+        ``_attached_link_name``.
+        """
+        return self._attached_link_name
+
+    @property
+    def last_fit_result(self) -> Optional[SphereFitResult]:
+        """Most recent deterministic sphere-fit result, if any."""
+        return self._last_fit_result
+
     def fit_spheres(
         self,
         obstacles: List[Obstacle],
@@ -93,6 +117,8 @@ class AttachmentManager:
     ) -> torch.Tensor:
         if not obstacles:
             raise ValueError("obstacles must be non-empty")
+        if not all(isinstance(value, Obstacle) for value in obstacles):
+            raise TypeError("obstacles must contain Obstacle values")
         mesh = _VertexMesh(
             torch.cat(
                 [_primitive_vertices(value, self._device_cfg) for value in obstacles],
@@ -107,7 +133,73 @@ class AttachmentManager:
             device_cfg=self._device_cfg,
         )
         self._last_fit_result = result
+        fit_name = sphere_fit_type.value if isinstance(sphere_fit_type, SphereFitType) else sphere_fit_type
+        log_info(
+            f"AttachmentManager.fit_spheres: fitted {result.num_spheres} spheres "
+            f"using portable {fit_name}"
+        )
         return torch.cat((result.centers, result.radii[:, None]), dim=-1)
+
+    def _validate_joint_states(self, joint_states: JointState) -> torch.Tensor:
+        if not isinstance(joint_states, JointState):
+            raise TypeError("joint_states must be JointState")
+        q = joint_states.position
+        if not isinstance(q, torch.Tensor) or q.ndim not in (1, 2):
+            raise ValueError("joint_states.position must have shape [dof] or [env, dof]")
+        if q.shape[-1] != self._kinematics.dof:
+            raise ValueError(
+                f"joint_states has dof={q.shape[-1]}, expected {self._kinematics.dof}"
+            )
+        q = q.to(device=self._device_cfg.device, dtype=self._device_cfg.dtype)
+        if not bool(torch.isfinite(q).all().item()):
+            raise ValueError("joint_states.position must contain finite values")
+        return q.unsqueeze(0) if q.ndim == 1 else q
+
+    def _object_to_link_poses(
+        self,
+        q: torch.Tensor,
+        world_objects_pose_offset: Optional[Pose],
+    ) -> Optional[Pose]:
+        """Resolve an object pose once and normalize its environment rank."""
+        if world_objects_pose_offset is None:
+            return None
+        if not isinstance(world_objects_pose_offset, Pose):
+            raise TypeError("world_objects_pose_offset must be a Pose")
+        offset = world_objects_pose_offset.clone().to(device=self._device_cfg.device)
+        if offset.position is None or offset.quaternion is None:
+            raise ValueError("world_objects_pose_offset must contain position and quaternion")
+        if offset.position.dtype != q.dtype:
+            offset = Pose(offset.position.to(dtype=q.dtype), offset.quaternion.to(dtype=q.dtype))
+        pose_count = offset.position.reshape(-1, 3).shape[0]
+        if pose_count not in (1, q.shape[0]):
+            raise ValueError(
+                "world_objects_pose_offset must have one pose or one pose per environment"
+            )
+        if pose_count == 1 and q.shape[0] > 1:
+            offset = Pose(
+                offset.position.reshape(1, 3).expand(q.shape[0], -1),
+                offset.quaternion.reshape(1, 4).expand(q.shape[0], -1),
+            )
+        state = self._kinematics.compute_kinematics(
+            JointState.from_position(q, joint_names=self._kinematics.joint_names)
+        )
+        if state.tool_poses is None:
+            log_and_raise("FK result has no tool_poses; cannot resolve attachment offset.")
+        link_pose = state.tool_poses.get_link_pose(self._kinematics.tool_frames[0])
+        return link_pose.inverse().multiply(offset)
+
+    def _validate_disable_names(self, names: List[str], num_envs: int) -> None:
+        """Validate every target before changing any scene enable bit."""
+        if self._scene_collision is None:
+            return
+        for name in names:
+            if not isinstance(name, str) or not name:
+                raise ValueError("disable_obstacle_names must contain non-empty names")
+            for environment in range(num_envs):
+                if not self._scene_collision.check_obstacle_exists(name, environment):
+                    raise ValueError(
+                        f"obstacle {name!r} does not exist in environment {environment}"
+                    )
 
     def update(
         self,
@@ -116,6 +208,7 @@ class AttachmentManager:
         link_name: str = "attached_object",
         world_objects_pose_offset: Optional[Pose] = None,
     ) -> None:
+        q = self._validate_joint_states(joint_states)
         values = torch.as_tensor(
             sphere_tensor,
             device=self._device_cfg.device,
@@ -123,9 +216,10 @@ class AttachmentManager:
         )
         if values.ndim != 2 or values.shape[-1] != 4:
             raise ValueError("sphere_tensor must have shape [num_spheres,4]")
-        q = joint_states.position
-        if q.ndim == 1:
-            q = q.unsqueeze(0)
+        if values.shape[0] == 0:
+            raise ValueError("sphere_tensor must contain at least one sphere")
+        if not bool(torch.isfinite(values).all().item()):
+            raise ValueError("sphere_tensor must contain finite values")
         num_envs = q.shape[0]
         params = self.kinematics_params
         indices = params.get_sphere_index_from_link_name(link_name)
@@ -136,34 +230,20 @@ class AttachmentManager:
                 f"fitted {len(values)} spheres but link '{link_name}' has only "
                 f"{len(indices)} sphere slots"
             )
-        if params.link_spheres.shape[0] != num_envs:
-            params._link_spheres = params.link_spheres[:1].expand(
-                num_envs, -1, -1
-            ).clone()
-            params.reference_link_spheres = params.reference_link_spheres[:1].expand(
-                num_envs, -1, -1
-            ).clone()
-        if world_objects_pose_offset is not None:
-            state = self._kinematics.compute_kinematics(
-                JointState.from_position(q, joint_names=self._kinematics.joint_names)
-            )
-            link = (
-                link_name if link_name in self._kinematics.tool_frames
-                else self._kinematics.tool_frames[0]
-            )
-            link_pose = state.tool_poses.get_link_pose(link)
-            object_to_link = link_pose.inverse().multiply(world_objects_pose_offset)
-        else:
-            object_to_link = None
+        object_to_link = self._object_to_link_poses(q, world_objects_pose_offset)
+        # ``set_num_envs`` extends from immutable reference spheres instead of
+        # duplicating a currently attached environment.  That makes an update
+        # from one grasp to many deterministic and keeps detach reversible.
+        # Resolve/validate the optional offset first so a malformed pose rank
+        # cannot resize this caller-owned configuration bank.
+        params.set_num_envs(num_envs)
         padding = values.new_zeros((len(indices), 4))
         padding[:, 3] = -100.0
         for environment in range(num_envs):
             current = values
             if object_to_link is not None:
-                pose = Pose(
-                    object_to_link.position[environment : environment + 1],
-                    object_to_link.quaternion[environment : environment + 1],
-                )
+                pose = Pose(object_to_link.position[environment : environment + 1],
+                            object_to_link.quaternion[environment : environment + 1])
                 centers = pose.transform_points(values[:, :3]).reshape(-1, 3)
                 current = torch.cat((centers, values[:, 3:]), dim=-1)
             padding[: len(current)] = current
@@ -181,17 +261,24 @@ class AttachmentManager:
         world_objects_pose_offset: Optional[Pose] = None,
         disable_obstacle_names: Optional[List[str]] = None,
     ) -> None:
+        q = self._validate_joint_states(joint_states)
+        names = list(disable_obstacle_names or [])
+        self._validate_disable_names(names, q.shape[0])
+        # The upstream record has one attached-link field.  Do not leave a
+        # prior attachment or its disabled world geometry stranded when this
+        # manager is reused for a new payload.
+        if self._attached_link_name is not None or self._disabled_obstacle_names:
+            self.detach()
         values = self.fit_spheres(
             obstacles, num_spheres, surface_radius, sphere_fit_type
         )
-        self.update(values, joint_states, link_name, world_objects_pose_offset)
-        if disable_obstacle_names and self._scene_collision is not None:
-            num_envs = self._get_num_envs(joint_states)
-            for name in disable_obstacle_names:
-                for environment in range(num_envs):
+        self.update(values, JointState.from_position(q, joint_names=joint_states.joint_names), link_name, world_objects_pose_offset)
+        if names and self._scene_collision is not None:
+            for name in names:
+                for environment in range(q.shape[0]):
                     self._scene_collision.enable_obstacle(name, False, environment)
-            self._disabled_obstacle_names = list(disable_obstacle_names)
-            self._disabled_num_envs = num_envs
+            self._disabled_obstacle_names = names
+            self._disabled_num_envs = q.shape[0]
 
     def attach_from_scene(
         self,
@@ -203,6 +290,8 @@ class AttachmentManager:
         sphere_fit_type: SphereFitType = SphereFitType.MORPHIT,
         world_objects_pose_offset: Optional[Pose] = None,
     ) -> None:
+        if not obstacle_names:
+            raise ValueError("obstacle_names must be non-empty")
         if self._scene_collision is None or self._scene_collision.scene_model is None:
             raise ValueError("attach_from_scene requires a configured scene_collision")
         scene = self._scene_collision.scene_model
@@ -239,9 +328,10 @@ class AttachmentManager:
             for name in names:
                 for environment in range(self._disabled_num_envs):
                     self._scene_collision.enable_obstacle(name, True, environment)
-        self._attached_link_name = None
-        self._disabled_obstacle_names = []
-        self._disabled_num_envs = 0
+        if link == self._attached_link_name:
+            self._attached_link_name = None
+            self._disabled_obstacle_names = []
+            self._disabled_num_envs = 0
 
     @staticmethod
     def _obstacles_to_trimesh(obstacles: List[Obstacle]):
