@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, fields
-from typing import Any, Optional
+from numbers import Real
+from typing import Any, Optional, Sequence, Union
 
 import torch
 
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
+
+
+_BatchIndex = Union[int, slice, torch.Tensor, Sequence[int]]
 
 
 def _clone_value(value: Any) -> Any:
@@ -98,6 +102,41 @@ def _select_value(value: Any, index: Any, batch_size: int) -> Any:
     return value
 
 
+def _normalise_batch_index(
+    index: _BatchIndex, *, batch_size: int, device: torch.device
+) -> torch.Tensor:
+    """Return a valid rank-one index without dropping the batch dimension."""
+    if isinstance(index, slice):
+        output = torch.arange(batch_size, device=device, dtype=torch.long)[index]
+    elif isinstance(index, int):
+        normalised = index + batch_size if index < 0 else index
+        if normalised < 0 or normalised >= batch_size:
+            raise IndexError("motion planner result batch index is out of range")
+        output = torch.tensor([normalised], device=device, dtype=torch.long)
+    elif isinstance(index, torch.Tensor):
+        output = index.to(device=device)
+    elif isinstance(index, (list, tuple)):
+        output = torch.as_tensor(index, device=device)
+    else:
+        raise TypeError("batch index must be an int, slice, sequence, or tensor")
+
+    if output.ndim == 0:
+        output = output.reshape(1)
+    if output.ndim != 1:
+        raise IndexError("motion planner result batch index must be one-dimensional")
+    if output.dtype == torch.bool:
+        if output.numel() != batch_size:
+            raise IndexError("boolean batch index must have batch_size elements")
+        return output
+    if output.dtype not in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8):
+        raise TypeError("batch index tensor must be integer or boolean")
+    output = output.to(dtype=torch.long)
+    output = torch.where(output < 0, output + batch_size, output)
+    if output.numel() and (output.min() < 0 or output.max() >= batch_size):
+        raise IndexError("motion planner result batch index is out of range")
+    return output
+
+
 class _PortableResultMixin:
     """Portable lifecycle shared by motion and grasp result containers."""
 
@@ -111,6 +150,79 @@ class _PortableResultMixin:
         status = getattr(self, "status", None)
         if status is not None and not isinstance(status, str):
             raise TypeError("status must be a string or None")
+
+    def validate(self):
+        """Validate materialised batch, stage, and device invariants.
+
+        V2 leaves these payloads as a permissive dataclass so partially
+        produced plans can be returned on failure.  This opt-in check is for
+        applications that retain or combine results and need to detect a
+        mixed-device/shape payload before using it.  It only covers ordinary
+        tensor and :class:`JointState` values; CUDA graph/result-buffer ABI
+        objects remain outside the portable contract.
+        """
+        success = getattr(self, "success", None)
+        if success is not None:
+            if not isinstance(success, torch.Tensor):
+                raise TypeError("success must be a torch.Tensor or None")
+            if success.dtype is not torch.bool:
+                raise TypeError("success must have dtype torch.bool")
+
+        status = getattr(self, "status", None)
+        if status is not None and not isinstance(status, str):
+            raise TypeError("status must be a string or None")
+
+        planning_time = getattr(self, "planning_time", None)
+        if planning_time is not None:
+            if not isinstance(planning_time, Real):
+                raise TypeError("planning_time must be a real scalar")
+            if planning_time < 0:
+                raise ValueError("planning_time must be non-negative")
+
+        if success is None:
+            return self
+        batch = self.batch_size
+        for name in ("approach_success", "grasp_success", "lift_success"):
+            value = getattr(self, name, None)
+            if value is None:
+                continue
+            if not isinstance(value, torch.Tensor) or value.dtype is not torch.bool:
+                raise TypeError(f"{name} must be a torch.bool tensor or None")
+            if value.device != success.device:
+                raise ValueError(f"{name} must share the success tensor device")
+            if value.shape != success.shape:
+                raise ValueError(f"{name} must have the same shape as success")
+
+        for name in (
+            "approach_trajectory", "approach_interpolated_trajectory",
+            "grasp_trajectory", "grasp_interpolated_trajectory",
+            "lift_trajectory", "lift_interpolated_trajectory",
+        ):
+            value = getattr(self, name, None)
+            if value is None:
+                continue
+            if not isinstance(value, JointState):
+                raise TypeError(f"{name} must be a JointState or None")
+            if value.device != success.device:
+                raise ValueError(f"{name} must share the success tensor device")
+            if batch and (value.position.ndim < 1 or value.position.shape[0] != batch):
+                raise ValueError(f"{name} must have the result batch as its leading dimension")
+
+        for name in (
+            "approach_trajectory_dt", "grasp_trajectory_dt", "lift_trajectory_dt",
+            "approach_interpolated_last_tstep", "grasp_interpolated_last_tstep",
+            "lift_interpolated_last_tstep", "goalset_index",
+        ):
+            value = getattr(self, name, None)
+            if value is None:
+                continue
+            if not isinstance(value, torch.Tensor):
+                raise TypeError(f"{name} must be a torch.Tensor or None")
+            if value.device != success.device:
+                raise ValueError(f"{name} must share the success tensor device")
+            if value.ndim and batch and value.shape[0] != batch:
+                raise ValueError(f"{name} must have the result batch as its leading dimension")
+        return self
 
     @property
     def batch_size(self) -> int:
@@ -159,6 +271,18 @@ class _PortableResultMixin:
         success = self.success_per_problem
         return bool(success is not None and success.numel() > 0 and success.all().item())
 
+    @property
+    def num_failures(self) -> int:
+        """Number of failed planning problems after collapsing seed rank."""
+        success = self.success_per_problem
+        return 0 if success is None else int((~success).sum().item())
+
+    @property
+    def failure_mask(self) -> Optional[torch.Tensor]:
+        """Per-problem boolean failure mask, or ``None`` before planning."""
+        success = self.success_per_problem
+        return None if success is None else ~success
+
     def clone(self):
         """Return an independent result, including dynamically attached stages."""
         output = type(self)(**{
@@ -193,6 +317,29 @@ class _PortableResultMixin:
         for name, value in tuple(output.__dict__.items()):
             setattr(output, name, _to_value(value, device_cfg))
         return output
+
+    def select_batch(self, index: _BatchIndex):
+        """Select result rows while preserving a leading problem batch axis.
+
+        Unlike ``result[index]``, selecting an integer produces one problem
+        with shape ``[1, ...]``.  That makes the selected value immediately
+        reusable by batched portable motion-planning APIs.
+        """
+        if self.batch_size == 0:
+            raise IndexError("cannot select a batch from a result without a batched success tensor")
+        device = self.device if self.device is not None else torch.device("cpu")
+        indices = _normalise_batch_index(index, batch_size=self.batch_size, device=device)
+        output = self.clone()
+        for name, value in tuple(output.__dict__.items()):
+            setattr(output, name, _select_value(value, indices, self.batch_size))
+        return output
+
+    def successful(self):
+        """Return successful problem rows with a preserved batch dimension."""
+        success = self.success_per_problem
+        if success is None or success.ndim == 0:
+            raise ValueError("a batched success tensor is required to filter successful results")
+        return self.select_batch(success)
 
     def __getitem__(self, index: Any):
         """Select a problem batch while retaining all stage metadata."""
