@@ -10,7 +10,7 @@ It deliberately does *not* claim CUDA graph or Warp-buffer compatibility.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 
@@ -46,15 +46,26 @@ class MultiStageOptimizer:
 
     def _validate_stage_layouts(self) -> None:
         final_size = self.action_horizon * self.action_dim
+        final_problems = int(self.config.num_problems)
+        if final_problems <= 0:
+            raise ValueError("final optimizer config.num_problems must be positive")
         for index, optimizer in enumerate(self.optimizers):
             try:
                 stage_size = int(optimizer.action_horizon) * int(optimizer.action_dim)
+                stage_problems = int(optimizer.config.num_problems)
             except AttributeError as error:
-                raise TypeError(f"optimizer stage {index} does not expose action_horizon/action_dim") from error
+                raise TypeError(
+                    f"optimizer stage {index} does not expose config/action_horizon/action_dim"
+                ) from error
             if stage_size != final_size:
                 raise ValueError(
                     "all multi-stage optimizers must have the same action size per problem; "
                     f"stage {index} has {stage_size}, final stage has {final_size}"
+                )
+            if stage_problems != final_problems:
+                raise ValueError(
+                    "all multi-stage optimizers must have the same num_problems; "
+                    f"stage {index} has {stage_problems}, final stage has {final_problems}"
                 )
 
     # -- Properties ---------------------------------------------------------
@@ -142,45 +153,89 @@ class MultiStageOptimizer:
         return action.reshape(problems, horizon, action_dim)
 
     @staticmethod
+    def _validate_stage_output(
+        output: Any, seed: torch.Tensor, optimizer: Any
+    ) -> torch.Tensor:
+        """Reject accidental host/device or dtype transitions between stages.
+
+        CUDA graphs keep each stage's action buffer on a single device.  The
+        eager backend has no graph buffer to provide that safety, so make the
+        invariant explicit instead of silently accepting an MPS-to-CPU copy
+        (or a precision change) between otherwise composable stages.
+        """
+
+        if not isinstance(output, torch.Tensor):
+            raise TypeError(
+                f"optimizer {type(optimizer).__name__}.optimize must return a torch.Tensor"
+            )
+        if output.device != seed.device:
+            raise ValueError(
+                f"optimizer {type(optimizer).__name__} changed action device "
+                f"from {seed.device} to {output.device}"
+            )
+        if output.dtype != seed.dtype:
+            raise ValueError(
+                f"optimizer {type(optimizer).__name__} changed action dtype "
+                f"from {seed.dtype} to {output.dtype}"
+            )
+        if output.numel() != seed.numel():
+            raise ValueError(
+                f"optimizer {type(optimizer).__name__} returned {output.numel()} action values, "
+                f"expected {seed.numel()}"
+            )
+        return output
+
+    @staticmethod
     def _synchronize(tensor: torch.Tensor) -> None:
         if tensor.device.type == "mps":
             torch.mps.synchronize()
 
-    def optimize(self, seed_action: torch.Tensor) -> torch.Tensor:
-        """Run enabled stages in order and return a final ``[B,H,D]`` tensor."""
+    def _run_stages(
+        self, iteration_state: OptimizationIterationState
+    ) -> OptimizationIterationState:
+        """Execute stage composition without recursively entering ``optimize``."""
 
-        current = self._canonical_seed(seed_action)
-        if not self.enabled:
-            self._last_iteration_state = OptimizationIterationState(
-                action=current, best_action=current
-            )
-            self._last_stage_outputs = ()
-            return current
-
-        start = time.perf_counter()
+        current = iteration_state.best_action
+        if current is None:
+            current = iteration_state.action
+        current = self._canonical_seed(current)
         outputs: list[torch.Tensor] = []
-        for optimizer in self.optimizers:
-            if not bool(getattr(optimizer, "enabled", True)):
-                continue
-            stage_seed = self._stage_seed(current, optimizer)
-            optimized = optimizer.optimize(stage_seed)
-            if not isinstance(optimized, torch.Tensor):
-                raise TypeError(
-                    f"optimizer {type(optimizer).__name__}.optimize must return a torch.Tensor"
+        if self.enabled:
+            for optimizer in self.optimizers:
+                if not bool(getattr(optimizer, "enabled", True)):
+                    continue
+                stage_seed = self._stage_seed(current, optimizer)
+                optimized = self._validate_stage_output(
+                    optimizer.optimize(stage_seed), stage_seed, optimizer
                 )
-            current = self._stage_seed(optimized, optimizer)
-            outputs.append(current.detach().clone())
+                current = self._stage_seed(optimized, optimizer)
+                outputs.append(current.detach().clone())
 
         # Convert the last stage's layout back to the public final-stage view.
         result = current.reshape(
             int(self.config.num_problems), self.action_horizon, self.action_dim
         )
-        self._synchronize(result)
-        self.opt_dt = time.perf_counter() - start
-        self._last_iteration_state = OptimizationIterationState(
-            action=result, best_action=result
+        result_state = OptimizationIterationState(
+            action=result,
+            exploration_action=result,
+            best_action=result,
         )
         self._last_stage_outputs = tuple(outputs)
+        self._last_iteration_state = result_state
+        return result_state
+
+    def optimize(self, seed_action: torch.Tensor) -> torch.Tensor:
+        """Run enabled stages in order and return a final ``[B,H,D]`` tensor."""
+
+        current = self._canonical_seed(seed_action)
+        start = time.perf_counter()
+        result_state = self._run_stages(
+            OptimizationIterationState(action=current, exploration_action=current)
+        )
+        result = result_state.best_action
+        assert result is not None  # Internal invariant established by _run_stages.
+        self._synchronize(result)
+        self.opt_dt = time.perf_counter() - start
         return result
 
     def _opt_iters(self, iteration_state: OptimizationIterationState) -> OptimizationIterationState:
@@ -188,11 +243,7 @@ class MultiStageOptimizer:
 
         if not isinstance(iteration_state, OptimizationIterationState):
             raise TypeError("iteration_state must be an OptimizationIterationState")
-        action = iteration_state.best_action
-        if action is None:
-            action = iteration_state.action
-        result = self.optimize(action)
-        return self._last_iteration_state or OptimizationIterationState(action=result, best_action=result)
+        return self._run_stages(iteration_state)
 
     # -- Lifecycle ----------------------------------------------------------
 
@@ -208,12 +259,14 @@ class MultiStageOptimizer:
         clear_optimizer_state: bool = True,
         reset_num_iters: bool = False,
     ) -> None:
+        canonical_action = self._canonical_seed(action)
         for optimizer in self.optimizers:
             if bool(getattr(optimizer, "enabled", True)):
+                stage_action = self._stage_seed(canonical_action, optimizer)
                 self._call_lifecycle(
                     optimizer,
                     "reinitialize",
-                    action,
+                    stage_action,
                     mask=mask,
                     clear_optimizer_state=clear_optimizer_state,
                     reset_num_iters=reset_num_iters,
