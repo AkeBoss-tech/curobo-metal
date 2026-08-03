@@ -58,6 +58,13 @@ class MPCSolverCfg:
             _positive_int(name, getattr(self, name))
         for name in ("position_tolerance", "orientation_tolerance", "optimizer_collision_activation_distance", "optimization_dt", "max_deceleration_time"):
             _positive_finite(name, getattr(self, name))
+        if (isinstance(self.non_terminal_tool_pose_weight_factor, bool)
+                or not isinstance(self.non_terminal_tool_pose_weight_factor, (float, int))
+                or not math.isfinite(self.non_terminal_tool_pose_weight_factor)
+                or self.non_terminal_tool_pose_weight_factor < 0):
+            raise ValueError(
+                "non_terminal_tool_pose_weight_factor must be finite and nonnegative"
+            )
         if self.deceleration_time is not None:
             _positive_finite("deceleration_time", self.deceleration_time)
         if self.deceleration_profile != "exponential":

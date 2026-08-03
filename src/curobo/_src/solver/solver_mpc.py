@@ -18,6 +18,7 @@ from curobo._src.solver.solver_trajopt import TrajOptSolver
 from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.util.trajectory_execution_manager import TrajectoryExecutionManager
 
 from .solver_mpc_cfg import MPCSolverCfg
 from .solver_mpc_result import MPCSolverResult
@@ -45,6 +46,9 @@ class MPCSolver:
         traj_cfg = TrajOptSolverCfg.create(
             config.robot_config, device_cfg=config.device_cfg,
             num_seeds=max(config.num_seeds, 1),
+            max_batch_size=config.max_batch_size,
+            multi_env=config.multi_env,
+            max_goalset=config.max_goalset,
             interpolation_dt=config.optimization_dt,
             use_cuda_graph=False,
             override_optimizer_num_iters={
@@ -58,6 +62,13 @@ class MPCSolver:
         self._goal_state: Optional[JointState] = None
         self._current_state: Optional[JointState] = None
         self._seed_trajectory = None
+        # Keep the public execution-manager object even though its buffers
+        # are ordinary PyTorch tensors here.  This makes command consumption
+        # obey the same interpolation-window lifecycle on CPU and MPS as the
+        # pinned CUDA facade, without claiming CUDA graph ownership.
+        self.trajectory_execution_manager = TrajectoryExecutionManager(
+            config.interpolation_steps
+        )
         # ``TrajectoryExecutionManager`` in the CUDA implementation owns a
         # graph-resident action ring buffer.  Keep the semantic part of that
         # contract locally: a regular tensor buffer and cursor.  In
@@ -168,6 +179,7 @@ class MPCSolver:
             batch_size, max(self.config.num_seeds, 1), current_state
         )
         self._action_buffer = None
+        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
         self._action_cursor = 0
         self._solve_count = 0
         self._setup_complete = True
@@ -259,6 +271,7 @@ class MPCSolver:
         self._require_solver_tensor(values, "seed_trajectory")
         self._seed_trajectory = values.clone()
         self._action_buffer = values[:, 0].clone() if values.ndim == 4 else values.clone()
+        self.trajectory_execution_manager.update_action_buffer(self._action_buffer)
         self._action_cursor = 0
         self._warm_start_available = True
 
@@ -296,9 +309,6 @@ class MPCSolver:
         # ``optimize_next_action`` consumes that command through the buffer
         # cursor below; keeping this at zero avoids silently skipping a step.
         next_index = 0
-        next_action = sequence.position[..., next_index, :]
-        if next_action.ndim > 2:
-            next_action = next_action[:, 0]
         sequence_values = sequence.position
         # An infeasible rollout still needs a physically conservative command
         # for the robot.  Preserve the solver's failure status but replace its
@@ -311,8 +321,15 @@ class MPCSolver:
             sequence_values = sequence_values.clone()
             sequence_values[~success_flat] = safe[~success_flat]
             sequence = JointState.from_position(sequence_values, self.joint_names)
+        # Compute the immediate command only after safe fallback substitution.
+        # Returning an infeasible optimizer command while exposing a safe
+        # action buffer is a dangerous mismatch for a control loop.
+        next_action = sequence_values[:, next_index, :]
         self._seed_trajectory = sequence_values.detach().clone()
         self._action_buffer = sequence_values.detach().clone()
+        self.trajectory_execution_manager.update_state_action_buffers(
+            sequence.detach().clone(), self._action_buffer
+        )
         self._action_cursor = 0
         self._solve_count += 1
         mpc_result = MPCSolverResult(
@@ -350,7 +367,7 @@ class MPCSolver:
         # A cold plan initializes the portable buffer.  Subsequent calls
         # consume it exactly once per command; re-plan only after the final
         # command has been consumed, matching the upstream execution manager.
-        if self._action_buffer is None or self._action_cursor >= self.action_horizon:
+        if self._action_buffer is None or not self.trajectory_execution_manager.has_valid_next_command():
             if not self._warm_start_available:
                 self.cold_start_solve(current_state)
             else:
@@ -376,6 +393,7 @@ class MPCSolver:
         )
         self._warm_start_available = False
         self._action_buffer = None
+        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
         self._action_cursor = 0
     def reset_robot_id(self, current_state, robot_ids):
         self.update_current_state(current_state)
@@ -383,9 +401,21 @@ class MPCSolver:
         goal = self._goal_state.clone()
         goal[ids] = self._current_state[ids]
         self.update_goal_state(goal)
-        self._warm_start_available = False
-        self._action_buffer = None
-        self._action_cursor = 0
+        # Preserve valid plans for robots outside ``robot_ids``.  CUDA cuRobo
+        # mutates only those queue rows; clearing the entire portable queue
+        # caused unrelated robots in a batch to lose their receding horizon.
+        if self._action_buffer is not None:
+            reset = self.prepare_trajectory_seeds(
+                self.problem_batch_size, 1, self._current_state
+            )[:, 0]
+            buffer = self._action_buffer.clone()
+            buffer[ids] = reset[ids]
+            self._action_buffer = buffer
+            self.trajectory_execution_manager.update_state_action_buffers(
+                JointState.from_position(buffer.clone(), self.joint_names), buffer
+            )
+            self._action_cursor = 0
+        self._warm_start_available = self._action_buffer is not None
     def reset_shape(self):
         self._solve_state = None
         self._goal_tool_poses = None
@@ -393,6 +423,7 @@ class MPCSolver:
         self._current_state = None
         self._seed_trajectory = None
         self._action_buffer = None
+        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
         self._action_cursor = 0
         self._solve_count = 0
         self._setup_complete = False
@@ -401,6 +432,7 @@ class MPCSolver:
     def reset_seed(self):
         self._warm_start_available = False
         self._action_buffer = None
+        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
         self._action_cursor = 0
         return self._trajopt.reset_seed()
     def reset_cuda_graph(self):
@@ -492,10 +524,15 @@ class MPCSolver:
         """Return a command from the existing MPC plan without re-solving."""
         if self._action_buffer is None or self._last_result is None:
             raise RuntimeError("no portable MPC action buffer is available")
-        index = min(self._action_cursor, self.action_horizon - 1)
-        next_action = self._action_buffer[:, index].clone()
+        # The execution manager deliberately limits consumption to the
+        # interpolation window, prompting a warm-start replan before stale
+        # commands leak past that window.  Its command tensor preserves all
+        # state derivative channels where the optimizer produced them.
+        index = self.trajectory_execution_manager.command_index
+        next_action_state = self.trajectory_execution_manager.get_next_command()
+        next_action = next_action_state.position
         result = self._last_result.clone()
-        result.next_action = JointState.from_position(next_action, self.joint_names)
+        result.next_action = next_action_state
         result.action_sequence = JointState.from_position(self._action_buffer.clone(), self.joint_names)
         result.full_action_sequence = result.action_sequence.clone()
         result.action_buffer = self._action_buffer.clone()
@@ -506,7 +543,7 @@ class MPCSolver:
             "reoptimized": False,
             "solve_count": self._solve_count,
         })
-        self._action_cursor += 1
+        self._action_cursor = self.trajectory_execution_manager.command_index
         return result
 
     def prepare_safe_deceleration_trajectory(
