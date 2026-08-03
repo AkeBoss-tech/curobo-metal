@@ -10,6 +10,8 @@ module implements that contract without a CUDA graph or a raw CUDA kernel.
 from __future__ import annotations
 
 from enum import Enum
+import math
+from numbers import Real
 from typing import Any, Callable
 
 import torch
@@ -104,12 +106,20 @@ class LineSearchStrategy:
     they own one.
     """
 
+    def __init__(self):
+        # CPU/MPS search has no CUDA output buffers, but retaining the resized
+        # batch count makes the strategy safely reusable by V2 solver cores.
+        self.num_problems: int | None = None
+
     def update_num_problems(self, num_problems: int, context: Any | None = None):
-        if num_problems <= 0:
+        if isinstance(num_problems, bool) or not isinstance(num_problems, int) or num_problems <= 0:
             raise ValueError("num_problems must be positive")
         self.num_problems = int(num_problems)
         if context is not None:
-            context.update_num_problems(num_problems)
+            callback = getattr(context, "update_num_problems", None)
+            if not callable(callback):
+                raise TypeError("line-search context must provide update_num_problems")
+            callback(num_problems)
         return self
 
     @staticmethod
@@ -118,11 +128,17 @@ class LineSearchStrategy:
     ) -> torch.Tensor:
         """Return candidates shaped ``[B, N, *event]`` without host copies."""
 
-        if x.shape != step_vec.shape or x.ndim < 2:
-            raise ValueError("x and step_vec must have matching [batch, *event] shape")
+        if not isinstance(x, torch.Tensor) or not isinstance(step_vec, torch.Tensor):
+            raise TypeError("x and step_vec must be tensors")
+        if x.shape != step_vec.shape or x.ndim != 3:
+            raise ValueError("x and step_vec must have matching [batch, horizon, action_dim] shape")
+        if x.device != step_vec.device or x.dtype != step_vec.dtype:
+            raise ValueError("x and step_vec must share device and dtype")
         scales = torch.as_tensor(line_search_scales, device=x.device, dtype=x.dtype).reshape(-1)
         if scales.numel() == 0:
             raise ValueError("line_search_scales must not be empty")
+        if not bool(torch.isfinite(scales).all()) or bool((scales < 0).any()):
+            raise ValueError("line_search_scales must be finite and nonnegative")
         return x.unsqueeze(1) + scales.reshape((1, -1) + (1,) * (x.ndim - 1)) * step_vec.unsqueeze(1)
 
     @staticmethod
@@ -140,11 +156,25 @@ class LineSearchStrategy:
         upstream applies max-step normalization when it differs from 0/1.
         """
 
-        output = dx.clone()
+        if not isinstance(dx, torch.Tensor) or dx.ndim != 3:
+            raise ValueError("dx must have [batch, horizon, action_dim] shape")
+        if isinstance(step_scale, bool) or not isinstance(step_scale, Real) or not math.isfinite(float(step_scale)):
+            raise ValueError("step_scale must be finite")
+        if not isinstance(fix_terminal_action, bool):
+            raise TypeError("fix_terminal_action must be bool")
+        if isinstance(action_horizon, bool) or not isinstance(action_horizon, int) or action_horizon <= 0:
+            raise ValueError("action_horizon must be a positive integer")
+        if dx.shape[1] != action_horizon:
+            raise ValueError("action_horizon must match dx.shape[1]")
+        output = dx.detach().clone()
         if step_scale not in (0.0, 1.0) and action_step_max is not None:
             max_step = torch.as_tensor(action_step_max, device=dx.device, dtype=dx.dtype)
-            if bool((max_step <= 0).any().item()):
-                raise ValueError("action_step_max entries must be positive")
+            if not bool(torch.isfinite(max_step).all()) or bool((max_step <= 0).any()):
+                raise ValueError("action_step_max entries must be finite and positive")
+            try:
+                torch.broadcast_shapes(output.shape, max_step.shape)
+            except RuntimeError as error:
+                raise ValueError("action_step_max must broadcast to [batch, horizon, action_dim]") from error
             ratio = (output.abs() / max_step).reshape(output.shape[0], -1).amax(-1)
             output = output / ratio.clamp_min(1.0).reshape((-1,) + (1,) * (output.ndim - 1))
         if fix_terminal_action and action_horizon > 1:
@@ -158,8 +188,18 @@ class LineSearchStrategy:
         direction = iteration_state.step_direction
         if not isinstance(x, torch.Tensor) or not isinstance(direction, torch.Tensor):
             raise TypeError("iteration state must provide tensor action and step_direction")
-        if x.shape != direction.shape:
-            raise ValueError("action and step_direction must have equal shape")
+        if x.ndim != 3 or x.shape != direction.shape:
+            raise ValueError("action and step_direction must have matching [batch, horizon, action_dim] shape")
+        if x.device != direction.device or x.dtype != direction.dtype:
+            raise ValueError("action and step_direction must share device and dtype")
+        expected = (x.shape[0], getattr(context, "action_horizon", x.shape[1]), getattr(context, "action_dim", x.shape[2]))
+        if tuple(x.shape) != tuple(expected):
+            raise ValueError(
+                "action and step_direction must match context [num_problems, action_horizon, action_dim]"
+            )
+        configured_problems = getattr(context, "num_problems", x.shape[0])
+        if configured_problems != x.shape[0]:
+            raise ValueError("context.num_problems must match the action batch dimension")
         direction = direction.detach()
         if (getattr(context, "step_scale", 1.0) not in (0.0, 1.0)) or getattr(context, "fix_terminal_action", False):
             direction = self.scale_action(
@@ -170,16 +210,30 @@ class LineSearchStrategy:
                 getattr(context, "action_horizon", x.shape[1] if x.ndim > 1 else 1),
             )
         scales = torch.as_tensor(context.line_search_scale, device=x.device, dtype=x.dtype).reshape(-1)
-        return self.jit_get_x_set(direction, x.detach(), scales), direction, scales
+        points = self.jit_get_x_set(direction, x.detach(), scales).detach().requires_grad_(True)
+        return points, direction, scales
 
     @staticmethod
     def _call_objective(points: torch.Tensor, context: Any) -> tuple[torch.Tensor, torch.Tensor]:
-        result = context.compute_costs_and_gradients(points)
+        callback = getattr(context, "compute_costs_and_gradients", None)
+        if not callable(callback):
+            raise TypeError("line-search context must provide compute_costs_and_gradients")
+        # A strategy can be invoked by an inference-only solver.  Candidate
+        # tensors intentionally retain a local autograd graph even inside a
+        # caller's outer ``torch.no_grad()`` scope.
+        with torch.enable_grad():
+            result = callback(points)
         if not isinstance(result, (tuple, list)) or len(result) < 2:
             raise TypeError("compute_costs_and_gradients must return (cost, gradient)")
         cost, gradient = result[:2]
         batch, candidates = points.shape[:2]
-        return _cost_matrix(cost, batch, candidates), _gradient_tensor(gradient, points, batch, candidates)
+        costs = _cost_matrix(cost, batch, candidates)
+        gradients = _gradient_tensor(gradient, points, batch, candidates)
+        if costs.device != points.device or gradients.device != points.device:
+            raise ValueError("line-search costs and gradients must share the candidate device")
+        if gradients.dtype != points.dtype:
+            raise ValueError("line-search gradient dtype must match candidate dtype")
+        return costs, gradients
 
     def _result_for_indices(
         self, points: torch.Tensor, costs: torch.Tensor, gradients: torch.Tensor, selected: torch.Tensor, exploration: torch.Tensor | None = None
@@ -190,6 +244,41 @@ class LineSearchStrategy:
             selected_state=_index_state(points, costs, gradients, selected),
             exploration_state=_index_state(points, costs, gradients, exploration),
         )
+
+    @staticmethod
+    def _base_cost_and_gradient(
+        iteration_state: Any,
+        costs: torch.Tensor,
+        gradients: torch.Tensor,
+        direction: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return validated base values for Armijo/Wolfe criteria."""
+        base_cost = getattr(iteration_state, "exploration_cost", None)
+        if not isinstance(base_cost, torch.Tensor):
+            cost = costs[:, 0]
+        else:
+            if base_cost.device != costs.device:
+                raise ValueError("exploration_cost must share the candidate device")
+            if base_cost.shape[0] != costs.shape[0]:
+                raise ValueError("exploration_cost must have one entry per problem")
+            cost = base_cost.reshape(costs.shape[0], -1).sum(-1)
+        base_gradient = getattr(iteration_state, "exploration_gradient", None)
+        if not isinstance(base_gradient, torch.Tensor):
+            gradient = gradients[:, 0]
+        else:
+            if base_gradient.shape != direction.shape:
+                raise ValueError("exploration_gradient must match step_direction shape")
+            if base_gradient.device != direction.device or base_gradient.dtype != direction.dtype:
+                raise ValueError("exploration_gradient must share step_direction device and dtype")
+            gradient = base_gradient
+        return cost.detach(), gradient.detach()
+
+    @staticmethod
+    def _coefficient(context: Any, name: str, default: float) -> float:
+        value = getattr(context, name, default)
+        if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
+            raise ValueError(f"{name} must be finite")
+        return float(value)
 
     def search(self, iteration_state: Any, context: Any) -> LineSearchResult:
         points, _direction, _scales = self._prepare_search_points(iteration_state, context)
@@ -210,16 +299,11 @@ class ArmijoLineSearchStrategy(LineSearchStrategy):
     def _acceptable(
         self, iteration_state: Any, context: Any, points: torch.Tensor, direction: torch.Tensor, scales: torch.Tensor, costs: torch.Tensor, gradients: torch.Tensor
     ) -> torch.Tensor:
-        base_cost = getattr(iteration_state, "exploration_cost", None)
-        if not isinstance(base_cost, torch.Tensor):
-            base_cost = costs[:, 0]
-        else:
-            base_cost = base_cost.reshape(costs.shape[0], -1).sum(-1)
-        base_gradient = getattr(iteration_state, "exploration_gradient", None)
-        if not isinstance(base_gradient, torch.Tensor):
-            base_gradient = gradients[:, 0]
+        base_cost, base_gradient = self._base_cost_and_gradient(
+            iteration_state, costs, gradients, direction
+        )
         derivative = (base_gradient.reshape(base_gradient.shape[0], -1) * direction.reshape(direction.shape[0], -1)).sum(-1)
-        rhs = base_cost[:, None] + float(getattr(context, "line_search_c_1", 1e-5)) * scales[None, :] * derivative[:, None]
+        rhs = base_cost[:, None] + self._coefficient(context, "line_search_c_1", 1e-5) * scales[None, :] * derivative[:, None]
         return torch.isfinite(costs) & (costs <= rhs)
 
     @staticmethod
@@ -251,12 +335,10 @@ class BaseWolfeLineSearchStrategy(ArmijoLineSearchStrategy):
         costs, gradients = self._call_objective(points, context)
         armijo = self._acceptable(iteration_state, context, points, direction, scales, costs, gradients)
         directional = (gradients.reshape(*gradients.shape[:2], -1) * direction[:, None].reshape(direction.shape[0], 1, -1)).sum(-1)
-        base_gradient = getattr(iteration_state, "exploration_gradient", None)
-        initial = (
-            (base_gradient.reshape(base_gradient.shape[0], -1) * direction.reshape(direction.shape[0], -1)).sum(-1)
-            if isinstance(base_gradient, torch.Tensor)
-            else directional[:, 0]
+        _base_cost, base_gradient = self._base_cost_and_gradient(
+            iteration_state, costs, gradients, direction
         )
+        initial = (base_gradient.reshape(base_gradient.shape[0], -1) * direction.reshape(direction.shape[0], -1)).sum(-1)
         wolfe = armijo & self._curvature(directional, initial[:, None], context)
         selected = self._largest(wolfe, scales, torch.zeros(costs.shape[0], device=costs.device, dtype=torch.long))
         exploration = self._fallback(wolfe, armijo, scales)
@@ -265,7 +347,7 @@ class BaseWolfeLineSearchStrategy(ArmijoLineSearchStrategy):
 
 class WolfeLineSearchStrategy(BaseWolfeLineSearchStrategy):
     def _curvature(self, candidate_directional: torch.Tensor, initial_directional: torch.Tensor, context: Any) -> torch.Tensor:
-        return candidate_directional >= float(getattr(context, "line_search_c_2", 0.9)) * initial_directional
+        return candidate_directional >= self._coefficient(context, "line_search_c_2", 0.9) * initial_directional
 
     def _fallback(self, wolfe: torch.Tensor, armijo: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
         fallback = self._largest(armijo, scales, torch.zeros(wolfe.shape[0], device=wolfe.device, dtype=torch.long))
@@ -275,7 +357,7 @@ class WolfeLineSearchStrategy(BaseWolfeLineSearchStrategy):
 
 class StrongWolfeLineSearchStrategy(BaseWolfeLineSearchStrategy):
     def _curvature(self, candidate_directional: torch.Tensor, initial_directional: torch.Tensor, context: Any) -> torch.Tensor:
-        return candidate_directional.abs() <= float(getattr(context, "line_search_c_2", 0.9)) * initial_directional.abs()
+        return candidate_directional.abs() <= self._coefficient(context, "line_search_c_2", 0.9) * initial_directional.abs()
 
 
 class ApproxWolfeLineSearchStrategy(WolfeLineSearchStrategy):
