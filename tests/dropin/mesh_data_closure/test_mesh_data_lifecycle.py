@@ -49,9 +49,10 @@ def test_shared_cache_refuses_orphaning_another_environment() -> None:
 
 def test_pose_validation_happens_before_cache_or_environment_mutation() -> None:
     data = MeshData.create_cache(1, 1, DeviceCfg())
-    invalid_pose = _tetra("bad_pose", pose=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     with pytest.raises(ValueError, match="quaternion"):
-        data.add(invalid_pose)
+        _tetra("bad_pose", pose=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    # Geometry values now reject an invalid pose at construction, before a
+    # cache can observe it.  The cache therefore remains untouched.
     assert data.get_active_count() == 0
     assert data.get_cached_mesh_names() == []
 
