@@ -32,20 +32,44 @@ class GradientDescentOptCfg(PortableOptCfg):
     gradient_descent_step_scale: float = 0.001
 
     def __post_init__(self) -> None:
+        for name in ("num_iters", "inner_iters", "num_problems"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if (
+            isinstance(self.convergence_iteration, bool)
+            or not isinstance(self.convergence_iteration, int)
+            or self.convergence_iteration < 0
+        ):
+            raise ValueError("convergence_iteration must be a nonnegative integer")
         if self.num_particles is None:
             self.num_particles = 1
-        if self.num_particles <= 0:
+        if isinstance(self.num_particles, bool) or not isinstance(self.num_particles, int) or self.num_particles <= 0:
             raise ValueError("num_particles must be positive")
-        if self.inner_iters <= 0:
-            raise ValueError("inner_iters must be positive")
-        if self.num_iters <= 0:
-            raise ValueError("num_iters must be positive")
+        for name in (
+            "step_scale", "gradient_descent_step_scale", "cost_convergence",
+            "cost_delta_threshold", "cost_relative_threshold", "converged_ratio",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError(f"{name} must be finite")
+        if self.step_scale < 0 or self.gradient_descent_step_scale < 0:
+            raise ValueError("gradient descent step scales must be nonnegative")
+        if self.cost_convergence < 0 or self.cost_delta_threshold < 0 or self.cost_relative_threshold < 0:
+            raise ValueError("cost convergence thresholds must be nonnegative")
         if not 0.0 <= self.converged_ratio <= 1.0:
             raise ValueError("converged_ratio must be in [0, 1]")
-        if self.minimum_iters is not None and self.minimum_iters < 0:
+        if self.minimum_iters is not None and (
+            isinstance(self.minimum_iters, bool)
+            or not isinstance(self.minimum_iters, int)
+            or self.minimum_iters < 0
+        ):
             raise ValueError("minimum_iters must be nonnegative")
         if self.cost_relative_threshold >= 1.0:
             raise ValueError("cost_relative_threshold must be less than 1.0")
+        for name in ("fixed_iters", "return_best_action"):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be bool")
         if self.fixed_iters:
             self.cost_delta_threshold = 0.0
             self.cost_relative_threshold = 0.0
@@ -78,6 +102,7 @@ class GradientDescentOpt(PortableOptimizer):
         self._best_cost: torch.Tensor | None = None
         self._converged: torch.Tensor | None = None
         self._convergence_count: torch.Tensor | None = None
+        self._reinitialized_action: torch.Tensor | None = None
         self._iteration = 0
         self._original_num_iters = config.num_iters
 
@@ -179,10 +204,22 @@ class GradientDescentOpt(PortableOptimizer):
         if not self.enabled:
             return seed_action
         objective = _objective(self.rollout_fn)
-        x = self._apply_action_bounds(self._canonical_action(seed_action)).detach()
+        supplied = self._apply_action_bounds(self._canonical_action(seed_action)).detach()
+        if self._reinitialized_action is not None:
+            if self._reinitialized_action.shape != supplied.shape:
+                raise ValueError("reinitialized action shape no longer matches optimizer seed shape")
+            if self._reinitialized_action.device != supplied.device or self._reinitialized_action.dtype != supplied.dtype:
+                raise ValueError("reinitialized action must share seed device and dtype")
+            x = self._reinitialized_action
+            self._reinitialized_action = None
+        else:
+            x = supplied
         best = x.detach().clone()
         best_cost = self._objective_value(best)
         previous_cost = best_cost
+        self._converged = None
+        self._convergence_count = None
+        self._iteration = 0
         # V2 exposes a dedicated scale.  Older callers supplied ``step_scale``
         # before that field existed, so honor a non-default legacy value when
         # the dedicated field has not been changed from its default.
@@ -200,7 +237,10 @@ class GradientDescentOpt(PortableOptimizer):
                 if not isinstance(value, torch.Tensor):
                     value = torch.as_tensor(value, device=leaf.device, dtype=leaf.dtype)
                 scalar = torch.where(torch.isfinite(value), value, torch.zeros_like(value)).sum()
-                gradient = torch.autograd.grad(scalar, leaf, create_graph=False, allow_unused=True)[0]
+                gradient = (
+                    torch.autograd.grad(scalar, leaf, create_graph=False, allow_unused=True)[0]
+                    if scalar.requires_grad else None
+                )
                 if gradient is None:
                     gradient = torch.zeros_like(leaf)
                 candidate = self._apply_action_bounds((leaf - step * gradient).detach())
@@ -229,12 +269,27 @@ class GradientDescentOpt(PortableOptimizer):
             if self.config.store_debug
             else None
         )
-        return best if self.config.return_best_action else x
+        current_finite = torch.isfinite(self._objective_value(x))
+        current_mask = current_finite.reshape((-1,) + (1,) * (x.ndim - 1))
+        return best if self.config.return_best_action else torch.where(current_mask, x, best)
 
     def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False):
-        super().reinitialize(action, mask, clear_optimizer_state, reset_num_iters)
+        canonical = self._apply_action_bounds(self._canonical_action(action)).detach().clone()
+        if mask is not None:
+            mask = torch.as_tensor(mask, device=canonical.device, dtype=torch.bool)
+            if mask.shape != (canonical.shape[0],):
+                raise ValueError(f"mask must have shape [{canonical.shape[0]}]")
+        super().reinitialize(canonical, mask, clear_optimizer_state, reset_num_iters)
         if reset_num_iters:
             self.config.update_niters(self._original_num_iters)
+        if mask is None or self._reinitialized_action is None or self._reinitialized_action.shape != canonical.shape:
+            self._reinitialized_action = canonical
+        else:
+            item_mask = mask.reshape((-1,) + (1,) * (canonical.ndim - 1))
+            self._reinitialized_action = torch.where(item_mask, canonical, self._reinitialized_action)
+        # Best/convergence records describe a completed solve, while the
+        # pending action describes the next one.  Clear the former rather
+        # than presenting a reinitialization seed as an already solved plan.
         self._best_action = None
         self._best_cost = None
         self._converged = None
@@ -247,6 +302,7 @@ class GradientDescentOpt(PortableOptimizer):
         self._best_cost = None
         self._converged = None
         self._convergence_count = None
+        self._reinitialized_action = None
         self._iteration = 0
         self.debug = None
 
@@ -257,6 +313,7 @@ class GradientDescentOpt(PortableOptimizer):
         self._best_cost = None
         self._converged = None
         self._convergence_count = None
+        self._reinitialized_action = None
         return True
 
     _shift = shift
@@ -267,12 +324,38 @@ class GradientDescentOpt(PortableOptimizer):
     def update_solver_params(self, solver_params):
         if self.config.solver_name not in solver_params:
             raise ValueError(f"Optimizer {self.config.solver_name} not found in {solver_params}")
+        values = solver_params[self.config.solver_name]
+        if not isinstance(values, dict):
+            raise TypeError("solver parameters must be a mapping")
+        unknown = [name for name in values if not hasattr(self.config, name)]
+        if unknown:
+            raise ValueError("unknown optimizer parameter(s): " + ", ".join(sorted(unknown)))
+        original = {name: getattr(self.config, name) for name in values}
         for name, value in solver_params[self.config.solver_name].items():
             setattr(self.config, name, value)
+        try:
+            self.config.__post_init__()
+        except Exception:
+            for name, value in original.items():
+                setattr(self.config, name, value)
+            self.config.__post_init__()
+            raise
         return True
 
     def update_niters(self, niters: int):
         self.config.update_niters(niters)
+
+    def update_num_problems(self, num_problems: int):
+        if isinstance(num_problems, bool) or not isinstance(num_problems, int) or num_problems <= 0:
+            raise ValueError("num_problems must be positive")
+        super().update_num_problems(num_problems)
+        for rollout in self._rollout_list:
+            callback = getattr(rollout, "update_batch_size", None)
+            if callable(callback):
+                callback(batch_size=num_problems)
+        self._best_action = self._best_cost = self._converged = self._convergence_count = None
+        self._reinitialized_action = None
+        self._iteration = 0
 
     def get_all_rollout_instances(self):
         return self._rollout_list
