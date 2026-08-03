@@ -1,11 +1,26 @@
-"""Limited-memory SR1 optimizer implemented with ordinary PyTorch tensors."""
+"""Portable limited-memory SR1 optimizer compatibility surface.
+
+The pinned implementation combines a CUDA-oriented gradient core with raw
+quasi-Newton buffers.  This module instead shares the eager, batched lifecycle
+from :class:`LBFGSOpt` and substitutes its inverse-Hessian direction with the
+SR1 rank-one update.  No CUDA graph or Warp ABI is emulated.
+"""
 
 from __future__ import annotations
 
 import torch
 
-from curobo._src.optim._portable import _objective
 from .lbfgs import LBFGSOpt
+
+
+def _history_rows(value: torch.Tensor, batch: int, name: str) -> torch.Tensor:
+    """Normalize supported portable/upstream-like history layouts to [B, M, N]."""
+    if value.ndim == 3 and value.shape[0] == batch:
+        return value.reshape(batch, value.shape[1], value.shape[2])
+    if value.ndim == 4 and value.shape[1] == batch:
+        # Upstream kernel layout: [M, B, N, 1].
+        return value.permute(1, 0, 2, 3).reshape(batch, value.shape[0], value.shape[2] * value.shape[3])
+    raise ValueError(f"{name} must have shape [B, M, N] or [M, B, N, 1]")
 
 
 def jit_lsr1_compute_step_direction(
@@ -17,126 +32,141 @@ def jit_lsr1_compute_step_direction(
     stable_mode: bool,
     hessian_0: torch.Tensor,
 ) -> torch.Tensor:
-    """Apply the limited-memory SR1 inverse-Hessian update to ``grad``.
+    """Return a finite batched L-SR1 inverse-Hessian search direction.
 
-    Histories are ordered newest-first.  Updates whose denominator is too
-    small are ignored, which is the stable portable counterpart to V2's raw
-    kernel path and prevents non-finite steps on MPS.
+    Histories may be portable ``[B, M, N]`` tensors or the pinned kernel's
+    ``[M, B, N, 1]`` layout.  The result preserves the shape of ``grad``.
+    Pairs with an ill-conditioned SR1 denominator are skipped independently
+    for each problem, which is essential for deterministic CPU/MPS batches.
     """
-
-    if y_buffer.shape != s_buffer.shape:
-        raise ValueError("y_buffer and s_buffer must have matching shape")
-    if grad.shape[0] != y_buffer.shape[0] or grad.shape[-1] != y_buffer.shape[-1]:
-        raise ValueError("history and gradient dimensions must agree")
+    if not isinstance(m, int) or isinstance(m, bool) or m < 0:
+        raise ValueError("m must be a nonnegative integer")
     if epsilon <= 0:
         raise ValueError("epsilon must be positive")
     if not stable_mode:
         raise ValueError("LSR1 stable_mode must be true")
-    history = min(int(m), y_buffer.shape[-2])
-    output = hessian_0 * grad
+    if grad.ndim < 2:
+        raise ValueError("grad must have a batch dimension and event dimensions")
+    batch = grad.shape[0]
+    flat_grad = grad.reshape(batch, -1)
+    y = _history_rows(y_buffer, batch, "y_buffer")
+    s = _history_rows(s_buffer, batch, "s_buffer")
+    if y.shape != s.shape or y.shape[-1] != flat_grad.shape[-1]:
+        raise ValueError("history and gradient dimensions must agree")
+    if hessian_0.numel() not in (1, batch):
+        raise ValueError("hessian_0 must be scalar or have one value per problem")
+    scale = hessian_0.to(device=grad.device, dtype=grad.dtype).reshape(-1)
+    if scale.numel() == 1:
+        scale = scale.expand(batch)
+    if not torch.isfinite(scale).all():
+        raise ValueError("hessian_0 must be finite")
+
+    history = min(m, y.shape[1])
+    # Pick the newest useful pair for the customary scalar initial Hessian.
+    gamma = scale.clone()
+    selected = torch.zeros(batch, dtype=torch.bool, device=grad.device)
     for index in range(history):
-        y = y_buffer[:, index]
-        s = s_buffer[:, index]
-        # hessian_0 has batch-compatible [B, 1, 1] shape in V2; broadcasting
-        # also supports [B, 1] or scalar values for direct callers.
-        h0_y = hessian_0.reshape(hessian_0.shape[0], -1)[:, :1] * y
-        u = s - h0_y
-        denominator = (u * y).sum(-1, keepdim=True)
-        numerator = (u * grad.reshape(grad.shape[0], -1)).sum(-1, keepdim=True)
-        valid = denominator.abs() > epsilon
-        safe_denominator = torch.where(valid, denominator, torch.ones_like(denominator))
-        update = torch.where(valid, u * (numerator / safe_denominator), torch.zeros_like(u))
-        output = output + update.reshape_as(output)
-    return -output
+        sy = (s[:, index] * y[:, index]).sum(-1)
+        yy = y[:, index].square().sum(-1)
+        valid = (~selected) & torch.isfinite(sy) & torch.isfinite(yy) & (sy > epsilon) & (yy > epsilon)
+        gamma = torch.where(valid, scale * (sy / yy.clamp_min(epsilon)), gamma)
+        selected |= valid
+    result = gamma[:, None] * flat_grad
+    for index in range(history):
+        current_y, current_s = y[:, index], s[:, index]
+        u = current_s - gamma[:, None] * current_y
+        denominator = (u * current_y).sum(-1)
+        numerator = (u * flat_grad).sum(-1)
+        valid = torch.isfinite(denominator) & torch.isfinite(numerator) & (denominator.abs() > epsilon)
+        update = torch.where(
+            valid[:, None],
+            u * (numerator / torch.where(valid, denominator, torch.ones_like(denominator)))[:, None],
+            torch.zeros_like(u),
+        )
+        result = result + update
+    return (-result).reshape_as(grad)
 
 
 class LSR1Opt(LBFGSOpt):
-    """Batched L-SR1 with a deterministic, no-worse fixed-candidate step."""
+    """Batched eager L-SR1 with independent per-problem rank-one history."""
+
+    strategy = "lsr1"
 
     def __init__(self, config, rollout_list, use_cuda_graph: bool = False):
-        super().__init__(config, rollout_list, use_cuda_graph=use_cuda_graph)
-        self._s_history: torch.Tensor | None = None
-        self._y_history: torch.Tensor | None = None
-
-    def _cost(self, action: torch.Tensor) -> torch.Tensor:
-        value = _objective(self.rollout_fn)(action)
-        if not isinstance(value, torch.Tensor):
-            value = torch.as_tensor(value, device=action.device, dtype=action.dtype)
-        return value.reshape(action.shape[0], -1).sum(-1)
-
-    def _candidate_step(self, action: torch.Tensor, direction: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        scales = torch.as_tensor(
-            [0.0, *self.config.line_search_scale], device=action.device, dtype=action.dtype
+        # A limited-memory method cannot profitably retain more independent
+        # pairs than action dimensions.  Match the pinned lifecycle by
+        # reducing an oversized configured history before buffers are used.
+        opt_dim = int(getattr(rollout_list[0], "action_horizon", 1)) * int(
+            getattr(rollout_list[0], "action_dim", 1)
         )
-        candidates = action[:, None] + scales.reshape(1, -1, *([1] * (action.ndim - 1))) * direction[:, None]
-        flat = candidates.reshape((-1,) + tuple(action.shape[1:]))
-        costs = self._cost(flat).reshape(action.shape[0], scales.numel())
-        index = torch.where(torch.isfinite(costs), costs, torch.full_like(costs, torch.inf)).argmin(-1)
-        gather = index.reshape(-1, 1, *([1] * (action.ndim - 1))).expand(-1, 1, *action.shape[1:])
-        return candidates.gather(1, gather).squeeze(1).detach(), costs.gather(1, index[:, None]).squeeze(1)
+        if config.history >= opt_dim:
+            config.history = max(1, opt_dim - 1)
+        config.use_cuda_kernel_step_direction = False
+        super().__init__(config, rollout_list, use_cuda_graph=use_cuda_graph)
+        self._hessian_0: torch.Tensor | None = None
 
-    def optimize(self, seed_action: torch.Tensor) -> torch.Tensor:
-        if not self.enabled:
-            return seed_action
-        if not isinstance(seed_action, torch.Tensor) or seed_action.ndim < 3:
-            raise ValueError("LSR1Opt expects [batch, horizon, action_dim] seed_action")
-        x = seed_action.detach()
-        batch, dimensions = x.shape[0], x[0].numel()
-        s_history = torch.zeros(batch, 0, dimensions, dtype=x.dtype, device=x.device)
-        y_history = torch.zeros_like(s_history)
-        best, best_cost = x.clone(), self._cost(x)
-        trace: list[torch.Tensor] = []
-        for _ in range(self.config.num_iters):
-            leaf = x.detach().requires_grad_(True)
-            cost = self._cost(leaf)
-            gradient = torch.autograd.grad(
-                torch.where(torch.isfinite(cost), cost, torch.zeros_like(cost)).sum(),
-                leaf,
-                create_graph=torch.is_grad_enabled(),
-                allow_unused=True,
-            )[0]
-            if gradient is None:
-                gradient = torch.zeros_like(leaf)
-            hessian_0 = torch.ones(batch, 1, 1, dtype=x.dtype, device=x.device)
-            direction = jit_lsr1_compute_step_direction(
-                y_history, s_history, gradient.reshape(batch, 1, dimensions),
-                self.config.history, self.config.epsilon, self.config.stable_mode, hessian_0,
-            ).reshape_as(x)
-            x_next, candidate_cost = self._candidate_step(leaf.detach(), direction.detach())
-            next_leaf = x_next.detach().requires_grad_(True)
-            next_cost = self._cost(next_leaf)
-            next_gradient = torch.autograd.grad(
-                torch.where(torch.isfinite(next_cost), next_cost, torch.zeros_like(next_cost)).sum(),
-                next_leaf,
-                create_graph=torch.is_grad_enabled(),
-                allow_unused=True,
-            )[0]
-            if next_gradient is None:
-                next_gradient = torch.zeros_like(next_leaf)
-            s = (x_next - leaf.detach()).reshape(batch, dimensions)
-            y = (next_gradient.detach() - gradient.detach()).reshape(batch, dimensions)
-            # Newest-first fixed-size history; reject no-op pairs early.
-            valid_pair = (s * y).sum(-1).abs() > self.config.epsilon
-            if bool(valid_pair.any().item()):
-                s = torch.where(valid_pair[:, None], s, torch.zeros_like(s))
-                y = torch.where(valid_pair[:, None], y, torch.zeros_like(y))
-                s_history = torch.cat((s[:, None], s_history), dim=1)[:, : self.config.history]
-                y_history = torch.cat((y[:, None], y_history), dim=1)[:, : self.config.history]
-            x = x_next
-            improved = torch.isfinite(candidate_cost) & (candidate_cost < best_cost)
-            best = torch.where(improved[:, None, None], x, best)
-            best_cost = torch.where(improved, candidate_cost, best_cost)
-            if self.config.store_debug:
-                trace.append(best_cost.detach().clone())
-        self._s_history, self._y_history = s_history.detach(), y_history.detach()
-        self.debug = {"objective": tuple(trace)} if self.config.store_debug else None
-        return best if self.config.return_best_action else x
+    def _record_pair(self, action: torch.Tensor, gradient: torch.Tensor) -> None:
+        current_action = action.detach().reshape(action.shape[0], -1)
+        current_gradient = gradient.detach().reshape(gradient.shape[0], -1)
+        if (
+            self._reference_action is None
+            or self._reference_gradient is None
+            or self._reference_action.shape != current_action.shape
+        ):
+            self._reference_action = current_action.clone()
+            self._reference_gradient = current_gradient.clone()
+            return
+        s = current_action - self._reference_action
+        y = current_gradient - self._reference_gradient
+        moved = torch.linalg.vector_norm(s, dim=-1) > self.config.epsilon
+        finite = torch.isfinite(s).all(-1) & torch.isfinite(y).all(-1)
+        # SR1 allows indefinite curvature.  Screen only its own denominator
+        # under the initial diagonal model rather than applying BFGS's
+        # positive-curvature rule.
+        u = s - y
+        denominator = (u * y).sum(-1)
+        valid = finite & moved & (denominator.abs() > self.config.epsilon)
+        safe_s = torch.where(valid[:, None], s, torch.zeros_like(s))
+        safe_y = torch.where(valid[:, None], y, torch.zeros_like(y))
+        marker = valid.to(dtype=current_action.dtype)
+        if self._s_history is None or self._s_history.shape[0] != action.shape[0]:
+            self._s_history, self._y_history, self._rho_history = safe_s[:, None], safe_y[:, None], marker[:, None]
+        else:
+            self._s_history = torch.cat((safe_s[:, None], self._s_history), dim=1)[:, : self.config.history]
+            self._y_history = torch.cat((safe_y[:, None], self._y_history), dim=1)[:, : self.config.history]
+            self._rho_history = torch.cat((marker[:, None], self._rho_history), dim=1)[:, : self.config.history]
+        self._reference_action = current_action.clone()
+        self._reference_gradient = current_gradient.clone()
 
-    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False):
-        super().reinitialize(action, mask, clear_optimizer_state, reset_num_iters)
-        if clear_optimizer_state:
-            self._s_history = None
-            self._y_history = None
+    def _two_loop(self, gradient: torch.Tensor) -> torch.Tensor:
+        if self._s_history is None or self._y_history is None:
+            return -gradient.detach()
+        hessian = self._hessian_0
+        if hessian is None or hessian.shape[0] != gradient.shape[0] or hessian.device != gradient.device:
+            hessian = torch.ones((gradient.shape[0], 1, 1), dtype=gradient.dtype, device=gradient.device)
+            self._hessian_0 = hessian
+        return jit_lsr1_compute_step_direction(
+            self._y_history,
+            self._s_history,
+            gradient,
+            self.config.history,
+            self.config.epsilon,
+            self.config.stable_mode,
+            hessian,
+        )
+
+    def _clear_history(self, mask: torch.Tensor | None = None) -> None:
+        super()._clear_history(mask)
+        if mask is None:
+            self._hessian_0 = None
+
+    def update_num_problems(self, num_problems):
+        super().update_num_problems(num_problems)
+        self._hessian_0 = None
+
+    def reset_shape(self):
+        super().reset_shape()
+        self._hessian_0 = None
 
 
 __all__ = ["LSR1Opt", "jit_lsr1_compute_step_direction"]
