@@ -72,8 +72,13 @@ def joint_state_to_tensor(joint_state):
 
 def stack_joint_states(js1, js2):
     """Stack compatible states along the trajectory/sample axis."""
-    if js1.position.shape[:-1] != js2.position.shape[:-1] or js1.position.shape[-1] != js2.position.shape[-1]:
-        raise ValueError("stacked JointStates must have matching tensor shapes")
+    if (
+        js1.position.ndim < 2
+        or js1.position.ndim != js2.position.ndim
+        or js1.position.shape[:-2] != js2.position.shape[:-2]
+        or js1.position.shape[-1] != js2.position.shape[-1]
+    ):
+        raise ValueError("stacked JointStates must share batch dimensions and DOF")
     if js1.position.device != js2.position.device:
         raise ValueError("stacked JointStates must be on the same device")
     # Construct via the canonical packed form to guarantee all four channels
