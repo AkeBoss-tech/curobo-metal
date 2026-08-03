@@ -256,10 +256,10 @@ class Pose(_MetalPose):
             raise ValueError("poses must share device and dtype")
         rotation = None
         if self.rotation is not None and other_pose.rotation is not None:
-            rotation = torch.vstack((self.rotation, other_pose.rotation))
+            rotation = torch.cat((self.rotation, other_pose.rotation), dim=0)
         return type(self)(
-            torch.vstack((self.position, other_pose.position)),
-            torch.vstack((self.quaternion, other_pose.quaternion)),
+            torch.cat((self.position, other_pose.position), dim=0),
+            torch.cat((self.quaternion, other_pose.quaternion), dim=0),
             rotation=rotation,
             name=self.name,
         )
@@ -284,33 +284,37 @@ class Pose(_MetalPose):
             self.batch_size = self.position.shape[0]
 
     def repeat(self, n):
+        if not isinstance(n, int):
+            raise TypeError("n must be an integer")
         if n <= 1:
             return self
-        rotation = None if self.rotation is None else self.rotation.repeat(n, 1, 1)
+        shape = (n,) + (1,) * (self.position.ndim - 1)
+        rotation_shape = None if self.rotation is None else (n,) + (1,) * (self.rotation.ndim - 1)
+        rotation = None if self.rotation is None else self.rotation.repeat(rotation_shape)
         return type(self)(
-            self.position.repeat(n, 1), self.quaternion.repeat(n, 1), rotation=rotation, name=self.name
+            self.position.repeat(shape), self.quaternion.repeat((n,) + (1,) * (self.quaternion.ndim - 1)),
+            rotation=rotation, name=self.name
         )
 
     def repeat_seeds(self, num_seeds: int) -> "Pose":
+        if not isinstance(num_seeds, int):
+            raise TypeError("num_seeds must be an integer")
         if self.position is None or self.quaternion is None or num_seeds <= 1:
             return type(self)(self.position, self.quaternion, self.rotation, name=self.name)
-        position = (
-            self.position.reshape(self.batch_size, 1, 3)
-            .repeat(1, num_seeds, 1)
-            .reshape(self.batch_size * num_seeds, 3)
-        )
-        quaternion = (
-            self.quaternion.reshape(self.batch_size, 1, 4)
-            .repeat(1, num_seeds, 1)
-            .reshape(self.batch_size * num_seeds, 4)
-        )
+        # Preserve every trajectory/frame dimension after the leading problem
+        # batch.  V2 flattens ``batch × seed`` for its solver buffers, while
+        # callers can still carry a [batch, horizon, ...] pose tensor.
+        position = self.position.unsqueeze(1).repeat(
+            (1, num_seeds) + (1,) * (self.position.ndim - 1)
+        ).reshape(self.batch_size * num_seeds, *self.position.shape[1:])
+        quaternion = self.quaternion.unsqueeze(1).repeat(
+            (1, num_seeds) + (1,) * (self.quaternion.ndim - 1)
+        ).reshape(self.batch_size * num_seeds, *self.quaternion.shape[1:])
         rotation = None
         if self.rotation is not None:
-            rotation = (
-                self.rotation.reshape(self.batch_size, 1, 3, 3)
-                .repeat(1, num_seeds, 1, 1)
-                .reshape(self.batch_size * num_seeds, 3, 3)
-            )
+            rotation = self.rotation.unsqueeze(1).repeat(
+                (1, num_seeds) + (1,) * (self.rotation.ndim - 1)
+            ).reshape(self.batch_size * num_seeds, *self.rotation.shape[1:])
         return type(self)(position, quaternion, rotation=rotation, name=self.name)
 
     def __getitem__(self, index) -> "Pose":
@@ -467,6 +471,15 @@ class Pose(_MetalPose):
             raise ValueError("batch_transform requires points to be b,n,3 shape")
         if points.device != self.device or points.dtype != self.position.dtype:
             raise ValueError("points and pose must share device and dtype")
+        # Preserve an explicit [batch, horizon, points, 3] layout when it
+        # matches the pose prefix.  The old CUDA call also accepted a
+        # flattened [batch*horizon, points, 3] launch layout, retained below.
+        if points.shape[:-2] == self.position.shape[:-1]:
+            output = batch_transform_points(self.position, self.quaternion, points)
+            if out_buffer is not None:
+                out_buffer.copy_(output)
+                return out_buffer
+            return output
         rotation = self.get_rotation().reshape(-1, 3, 3)
         if rotation.shape[0] != points.shape[0]:
             raise ValueError(
@@ -489,6 +502,12 @@ class Pose(_MetalPose):
             raise ValueError("batch_transform_inverse requires points to be b,n,3 shape")
         if points.device != self.device or points.dtype != self.position.dtype:
             raise ValueError("points and pose must share device and dtype")
+        if points.shape[:-2] == self.position.shape[:-1]:
+            output = batch_transform_points_inverse(self.position, self.quaternion, points)
+            if out_buffer is not None:
+                out_buffer.copy_(output)
+                return out_buffer
+            return output
         rotation = self.get_rotation().reshape(-1, 3, 3).transpose(-1, -2)
         if rotation.shape[0] != points.shape[0]:
             raise ValueError(
