@@ -17,6 +17,10 @@ import torch
 from torch.profiler import record_function
 
 from curobo._src.geom.cv import get_projection_rays, project_depth_using_rays
+from curobo._src.curobolib.cuda_ops.tensor_checks import (
+    check_float16_tensors,
+    check_float32_tensors,
+)
 from curobo._src.robot.kinematics.kinematics import Kinematics
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.types import KinematicsParams
@@ -26,6 +30,10 @@ from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.robot import RobotCfg
 from curobo._src.util.cuda_graph_util import GraphExecutor
 from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import (
+    get_torch_jit_decorator,
+    is_torch_compile_available,
+)
 from curobo._src.util_file import get_robot_configs_path, join_path, load_yaml
 
 
@@ -47,6 +55,18 @@ def _expand_batch(value: torch.Tensor, batch: int, name: str) -> torch.Tensor:
     if value.shape[0] == 1:
         return value.expand((batch, *value.shape[1:]))
     raise ValueError(f"{name} batch must be 1 or {batch}, got {value.shape[0]}")
+
+
+def _tensor_signature(value: torch.Tensor) -> tuple[object, ...]:
+    """Return a no-sync identity/version fingerprint for a calibration tensor.
+
+    Tensor ``_version`` increments for in-place camera-calibration updates,
+    while ``id`` catches a caller replacing the calibration tensor entirely.
+    Neither reads a tensor value, so this is safe on fallback-disabled MPS.
+    """
+    return (
+        id(value), value._version, tuple(value.shape), value.dtype, value.device,
+    )
 
 
 def _mask_image(
@@ -163,12 +183,30 @@ class RobotSegmenter:
         self.distance_threshold = float(distance_threshold)
         self._ops_dtype = ops_dtype
         self._projection_rays: Optional[torch.Tensor] = None
+        self._calibration_signature: Optional[tuple[object, ...]] = None
         self.ready = False
         self._graph_executor = GraphExecutor(
             self._mask_op,
             device=self.device_cfg.device,
             use_cuda_graph=use_cuda_graph,
             clone_outputs=True,
+        )
+
+    @staticmethod
+    def _camera_calibration_signature(camera_obs: CameraObservation) -> tuple[object, ...]:
+        """Fingerprint every input that changes a projected camera ray.
+
+        Depth values intentionally do not appear here: only image geometry,
+        intrinsics, and the raw-depth unit conversion define projection rays.
+        This lets a live camera reuse calibration while guaranteeing that an
+        in-place calibration update is not silently ignored.
+        """
+        camera_obs.validate(require_depth=True, require_intrinsics=True)
+        assert camera_obs.depth_image is not None and camera_obs.intrinsics is not None
+        return (
+            tuple(camera_obs.depth_image.shape[-2:]),
+            _tensor_signature(camera_obs.intrinsics),
+            float(camera_obs.depth_to_meter),
         )
 
     @staticmethod
@@ -209,9 +247,9 @@ class RobotSegmenter:
         """Cache projection rays for the current camera intrinsics/resolution."""
         if not isinstance(camera_obs, CameraObservation):
             raise TypeError("camera_obs must be CameraObservation")
+        signature = self._camera_calibration_signature(camera_obs)
+        assert camera_obs.depth_image is not None and camera_obs.intrinsics is not None
         depth, _ = _canonical_depth(camera_obs.depth_image)
-        if camera_obs.intrinsics is None:
-            raise ValueError("camera_obs.intrinsics is required for robot segmentation")
         intrinsics = camera_obs.intrinsics
         if intrinsics.ndim == 2:
             intrinsics = intrinsics.unsqueeze(0)
@@ -223,7 +261,11 @@ class RobotSegmenter:
         rays = get_projection_rays(
             depth.shape[-2], depth.shape[-1], intrinsics, camera_obs.depth_to_meter
         )
+        # Do not copy into a retained tensor.  Assignment preserves the
+        # differentiable relationship to the *current* intrinsics, and avoids
+        # reusing a stale autograd graph for a subsequent camera frame.
         self._projection_rays = rays
+        self._calibration_signature = signature
         # Expose the same computed values on the observation as the V2 camera
         # helper, without changing its ownership/device/dtype contract.
         camera_obs.projection_rays = rays
@@ -231,13 +273,47 @@ class RobotSegmenter:
 
     def get_pointcloud_from_depth(self, camera_obs: CameraObservation) -> torch.Tensor:
         """Project depth to camera-frame points; pose conversion happens in masking."""
+        if not isinstance(camera_obs, CameraObservation):
+            raise TypeError("camera_obs must be CameraObservation")
+        signature = self._camera_calibration_signature(camera_obs)
+        assert camera_obs.depth_image is not None
         depth, _ = _canonical_depth(camera_obs.depth_image)
         expected = (*depth.shape, 3)
-        if self._projection_rays is None or self._projection_rays.shape != expected:
+        if (
+            self._projection_rays is None
+            or self._projection_rays.shape != expected
+            or self._calibration_signature != signature
+        ):
             self.update_camera_projection(camera_obs)
         assert self._projection_rays is not None
         rays = _expand_batch(self._projection_rays, depth.shape[0], "projection rays")
-        return project_depth_using_rays(depth, rays)
+        # V2's CUDA renderer converts both operands to an operation dtype.
+        # Here we retain ordinary PyTorch semantics by casting only depth to
+        # the calibrated ray dtype; the depth image returned to the caller is
+        # never modified or downcast.
+        return project_depth_using_rays(depth.to(dtype=rays.dtype), rays)
+
+    def invalidate_camera_projection(self) -> None:
+        """Forget cached camera calibration after an out-of-band update.
+
+        Most callers need not invoke this: ``get_pointcloud_from_depth``
+        detects replaced or in-place-mutated intrinsics.  It remains useful
+        for deterministic calibration lifecycle tests and external capture
+        systems that explicitly reset their camera configuration.
+        """
+        self._projection_rays = None
+        self._calibration_signature = None
+        self.ready = False
+
+    def reset(self) -> None:
+        """Reset portable execution and calibration state.
+
+        This is the CPU/MPS analogue of discarding V2's CUDA-graph buffers.
+        It intentionally does not alter robot kinematics or caller-owned
+        camera observations.
+        """
+        self.invalidate_camera_projection()
+        self._graph_executor.reset()
 
     def _points_in_robot_frame(self, camera_obs: CameraObservation) -> torch.Tensor:
         points = self.get_pointcloud_from_depth(camera_obs)
@@ -253,6 +329,13 @@ class RobotSegmenter:
             raise ValueError("camera pose must have a rotation")
         rotation = _expand_batch(rotation.reshape(-1, 3, 3), points.shape[0], "camera pose")
         position = _expand_batch(pose.position.reshape(-1, 3), points.shape[0], "camera pose")
+        if not (rotation.is_floating_point() and position.is_floating_point()):
+            raise TypeError("camera pose tensors must be floating point")
+        # A camera may legitimately be calibrated at a different floating
+        # precision from a live depth stream.  Conversion is differentiable
+        # and avoids an incidental dtype restriction on CPU/MPS.
+        rotation = rotation.to(dtype=points.dtype)
+        position = position.to(dtype=points.dtype)
         return torch.einsum("bij,bhwj->bhwi", rotation, points) + position[:, None, None, :]
 
     @record_function("robot_segmenter/_mask_op")
@@ -286,7 +369,12 @@ class RobotSegmenter:
     def _call_op(
         self, camera_obs: CameraObservation, q: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        return self._graph_executor(camera_obs, q)
+        # GraphExecutor retains non-tensor inputs by identity.  A mutable
+        # CameraObservation must therefore run directly: otherwise a second
+        # frame could be segmented with the first frame's depth or pose.  This
+        # is already the portable executor's execution mode; CUDA capture is
+        # explicitly unavailable on Metal.
+        return self._mask_op(camera_obs, q)
 
     @record_function("robot_segmenter/get_robot_mask")
     def get_robot_mask(
