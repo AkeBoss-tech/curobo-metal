@@ -4451,9 +4451,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 2,
         "path": "curobo/_src/cost/cost_tool_pose_cfg.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 12,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_tool_pose_cfg",
@@ -67126,9 +67126,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 8,
         "path": "curobo/_src/robot/builder/debugger_robot.py",
-        "resolved_symbols": 11,
+        "resolved_symbols": 13,
         "status": "partial"
       },
       "name": "curobo._src.robot.builder.debugger_robot",
