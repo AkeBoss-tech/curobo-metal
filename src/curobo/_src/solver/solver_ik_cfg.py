@@ -190,12 +190,37 @@ class IKSolverCfg:
                                         load_collision_spheres=load_collision_spheres,
                                         num_envs=max_batch_size if multi_env else 1)
         # Task YAML is an optional upstream content bundle.  Keep the supplied
-        # records for inspection without requiring CUDA-only task assets.
+        # records for inspection without requiring CUDA-only task assets, but
+        # do honour the two documented regularization overrides when a caller
+        # provides a structured optimizer record.
         optimizer_records = deepcopy(list(optimizer_configs))
         for label, value in (("velocity_regularization_weight", velocity_regularization_weight),
                              ("acceleration_regularization_weight", acceleration_regularization_weight)):
             if value is not None:
                 _positive_finite(label, value)
+        if velocity_regularization_weight is not None or acceleration_regularization_weight is not None:
+            for record in optimizer_records:
+                if not isinstance(record, dict):
+                    continue
+                rollout = record.setdefault("rollout", {})
+                if not isinstance(rollout, dict):
+                    raise TypeError("optimizer rollout configuration must be a mapping")
+                cost_cfg = rollout.setdefault("cost_cfg", {})
+                if not isinstance(cost_cfg, dict):
+                    raise TypeError("optimizer rollout cost_cfg must be a mapping")
+                cspace_cfg = cost_cfg.setdefault("cspace_cfg", {})
+                if not isinstance(cspace_cfg, dict):
+                    raise TypeError("optimizer rollout cspace_cfg must be a mapping")
+                values = list(cspace_cfg.get("squared_l2_regularization_weight", [0.0, 0.0]))
+                if len(values) != 2:
+                    raise ValueError(
+                        "squared_l2_regularization_weight must contain velocity and acceleration entries"
+                    )
+                if velocity_regularization_weight is not None:
+                    values[0] = velocity_regularization_weight
+                if acceleration_regularization_weight is not None:
+                    values[1] = acceleration_regularization_weight
+                cspace_cfg["squared_l2_regularization_weight"] = values
         core = SolverCoreCfg(robot_cfg, device_cfg, optimizer_records,
                              scene_collision_cfg=scene_model, use_cuda_graph=use_cuda_graph,
                              random_seed=random_seed, store_debug=store_debug)

@@ -20,6 +20,7 @@ from .seed_ik.seed_ik_solver import SeedIKSolver
 from .seed_ik.seed_ik_solver_cfg import SeedIKSolverCfg
 from .solve_mode import SolveMode
 from .solve_state import SolveState
+from .solver_core import SolverCore
 from .solver_ik_cfg import IKSolverCfg
 from .solver_ik_result import IKSolverResult
 
@@ -93,18 +94,17 @@ class IKSolver:
         if not isinstance(config, IKSolverCfg):
             raise TypeError("config must be IKSolverCfg")
         self.config = config
-        # Retain the supplied portable SceneCollision for lifecycle parity.  IK
-        # collision costs remain a documented future composition, rather than
-        # silently treating a supplied scene as active.
-        self._scene_collision_checker = scene_collision_checker
-        robot = config.robot_config.kinematics
-        kin_cfg = KinematicsCfg(
-            config.device_cfg, list(robot.tool_frames), KinematicsParams(robot)
-        )
-        self._kinematics = Kinematics(kin_cfg)
-        self._goal_registry_manager = GoalManager(config.device_cfg)
-        self._solve_state: Optional[SolveState] = None
-        self._goal_buffer = None
+        # SolverCore owns the reusable configuration, world and goal lifecycle
+        # shared by the V2 solver facades.  This class still owns its portable
+        # Adam objective, but it must not bypass world/goal updates merely
+        # because no CUDA graph was built.
+        self.core = SolverCore(config.core_cfg, scene_collision_checker)
+        self._kinematics = self.core.kinematics
+        self._goal_registry_manager = self.core.goal_registry_manager
+        self._scene_collision_checker = self.core.scene_collision_checker
+        self._solve_state: Optional[SolveState] = self.core.solve_state
+        self._goal_buffer = self.core.goal_buffer
+        self._last_result: Optional[IKSolverResult] = None
         self._tool_pose_tracking = set()
         self._joint_position_tracking = False
         self.seed_ik_solver: Optional[SeedIKSolver] = None
@@ -144,71 +144,99 @@ class IKSolver:
     def action_horizon(self): return 1
     @property
     def default_joint_position(self):
-        return self.config.robot_config.kinematics.cspace.default_joint_position
+        return self.core.default_joint_position
     @property
     def default_joint_state(self):
-        return JointState(self.device_cfg.to_device(self.default_joint_position), joint_names=self.joint_names)
+        return self.core.default_joint_state
 
-    optimizer = property(lambda self: None)
-    metrics_rollout = property(lambda self: None)
-    auxiliary_rollout = property(lambda self: None)
-    transition_model = property(lambda self: None)
-    solve_state = property(lambda self: self._solve_state)
-    seed_manager = property(lambda self: None)
-    goal_registry_manager = property(lambda self: self._goal_registry_manager)
+    optimizer = property(lambda self: self.core.optimizer)
+    metrics_rollout = property(lambda self: self.core.metrics_rollout)
+    auxiliary_rollout = property(lambda self: self.core.auxiliary_rollout)
+    transition_model = property(lambda self: self.core.transition_model)
+    solve_state = property(lambda self: self.core.solve_state)
+    seed_manager = property(lambda self: self.core.seed_manager)
+    goal_registry_manager = property(lambda self: self.core.goal_registry_manager)
+    # A few established V2 compositors intentionally replace this private
+    # adapter before calling ``update_world``.  Keep the public property tied
+    # to that live reference; explicit IKSolver world updates synchronize it
+    # back into SolverCore below.
     scene_collision_checker = property(lambda self: self._scene_collision_checker)
-    problem_batch_size = property(lambda self: self.config.max_batch_size)
+
+    @property
+    def problem_batch_size(self) -> int:
+        """Seed-expanded active problem size, or the configured capacity before a solve."""
+        state = self.core.solve_state
+        if state is None:
+            return self.config.max_batch_size * self.config.num_seeds
+        return state.get_ik_batch_size() or state.get_batch_size()
 
     def compute_kinematics(self, state: JointState):
-        return self._kinematics.compute_kinematics(state)
-    def get_active_js(self, full_js): return self._kinematics.get_active_js(full_js)
-    def get_full_js(self, active_js): return self._kinematics.get_full_js(active_js)
+        return self.core.compute_kinematics(state)
+    def get_active_js(self, full_js): return self.core.get_active_js(full_js)
+    def get_full_js(self, active_js): return self.core.get_full_js(active_js)
     def reset_seed(self):
         if self.seed_ik_solver is not None:
             self.seed_ik_solver.reset_seed()
+        self.core.reset_seed()
     def reset_shape(self):
-        self._solve_state = None
-        self._goal_buffer = None
+        self.core.reset_shape()
+        self._solve_state = self.core.solve_state
+        self._goal_buffer = self.core.goal_buffer
     def reset_cuda_graph(self):
         raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
     def destroy(self):
         if self.seed_ik_solver is not None:
             self.seed_ik_solver.destroy()
-        self._goal_buffer = None
-        self._solve_state = None
+        self.core.destroy()
+        self._goal_buffer = self._solve_state = self._last_result = None
 
     def get_all_rollout_instances(self, **kwargs):
-        del kwargs
-        return []
+        return self.core.get_all_rollout_instances(**kwargs)
     def prepare_action_seeds(self, batch_size, num_seeds, seed_config=None, current_state=None, seed_traj=None):
-        del seed_config
-        if seed_traj is not None:
-            return seed_traj.position if isinstance(seed_traj, JointState) else seed_traj
-        if current_state is not None:
-            position = current_state.position
-            if position.ndim == 1:
-                position = position.unsqueeze(0)
-            return position[:, None, None, :].expand(batch_size, num_seeds, 1, -1).clone()
-        return self.sample_configs(batch_size * num_seeds).reshape(batch_size, num_seeds, 1, -1)
+        """Prepare shared solver-core action seeds in ``[B * N, 1, dof]`` layout.
+
+        ``solve_pose`` consumes an IK-specific ``[B, N, dof]`` layout
+        internally, while applications using the public SolverCore-shaped API
+        expect this seed-manager layout.  Delegating preserves caller seeds,
+        deterministic padding, and the ordinary CPU/MPS lifecycle.
+        """
+        return self.core.prepare_action_seeds(
+            batch_size, num_seeds, seed_config, current_state, seed_traj
+        )
     def prepare_trajectory_seeds(self, batch_size, num_seeds, current_state, seed_config=None, seed_traj=None):
-        return self.prepare_action_seeds(batch_size, num_seeds, seed_config, current_state, seed_traj)
+        return self.core.prepare_trajectory_seeds(
+            batch_size, num_seeds, current_state, seed_config, seed_traj
+        )
     def enable_tool_pose_tracking(self, tool_frames=None):
         frames = self.tool_frames if tool_frames is None else list(tool_frames)
         unknown = set(frames).difference(self.tool_frames)
         if unknown:
             raise ValueError(f"unknown tool frame(s): {sorted(unknown)}")
         self._tool_pose_tracking.update(frames)
+        self.core.enable_tool_pose_tracking(
+            frames, self.config.non_terminal_tool_pose_weight_factor
+        )
     def disable_tool_pose_tracking(self, tool_frames=None):
         frames = self.tool_frames if tool_frames is None else list(tool_frames)
         self._tool_pose_tracking.difference_update(frames)
-    def enable_joint_position_tracking(self): self._joint_position_tracking = True
-    def disable_joint_position_tracking(self): self._joint_position_tracking = False
+        self.core.disable_tool_pose_tracking(frames)
+    def enable_joint_position_tracking(self):
+        self._joint_position_tracking = True
+        self.core.enable_joint_position_tracking()
+    def disable_joint_position_tracking(self):
+        self._joint_position_tracking = False
+        self.core.disable_joint_position_tracking()
     def update_tool_pose_criteria(self, tool_pose_criteria):
         if not isinstance(tool_pose_criteria, dict):
             raise TypeError("tool_pose_criteria must be a mapping")
         unknown = set(tool_pose_criteria).difference(self.tool_frames)
         if unknown:
             raise ValueError(f"unknown tool frame(s): {sorted(unknown)}")
+        if self.seed_ik_solver is not None:
+            self.seed_ik_solver.update_tool_pose_criteria(tool_pose_criteria)
+        self.core.update_tool_pose_criteria(tool_pose_criteria)
+        # This transport attribute is read directly by existing planner
+        # facades.  Preserve it in addition to SolverCore's typed criteria.
         self.config.tool_pose_criteria = dict(tool_pose_criteria)
     def update_world(self, scene_cfg):
         """Replace the active portable world collision scene.
@@ -252,22 +280,23 @@ class IKSolver:
                 "YAML/USD scene assets are unavailable"
             )
         self.config.core_cfg.scene_collision_cfg = scene_cfg
+        # Retain the existing adapter when it was mutated above.  This gives
+        # attached core rollouts the same concrete world object as IK.
+        self.core.update_world(self._scene_collision_checker)
+        self._scene_collision_checker = self.core.scene_collision_checker
     def update_link_inertial(self, link_name, mass=None, com=None, inertia=None):
-        del mass, com, inertia
-        raise NotImplementedError(f"runtime inertial mutation is unavailable for {link_name}")
+        return self.core.update_link_inertial(link_name, mass, com, inertia)
     def update_links_inertial(self, link_properties):
-        for name, values in link_properties.items():
-            self.update_link_inertial(name, **values)
+        return self.core.update_links_inertial(link_properties)
     def debug_dump(self, *args, **kwargs):
         del args, kwargs
         return {"backend": "portable", "cuda_graph": False}
 
     def sample_configs(self, num_samples: int, rejection_ratio: int = 10):
-        del rejection_ratio
-        lower, upper = self._joint_limits()
-        generator = torch.Generator(device="cpu").manual_seed(self.config.random_seed)
-        unit = torch.rand((num_samples, self.action_dim), generator=generator, dtype=self.device_cfg.dtype)
-        return lower + unit.to(self.device_cfg.device) * (upper - lower)
+        return self.core.sample_configs(
+            num_samples, rejection_ratio,
+            self.config.optimizer_collision_activation_distance,
+        )
 
     def _joint_limits(self):
         robot = self.config.robot_config.kinematics
@@ -342,24 +371,23 @@ class IKSolver:
         solve_state: SolveState,
         goal_tool_poses: GoalToolPose,
         current_state: Optional[JointState] = None,
+        use_implicit_goal: bool = False,
+        seed_goal_state: Optional[JointState] = None,
+        goal_state: Optional[JointState] = None,
     ):
         """Record a typed goal registry for applications sharing V2 lifecycle code."""
         goal = goal_tool_poses.reorder_links(self.tool_frames)
-        previous = self._solve_state
-        structural = previous is None or any(
-            getattr(previous, key, None) != getattr(solve_state, key, None)
-            for key in (
-                "solve_type", "batch_size", "num_envs", "num_goalset",
-                "num_ik_seeds", "tool_frames",
-            )
+        self._goal_buffer, structural = self.core.prepare_goal_buffer(
+            solve_state, goal, current_state=current_state,
+            use_implicit_goal=use_implicit_goal,
+            seed_goal_state=seed_goal_state, goal_state=goal_state,
         )
-        self._goal_buffer = self._goal_registry_manager.update_goal_buffer(
-            solve_state,
-            goal_tool_poses=goal,
-            current_js=current_state,
-        )
-        self._solve_state = solve_state
+        self._solve_state = self.core.solve_state
         return self._goal_buffer, structural
+
+    def _update_rollout_params(self, goal_buffer, include_auxiliary_rollout: bool = True) -> None:
+        """Propagate a changed goal to configured eager portable rollouts."""
+        self.core.update_rollout_params(goal_buffer, include_auxiliary_rollout)
 
     def _prepare_seeds(
         self,
@@ -369,7 +397,19 @@ class IKSolver:
         seed_config,
     ) -> torch.Tensor:
         """Normalize the public seed ranks to ``[batch, seed, dof]``."""
-        seeds = self.sample_configs(batch * num_seeds).reshape(batch, num_seeds, self.action_dim)
+        # Sampling through SolverCore may intentionally return fewer values
+        # after rejection against a dense world.  IK must nevertheless retain
+        # its declared ``[batch, seed, dof]`` rank so its later feasibility
+        # stage can report collisions rather than failing in a reshape.
+        sample_count = batch * num_seeds
+        sampled = self.sample_configs(sample_count)
+        if sampled.shape[0] < sample_count:
+            lower, upper = self._joint_limits()
+            generator = torch.Generator(device="cpu").manual_seed(self.config.random_seed)
+            unit = torch.rand((sample_count, self.action_dim), generator=generator,
+                              dtype=self.device_cfg.dtype)
+            sampled = lower + unit.to(self.device_cfg.device) * (upper - lower)
+        seeds = sampled[:sample_count].reshape(batch, num_seeds, self.action_dim)
         if seed_config is None and current_state is not None:
             seed_config = current_state
         if seed_config is None:
@@ -516,7 +556,7 @@ class IKSolver:
         )
         return seed_result.solution
 
-    def solve_pose(
+    def _solve_pose_portable(
         self,
         goal_tool_poses: GoalToolPose,
         current_state: Optional[JointState] = None,
@@ -619,7 +659,101 @@ class IKSolver:
             },
         )
         self._compute_solution_velocity(result, current_state)
+        self._last_result = result
         return result
+
+    def _solve_impl(
+        self,
+        solve_state: SolveState,
+        goal_tool_poses: GoalToolPose,
+        num_seeds: int,
+        current_state: Optional[JointState] = None,
+        seed_config=None,
+        return_seeds: int = 1,
+        run_optimizer: bool = True,
+    ) -> IKSolverResult:
+        """Execute an already-described IK problem using the portable solver.
+
+        The V2 internal entrypoint is useful to solver composers which own a
+        :class:`SolveState`.  CPU/MPS does not require CUDA graph padding, but
+        it still validates that the supplied structural metadata agrees with
+        the target before dispatching the real autograd optimizer.
+        """
+        if not isinstance(solve_state, SolveState):
+            raise TypeError("solve_state must be SolveState")
+        goal_tool_poses = self._prepare_pose_goal(goal_tool_poses)
+        if solve_state.batch_size != goal_tool_poses.batch_size:
+            raise ValueError("solve_state.batch_size must match goal_tool_poses.batch_size")
+        if solve_state.num_goalset != goal_tool_poses.num_goalset:
+            raise ValueError("solve_state.num_goalset must match goal_tool_poses.num_goalset")
+        if list(solve_state.tool_frames or []) != list(self.tool_frames):
+            raise ValueError("solve_state.tool_frames must match the configured tool frame order")
+        if num_seeds != max(self.config.num_seeds, return_seeds):
+            raise ValueError(
+                "portable IKSolver uses config.num_seeds (or return_seeds when larger); "
+                "construct a configuration with the requested seed count"
+            )
+        return self._solve_pose_portable(
+            goal_tool_poses, current_state=current_state, seed_config=seed_config,
+            return_seeds=return_seeds, run_optimizer=run_optimizer,
+        )
+
+    def get_unique_solution(self, roundoff_decimals: int = 2) -> torch.Tensor:
+        """Return unique successful joint configurations from the last solve.
+
+        Solutions are flattened over batch and seed only after their success
+        mask has been applied.  ``torch.unique(..., dim=0)`` is deterministic
+        for identical CPU/MPS values and returns the first source solution for
+        every rounded configuration, rather than returning the rounded data.
+        """
+        if self._last_result is None or self._last_result.solution is None:
+            raise RuntimeError("solve_pose must succeed or produce a result before get_unique_solution")
+        if isinstance(roundoff_decimals, bool) or not isinstance(roundoff_decimals, int):
+            raise TypeError("roundoff_decimals must be an integer")
+        solution = self._last_result.solution
+        success = self._last_result.success
+        if solution.ndim != 3 or success.shape != solution.shape[:2]:
+            raise ValueError("last IK result must use [batch, seed, dof] solution and success layouts")
+        selected = solution[success]
+        if selected.numel() == 0:
+            return solution.new_empty((0, solution.shape[-1]))
+        rounded = torch.round(selected * (10.0 ** roundoff_decimals))
+        # ``return_index`` is not available on every PyTorch/MPS version.
+        # Preserve a stable first occurrence with a tiny host-free loop over
+        # the selected (usually very small) candidate set.
+        keep = []
+        for index in range(selected.shape[0]):
+            if not any(bool(torch.equal(rounded[index], rounded[previous])) for previous in keep):
+                keep.append(index)
+        return selected[torch.as_tensor(keep, device=selected.device, dtype=torch.long)]
+
+    def solve_pose(
+        self,
+        goal_tool_poses: GoalToolPose,
+        current_state: Optional[JointState] = None,
+        seed_config=None,
+        return_seeds: int = 1,
+        run_optimizer: bool = True,
+    ) -> IKSolverResult:
+        """Solve pose targets with the typed V2 goal/seed lifecycle."""
+        goal = self._prepare_pose_goal(goal_tool_poses)
+        if return_seeds < 1:
+            raise ValueError("return_seeds must be positive")
+        batch = goal.batch_size
+        num_seeds = max(self.config.num_seeds, return_seeds)
+        mode = (SolveMode.SINGLE if batch == 1 else
+                (SolveMode.MULTI_ENV if self.config.multi_env else SolveMode.BATCH))
+        solve_state = SolveState(
+            solve_type=mode, batch_size=batch,
+            num_envs=batch if self.config.multi_env else 1,
+            num_goalset=goal.num_goalset, num_ik_seeds=num_seeds,
+            tool_frames=list(goal.tool_frames),
+        )
+        return self._solve_impl(
+            solve_state, goal, num_seeds, current_state=current_state,
+            seed_config=seed_config, return_seeds=return_seeds,
+            run_optimizer=run_optimizer,
+        )
 
 
 __all__ = ["IKSolver"]
