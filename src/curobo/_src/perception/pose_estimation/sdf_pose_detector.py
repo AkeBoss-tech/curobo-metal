@@ -148,11 +148,40 @@ class SDFPoseDetector(PoseDetector):
     """Required-initial-pose local mesh registration with V2-like LM state."""
 
     def __init__(self, robot_mesh: RobotMesh, config: Optional[SDFDetectorCfg] = None) -> None:
+        if not isinstance(robot_mesh, RobotMesh):
+            raise TypeError("robot_mesh must be a RobotMesh")
         self.robot_mesh = robot_mesh
         self.config = config or SDFDetectorCfg()
         self.device = _resolve_device(self.config.device_cfg.device)
+        if self.device.type not in {"cpu", "mps"}:
+            raise ValueError("portable SDF pose refinement supports only CPU and MPS devices")
+        # The pinned CUDA implementation checks float32 tensor inputs before
+        # launching its Warp kernels.  Make the portable equivalent explicit
+        # instead of letting a mixed float64 model/float32 observation fail in
+        # matrix multiplication deep inside an iteration.
+        if self.config.device_cfg.dtype != torch.float32:
+            raise TypeError("portable SDF pose refinement supports only float32 tensors")
+        self.dtype = self.config.device_cfg.dtype
+        self._eye6 = torch.eye(6, device=self.device, dtype=self.dtype)
+        self._last_state: Optional[SDFRefinementState] = None
+        self._run_count = 0
         # PoseDetector's centroid config is intentionally not applicable here.
         self.geometry = robot_mesh
+
+    @property
+    def last_refinement_state(self) -> Optional[SDFRefinementState]:
+        """Return an isolated snapshot of the most recently completed run."""
+        return None if self._last_state is None else self._last_state.clone()
+
+    @property
+    def run_count(self) -> int:
+        """Number of completed calls to :meth:`detect_from_points`."""
+        return self._run_count
+
+    def reset(self) -> None:
+        """Discard the retained portable state snapshot without changing mesh state."""
+        self._last_state = None
+        self._run_count = 0
 
     def _model_points(self, n_points: int) -> torch.Tensor:
         return self.robot_mesh.sample_surface_points(n_points)[0]
@@ -163,7 +192,13 @@ class SDFPoseDetector(PoseDetector):
         position, quaternion = initial_pose.position.reshape(-1, 3), initial_pose.quaternion.reshape(-1, 4)
         if len(position) != 1 or len(quaternion) != 1:
             raise ValueError("portable SDFPoseDetector supports one initial pose")
-        return Pose(position.to(self.device), quaternion.to(self.device))
+        position = position.to(device=self.device, dtype=self.dtype)
+        quaternion = quaternion.to(device=self.device, dtype=self.dtype)
+        if not bool(torch.isfinite(position).all().item()) or not bool(torch.isfinite(quaternion).all().item()):
+            raise ValueError("initial_pose must contain only finite values")
+        if bool((torch.linalg.vector_norm(quaternion, dim=-1) <= torch.finfo(self.dtype).eps).any().item()):
+            raise ValueError("initial_pose quaternion must be nonzero")
+        return Pose(position, quaternion, normalize_rotation=True)
 
     def _evaluate(
         self, model: torch.Tensor, points: torch.Tensor, rotation: torch.Tensor, translation: torch.Tensor,
@@ -214,6 +249,11 @@ class SDFPoseDetector(PoseDetector):
 
     def _setup_refinement(self, observed_points: torch.Tensor, initial_pose: Pose) -> SDFRefinementState:
         """Allocate a portable refinement session in the pinned state shape."""
+        if not isinstance(observed_points, torch.Tensor) or observed_points.ndim != 2 or observed_points.shape[-1] != 3:
+            raise ValueError("observed_points must have shape [N, 3]")
+        observed_points = observed_points.to(device=self.device, dtype=self.dtype)
+        if not bool(torch.isfinite(observed_points).all().item()):
+            raise ValueError("observed_points must contain only finite values")
         pose = self._initial_pose(initial_pose)
         points = observed_points.reshape(-1, 3)
         jtj, jtr, sum_sq, n_valid = self._evaluate_at_pose(
@@ -233,8 +273,7 @@ class SDFPoseDetector(PoseDetector):
         if any(value is None for value in (state.observed_points, state.best_JtJ, state.best_Jtr,
                                             state.best_sum_sq, state.best_n_valid, state.lambda_damping)):
             raise ValueError("state lacks normal-equation buffers required for refinement")
-        eye = torch.eye(6, device=state.position.device, dtype=state.position.dtype)
-        delta = torch.linalg.solve(state.best_JtJ + state.lambda_damping * eye, -state.best_Jtr)
+        delta = torch.linalg.solve(state.best_JtJ + state.lambda_damping * self._eye6, -state.best_Jtr)
         delta_t, delta_r = delta[:3], delta[3:]
         current_rotation = Pose(state.position[None], state.quaternion[None]).get_rotation()[0]
         candidate_position = state.position + delta_t
@@ -293,12 +332,16 @@ class SDFPoseDetector(PoseDetector):
         if initial_pose is None:
             raise ValueError("SDFPoseDetector requires an initial_pose estimate")
         if config is not None:
-            self.robot_mesh.update(config.to(self.device))
+            if not isinstance(config, torch.Tensor):
+                raise TypeError("config must be a torch.Tensor when supplied")
+            if not bool(torch.isfinite(config).all().item()):
+                raise ValueError("config must contain only finite values")
+            self.robot_mesh.update(config.to(device=self.device, dtype=self.dtype))
         if not isinstance(observed_points, torch.Tensor):
             raise TypeError("observed_points must be a torch.Tensor")
         if observed_points.ndim != 2 or observed_points.shape[-1] != 3:
             raise ValueError("observed_points must have shape [N, 3]")
-        points = observed_points.to(device=self.device, dtype=self.config.device_cfg.dtype)
+        points = observed_points.to(device=self.device, dtype=self.dtype)
         points = points[torch.isfinite(points).all(dim=-1)]
         if len(points) == 0:
             raise ValueError("observed_points must contain at least one finite point")
@@ -306,12 +349,18 @@ class SDFPoseDetector(PoseDetector):
         if len(self._model_points(len(points))) == 0:
             raise ValueError("detector mesh contains no sampleable points")
         state = self._setup_refinement(points, initial_pose)
-        for _ in range(self.config.max_iterations):
-            state = self._refine_iteration(state)
+        remaining = self.config.max_iterations
+        while remaining:
+            iteration_count = min(remaining, self.config.inner_iterations)
+            for _ in range(iteration_count):
+                state = self._refine_iteration(state)
+            remaining -= iteration_count
             if (state.translation_change.norm() <= self.config.convergence_threshold
                     and state.rotation_change.norm() <= self.config.rotation_convergence_threshold):
                 break
         valid_ratio = float(state.best_n_valid.to(points.dtype).div(state.n_points).detach().cpu())
+        self._last_state = state.clone()
+        self._run_count += 1
         return DetectionResult(
             pose=Pose(state.position[None], state.quaternion[None]), config=config,
             confidence=min(1.0, valid_ratio / self.config.min_valid_ratio),
