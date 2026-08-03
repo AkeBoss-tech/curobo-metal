@@ -10,6 +10,8 @@ rollout buffers intentionally remain unavailable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
+from numbers import Real
 from typing import Any
 
 import torch
@@ -29,8 +31,13 @@ class EvolutionStrategiesCfg(MPPICfg):
 
     def __post_init__(self):
         super().__post_init__()
-        if self.learning_rate <= 0.0:
-            raise ValueError("learning_rate must be positive")
+        if (
+            isinstance(self.learning_rate, bool)
+            or not isinstance(self.learning_rate, Real)
+            or not math.isfinite(float(self.learning_rate))
+            or self.learning_rate <= 0.0
+        ):
+            raise ValueError("learning_rate must be a finite positive real number")
 
 
 class EvolutionStrategies(MPPI):
@@ -130,6 +137,36 @@ class EvolutionStrategies(MPPI):
         self._last_utilities = utilities.detach().clone()
         return utilities
 
+    def _population(
+        self, problems: int, horizon: int, action_dim: int, *, device, dtype, iteration: int
+    ) -> torch.Tensor:
+        """Return an ES population in the shared V2 particle-buffer order.
+
+        ES and MPPI use different distribution updates, not different particle
+        layouts.  Routing through the common builder preserves the persistent
+        ``fixed_samples`` cursor, one exact-mean candidate, and the configured
+        negated/null candidates.  It also keeps batch sampling semantics
+        identical for CPU and MPS rather than maintaining an ES-only RNG path.
+        """
+        return self._particle_population(
+            problems, horizon, action_dim, device=device, dtype=dtype, iteration=iteration
+        )
+
+    def _sample_distribution_action(self, *, iteration: int) -> torch.Tensor:
+        """Draw exactly one projected action per problem without mutating state."""
+        assert self._dist is not None
+        problems, horizon, action_dim = self._dist.mean.shape
+        noise = self._noise(
+            problems,
+            1,
+            horizon,
+            action_dim,
+            device=self._dist.mean.device,
+            dtype=self._dist.mean.dtype,
+            iteration=iteration,
+        )[:, 0]
+        return self._project(self._dist.mean + noise * self._dist.scale_tril)
+
     def optimize(self, seed_action: torch.Tensor) -> torch.Tensor:
         """Run ES on a batched action seed and return the selected action."""
         if not self.enabled:
@@ -145,16 +182,9 @@ class EvolutionStrategies(MPPI):
         cov_history: list[torch.Tensor] = []
 
         for iteration in range(self.config.num_iters):
-            noise = self._noise(
-                problems, particles, horizon, action_dim,
-                device=seed.device, dtype=seed.dtype, iteration=iteration,
+            population = self._population(
+                problems, horizon, action_dim, device=seed.device, dtype=seed.dtype, iteration=iteration
             )
-            population = self._project(self._dist.mean[:, None] + noise * self._dist.scale_tril[:, None])
-            # Keep one exact mean trajectory, matching the useful V2 safety
-            # invariant that ES can never sample *only* perturbations.
-            population[:, 0] = self._dist.mean
-            if self.null_per_problem:
-                population[:, : self.null_per_problem] = 0.0
             costs = self._evaluate_costs(population)
             total = self._compute_total_cost(costs)
             finite_total = torch.where(torch.isfinite(total), total, torch.full_like(total, torch.inf))
@@ -178,6 +208,7 @@ class EvolutionStrategies(MPPI):
                 objective_history.append(best_cost.detach().clone())
                 mean_history.append(self._dist.mean.detach().clone())
                 cov_history.append(self._dist.cov.detach().clone())
+            self._num_steps += 1
 
         self._best_action = best.detach().clone()
         self._seed_action = seed.detach().clone()
@@ -190,10 +221,8 @@ class EvolutionStrategies(MPPI):
         if self.config.sample_mode == SampleMode.BEST:
             result = best
         elif self.config.sample_mode == SampleMode.SAMPLE:
-            result = self._project(
-                self._dist.mean
-                + self._noise(problems, 1, horizon, action_dim, device=seed.device, dtype=seed.dtype,
-                              iteration=self.config.num_iters)[:, 0] * self._dist.scale_tril
+            result = self._sample_distribution_action(
+                iteration=self.config.num_iters + 123 * self._num_steps
             )
         else:
             result = self._dist.mean
@@ -204,12 +233,23 @@ class EvolutionStrategies(MPPI):
         if self._dist is None:
             return None
         if isinstance(mode, str):
-            mode = SampleMode[mode.upper()]
+            try:
+                mode = SampleMode[mode.upper()]
+            except KeyError as exc:
+                raise ValueError(f"unidentified ES sample mode: {mode!r}") from exc
         if mode == SampleMode.BEST:
             return self.best_traj
         if mode == SampleMode.SAMPLE:
-            return self.sample_actions(self._dist.mean)[: self.config.num_problems]
-        return self.mean_action
+            # ``sample_actions`` constructs a *full* particle population and,
+            # when passed a seed, resets the warm-start distribution.  The V2
+            # query contract asks for one action per problem and must be a
+            # read-only operation.
+            return self._sample_distribution_action(
+                iteration=self.config.seed + 123 * self._num_steps
+            )
+        if mode == SampleMode.MEAN:
+            return self.mean_action
+        raise ValueError(f"unidentified ES sample mode: {mode!r}")
 
 
 def calc_exp(total_costs: torch.Tensor) -> torch.Tensor:
