@@ -20,6 +20,57 @@ def _portable_tensor(value: Any, device_cfg: DeviceCfg) -> torch.Tensor:
     return torch.as_tensor(value, device=device_cfg.device, dtype=device_cfg.dtype)
 
 
+def _require_finite(name: str, value: torch.Tensor) -> None:
+    if not bool(torch.isfinite(value).all().item()):
+        raise ValueError(f"{name} must contain only finite values")
+
+
+def _validate_pose_tensor(pose: torch.Tensor, *, name: str = "pose") -> None:
+    if pose.shape[-1:] != (7,):
+        raise ValueError(f"{name} must end in seven xyz+wxyz values")
+    _require_finite(name, pose)
+    if bool((torch.linalg.vector_norm(pose[..., 3:], dim=-1) <= torch.finfo(pose.dtype).eps).any().item()):
+        raise ValueError(f"{name} quaternion must be nonzero")
+
+
+def _batched_radius(value: Any, device_cfg: DeviceCfg) -> torch.Tensor:
+    """Normalize scalar, ``[B]``, and ``[B,1]`` radius storage."""
+    radius = _portable_tensor(value, device_cfg)
+    if radius.ndim and radius.shape[-1] == 1:
+        radius = radius.squeeze(-1)
+    _require_finite("radius", radius)
+    if bool((radius < 0).any().item()):
+        raise ValueError("radius must be nonnegative")
+    return radius
+
+
+def _geometry_output(value: torch.Tensor, tensor: Optional[torch.Tensor], *, width: int) -> torch.Tensor:
+    """Return a value or update a caller-owned geometry buffer exactly."""
+    if tensor is None:
+        return value
+    if tensor.shape != value.shape or tensor.shape[-1:] != (width,):
+        raise ValueError(f"geometry output tensor must have shape {tuple(value.shape)}")
+    tensor.copy_(value.to(device=tensor.device, dtype=tensor.dtype))
+    return tensor
+
+
+def _serializable(value: Any) -> Any:
+    """Convert portable value-model fields into JSON-safe nested data."""
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().tolist()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, Material):
+        return {"metallic": value.metallic, "roughness": value.roughness}
+    if isinstance(value, (list, tuple)):
+        return [_serializable(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _serializable(item) for key, item in value.items()}
+    if isinstance(value, torch.dtype):
+        return str(value).removeprefix("torch.")
+    return value
+
+
 def _offset_pose(base_pose: Sequence[float] | None, local_translation: torch.Tensor, cfg: DeviceCfg) -> list[float]:
     """Compose a local translation with an obstacle pose in portable torch."""
     base = Pose.from_list(list(base_pose or [0, 0, 0, 1, 0, 0, 0]), cfg)
@@ -180,14 +231,12 @@ def tensor_sphere(
     point = _portable_tensor(pt, device_cfg)
     if point.shape[-1:] != (3,):
         raise ValueError("sphere point must end in dimension 3")
-    radius_t = _portable_tensor(radius, device_cfg).reshape(1)
-    if tensor is None:
-        return torch.cat((point, radius_t), dim=-1)
-    if tensor.shape[-1:] != (4,):
-        raise ValueError("sphere tensor must end in dimension 4")
-    tensor[..., :3].copy_(point)
-    tensor[..., 3].copy_(radius_t.expand_as(tensor[..., 3]))
-    return tensor
+    _require_finite("sphere point", point)
+    radius_t = _batched_radius(radius, device_cfg)
+    batch = torch.broadcast_shapes(point.shape[:-1], radius_t.shape)
+    point = point.expand(*batch, 3)
+    value = torch.cat((point, radius_t.expand(batch).unsqueeze(-1)), dim=-1)
+    return _geometry_output(value, tensor, width=4)
 
 
 def tensor_capsule(
@@ -201,15 +250,14 @@ def tensor_capsule(
     base_t, tip_t = _portable_tensor(base, device_cfg), _portable_tensor(tip, device_cfg)
     if base_t.shape[-1:] != (3,) or tip_t.shape[-1:] != (3,):
         raise ValueError("capsule base and tip must end in dimension 3")
-    radius_t = _portable_tensor(radius, device_cfg).reshape(1)
-    if tensor is None:
-        return torch.cat((base_t, tip_t, radius_t), dim=-1)
-    if tensor.shape[-1:] != (7,):
-        raise ValueError("capsule tensor must end in dimension 7")
-    tensor[..., :3].copy_(base_t)
-    tensor[..., 3:6].copy_(tip_t)
-    tensor[..., 6].copy_(radius_t.expand_as(tensor[..., 6]))
-    return tensor
+    _require_finite("capsule base", base_t)
+    _require_finite("capsule tip", tip_t)
+    radius_t = _batched_radius(radius, device_cfg)
+    batch = torch.broadcast_shapes(base_t.shape[:-1], tip_t.shape[:-1], radius_t.shape)
+    value = torch.cat((
+        base_t.expand(*batch, 3), tip_t.expand(*batch, 3), radius_t.expand(batch).unsqueeze(-1),
+    ), dim=-1)
+    return _geometry_output(value, tensor, width=7)
 
 
 def tensor_cube(
@@ -222,7 +270,11 @@ def tensor_cube(
     dims_t = _portable_tensor(dims, device_cfg)
     if pose_t.shape != (7,) or dims_t.shape != (3,):
         raise ValueError("cube pose and dims must have shapes [7] and [3]")
-    forward = Pose(pose_t[:3], pose_t[3:])
+    _validate_pose_tensor(pose_t)
+    _require_finite("cube dims", dims_t)
+    if bool((dims_t < 0).any().item()):
+        raise ValueError("cube dims must be nonnegative")
+    forward = Pose(pose_t[:3], pose_t[3:], normalize_rotation=True)
     return [dims_t, forward.inverse().get_pose_vector().squeeze(0)]
 
 
@@ -236,7 +288,11 @@ def batch_tensor_cube(
     dims_t = _portable_tensor(dims, device_cfg)
     if pose_t.ndim != 2 or pose_t.shape[-1] != 7 or dims_t.shape != (pose_t.shape[0], 3):
         raise ValueError("cube batches require pose [B,7] and dims [B,3]")
-    forward = Pose(pose_t[:, :3], pose_t[:, 3:])
+    _validate_pose_tensor(pose_t)
+    _require_finite("cube dims", dims_t)
+    if bool((dims_t < 0).any().item()):
+        raise ValueError("cube dims must be nonnegative")
+    forward = Pose(pose_t[:, :3], pose_t[:, 3:], normalize_rotation=True)
     return [dims_t, forward.inverse().get_pose_vector()]
 
 
@@ -244,6 +300,10 @@ def batch_tensor_cube(
 class Material:
     metallic: float = 0.0
     roughness: float = 0.4
+
+    def __post_init__(self) -> None:
+        values = torch.as_tensor((self.metallic, self.roughness), dtype=torch.float64)
+        _require_finite("material", values)
 
 
 @dataclass
@@ -258,8 +318,10 @@ class Obstacle:
     device_cfg: DeviceCfg = field(default_factory=DeviceCfg)
 
     def __post_init__(self) -> None:
-        if self.pose is not None and len(self.pose) != 7:
-            raise ValueError("pose must be [x, y, z, qw, qx, qy, qz]")
+        if self.pose is not None:
+            if len(self.pose) != 7:
+                raise ValueError("pose must be [x, y, z, qw, qx, qy, qz]")
+            _validate_pose_tensor(torch.as_tensor(self.pose, dtype=torch.float64))
 
     def _pose_or_identity(self) -> list[float]:
         return self.pose or [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
@@ -341,10 +403,18 @@ class Cuboid(Obstacle):
     dims: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
 
     def __post_init__(self) -> None:
+        # ``Obstacle.scale`` precedes ``dims`` in inherited dataclass field
+        # order.  Historical cuRobo call sites nevertheless commonly use
+        # ``Cuboid(name, pose, dims)``.  Cuboids do not have independent mesh
+        # scaling semantics, so treat that otherwise-ambiguous legacy slot as
+        # dimensions when explicit ``dims`` were not supplied.
+        if self.scale is not None and torch.equal(torch.as_tensor(self.dims), torch.zeros(3, dtype=torch.as_tensor(self.dims).dtype)):
+            self.dims, self.scale = self.scale, None
         super().__post_init__()
         if self.pose is None:
             raise ValueError("Cuboid Obstacle requires Pose")
-        if len(self.dims) != 3 or any(x < 0 for x in self.dims):
+        dims = torch.as_tensor(self.dims)
+        if dims.shape != (3,) or not bool(torch.isfinite(dims).all().item()) or bool((dims < 0).any().item()):
             raise ValueError("dims must contain three nonnegative lengths")
 
     def get_cuboid(self) -> "Cuboid":
@@ -372,7 +442,8 @@ class Sphere(Obstacle):
                 raise ValueError("position must contain three values")
             self.pose = list(self.position) + [1, 0, 0, 0]
         super().__post_init__()
-        if self.radius < 0:
+        radius = torch.as_tensor(self.radius)
+        if radius.numel() != 1 or not bool(torch.isfinite(radius).all().item()) or bool((radius < 0).any().item()):
             raise ValueError("radius must be nonnegative")
         if self.pose is not None:
             self.position = list(self.pose[:3])
@@ -394,7 +465,11 @@ class Capsule(Obstacle):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if self.radius < 0 or len(self.base) != 3 or len(self.tip) != 3:
+        radius = torch.as_tensor(self.radius)
+        base, tip = torch.as_tensor(self.base), torch.as_tensor(self.tip)
+        if (radius.numel() != 1 or not bool(torch.isfinite(radius).all().item())
+                or bool((radius < 0).any().item()) or base.shape != (3,) or tip.shape != (3,)
+                or not bool(torch.isfinite(base).all().item()) or not bool(torch.isfinite(tip).all().item())):
             raise ValueError("Capsule requires a nonnegative radius and 3D base/tip")
 
     def get_cuboid(self) -> Cuboid:
@@ -469,7 +544,8 @@ class Cylinder(Obstacle):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if self.radius < 0 or self.height < 0:
+        values = torch.as_tensor((self.radius, self.height))
+        if not bool(torch.isfinite(values).all().item()) or bool((values < 0).any().item()):
             raise ValueError("Cylinder radius and height must be nonnegative")
 
     def get_cuboid(self) -> Cuboid:
@@ -493,6 +569,11 @@ class PointCloud(Obstacle):
         points = torch.as_tensor(self.points)
         if points.ndim < 2 or points.shape[-1] != 3:
             raise ValueError("points must end in dimension 3")
+        if not points.is_floating_point():
+            points = points.to(torch.get_default_dtype())
+            self.points = points
+        if not bool(torch.isfinite(points).all().item()):
+            raise ValueError("points must contain only finite values")
         if self.scale is not None:
             dtype = points.dtype if points.is_floating_point() else torch.get_default_dtype()
             scale = torch.as_tensor(self.scale, dtype=dtype, device=points.device)
@@ -545,11 +626,18 @@ class Mesh(Obstacle):
         vertices, faces = torch.as_tensor(self.vertices), torch.as_tensor(self.faces)
         if vertices.ndim != 2 or vertices.shape[-1] != 3:
             raise ValueError("vertices must have shape [N, 3]")
+        if not vertices.is_floating_point():
+            vertices = vertices.to(torch.get_default_dtype())
+            self.vertices = vertices
+        if not bool(torch.isfinite(vertices).all().item()):
+            raise ValueError("vertices must be finite values")
         if faces.ndim == 1 and faces.numel() == 3:
             faces = faces.reshape(1, 3)
             self.faces = faces
         if faces.ndim != 2 or faces.shape[-1] != 3:
             raise ValueError("portable world collision supports triangulated faces [F, 3]")
+        if faces.is_floating_point() and not bool(torch.equal(faces, torch.round(faces))):
+            raise ValueError("mesh face indices must be integral")
         if faces.numel() and (int(faces.min()) < 0 or int(faces.max()) >= vertices.shape[0]):
             raise ValueError("mesh face indices are outside vertices")
         if self.scale is not None:
@@ -702,11 +790,17 @@ class VoxelGrid(Obstacle):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if len(self.dims) != 3 or any(x <= 0 for x in self.dims):
+        dims = torch.as_tensor(self.dims)
+        if dims.shape != (3,) or not bool(torch.isfinite(dims).all().item()) or bool((dims <= 0).any().item()):
             raise ValueError("dims must contain three positive lengths")
-        if self.voxel_size <= 0:
+        voxel_size = torch.as_tensor(self.voxel_size)
+        if voxel_size.numel() != 1 or not bool(torch.isfinite(voxel_size).all().item()) or bool((voxel_size <= 0).any().item()):
             raise ValueError("voxel_size must be positive")
         if self.feature_tensor is not None:
+            if not isinstance(self.feature_tensor, torch.Tensor) or not self.feature_tensor.is_floating_point():
+                raise ValueError("feature_tensor must be a floating torch.Tensor")
+            if not bool(torch.isfinite(self.feature_tensor).all().item()):
+                raise ValueError("feature_tensor must contain only finite values")
             self.feature_dtype = self.feature_tensor.dtype
 
     def get_grid_shape(self) -> tuple[List[int], List[float], List[float]]:
@@ -776,15 +870,76 @@ class SceneCfg(Sequence[Obstacle]):
 
     @staticmethod
     def create(data_dict: dict[str, Any]) -> "SceneCfg":
+        """Build a scene from the pinned mapping format or JSON list form."""
+        if not isinstance(data_dict, dict):
+            raise TypeError("scene data must be a mapping")
         raw = data_dict.get("world_cfg", data_dict)
+        if not isinstance(raw, dict):
+            raise TypeError("world_cfg must be a mapping")
+
+        def decode(kind: str, obstacle_type):
+            values = raw.get(kind, {})
+            if values is None:
+                return []
+            if isinstance(values, dict):
+                entries = [{"name": name, **(fields or {})} for name, fields in values.items()]
+            if isinstance(values, list):
+                entries = values
+            if not isinstance(values, (dict, list)):
+                raise TypeError(f"{kind} must be a mapping or a list of named mappings")
+            decoded = []
+            for fields in entries:
+                if not isinstance(fields, dict) or "name" not in fields:
+                    raise ValueError(f"{kind} list entries require a name")
+                fields = fields.copy()
+                name = fields.pop("name")
+                if isinstance(fields.get("material"), dict):
+                    fields["material"] = Material(**fields["material"])
+                if obstacle_type is VoxelGrid and isinstance(fields.get("feature_tensor"), list):
+                    fields["feature_tensor"] = torch.as_tensor(
+                        fields["feature_tensor"], dtype=torch.get_default_dtype()
+                    )
+                decoded.append(obstacle_type(name=name, **fields))
+            return decoded
+
         return SceneCfg(
-            cuboid=[Cuboid(name=n, **v) for n, v in raw.get("cuboid", {}).items()],
-            sphere=[Sphere(name=n, **v) for n, v in raw.get("sphere", {}).items()],
-            capsule=[Capsule(name=n, **v) for n, v in raw.get("capsule", {}).items()],
-            cylinder=[Cylinder(name=n, **v) for n, v in raw.get("cylinder", {}).items()],
-            mesh=[Mesh(name=n, **v) for n, v in raw.get("mesh", {}).items()],
-            voxel=[VoxelGrid(name=n, **v) for n, v in raw.get("voxel", {}).items()],
+            cuboid=decode("cuboid", Cuboid), sphere=decode("sphere", Sphere),
+            capsule=decode("capsule", Capsule), cylinder=decode("cylinder", Cylinder),
+            mesh=decode("mesh", Mesh), voxel=decode("voxel", VoxelGrid),
         )
+
+    def to_dict(self, *, wrap_world_cfg: bool = True) -> dict[str, Any]:
+        """Return a deterministic JSON-safe scene mapping accepted by :meth:`create`.
+
+        Runtime ``DeviceCfg`` objects and derived voxel ``feature_dtype`` are
+        intentionally omitted: they are process-local execution settings, and
+        the latter is reconstructed from ``feature_tensor`` on load.
+        """
+        def encode(items: Sequence[Obstacle]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for obstacle in items:
+                fields = {
+                    name: _serializable(value)
+                    for name, value in vars(obstacle).items()
+                    if name not in {"name", "device_cfg", "feature_dtype"}
+                    and value is not None
+                }
+                # ``position`` is a deprecated Sphere alias.  Emitting both
+                # would make construction prefer it and erase an otherwise
+                # meaningful serialized pose quaternion.
+                if isinstance(obstacle, Sphere) and obstacle.pose is not None:
+                    fields.pop("position", None)
+                result[obstacle.name] = fields
+            return result
+
+        payload = {
+            "sphere": encode(self.sphere), "cuboid": encode(self.cuboid),
+            "capsule": encode(self.capsule), "cylinder": encode(self.cylinder),
+            "mesh": encode(self.mesh), "voxel": encode(self.voxel),
+        }
+        return {"world_cfg": payload} if wrap_world_cfg else payload
+
+    as_dict = to_dict
 
     @staticmethod
     def get_scene_graph(current_world: "SceneCfg", process_color: bool = True):
