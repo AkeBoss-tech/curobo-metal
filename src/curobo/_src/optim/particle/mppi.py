@@ -9,7 +9,7 @@ one-shot call to a generic particle optimiser.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
 import math
 from typing import Any, Optional
@@ -56,9 +56,15 @@ class MPPICfg(PortableOptCfg):
     sample_per_problem: bool = True
 
     def __post_init__(self):
+        if isinstance(self.num_iters, bool) or not isinstance(self.num_iters, int) or self.num_iters < 1:
+            raise ValueError("num_iters must be a positive integer")
+        if isinstance(self.inner_iters, bool) or not isinstance(self.inner_iters, int) or self.inner_iters < 1:
+            raise ValueError("inner_iters must be a positive integer")
+        if isinstance(self.num_problems, bool) or not isinstance(self.num_problems, int) or self.num_problems < 1:
+            raise ValueError("num_problems must be a positive integer")
         if self.num_particles is None:
             self.num_particles = 1
-        if self.num_particles <= 0:
+        if isinstance(self.num_particles, bool) or not isinstance(self.num_particles, int) or self.num_particles <= 0:
             raise ValueError("num_particles must be positive")
         if not 0.0 <= self.null_act_frac <= 1.0:
             raise ValueError("null_act_frac must lie in [0, 1]")
@@ -84,6 +90,37 @@ class MPPICfg(PortableOptCfg):
             self.sample_params = ParticleSamplerCfg(
                 **self.sample_params, device_cfg=self.device_cfg
             )
+        elif not isinstance(self.sample_params, ParticleSamplerCfg):
+            raise TypeError("sample_params must be a ParticleSamplerCfg or mapping")
+        else:
+            # The sampler is part of one optimizer instance, so it must follow
+            # its configured CPU/MPS device rather than retain the device of a
+            # caller-owned default configuration.
+            self.sample_params.device_cfg = self.device_cfg
+        if self.null_act_frac and self._null_particle_count() >= self.num_particles:
+            raise ValueError("null_act_frac must leave at least one stochastic MPPI particle")
+        if self.init_mean is not None:
+            self.init_mean = self.device_cfg.to_device(self.init_mean).clone()
+
+    def _null_particle_count(self) -> int:
+        """Return the exact V2 split count used for negated/null particles."""
+        positive = round(int(self.null_act_frac * self.num_particles * 0.5))
+        negative = round(int(self.null_act_frac * self.num_particles)) - positive
+        return positive + negative
+
+    @classmethod
+    def create_data_dict(cls, data_dict, device_cfg=PortableOptCfg.device_cfg, child_dict=None):
+        """Build a constructor-safe MPPI mapping from a broader solver dict.
+
+        The generic portable base only knows its own fields; inheriting that
+        helper silently discarded MPPI-specific entries such as ``beta`` and
+        ``null_act_frac`` when an optimizer factory constructed this config.
+        """
+        values = dict(data_dict if child_dict is None else child_dict)
+        values["device_cfg"] = device_cfg
+        values.setdefault("num_particles", None)
+        allowed = {item.name for item in fields(cls)}
+        return {key: value for key, value in values.items() if key in allowed}
 
 
 class MPPI(PortableOptimizer):
@@ -316,15 +353,19 @@ class MPPI(PortableOptimizer):
 
     @property
     def problem_col(self):
-        return torch.arange(self.config.num_problems, device=self.device_cfg.device)
+        device = self.device_cfg.device if self._dist is None else self._dist.mean.device
+        return torch.arange(self.config.num_problems, device=device)
 
     @property
     def gamma_seq(self):
         if self._distribution_shape is None:
             horizon = self.action_horizon
+            device, dtype = self.device_cfg.device, self.device_cfg.dtype
         else:
             horizon = self._distribution_shape[0]
-        exponent = torch.arange(horizon, device=self.device_cfg.device, dtype=self.device_cfg.dtype)
+            assert self._dist is not None
+            device, dtype = self._dist.mean.device, self._dist.mean.dtype
+        exponent = torch.arange(horizon, device=device, dtype=dtype)
         return torch.pow(torch.as_tensor(self.config.gamma, device=exponent.device, dtype=exponent.dtype), exponent)
 
     @property
@@ -359,12 +400,21 @@ class MPPI(PortableOptimizer):
 
     # -- Sampling, evaluation, and update ---------------------------------------
 
+    @property
+    def _sample_seed(self) -> int:
+        """Seed the particle population from its sampler configuration.
+
+        ``MPPICfg.seed`` remains the default, while an explicit
+        ``ParticleSamplerCfg(seed=...)`` has the same authority it has in V2.
+        """
+        return int(getattr(self.config.sample_params, "seed", self.config.seed))
+
     def _noise(self, problems: int, particles: int, horizon: int, action_dim: int, *, device, dtype, iteration: int):
         # CPU-seeded RNG gives bit-for-bit reproducible population generation
         # across CPU/MPS for a particular PyTorch release.  Moving the finished
         # noise tensor onto MPS avoids a CPU fallback operator.
         generator = torch.Generator(device="cpu")
-        generator.manual_seed(int(self.config.seed) + int(iteration))
+        generator.manual_seed(self._sample_seed + int(iteration))
         sample_problems = problems if self.config.sample_per_problem else 1
         noise = torch.randn(
             (sample_problems, particles, horizon, action_dim),
@@ -596,7 +646,7 @@ class MPPI(PortableOptimizer):
         self._sample_cursor = 0
 
     def update_init_mean(self, init_mean):
-        self.config.init_mean = torch.as_tensor(init_mean).detach().clone()
+        self.config.init_mean = self.device_cfg.to_device(init_mean).detach().clone()
         if self._dist is not None:
             self._ensure_distribution(self._dist.mean, reset_mean=True)
 
@@ -681,16 +731,31 @@ class MPPI(PortableOptimizer):
         horizon = self._dist.mean.shape[-2]
         if shift_steps >= horizon:
             shift_steps = horizon
-        old = self._dist.mean.clone()
-        self._dist.mean = torch.roll(old, shifts=-shift_steps, dims=-2)
-        if self.config.base_action == BaseActionType.REPEAT and shift_steps:
-            self._dist.mean[:, -shift_steps:] = old[:, -1:]
-        elif self.config.base_action == BaseActionType.NULL and shift_steps:
-            self._dist.mean[:, -shift_steps:] = 0.0
-        elif self.config.base_action == BaseActionType.RANDOM and shift_steps:
-            noise = self._noise(self._dist.mean.shape[0], 1, shift_steps, self._dist.mean.shape[-1], device=old.device, dtype=old.dtype, iteration=0)[:, 0]
-            self._dist.mean[:, -shift_steps:] = noise * self._dist.scale_tril
-        self._best_action = self._dist.mean.detach().clone()
+        def shift_value(value: torch.Tensor, *, iteration: int) -> torch.Tensor:
+            old = value.clone()
+            shifted = torch.roll(old, shifts=-shift_steps, dims=-2)
+            if self.config.base_action == BaseActionType.REPEAT:
+                shifted[:, -shift_steps:] = old[:, -1:]
+            elif self.config.base_action == BaseActionType.NULL:
+                shifted[:, -shift_steps:] = 0.0
+            else:
+                noise = self._noise(
+                    shifted.shape[0], 1, shift_steps, shifted.shape[-1],
+                    device=old.device, dtype=old.dtype, iteration=iteration,
+                )[:, 0]
+                shifted[:, -shift_steps:] = noise * self._dist.scale_tril
+            # Distribution state stays in its native control coordinates.
+            # Bounds are applied when populations/actions are exposed, exactly
+            # as for the regular optimisation loop.
+            return shifted
+
+        self._dist.mean = shift_value(self._dist.mean, iteration=0)
+        if self._best_action is not None and self._best_action.shape == self._dist.mean.shape:
+            # V2 shifts mean and best trajectory independently; replacing the
+            # best trajectory with the mean loses a useful MPC warm start.
+            self._best_action = shift_value(self._best_action, iteration=1).detach()
+        else:
+            self._best_action = self._dist.mean.detach().clone()
         return True
 
     _shift = shift
@@ -713,9 +778,23 @@ class MPPI(PortableOptimizer):
         values = dict(solver_params)
         if self.config.solver_name in values:
             values = dict(values[self.config.solver_name])
+        changed = set()
         for key, value in values.items():
-            if hasattr(self.config, key):
-                setattr(self.config, key, value)
+            if not hasattr(self.config, key):
+                # Keep the portable configuration strict about its own state
+                # but tolerate solver-wide dictionaries carrying parameters
+                # for sibling optimizers, as the previous facade did.
+                continue
+            setattr(self.config, key, value)
+            changed.add(key)
+        # Re-run parsing/validation for enum strings and every public range.
+        self.config.__post_init__()
+        if changed.intersection({"num_iters", "num_particles", "sample_params", "seed", "sample_per_problem"}):
+            self._sample_iter = None
+            self._sample_set = None
+            self._sample_cursor = 0
+        if changed.intersection({"init_mean", "init_cov", "cov_type"}) and self._dist is not None:
+            self.reset_distribution()
         return True
 
     def update_niters(self, niters):
