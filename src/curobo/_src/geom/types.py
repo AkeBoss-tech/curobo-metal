@@ -48,6 +48,21 @@ def _copy_visual_fields(source: "Obstacle", target: "Obstacle") -> "Obstacle":
     return target
 
 
+def _clone_value(value: Any) -> Any:
+    """Clone mutable/tensor scene values without detaching autograd graphs."""
+    if isinstance(value, torch.Tensor):
+        return value.clone()
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    if isinstance(value, list):
+        return [_clone_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_value(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _clone_value(item) for key, item in value.items()}
+    return value
+
+
 def _triangulate_polygon_faces(
     faces: Sequence[Any] | torch.Tensor,
     face_counts: Sequence[int] | torch.Tensor | None = None,
@@ -248,6 +263,19 @@ class Obstacle:
 
     def _pose_or_identity(self) -> list[float]:
         return self.pose or [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+
+    def clone(self) -> "Obstacle":
+        """Return an independent portable value copy.
+
+        Scene mutation/caching routinely clones worlds before applying an
+        attachment or voxel update.  Tensor fields remain differentiable: a
+        clone participates in the same graph rather than silently detaching.
+        """
+        values = {
+            name: _clone_value(getattr(self, name))
+            for name in self.__dataclass_fields__
+        }
+        return type(self)(**values)
 
     def get_transform_matrix(self) -> np.ndarray:
         """Return a serialisable homogeneous transform without trimesh."""
@@ -517,6 +545,9 @@ class Mesh(Obstacle):
         vertices, faces = torch.as_tensor(self.vertices), torch.as_tensor(self.faces)
         if vertices.ndim != 2 or vertices.shape[-1] != 3:
             raise ValueError("vertices must have shape [N, 3]")
+        if faces.ndim == 1 and faces.numel() == 3:
+            faces = faces.reshape(1, 3)
+            self.faces = faces
         if faces.ndim != 2 or faces.shape[-1] != 3:
             raise ValueError("portable world collision supports triangulated faces [F, 3]")
         if faces.numel() and (int(faces.min()) < 0 or int(faces.max()) >= vertices.shape[0]):
@@ -567,7 +598,7 @@ class Mesh(Obstacle):
         pointcloud: np.ndarray | torch.Tensor | Sequence[Sequence[float]],
         pitch: float = 0.02,
         name: str = "world_pc",
-        pose: List[float] = [0, 0, 0, 1, 0, 0, 0],
+        pose: List[float] | None = None,
         filter_close_points: float = 0.0,
     ) -> "Mesh":
         """Create a deterministic voxel-surface mesh from a point cloud.
@@ -789,9 +820,12 @@ class SceneCfg(Sequence[Obstacle]):
 
     def clone(self) -> "SceneCfg":
         return SceneCfg(
-            sphere=self.sphere.copy(), cuboid=self.cuboid.copy(),
-            capsule=self.capsule.copy(), cylinder=self.cylinder.copy(),
-            mesh=self.mesh.copy(), voxel=self.voxel.copy(),
+            sphere=[item.clone() for item in self.sphere],
+            cuboid=[item.clone() for item in self.cuboid],
+            capsule=[item.clone() for item in self.capsule],
+            cylinder=[item.clone() for item in self.cylinder],
+            mesh=[item.clone() for item in self.mesh],
+            voxel=[item.clone() for item in self.voxel],
         )
 
     @staticmethod
