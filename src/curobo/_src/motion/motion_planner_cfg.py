@@ -10,7 +10,8 @@ unavailable execution optimization.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, fields
 import math
 from os import PathLike
 from typing import Any, Dict, List, Mapping, Optional, Type, Union
@@ -18,13 +19,16 @@ from typing import Any, Dict, List, Mapping, Optional, Type, Union
 from curobo._src.geom.collision.collision_scene import SceneCollisionCfg
 from curobo._src.geom.types import SceneCfg
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
+from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.solver.solver_ik_cfg import IKSolverCfg
 from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
+from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.robot import RobotCfg
 from curobo._src.util.config_io import join_path, resolve_config, resolve_device_cfg
-from curobo.content import get_scene_configs_path
+from curobo._src.util.logging import log_and_raise
+from curobo.content import get_robot_configs_path, get_scene_configs_path
 
 
 def _positive_int(value: Any, name: str, *, allow_zero: bool = False) -> int:
@@ -44,14 +48,14 @@ def _positive_scalar(value: Any, name: str) -> float:
     return value
 
 
-def _resolve_scene(scene_model: Any) -> SceneCfg | list[SceneCfg]:
+def _resolve_scene(scene_model: Any) -> SceneCfg | list[SceneCfg] | SceneCollisionCfg:
     """Resolve the portable subset of V2 scene inputs.
 
     Scene YAML names are intentionally resolved relative to bundled scene
     content, just like robot names.  USD/Isaac values are rejected by
     :func:`resolve_config` with an explicit portable boundary.
     """
-    if isinstance(scene_model, SceneCfg):
+    if isinstance(scene_model, (SceneCfg, SceneCollisionCfg)):
         return scene_model
     if isinstance(scene_model, (str, PathLike)):
         scene_model = resolve_config(join_path(get_scene_configs_path(), scene_model))
@@ -99,8 +103,165 @@ class MotionPlannerCfg:
     ik_solver_config: IKSolverCfg
     trajopt_solver_config: TrajOptSolverCfg
     graph_planner_config: Optional[PRMGraphPlannerCfg] = None
-    scene_collision_cfg: Optional[object] = None
+    scene_collision_cfg: Optional[SceneCollisionCfg] = None
     device_cfg: DeviceCfg = DeviceCfg()
+
+    def __post_init__(self) -> None:
+        """Validate the direct-construction form used by advanced callers.
+
+        ``create`` is the normal public entry point, but cuRobo applications
+        also compose pre-built IK, TrajOpt, and PRM records.  The planner shares
+        their world and shape-bound assumptions, so accepting contradictory
+        records here otherwise leads to a failure deep inside a solve call.
+        The records may request CUDA graph capture, but their portable active
+        setting remains ordinary eager/persistent CPU/MPS state.
+        """
+        self.device_cfg = resolve_device_cfg(self.device_cfg)
+        if not isinstance(self.ik_solver_config, IKSolverCfg):
+            raise TypeError("ik_solver_config must be IKSolverCfg")
+        if not isinstance(self.trajopt_solver_config, TrajOptSolverCfg):
+            raise TypeError("trajopt_solver_config must be TrajOptSolverCfg")
+        if self.graph_planner_config is not None and not isinstance(
+            self.graph_planner_config, PRMGraphPlannerCfg
+        ):
+            raise TypeError("graph_planner_config must be PRMGraphPlannerCfg or None")
+        if self.scene_collision_cfg is not None and not isinstance(
+            self.scene_collision_cfg, SceneCollisionCfg
+        ):
+            raise TypeError("scene_collision_cfg must be SceneCollisionCfg or None")
+
+        children: list[tuple[str, Any]] = [
+            ("ik_solver_config", self.ik_solver_config),
+            ("trajopt_solver_config", self.trajopt_solver_config),
+        ]
+        if self.graph_planner_config is not None:
+            children.append(("graph_planner_config", self.graph_planner_config))
+        for name, config in children:
+            if config.device_cfg != self.device_cfg:
+                raise ValueError(f"{name}.device_cfg must match MotionPlannerCfg.device_cfg")
+
+        ik, traj = self.ik_solver_config, self.trajopt_solver_config
+        for name in ("max_batch_size", "multi_env", "max_goalset"):
+            if getattr(ik, name) != getattr(traj, name):
+                raise ValueError(
+                    f"ik_solver_config and trajopt_solver_config must agree on {name}"
+                )
+        expected_envs = ik.max_batch_size if ik.multi_env else 1
+        if self.scene_collision_cfg is not None:
+            if self.scene_collision_cfg.device_cfg != self.device_cfg:
+                raise ValueError("scene_collision_cfg.device_cfg must match MotionPlannerCfg.device_cfg")
+            if self.scene_collision_cfg.num_envs != expected_envs:
+                raise ValueError(
+                    "scene_collision_cfg.num_envs must match the configured planner environments"
+                )
+            for name, config in (("ik_solver_config", ik), ("trajopt_solver_config", traj)):
+                if config.scene_collision_cfg is not self.scene_collision_cfg:
+                    raise ValueError(
+                        f"{name}.scene_collision_cfg must be the planner scene_collision_cfg"
+                    )
+            if (
+                self.graph_planner_config is not None
+                and self.graph_planner_config.scene_collision_cfg is not self.scene_collision_cfg
+            ):
+                raise ValueError(
+                    "graph_planner_config.scene_collision_cfg must be the planner scene_collision_cfg"
+                )
+        else:
+            for name, config in (("ik_solver_config", ik), ("trajopt_solver_config", traj)):
+                if config.scene_collision_cfg is not None:
+                    raise ValueError(
+                        f"{name}.scene_collision_cfg must be None when planner scene_collision_cfg is None"
+                    )
+            if (
+                self.graph_planner_config is not None
+                and self.graph_planner_config.scene_collision_cfg is not None
+            ):
+                raise ValueError(
+                    "graph_planner_config.scene_collision_cfg must be None when planner scene_collision_cfg is None"
+                )
+
+    @property
+    def robot_config(self) -> RobotCfg:
+        """The robot configuration shared by the planner's portable solvers."""
+        return self.ik_solver_config.robot_config
+
+    @property
+    def requested_use_cuda_graph(self) -> bool:
+        """Whether the caller requested CUDA graph capture on construction.
+
+        It is retained for source compatibility and diagnostics only.  The
+        active ``use_cuda_graph`` fields of portable child records are always
+        false because graph capture is a CUDA runtime ABI.
+        """
+        return bool(
+            self.ik_solver_config.requested_use_cuda_graph
+            or self.trajopt_solver_config.requested_use_cuda_graph
+            or (
+                self.graph_planner_config is not None
+                and self.graph_planner_config.use_cuda_graph_for_rollout
+            )
+        )
+
+    def clone(self, **updates: Any) -> "MotionPlannerCfg":
+        """Return a validated independent configuration tree.
+
+        Deep copying the complete aggregation preserves aliases between a
+        shared scene and each child core, while isolating mutable optimizer,
+        cache, and tensor-bound records from the source configuration.  Device
+        migration is intentionally not implicit: robot/world tensors must be
+        rebuilt through :meth:`create` for their target ``DeviceCfg``.
+        """
+        known = {item.name for item in fields(self)}
+        unknown = sorted(set(updates).difference(known))
+        if unknown:
+            raise TypeError(f"unknown MotionPlannerCfg fields: {unknown}")
+        if "device_cfg" in updates and resolve_device_cfg(updates["device_cfg"]) != self.device_cfg:
+            raise ValueError(
+                "MotionPlannerCfg cannot migrate prebuilt robot/world tensors; "
+                "create a new configuration for the target DeviceCfg"
+            )
+        # ``deepcopy`` preserves aliases in the original aggregate. When a
+        # caller replaces either a child config or the world, this aggregate
+        # remains the authority for world ownership: rewire all three children
+        # to its copied/replaced scene before complete validation.
+        candidate = deepcopy(self)
+        for name, value in updates.items():
+            setattr(candidate, name, value)
+        scene_or_child_update = {
+            "scene_collision_cfg",
+            "ik_solver_config",
+            "trajopt_solver_config",
+            "graph_planner_config",
+        }
+        if scene_or_child_update.intersection(updates):
+            canonical_scene = candidate.scene_collision_cfg
+            for name in ("ik_solver_config", "trajopt_solver_config"):
+                config = getattr(candidate, name)
+                if config.scene_collision_cfg is not canonical_scene:
+                    core = config.core_cfg.clone(scene_collision_cfg=canonical_scene)
+                    setattr(
+                        candidate,
+                        name,
+                        config.clone(core_cfg=core, robot_config=core.robot_config),
+                    )
+            if (
+                candidate.graph_planner_config is not None
+                and candidate.graph_planner_config.scene_collision_cfg is not canonical_scene
+            ):
+                candidate.graph_planner_config = candidate.graph_planner_config.clone(
+                    scene_collision_cfg=canonical_scene
+                )
+        candidate.__post_init__()
+        return candidate
+
+    copy = clone
+
+    def update(self, **updates: Any) -> "MotionPlannerCfg":
+        """Atomically replace fields after validating the complete configuration."""
+        candidate = self.clone(**updates)
+        for item in fields(self):
+            setattr(self, item.name, getattr(candidate, item.name))
+        return self
 
     @staticmethod
     def create(
@@ -125,8 +286,8 @@ class MotionPlannerCfg:
         random_seed: int = 123,
         optimizer_collision_activation_distance: float = 0.01,
         store_debug: bool = False,
-        transition_model_config_instance_type: Type = object,
-        cost_manager_config_instance_type: Type = object,
+        transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
+        cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
         max_batch_size: int = 1,
         multi_env: bool = False,
         max_goalset: int = 1,
@@ -186,7 +347,20 @@ class MotionPlannerCfg:
         scene_collision_cfg: Optional[SceneCollisionCfg] = None
         if scene_model is not None:
             scene = _resolve_scene(scene_model)
-            if isinstance(scene, list):
+            if isinstance(scene, SceneCollisionCfg):
+                if scene.device_cfg != device_cfg:
+                    raise ValueError("scene_model SceneCollisionCfg device_cfg must match device_cfg")
+                if collision_cache is not None and scene.cache != collision_cache:
+                    raise ValueError(
+                        "collision_cache cannot override a prebuilt SceneCollisionCfg cache"
+                    )
+                expected_envs = max_batch_size if multi_env else 1
+                if scene.num_envs != expected_envs:
+                    raise ValueError(
+                        "scene_model SceneCollisionCfg.num_envs must match configured planner environments"
+                    )
+                scene_collision_cfg = scene
+            elif isinstance(scene, list):
                 if not multi_env:
                     raise ValueError("a list scene_model requires multi_env=True")
                 if len(scene) != max_batch_size:
@@ -194,12 +368,13 @@ class MotionPlannerCfg:
                         "multi_env scene_model length must equal max_batch_size "
                         f"({max_batch_size}), got {len(scene)}"
                     )
-            scene_collision_cfg = SceneCollisionCfg(
-                device_cfg=device_cfg,
-                scene_model=scene,
-                num_envs=max_batch_size if multi_env else 1,
-                cache=collision_cache,
-            )
+            if scene_collision_cfg is None:
+                scene_collision_cfg = SceneCollisionCfg(
+                    device_cfg=device_cfg,
+                    scene_model=scene,
+                    num_envs=max_batch_size if multi_env else 1,
+                    cache=collision_cache,
+                )
         elif collision_cache is not None:
             scene_collision_cfg = SceneCollisionCfg(
                 device_cfg=device_cfg,
@@ -263,8 +438,28 @@ class MotionPlannerCfg:
                 cost_manager_config_instance_type=cost_manager_config_instance_type,
             )
         return MotionPlannerCfg(
-            ik_cfg, traj_cfg, graph_cfg, scene_collision_cfg, device_cfg
+            ik_solver_config=ik_cfg,
+            trajopt_solver_config=traj_cfg,
+            graph_planner_config=graph_cfg,
+            scene_collision_cfg=scene_collision_cfg,
+            device_cfg=device_cfg,
         )
 
 
-__all__ = ["MotionPlannerCfg"]
+__all__ = [
+    "MotionPlannerCfg",
+    "DeviceCfg",
+    "IKSolverCfg",
+    "PRMGraphPlannerCfg",
+    "RobotCfg",
+    "RobotCostManagerCfg",
+    "RobotStateTransitionCfg",
+    "SceneCfg",
+    "SceneCollisionCfg",
+    "TrajOptSolverCfg",
+    "get_robot_configs_path",
+    "get_scene_configs_path",
+    "join_path",
+    "log_and_raise",
+    "resolve_config",
+]
