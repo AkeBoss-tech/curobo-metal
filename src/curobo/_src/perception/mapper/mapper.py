@@ -42,7 +42,7 @@ class Mapper:
             raise NotImplementedError("MapperCfg.lidar_num_sensors requires CUDA/Warp LiDAR integration")
         center = (0.0,0.0,0.0) if config.grid_center is None else tuple(torch.as_tensor(config.grid_center).tolist())
         native = PerceptionConfig(
-            config.grid_shape, config.voxel_size, center,
+            config.native_grid_shape, config.voxel_size, center,
             config.truncation_distance, config.depth_minimum_distance,
             config.depth_maximum_distance, config.accumulator_w_max,
             block_size=config.block_size,
@@ -55,7 +55,7 @@ class Mapper:
             origin=torch.as_tensor(center),
             truncation_distance=config.truncation_distance,
             device=config.device,
-            grid_shape=config.grid_shape,
+            grid_shape=config.native_grid_shape,
             enable_dynamic=True,
             enable_static=config.enable_static,
             static_obstacle_color=tuple(float(v) / 255.0 if float(v) > 1 else float(v)
@@ -143,6 +143,39 @@ class Mapper:
         self._last_voxel_grid = None
         self._last_esdf_generation = None
 
+    def _strip_static_layer(self, *, rebuild_esdf: bool) -> None:
+        """Recover dynamic map state below the dense static overlay."""
+        if not bool(self._static_mask.any().item()):
+            return
+        state = self._mapper.state
+        tsdf = torch.where(self._static_mask, torch.ones_like(state.tsdf), state.tsdf)
+        weight = torch.where(self._static_mask, torch.zeros_like(state.weight), state.weight)
+        occupancy = state.occupancy & ~self._static_mask
+        if rebuild_esdf:
+            esdf, gradient = dense_esdf(
+                occupancy, self.config.voxel_size, self._mapper.config.unobserved_esdf,
+                dtype=state.tsdf.dtype,
+            )
+        else:
+            esdf, gradient = state.esdf, state.gradient
+        self._replace_state(tsdf=tsdf, weight=weight, occupancy=occupancy,
+                            esdf=esdf, gradient=gradient, generation=state.generation)
+
+    def _apply_static_layer(self) -> None:
+        """Compose the portable static channel over current dynamic state."""
+        if not bool(self._static_mask.any().item()):
+            return
+        state = self._mapper.state
+        tsdf = torch.where(self._static_mask, torch.full_like(state.tsdf, -0.5), state.tsdf)
+        weight = torch.where(self._static_mask, torch.ones_like(state.weight), state.weight)
+        occupancy = state.occupancy | self._static_mask
+        esdf, gradient = dense_esdf(
+            occupancy, self.config.voxel_size, self._mapper.config.unobserved_esdf,
+            dtype=state.tsdf.dtype,
+        )
+        self._replace_state(tsdf=tsdf, weight=weight, occupancy=occupancy,
+                            esdf=esdf, gradient=gradient, generation=state.generation)
+
     def integrate(self, *args, observation=None, camera_observation=None, lidar_observation=None):
         camera_observation, lidar_observation = self._normalize_integrate_observations(
             args, observation=observation, camera_observation=camera_observation,
@@ -156,15 +189,25 @@ class Mapper:
         depth = obs.depth_image.to(self.device, dtype=self._mapper.state.tsdf.dtype) * obs.depth_to_meter
         intrinsics = obs.intrinsics.to(self.device, dtype=depth.dtype)
         pose = obs.pose.get_matrix().to(self.device, dtype=depth.dtype)
+        # The upstream mapper carries static geometry in an independent
+        # channel.  Remove our dense overlay before depth fusion so its fixed
+        # TSDF weight is never mistaken for a camera measurement.
+        has_static = bool(self._static_mask.any().item())
+        if has_static:
+            self._strip_static_layer(rebuild_esdf=False)
         self._mapper.update(NativeObservation(depth, intrinsics, pose))
+        if has_static:
+            self._apply_static_layer()
         self._frame_count += 1
         self._invalidate_esdf_cache()
 
     def compute_esdf(self, esdf_origin=None, esdf_voxel_size=None):
         if esdf_origin is None and esdf_voxel_size is None and self.is_esdf_current:
             return self._last_voxel_grid
-        if esdf_voxel_size not in (None, self.config.voxel_size):
-            raise NotImplementedError("ESDF resampling is not implemented")
+        if esdf_voxel_size is not None and esdf_voxel_size != self.config.voxel_size:
+            raise NotImplementedError(
+                "portable dense Mapper computes ESDF at voxel_size; resampling is unavailable"
+            )
         if esdf_origin is not None:
             expected = torch.as_tensor(self._mapper.config.grid_center, device=self.device,
                                        dtype=self._mapper.state.tsdf.dtype)
@@ -250,6 +293,7 @@ class Mapper:
         self._storage.reset()
         self._static_mask = torch.zeros_like(self._mapper.state.occupancy)
         self._frame_count = 0
+        self._esdf_compute_count = 0
         self._invalidate_esdf_cache()
 
     def save_blocks(self, file_path):
@@ -427,7 +471,7 @@ class Mapper:
         if lower.shape != (3,) or upper.shape != (3,) or bool((upper < lower).any().item()):
             raise ValueError("bounds must be xyz vectors with bounds_max >= bounds_min")
         origin = self.config.origin.to(device=self.device, dtype=lower.dtype)
-        shape = torch.tensor(self.config.grid_shape, device=self.device)
+        shape = torch.tensor(self.config.native_grid_shape, device=self.device)
         # Native storage is x,y,z while this compatibility config exposes
         # world xyz; both are deliberately kept in the same order here.
         start = torch.floor((lower - origin) / self.config.voxel_size).to(torch.long).clamp_min(0)
@@ -436,6 +480,9 @@ class Mapper:
         state = self._mapper.state
         mask = torch.zeros_like(state.occupancy)
         mask[(slice(None),) + slices] = True
+        # Source clear operations target the dynamic channel.  Static scene
+        # occupancy survives until update_static_obstacles() or reset().
+        mask &= ~self._static_mask
         count = int((state.weight[mask] > 0).sum().item())
         tsdf = torch.where(mask, torch.ones_like(state.tsdf), state.tsdf)
         weight = torch.where(mask, torch.zeros_like(state.weight), state.weight)
@@ -450,10 +497,10 @@ class Mapper:
 
     def clear_blocks(self, pool_indices):
         index = torch.as_tensor(pool_indices, device=self.device, dtype=torch.long).reshape(-1)
-        size = int(torch.tensor(self.config.grid_shape).prod().item())
+        size = int(torch.tensor(self.config.native_grid_shape).prod().item())
         if bool(((index < 0) | (index >= size)).any().item()):
             raise ValueError("portable dense block indices must index the flattened grid")
-        coordinates = torch.stack(torch.unravel_index(index, self.config.grid_shape), -1)
+        coordinates = torch.stack(torch.unravel_index(index, self.config.native_grid_shape), -1)
         count = 0
         for coordinate in coordinates.tolist():
             lower = self.config.origin + torch.tensor(coordinate) * self.config.voxel_size
@@ -491,7 +538,7 @@ class Mapper:
         state = self._mapper.state
         centers = torch.stack(torch.meshgrid(
             *[(torch.arange(n, device=self.device, dtype=state.tsdf.dtype) - (n - 1) / 2) * self.config.voxel_size + c
-              for n, c in zip(self.config.grid_shape, self._mapper.config.grid_center)], indexing="ij",
+              for n, c in zip(self.config.native_grid_shape, self._mapper.config.grid_center)], indexing="ij",
         ), -1)
         mask = torch.zeros_like(state.occupancy[0])
         for obstacle in scene.cuboid:
@@ -515,22 +562,19 @@ class Mapper:
                 raise TypeError("scene.sphere must contain Sphere records")
             position = centers.new_tensor(obstacle.position if obstacle.position is not None else obstacle.pose[:3])
             mask |= torch.linalg.vector_norm(centers - position, dim=-1) <= obstacle.radius
-        # Remove the previous static layer before writing a replacement.  The
-        # dense backend has no separate static channel, hence this only claims
-        # static scene mutation between depth integration calls.
-        dynamic_occupancy = state.occupancy.clone()
-        dynamic_occupancy[self._static_mask] = False
-        occupancy = dynamic_occupancy.clone()
+        # Remove the previous overlay before replacing it.  The helpers keep
+        # the underlying dynamic weights separate across camera updates.
+        self._strip_static_layer(rebuild_esdf=False)
+        state = self._mapper.state
+        occupancy = state.occupancy.clone()
         occupancy[0] |= mask
         tsdf = state.tsdf.clone()
         weight = state.weight.clone()
-        tsdf[0] = torch.where(mask, torch.full_like(tsdf[0], -0.5), tsdf[0])
-        weight[0] = torch.where(mask, torch.ones_like(weight[0]), weight[0])
-        esdf, gradient = dense_esdf(occupancy, self.config.voxel_size, self._mapper.config.unobserved_esdf,
-                                    dtype=state.tsdf.dtype)
-        self._replace_state(tsdf=tsdf, weight=weight, occupancy=occupancy, esdf=esdf,
-                            gradient=gradient, generation=state.generation + 1)
         self._static_mask = torch.zeros_like(occupancy)
         self._static_mask[0] = mask
+        self._replace_state(tsdf=tsdf, weight=weight, occupancy=occupancy,
+                            esdf=state.esdf, gradient=state.gradient,
+                            generation=state.generation + 1)
+        self._apply_static_layer()
         self._invalidate_esdf_cache()
         return int(mask.sum().item())
