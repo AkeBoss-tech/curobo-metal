@@ -25,6 +25,17 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         self.__dict__.update(config.__dict__)
         self._collision_buffer = None
 
+    @property
+    def tool_frames(self):
+        """Configured end-effector link names.
+
+        This is intentionally a live view of the portable kinematics model,
+        matching the pinned cuRobo convenience property.  Robot reduction or
+        a configuration reload can therefore change the value without a
+        second collision-checker construction.
+        """
+        return self.kinematics.tool_frames
+
     def setup_batch_tensors(self, batch_size: int, horizon: int):
         if batch_size < 1 or horizon < 1:
             raise ValueError("batch_size and horizon must be positive")
@@ -57,17 +68,41 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         self._collision_buffer.resize(spheres.shape, self.device_cfg)
         return self._collision_buffer
 
-    def get_collision_distance(self, x_sph, env_query_idx=None):
+    @staticmethod
+    def _spheres(x_sph) -> torch.Tensor:
+        """Normalize public sphere/state inputs and validate the portable ABI."""
         if isinstance(x_sph, KinematicsState):
             x_sph = x_sph.robot_spheres
-        if self.scene_model is None:
-            return x_sph.new_zeros(x_sph.shape[:-1])
-        settings = self.collision_cost
-        if settings is None:
-            return x_sph.new_zeros(x_sph.shape[:-1])
+        if not isinstance(x_sph, torch.Tensor):
+            raise TypeError("x_sph must be a tensor or KinematicsState")
         if x_sph.ndim != 4 or x_sph.shape[-1] != 4:
             raise ValueError("x_sph must have shape [batch,horizon,spheres,4]")
+        if not x_sph.is_floating_point():
+            raise TypeError("x_sph must have a floating-point dtype")
+        return x_sph
+
+    def _zero_scene_distance(self, spheres: torch.Tensor) -> torch.Tensor:
+        """Return a detached empty-world result and reset reusable diagnostics.
+
+        The CUDA implementation owns launch buffers which are overwritten on
+        every query.  This portable value implementation owns a reusable
+        :class:`CollisionBuffer`; clearing it here prevents an earlier world
+        query's gradient from leaking into a later robot-only query.
+        """
+        buffer = self._buffer(spheres)
+        buffer.zero_()
+        return spheres.new_zeros(spheres.shape[:-1])
+
+    def get_collision_distance(self, x_sph, env_query_idx=None):
+        x_sph = self._spheres(x_sph)
+        if self.scene_model is None:
+            return self._zero_scene_distance(x_sph)
+        settings = self.collision_cost
+        if settings is None:
+            return self._zero_scene_distance(x_sph)
         if env_query_idx is not None and (
+            not isinstance(env_query_idx, torch.Tensor)
+            or
             env_query_idx.ndim != 1 or env_query_idx.shape[0] != x_sph.shape[0]
         ):
             raise ValueError("env_query_idx must have shape [batch]")
@@ -86,10 +121,9 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return self._collision_buffer
 
     def get_collision_constraint(self, x_sph, env_query_idx=None):
-        if isinstance(x_sph, KinematicsState):
-            x_sph = x_sph.robot_spheres
+        x_sph = self._spheres(x_sph)
         if self.scene_model is None or self.collision_constraint is None:
-            return x_sph.new_zeros(x_sph.shape[:-1])
+            return self._zero_scene_distance(x_sph)
         value = self.scene_model.get_sphere_distance_raw(
             x_sph,
             self._buffer(x_sph),
@@ -101,8 +135,7 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return (-value).clamp_min(0)
 
     def get_self_collision_distance(self, x_sph) -> torch.Tensor:
-        if isinstance(x_sph, KinematicsState):
-            x_sph = x_sph.robot_spheres
+        x_sph = self._spheres(x_sph)
         cost = self.self_collision_cost
         if cost is None:
             return x_sph.new_zeros((*x_sph.shape[:2], 1))
@@ -129,8 +162,7 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return self.get_self_collision_distance(x_sph)
 
     def get_collision_vector(self, x_sph, env_query_idx=None):
-        if isinstance(x_sph, KinematicsState):
-            x_sph = x_sph.robot_spheres
+        x_sph = self._spheres(x_sph)
         distance = self.get_collision_distance(x_sph, env_query_idx)
         return distance.detach(), self._buffer(x_sph).gradient.clone()
 
@@ -200,13 +232,24 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return output[:sample_size]
 
     def validate(self, joint_position, env_query_idx=None):
+        if not isinstance(joint_position, torch.Tensor):
+            raise TypeError("joint_position must be a torch.Tensor")
+        if joint_position.ndim not in (1, 2, 3):
+            raise ValueError("joint_position must have shape [dof], [batch,dof], or [batch,horizon,dof]")
+        if joint_position.shape[-1] != self.kinematics.dof:
+            raise ValueError("joint_position dof does not match kinematics")
         state = self.get_kinematics(joint_position, env_query_idx)
         world = self.get_collision_distance(state, env_query_idx)
         self_distance = self.get_self_collision_distance(state)
+        # Existing portable callers consume self collision as [B,H], while
+        # the world query is sphere-resolved [B,H,S].  Normalize only for the
+        # predicate so B/H axes never accidentally broadcast against S.
+        if self_distance.ndim == world.ndim - 1:
+            self_distance = self_distance.unsqueeze(-1)
         bound = self.get_bound(joint_position)
         valid = (
             (world >= 0).all(dim=-1)
-            & (self_distance <= 0)
+            & (self_distance <= 0).all(dim=-1)
         )
         if joint_position.ndim == 2 and valid.ndim == 2:
             valid = valid[:, 0]
@@ -236,13 +279,37 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return position, rotation
 
     def get_point_robot_distance(self, points: torch.Tensor, q: torch.Tensor):
+        """Return signed point-to-robot distance using the sphere envelope.
+
+        Positive values indicate a point inside at least one robot sphere,
+        as in pinned V2.  A single robot configuration broadcasts across a
+        batched point cloud; otherwise robot and point-cloud batch counts
+        must agree.  This path is composed PyTorch and remains differentiable
+        with respect to both point positions and joint positions.
+        """
+        if not isinstance(points, torch.Tensor) or not isinstance(q, torch.Tensor):
+            raise TypeError("points and q must be tensors")
         if points.shape[-1] != 3:
             raise ValueError("points must end in xyz")
-        spheres = self.get_kinematics(q).robot_spheres
-        delta = points[..., None, :] - spheres[..., None, :, :3]
-        return (
-            torch.linalg.vector_norm(delta, dim=-1) - spheres[..., None, :, 3]
-        ).min(dim=-1).values
+        if points.ndim not in (2, 3):
+            raise ValueError("points must have shape [points,3] or [batch,points,3]")
+        if q.ndim != 2:
+            raise ValueError("q must have shape [batch,dof]")
+        if q.shape[-1] != self.kinematics.dof:
+            raise ValueError("q dof does not match kinematics")
+        if q.device != points.device:
+            raise ValueError("points and q must share a device")
+        if q.dtype != points.dtype:
+            raise ValueError("points and q must share a dtype")
+        spheres = self.get_kinematics(q).robot_spheres.squeeze(1)
+        squeeze = points.ndim == 2
+        query = points.unsqueeze(0) if squeeze else points
+        if spheres.shape[0] not in (1, query.shape[0]):
+            raise ValueError("robot batch must be one or match point-cloud batch")
+        delta = query[:, :, None, :] - spheres[:, None, :, :3]
+        penetration = spheres[:, None, :, 3] - torch.linalg.vector_norm(delta, dim=-1)
+        result = penetration.amax(dim=-1)
+        return result.squeeze(0) if squeeze else result
 
     def clear_scene_cache(self) -> None:
         if self.scene_model is not None:
