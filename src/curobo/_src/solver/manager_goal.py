@@ -106,7 +106,15 @@ class GoalManager:
             if goal_tool_poses.num_goalset != solve_state.num_goalset:
                 raise ValueError("goal_tool_poses goalset size must match solve_state.num_goalset")
         for name, state in (("goal_js", goal_js), ("current_js", current_js)):
-            if state is not None and (state.position.ndim < 2 or state.position.shape[0] != solve_state.batch_size):
+            if state is None:
+                continue
+            # The public single-problem APIs accept a compact ``[dof]``
+            # JointState.  It is exactly one batch item, not a malformed
+            # missing batch axis; keep stricter validation for batched solves.
+            if state.position.ndim == 1:
+                if solve_state.batch_size != 1:
+                    raise ValueError(f"{name} batch size must match solve_state.batch_size")
+            elif state.position.ndim < 2 or state.position.shape[0] != solve_state.batch_size:
                 raise ValueError(f"{name} batch size must match solve_state.batch_size")
         if seed_goal_js is not None and seed_goal_js.position.ndim != 3:
             raise ValueError("seed_goal_js must have shape [batch, seeds, dof]")

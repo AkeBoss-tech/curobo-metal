@@ -55,6 +55,15 @@ def test_goal_manager_rejects_malformed_goal_and_state_payloads_before_buffer_cr
         manager.update_goal_buffer(_solve(), current_state_dt=torch.ones(3))
 
 
+def test_goal_manager_accepts_compact_single_problem_joint_state():
+    manager = GoalManager(DeviceCfg())
+    solve_state = SolveState(SolveMode.BATCH, 1, 1, num_goalset=1, num_seeds=2)
+    current = JointState.from_position(torch.zeros(2))
+    registry, update_reference = manager.update_goal_buffer(solve_state, current_js=current)
+    assert update_reference
+    assert registry.current_js is current
+
+
 def test_seed_manager_converts_all_state_channels_together_and_rejects_nonfinite_seeds():
     manager = SeedManager(
         DeviceCfg(), 2, torch.tensor([-1.0, -1.0]), torch.tensor([1.0, 1.0]), action_horizon=4
