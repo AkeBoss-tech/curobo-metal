@@ -107,7 +107,14 @@ class SeedIKSolver:
         # Callers prepare velocity/acceleration constraints immediately before
         # optimizing.  Retaining equal-shape buffers prevents the later
         # optimize call from silently discarding those prepared constraints.
-        if batch_size == self._batch_size and num_seeds == self._num_seeds:
+        if (
+            batch_size == self._batch_size
+            and num_seeds == self._num_seeds
+            and self._idxs_goal is not None
+            and self._velocity_current_position is not None
+            and self._velocity_current_velocity is not None
+            and self._velocity_dt is not None
+        ):
             return
         self._batch_size, self._num_seeds = batch_size, num_seeds
         self._num_problems = batch_size * num_seeds
@@ -224,6 +231,8 @@ class SeedIKSolver:
                 "seed_config cannot contain more seeds than config.num_seeds; "
                 "increase the configuration-lifetime seed count"
             )
+        if not bool(torch.isfinite(seed).all().item()):
+            raise ValueError("seed_config must contain only finite values")
         return seed
 
     def _generate_seed_configs(self, batch_size: int, seed_config: Optional[torch.Tensor] = None):
@@ -267,18 +276,34 @@ class SeedIKSolver:
         self._velocity_clamping_active = False
         if current_state is None or current_state.dt is None:
             return
+        if not isinstance(current_state, JointState):
+            raise TypeError("current_state must be a JointState")
         position = current_state.position
         if position.ndim == 1:
             position = position[None]
         if position.shape != (batch_size, self.dof):
             raise ValueError("current_state position must be [goal batch, dof]")
+        if position.dtype != self.device_cfg.dtype or not self.device_cfg.is_same_torch_device(position.device):
+            raise ValueError("current_state position must use the solver device and dtype")
+        if not bool(torch.isfinite(position).all().item()):
+            raise ValueError("current_state position must contain only finite values")
         dt = current_state.dt.reshape(batch_size, -1)[:, 0]
+        if dt.dtype != self.device_cfg.dtype or not self.device_cfg.is_same_torch_device(dt.device):
+            raise ValueError("current_state dt must use the solver device and dtype")
+        if not bool(torch.isfinite(dt).all().item()) or bool((dt <= 0).any().item()):
+            raise ValueError("current_state dt must contain positive finite values")
         self._velocity_current_position.copy_(position.repeat_interleave(num_seeds, dim=0))
         self._velocity_dt.copy_(dt.repeat_interleave(num_seeds))
         if current_state.velocity is not None:
             velocity = current_state.velocity
             if velocity.ndim == 1:
                 velocity = velocity[None]
+            if velocity.shape != (batch_size, self.dof):
+                raise ValueError("current_state velocity must be [goal batch, dof]")
+            if velocity.dtype != self.device_cfg.dtype or not self.device_cfg.is_same_torch_device(velocity.device):
+                raise ValueError("current_state velocity must use the solver device and dtype")
+            if not bool(torch.isfinite(velocity).all().item()):
+                raise ValueError("current_state velocity must contain only finite values")
             self._velocity_current_velocity.copy_(velocity.repeat_interleave(num_seeds, dim=0))
         self._velocity_clamping_active = True
 
@@ -485,8 +510,17 @@ class SeedIKSolver:
         self._generator.manual_seed(self.config.sampler_seed)
 
     def destroy(self):
+        """Release portable shape-dependent buffers.
+
+        Unlike the CUDA graph implementation this does not invalidate the
+        solver object.  A later solve recreates ordinary PyTorch buffers,
+        which makes the public reset/destroy lifecycle safe for long-lived
+        MotionGen applications.
+        """
         self._idxs_goal = None
         self._velocity_current_position = self._velocity_current_velocity = self._velocity_dt = None
+        self._batch_size = self._num_seeds = self._num_problems = -1
+        self._velocity_clamping_active = False
 
 
 __all__ = ["SeedIKSolver"]
