@@ -133,11 +133,32 @@ def get_batch_interpolated_trajectory(
     use_implicit_goal_state: Optional[torch.Tensor] = None,
 ):
     if kind == TrajInterpolationType.BSPLINE_KNOTS_CUDA:
-        return get_bspline_interpolation(
-            raw_traj, out_traj_state, interpolation_dt, current_state=current_state,
-            goal_state=goal_state, start_idx=start_idx, goal_idx=goal_idx,
-            use_implicit_goal_state=use_implicit_goal_state,
+        raw = raw_traj.unsqueeze(0) if raw_traj.position.ndim == 2 else raw_traj
+        if raw.knot is None or raw.knot_dt is None:
+            raise ValueError(
+                "BSPLINE_KNOTS_CUDA requires JointState.knot [batch, knot, dof] and knot_dt"
+            )
+        if raw.control_space not in ControlSpace.bspline_types():
+            raise ValueError("BSPLINE_KNOTS_CUDA requires a BSPLINE_3, BSPLINE_4, or BSPLINE_5 control_space")
+        knot = raw.knot.unsqueeze(0) if raw.knot.ndim == 2 else raw.knot
+        if knot.ndim != 3 or knot.shape[0] != raw.position.shape[0] or knot.shape[-1] != raw.position.shape[-1]:
+            raise ValueError("JointState.knot must have shape [batch, knot, dof] matching position")
+        steps, maximum = calculate_traj_steps(
+            raw.knot_dt, interpolation_dt,
+            ControlSpace.spline_total_knots(raw.control_space, knot.shape[1]) + 1,
+            nearest_int=True,
         )
+        if int(maximum.item()) > 10000:
+            raise ValueError("interpolated trajectory exceeds the portable 10000-step limit")
+        size = (knot.shape[0], int(maximum.item()), knot.shape[-1])
+        if out_traj_state is None or out_traj_state.position.ndim != 3 or out_traj_state.position.shape[0] != size[0] or out_traj_state.position.shape[1] < size[1] or out_traj_state.position.shape[-1] != size[-1]:
+            out_traj_state = JointState.zeros(size, DeviceCfg(knot.device, knot.dtype), joint_names=raw.joint_names)
+        return get_bspline_interpolation(
+            raw, out_traj_state, interpolation_dt, current_state=current_state,
+            goal_state=goal_state, start_idx=start_idx, goal_idx=goal_idx,
+            use_implicit_goal_state=use_implicit_goal_state, interpolated_horizon=steps,
+            bspline_degree=ControlSpace.spline_degree(raw.control_space),
+        ), steps
     del current_state, goal_state, start_idx, goal_idx, use_implicit_goal_state
     raw = raw_traj.unsqueeze(0) if raw_traj.position.ndim == 2 else raw_traj
     raw_dt = raw.dt
@@ -176,13 +197,172 @@ def get_cuda_linear_interpolation(raw_traj, traj_tsteps, out_traj, interpolation
     )
 
 
-def get_bspline_interpolation(*args, **kwargs):
-    """Document the raw CUDA spline-kernel boundary without silently changing its semantics."""
-    del args, kwargs
-    raise NotImplementedError(
-        "BSPLINE_KNOTS_CUDA requires cuRobo's CUDA spline kernel; use LINEAR_CUDA, LINEAR, "
-        "CUBIC, or QUINTIC on the portable CPU/MPS backend"
-    )
+def _select_bspline_boundary(
+    state: Optional[JointState], indices: Optional[torch.Tensor], batch: int,
+    reference: torch.Tensor, name: str,
+) -> Optional[torch.Tensor]:
+    """Return one position row per spline batch without CPU staging.
+
+    The CUDA entry point accepts a table of current/goal states and integer
+    lookup buffers.  This portable variant retains the useful table semantics
+    using regular Torch indexing.  It purposely has no packed-buffer or CUDA
+    graph dependency.
+    """
+    if state is None:
+        return None
+    value = state.position
+    if value.ndim == 1:
+        value = value.unsqueeze(0)
+    if value.ndim != 2 or value.shape[-1] != reference.shape[-1]:
+        raise ValueError(f"{name}_state.position must be [table, dof]")
+    if value.device != reference.device or value.dtype != reference.dtype:
+        raise ValueError(f"{name}_state must share spline knot device and dtype")
+    if indices is None:
+        if value.shape[0] == 1:
+            return value.expand(batch, -1)
+        if value.shape[0] == batch:
+            return value
+        raise ValueError(f"{name}_idx is required when {name}_state has a table size other than one or batch")
+    indices = torch.as_tensor(indices, device=reference.device, dtype=torch.long).reshape(-1)
+    if indices.numel() == 1:
+        indices = indices.expand(batch)
+    if indices.numel() != batch:
+        raise ValueError(f"{name}_idx must be scalar or [batch]")
+    if bool(((indices < 0) | (indices >= value.shape[0])).any().item()):
+        raise IndexError(f"{name}_idx contains an out-of-range state index")
+    return value.index_select(0, indices)
+
+
+def _clamped_uniform_bspline_basis(
+    count: int, controls: int, degree: int, reference: torch.Tensor
+) -> torch.Tensor:
+    """Evaluate a clamped uniform B-spline basis with ordinary Torch ops.
+
+    This is a portable mathematical implementation, not a substitute claim
+    for cuRobo's CUDA launch layout.  It is deterministic, autograd-safe, and
+    uses the conventional endpoint interpolation of clamped B-splines.
+    """
+    if count < 2:
+        raise ValueError("B-spline output requires at least two samples")
+    if degree < 1 or controls <= degree:
+        raise ValueError("B-spline needs at least degree + 1 control knots")
+    # p+1 repeated endpoint knots and uniformly spaced internal knots.
+    interior_count = controls - degree - 1
+    if interior_count > 0:
+        interior = torch.arange(1, interior_count + 1, device=reference.device, dtype=reference.dtype)
+        interior = interior / (interior_count + 1)
+        knots = torch.cat((torch.zeros(degree + 1, device=reference.device, dtype=reference.dtype), interior, torch.ones(degree + 1, device=reference.device, dtype=reference.dtype)))
+    else:
+        knots = torch.cat((torch.zeros(degree + 1, device=reference.device, dtype=reference.dtype), torch.ones(degree + 1, device=reference.device, dtype=reference.dtype)))
+    parameter = torch.linspace(0, 1, count, device=reference.device, dtype=reference.dtype)
+    # Degree-zero basis first.  The right endpoint belongs to the final basis
+    # function by convention, preserving exact endpoint values.
+    basis = ((parameter[:, None] >= knots[:-1]) & (parameter[:, None] < knots[1:])).to(reference.dtype)
+    basis[-1].zero_()
+    basis[-1, -1] = 1
+    for order in range(1, degree + 1):
+        width = knots.numel() - order - 1
+        left_denominator = knots[order:order + width] - knots[:width]
+        right_denominator = knots[order + 1:order + 1 + width] - knots[1:width + 1]
+        left = torch.where(
+            left_denominator.abs() > 0,
+            (parameter[:, None] - knots[:width]) / left_denominator,
+            torch.zeros((count, width), device=reference.device, dtype=reference.dtype),
+        ) * basis[:, :width]
+        right = torch.where(
+            right_denominator.abs() > 0,
+            (knots[order + 1:order + 1 + width] - parameter[:, None]) / right_denominator,
+            torch.zeros((count, width), device=reference.device, dtype=reference.dtype),
+        ) * basis[:, 1:width + 1]
+        basis = left + right
+    # Recursive half-open intervals exclude t=1.  Restore the conventional
+    # clamped endpoint after the recurrence so the final control point is
+    # represented exactly rather than only in the degree-zero stencil.
+    basis[-1].zero_()
+    basis[-1, -1] = 1
+    return basis[:, :controls]
+
+
+def get_bspline_interpolation(
+    input_trajectory: JointState,
+    output_trajectory: JointState,
+    interpolation_dt: torch.Tensor,
+    current_state: Optional[JointState] = None,
+    goal_state: Optional[JointState] = None,
+    start_idx: Optional[torch.Tensor] = None,
+    goal_idx: Optional[torch.Tensor] = None,
+    use_implicit_goal_state: Optional[torch.Tensor] = None,
+    interpolated_horizon: Optional[torch.Tensor] = None,
+    bspline_degree: int = 4,
+) -> JointState:
+    """Materialise a clamped-uniform B-spline trajectory on CPU or MPS.
+
+    The function keeps the pinned CUDA-named signature so normal cuRobo
+    callers can exercise B-spline TrajOpt results on Metal.  It intentionally
+    does *not* claim byte-for-byte equivalence to the CUDA kernel: that kernel
+    has a distinct packed launch layout and implicit-boundary implementation.
+    This path defines its portable contract as a clamped uniform spline over
+    ``input_trajectory.knot`` and differentiates all position channels with
+    standard PyTorch operations.
+    """
+    if input_trajectory.knot is None:
+        raise ValueError("input_trajectory.knot is required for B-spline interpolation")
+    knots = input_trajectory.knot
+    if knots.ndim == 2:
+        knots = knots.unsqueeze(0)
+    if knots.ndim != 3:
+        raise ValueError("input_trajectory.knot must be [batch, knot, dof]")
+    output = output_trajectory
+    if output.position.ndim == 2:
+        output = output.unsqueeze(0)
+    if output.position.ndim != 3 or output.position.shape[0] != knots.shape[0] or output.position.shape[-1] != knots.shape[-1]:
+        raise ValueError("output_trajectory.position must be [batch, horizon, dof] matching knots")
+    if knots.device != output.position.device or knots.dtype != output.position.dtype:
+        raise ValueError("input spline knots and output trajectory must share device and dtype")
+    batch, _, dof = knots.shape
+    if interpolated_horizon is None:
+        steps = torch.full((batch,), output.position.shape[1], device=knots.device, dtype=torch.int32)
+    else:
+        steps = torch.as_tensor(interpolated_horizon, device=knots.device, dtype=torch.int32).reshape(-1)
+        if steps.numel() == 1:
+            steps = steps.expand(batch)
+        if steps.numel() != batch:
+            raise ValueError("interpolated_horizon must be scalar or [batch]")
+    if bool((steps < 2).any().item()) or bool((steps > output.position.shape[1]).any().item()):
+        raise ValueError("interpolated_horizon must be between two and output horizon")
+    controls = knots
+    start = _select_bspline_boundary(current_state, start_idx, batch, knots, "start")
+    goal = _select_bspline_boundary(goal_state, goal_idx, batch, knots, "goal")
+    if start is not None:
+        controls = torch.cat((start[:, None, :], controls[:, 1:, :]), dim=1)
+    if goal is not None:
+        if use_implicit_goal_state is None:
+            implicit_goal = torch.ones(batch, device=knots.device, dtype=torch.bool)
+        else:
+            implicit_goal = torch.as_tensor(use_implicit_goal_state, device=knots.device, dtype=torch.bool).reshape(-1)
+            if implicit_goal.numel() == 1:
+                implicit_goal = implicit_goal.expand(batch)
+            if implicit_goal.numel() != batch:
+                raise ValueError("use_implicit_goal_state must be scalar or [batch]")
+        terminal = torch.where(implicit_goal[:, None], goal, controls[:, -1, :])
+        controls = torch.cat((controls[:, :-1, :], terminal[:, None, :]), dim=1)
+
+    # Keep output-buffer semantics: fill every batch row, then extend the
+    # final valid knot through any shared maximum-horizon tail.
+    positions = []
+    for item in range(batch):
+        count = int(steps[item].item())
+        basis = _clamped_uniform_bspline_basis(count, controls.shape[1], bspline_degree, controls)
+        value = basis @ controls[item]
+        if count < output.position.shape[1]:
+            value = torch.cat((value, value[-1:].expand(output.position.shape[1] - count, dof)), dim=0)
+        positions.append(value)
+    output.position = torch.stack(positions, dim=0)
+    result = output.finite_difference(interpolation_dt)
+    result.knot = input_trajectory.knot
+    result.knot_dt = input_trajectory.knot_dt
+    result.control_space = input_trajectory.control_space
+    return result
 
 
 def linear_smooth(
