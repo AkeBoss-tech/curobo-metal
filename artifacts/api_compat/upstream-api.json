@@ -48823,9 +48823,9 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
+        "missing_symbols": 2,
         "path": "curobo/_src/perception/filter_depth.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.perception.filter_depth",
