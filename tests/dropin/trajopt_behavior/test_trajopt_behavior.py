@@ -36,8 +36,12 @@ def test_cspace_ranks_seed_results_and_returns_dense_state():
     seeds[0, 0, 2, 0] += 1.0
     result = solver.solve_cspace(goal, start, seed_traj=seeds, return_seeds=2, dt=0.05)
     assert result.solution.shape == (1, 2, 6, 7)
-    assert result.seed_rank.shape == (1, 3)
-    torch.testing.assert_close(result.seed_rank, result.seed_cost.argsort(dim=-1))
+    # cuRobo's top-k result owns only the retained seeds.  ``seed_rank``
+    # contains their original optimizer ids, whereas ``seed_cost`` is already
+    # ordered by that ranking.
+    assert result.seed_rank.shape == (1, 2)
+    assert torch.all((result.seed_rank >= 0) & (result.seed_rank < 3))
+    assert torch.all(result.seed_cost[:, 1:] >= result.seed_cost[:, :-1])
     assert result.interpolated_trajectory.position.shape[:2] == (1, 2)
     assert result.interpolated_last_tstep.shape == (1, 2)
     torch.testing.assert_close(result.solution[:, :, 0], start.position[:, None].expand(-1, 2, -1))
