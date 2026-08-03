@@ -81,6 +81,14 @@ class SceneCollisionCost(_PortableSceneCollisionCost):
             raise ValueError("scene collision expects [batch,horizon,spheres,4] xyzw-radius tensors")
         if not self.device_cfg.is_same_torch_device(spheres.device):
             raise ValueError("scene collision spheres must be on the configured device")
+        if spheres.dtype != self.device_cfg.dtype:
+            raise TypeError("scene collision spheres dtype must match device_cfg.dtype")
+        if spheres.device.type == "mps" and spheres.dtype != torch.float32:
+            raise TypeError("MPS scene collision supports float32 only")
+        if not bool(torch.isfinite(spheres).all().item()):
+            raise ValueError("scene collision spheres must contain only finite values")
+        if bool((spheres[..., 3] < 0).any().item()):
+            raise ValueError("scene collision sphere radii must be non-negative")
         if self.config.num_spheres and spheres.shape[-2] != self.config.num_spheres:
             raise ValueError("sphere count does not match configured num_spheres")
         if self._batch_size >= 0 and spheres.shape[0] != self._batch_size:
@@ -194,6 +202,7 @@ class SceneCollisionCost(_PortableSceneCollisionCost):
         if value.shape == spheres.shape[:-1]:
             activation = self.config.activation_distance.reshape(-1)[0].to(value)
             penalty = 0.5 * (activation - value).clamp_min(0).square()
+            self._record_gradient_buffer(value, penalty, spheres)
             if self.config.convert_to_binary:
                 return self.jit_weight_collision(penalty, self.config.sum_distance)
             return self.jit_weight_distance(penalty, self.config.sum_distance)
@@ -203,6 +212,55 @@ class SceneCollisionCost(_PortableSceneCollisionCost):
                 "or an aggregated [batch,horizon] loss"
             )
         return value
+
+    def _record_gradient_buffer(
+        self,
+        clearance: torch.Tensor,
+        penalty: torch.Tensor,
+        spheres: torch.Tensor,
+    ) -> None:
+        """Store a detached gradient of this *cost* in the reusable workspace.
+
+        ``SceneCollision`` populates ``CollisionBuffer.gradient`` with the
+        gradient of signed clearance.  That is insufficient for V2 callers
+        that use ``get_gradient_buffer`` for a collision-cost linearization:
+        the activation hinge, reduction, binary offset, and configured cost
+        weight must be accounted for.  When ``use_grad_input`` is requested,
+        take an exact first-order VJP through the active portable query.  The
+        extra VJP is intentionally detached and retains the outer graph, so a
+        later user ``backward()`` remains valid.  When gradients were not
+        requested, retain the checker's inexpensive raw diagnostic buffer.
+
+        Raw Warp/CUDA gradient-buffer ABI is not exposed; this is the
+        documented CPU/MPS tensor equivalent.
+        """
+        buffer = self._collision_buffer
+        if (
+            buffer is None
+            or buffer.gradient.shape != spheres.shape
+            or not self.use_grad_input
+            or not spheres.requires_grad
+            or not penalty.requires_grad
+        ):
+            return
+        reduced = (
+            penalty.sum(dim=-1)
+            if self.config.sum_distance
+            else penalty.max(dim=-1).values
+        )
+        weight = self._weight.reshape(-1)[0].to(reduced)
+        scalar = (reduced * weight).sum()
+        gradient = torch.autograd.grad(
+            scalar,
+            spheres,
+            retain_graph=True,
+            create_graph=False,
+            allow_unused=True,
+        )[0]
+        if gradient is None:
+            buffer.gradient.zero_()
+        else:
+            buffer.gradient.copy_(gradient.detach())
 
     def _discrete_fn(self, state: Any, env_query_idx: Optional[torch.Tensor] = None) -> torch.Tensor:
         spheres = self._spheres(state)

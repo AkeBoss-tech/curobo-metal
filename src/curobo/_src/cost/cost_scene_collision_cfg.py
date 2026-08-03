@@ -81,12 +81,13 @@ class SceneCollisionCostCfg(_PortableSceneCollisionCostCfg):
         )
 
     def _validate_checker(self, checker: Any) -> None:
-        if not isinstance(checker, SceneCollision) and not callable(checker):
-            if not self._query_protocol(checker, swept=self.use_sweep):
-                raise TypeError(
-                    "scene_collision_checker must be a SceneCollision or provide the "
-                    "configured discrete/swept sphere query"
-                )
+        if not isinstance(checker, SceneCollision) and not self._query_protocol(
+            checker, swept=self.use_sweep
+        ):
+            raise TypeError(
+                "scene_collision_checker must be a SceneCollision or provide the "
+                "configured discrete/swept sphere query"
+            )
         if self.use_sweep and not self._query_protocol(checker, swept=True):
             raise TypeError(
                 "use_sweep=True requires get_swept_sphere_distance or "

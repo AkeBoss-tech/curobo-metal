@@ -15,6 +15,14 @@ for testing and application extensions. `use_sweep_kernel` is retained as a
 V2 configuration option but selects the portable swept-query route; it does
 not expose Warp or CUDA kernel handles.
 
+When `use_grad_input=True`, `get_gradient_buffer()` is a detached first-order
+VJP of the final configured cost: it includes the activation hinge, chosen
+sum/first-max reduction, binary-mode offset convention, and weight. This is
+the useful portable replacement for the upstream Warp gradient workspace; it
+does not provide a raw CUDA/Warp buffer ABI or higher-order derivatives.
+Sphere tensors must be finite, use the configured dtype/device, and have
+non-negative radii before any checker is called.
+
 Signed per-sphere clearances are converted to
 `0.5 * max(activation_distance - clearance, 0)^2`, then reduced with either
 `sum_distance=True` or the deterministic first `max` reduction.  The cost

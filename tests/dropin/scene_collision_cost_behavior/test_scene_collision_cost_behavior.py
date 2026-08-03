@@ -25,7 +25,7 @@ def test_native_scene_cost_aggregates_once_and_resets_workspace() -> None:
     device = torch.device("cpu")
     config = SceneCollisionCostCfg(
         weight=2.0, activation_distance=0.1, num_spheres=2,
-        _scene_collision_checker=_checker(device),
+        use_grad_input=True, _scene_collision_checker=_checker(device),
     )
     cost = SceneCollisionCost(config)
     cost.setup_batch_tensors(2, 2)
@@ -51,6 +51,9 @@ def test_native_scene_cost_aggregates_once_and_resets_workspace() -> None:
     output.sum().backward()
     assert spheres.grad is not None and torch.isfinite(spheres.grad).all()
     assert cost.get_gradient_buffer().shape == spheres.shape
+    # The lifecycle buffer is the configured cost VJP, rather than the raw
+    # signed-clearance direction emitted by the scene checker.
+    torch.testing.assert_close(cost.get_gradient_buffer(), spheres.grad)
 
     retained = cost.get_gradient_buffer()[0].clone()
     cost.reset(torch.tensor([1], dtype=torch.int64))
@@ -85,6 +88,28 @@ def test_scene_cost_topology_sweep_and_binary_lifecycle() -> None:
         cost(SimpleNamespace(robot_spheres=spheres[:, :2]), trajectory_dt=torch.tensor([0.1]))
     with pytest.raises(ValueError, match="trajectory_dt"):
         cost(SimpleNamespace(robot_spheres=spheres), trajectory_dt=torch.tensor([0.1, 0.1]))
+
+
+@pytest.mark.parametrize(
+    ("spheres", "error"),
+    [
+        (torch.tensor([[[[float("nan"), 0.0, 0.0, 0.1]]]]), "finite"),
+        (torch.tensor([[[[0.0, 0.0, 0.0, -0.1]]]]), "non-negative"),
+    ],
+)
+def test_scene_cost_rejects_invalid_spheres_before_query(
+    spheres: torch.Tensor, error: str
+) -> None:
+    cost = SceneCollisionCost(SceneCollisionCostCfg(
+        weight=1.0, num_spheres=1, _scene_collision_checker=_checker(torch.device("cpu")),
+    ))
+    with pytest.raises(ValueError, match=error):
+        cost(SimpleNamespace(robot_spheres=spheres))
+
+
+def test_scene_cost_config_rejects_plain_callable_without_query_protocol() -> None:
+    with pytest.raises(TypeError, match="configured discrete/swept"):
+        SceneCollisionCostCfg(weight=1.0, _scene_collision_checker=lambda _: None)
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple Metal")
