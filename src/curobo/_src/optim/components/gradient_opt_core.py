@@ -100,6 +100,8 @@ class GradientOptCore(PortableOptimizer):
     def reset_shape(self):
         self._rollout_callback("reset_shape")
         self._iteration_state = None
+        self._best_action = self._best_cost = self._best_iteration = None
+        self._converged = self._convergence_count = None
 
     def reset_seed(self):
         return True
@@ -125,15 +127,38 @@ class GradientOptCore(PortableOptimizer):
         name = str(getattr(self.config, "solver_name", "gradient"))
         if name not in solver_params:
             raise ValueError(f"Optimizer {name} not found in solver parameters")
-        for key, value in solver_params[name].items():
-            if not hasattr(self.config, key):
-                raise ValueError(f"unknown optimizer parameter: {key}")
-            setattr(self.config, key, value)
-        inner = int(getattr(self.config, "inner_iters", 1))
-        total = int(self.config.num_iters)
-        if inner <= 0 or total <= 0 or inner > total or total % inner:
-            raise ValueError("num_iters must be a positive multiple of inner_iters")
+        values = solver_params[name]
+        if not isinstance(values, dict):
+            raise TypeError("solver parameters must be a mapping")
+        unknown = [key for key in values if not hasattr(self.config, key)]
+        if unknown:
+            raise ValueError("unknown optimizer parameter(s): " + ", ".join(sorted(unknown)))
+        previous = {key: getattr(self.config, key) for key in values}
+        try:
+            for key, value in values.items():
+                setattr(self.config, key, value)
+            validate = getattr(self.config, "__post_init__", None)
+            if callable(validate):
+                validate()
+            self._validate_iteration_config()
+        except Exception:
+            for key, value in previous.items():
+                setattr(self.config, key, value)
+            validate = getattr(self.config, "__post_init__", None)
+            if callable(validate):
+                validate()
+            raise
         return True
+
+    def _validate_iteration_config(self) -> None:
+        """Validate the cross-solver eager loop contract without CUDA assumptions."""
+        for key in ("num_iters", "inner_iters", "num_problems"):
+            value = getattr(self.config, key, 1)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{key} must be a positive integer")
+        inner, total = int(self.config.inner_iters), int(self.config.num_iters)
+        if inner > total or total % inner:
+            raise ValueError("num_iters must be a positive multiple of inner_iters")
 
     def update_goal_dt(self, goal):
         self._goal_dt = goal
@@ -178,7 +203,7 @@ class GradientOptCore(PortableOptimizer):
             self._cache.reset()
         if self._on_reinitialize:
             self._on_reinitialize(checked_mask)
-        state = self._prepare_initial_iteration_state(action)
+        state = self._prepare_initial_iteration_state(action, checked_mask)
         if self._iteration_state is not None and checked_mask is not None:
             state = self._merge_state(self._iteration_state, state, checked_mask)
         self._iteration_state = state
@@ -224,7 +249,10 @@ class GradientOptCore(PortableOptimizer):
         horizon, dimension = self.action_horizon, self.action_dim
         if action.ndim == 3 and tuple(action.shape[1:]) == (horizon, dimension):
             if action.shape[0] != batch:
-                raise ValueError(f"seed batch {action.shape[0]} != num_problems {batch}")
+                if batch == 1:
+                    self.update_num_problems(int(action.shape[0]))
+                else:
+                    raise ValueError(f"seed batch {action.shape[0]} != num_problems {batch}")
             return action
         if action.ndim == 2 and tuple(action.shape) == (batch, horizon * dimension):
             return action.reshape(batch, horizon, dimension)
@@ -318,11 +346,13 @@ class GradientOptCore(PortableOptimizer):
 
     # -- optimization ---------------------------------------------------------
 
-    def _prepare_initial_iteration_state(self, action: torch.Tensor) -> OptimizationIterationState:
+    def _prepare_initial_iteration_state(
+        self, action: torch.Tensor, mask: torch.Tensor | None = None
+    ) -> OptimizationIterationState:
         rollout = self._rollout_list[1] if len(self._rollout_list) > 1 else self.rollout_fn
         state = self._make_state(self._apply_action_bounds(action), rollout)
         if self._on_initial_state:
-            self._on_initial_state(state, None)
+            self._on_initial_state(state, mask)
         return state
 
     def _direction(self, state: OptimizationIterationState) -> torch.Tensor:
@@ -344,7 +374,9 @@ class GradientOptCore(PortableOptimizer):
         scales = torch.as_tensor(scales, device=action.device, dtype=action.dtype).reshape(-1)
         if scales.numel() == 0 or bool((~torch.isfinite(scales)).any()) or bool((scales < 0).any()):
             raise ValueError("line_search_scale must contain finite nonnegative values")
-        return scales
+        # A no-op candidate makes the fixed candidate search no-worse for
+        # every batch member, including when all proposed steps are uphill.
+        return torch.cat((torch.zeros(1, device=action.device, dtype=action.dtype), scales))
 
     def _opt_step(self, state: OptimizationIterationState) -> OptimizationIterationState:
         direction = self._direction(state)
@@ -402,6 +434,12 @@ class GradientOptCore(PortableOptimizer):
         else:
             state = self._iteration_state
             self._iteration_state = None
+            if (
+                state.action.shape != seed.shape
+                or state.action.device != seed.device
+                or state.action.dtype != seed.dtype
+            ):
+                raise ValueError("reinitialized state must match the next seed shape, dtype, and device")
         self._set_best_from_state(state)
         self._record(state)
         start = time.perf_counter()
