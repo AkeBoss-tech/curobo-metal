@@ -1857,9 +1857,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 3,
         "path": "curobo/_src/cost/cost_cspace_base.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_base",
@@ -2077,9 +2077,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 2,
         "path": "curobo/_src/cost/cost_cspace_cfg.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 14,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_cfg",
@@ -2573,9 +2573,9 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 1,
         "path": "curobo/_src/cost/cost_cspace_dist_cfg.py",
-        "resolved_symbols": 3,
+        "resolved_symbols": 9,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_cspace_dist_cfg",
@@ -70434,9 +70434,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 6,
         "path": "curobo/_src/robot/parser/parser_urdf.py",
-        "resolved_symbols": 15,
+        "resolved_symbols": 17,
         "status": "partial"
       },
       "name": "curobo._src.robot.parser.parser_urdf",
@@ -87854,10 +87854,10 @@
     },
     {
       "local": {
-        "missing_symbols": 1,
+        "missing_symbols": 0,
         "path": "curobo/_src/state/filter_coeff.py",
-        "resolved_symbols": 2,
-        "status": "partial"
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo._src.state.filter_coeff",
       "path": "curobo/_src/state/filter_coeff.py",
@@ -87916,10 +87916,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
+        "missing_symbols": 0,
         "path": "curobo/_src/state/state_base.py",
-        "resolved_symbols": 2,
-        "status": "partial"
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo._src.state.state_base",
       "path": "curobo/_src/state/state_base.py",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 226,
-    "resolved_modules": 135,
+    "partial_modules": 224,
+    "resolved_modules": 137,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 226,
-    "resolved_modules": 135,
+    "partial_modules": 224,
+    "resolved_modules": 137,
     "symbols": 7182
   },
   "upstream": {
