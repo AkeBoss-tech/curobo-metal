@@ -18,6 +18,7 @@ from .mapper import Mapper
 from .mapper_cfg import MapperCfg
 from .projector_texture import ProjectiveTextureProjector, ProjectiveTextureProjectorCfg
 from .storage import OccupiedVoxels
+from curobo._src.types.camera import CameraObservation
 from curobo_metal.ops.perception.core import dense_esdf
 
 
@@ -223,21 +224,77 @@ class BlockSparseTSDFIntegrator:
         # global temporal decay is meaningful and can be implemented exactly
         # over its dense state before each camera update.
         selected_observation = observation if observation is not None else camera_observation
-        self._apply_frame_decay(camera_observation=selected_observation)
-        result = self.mapper.integrate(
-            observation=observation, camera_observation=camera_observation,
-            lidar_observation=lidar_observation,
+        self._validate_camera_observation(selected_observation)
+        # Validation must precede every mutable operation.  In particular a
+        # malformed later frame cannot decay/recycle a previously valid map.
+        if self._frame_count:
+            self._apply_frame_decay(camera_observation=selected_observation)
+        result = self._integrate_camera_frame(
+            selected_observation, advance_frame=False, apply_decay=False
         )
         self._frame_count += 1
         return result
 
     def _integrate_camera_frame(self, observation, *, advance_frame=True, apply_decay=True):
+        self._validate_camera_observation(observation)
         if apply_decay:
-            self._apply_frame_decay(camera_observation=observation)
+            if self._frame_count:
+                self._apply_frame_decay(camera_observation=observation)
         result = self.mapper.integrate(camera_observation=observation)
         if advance_frame:
             self._frame_count += 1
         return result
+
+    def _validate_camera_observation(self, observation: CameraObservation) -> int:
+        """Validate a camera update before it can mutate dense map state.
+
+        Source V2 expects a camera-axis batch.  The portable facade also
+        accepts an unbatched image for the common ``num_cameras == 1`` case,
+        but otherwise enforces the same camera count, resolution, dtype, and
+        device invariants.  Valid zero/NaN/out-of-range depth pixels remain a
+        *data mask* handled by the production fusion operator rather than a
+        malformed frame.
+        """
+        if not isinstance(observation, CameraObservation):
+            raise TypeError(
+                "camera observation must be a CameraObservation, got "
+                f"{type(observation).__name__}"
+            )
+        observation.validate(require_depth=True, require_intrinsics=True, require_pose=True)
+        depth = observation.depth_image
+        assert depth is not None  # narrowed by validate() above
+        count = 1 if depth.ndim == 2 else int(depth.shape[0])
+        if count != self.config.num_cameras:
+            raise ValueError(
+                f"Expected num_cameras={self.config.num_cameras}, got depth_image camera count {count}"
+            )
+        if self.config.image_height is not None and tuple(depth.shape[-2:]) != (
+            self.config.image_height, self.config.image_width,
+        ):
+            raise ValueError(
+                "depth_image spatial shape must match configured image_height/image_width"
+            )
+        state = self.mapper._mapper.state
+        if depth.device != state.tsdf.device:
+            raise ValueError("camera observation must share the TSDF map device")
+        if depth.dtype != state.tsdf.dtype:
+            raise TypeError("camera depth_image must share the TSDF map floating dtype")
+        assert observation.intrinsics is not None and observation.pose is not None
+        intrinsics = observation.intrinsics
+        intrinsics_count = 1 if intrinsics.ndim == 2 else int(intrinsics.shape[0])
+        if intrinsics_count not in (1, count):
+            raise ValueError("camera intrinsics count must be one or match depth_image cameras")
+        matrix = observation.pose.get_matrix()
+        pose_count = 1 if matrix.ndim == 2 else int(matrix.shape[0])
+        if pose_count not in (1, count):
+            raise ValueError("camera pose count must be one or match depth_image cameras")
+        if observation.image_segmentation is not None:
+            # The geometry-only map does not interpret semantic labels, but a
+            # shape mismatch is still a caller error rather than a reason to
+            # pass a malformed auxiliary image into a future backend.
+            if tuple(observation.image_segmentation.shape) != tuple(depth.shape):
+                raise ValueError("image_segmentation must have the same shape as depth_image")
+        return count
 
     def _camera_frustum_mask(self, observation) -> torch.Tensor:
         """Return dense cells projecting into at least one camera image.
