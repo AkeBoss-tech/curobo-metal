@@ -14,6 +14,17 @@ from curobo_metal.ops.world_collision import query_esdf
 from .integrator_tsdf import BlockSparseTSDFIntegrator, BlockSparseTSDFIntegratorCfg
 
 
+def _same_torch_device(left: torch.device | str, right: torch.device | str) -> bool:
+    """Compare devices while treating ``mps`` and ``mps:0`` as identical."""
+
+    left_device = torch.device(left)
+    right_device = torch.device(right)
+    return (
+        left_device.type == right_device.type
+        and (left_device.index or 0) == (right_device.index or 0)
+    )
+
+
 @dataclass
 class BlockSparseESDFIntegratorCfg:
     voxel_size: float = 0.005
@@ -138,8 +149,13 @@ class BlockSparseESDFIntegrator:
     def __init__(self, config: BlockSparseESDFIntegratorCfg):
         self.config = config
         self.cfg = config
-        self.device = torch.device("mps" if config.device.startswith("cuda") and torch.backends.mps.is_available()
-                                   else ("cpu" if config.device.startswith("cuda") else config.device))
+        requested_device = torch.device(config.device)
+        self.device = torch.device("mps" if requested_device.type == "cuda" and torch.backends.mps.is_available()
+                                   else ("cpu" if requested_device.type == "cuda" else requested_device))
+        if self.device.type not in {"cpu", "mps"}:
+            raise ValueError("portable ESDF integration supports only CPU and MPS devices")
+        if self.device.type == "mps" and config.dtype not in {torch.float16, torch.float32}:
+            raise TypeError("MPS portable ESDF storage supports only float16 or float32")
         self.dtype = config.dtype
         self.use_cuda_graph = config.use_cuda_graph
         self._esdf_grid_shape = config.esdf_grid_shape
@@ -305,12 +321,7 @@ class BlockSparseESDFIntegrator:
         """
         if value.shape != self._esdf_grid_shape:
             raise RuntimeError("portable ESDF source and output shapes must match")
-        delta = (origin - self._origin) / self.esdf_voxel_size
-        shift = torch.round(delta).to(torch.int64)
-        if not torch.allclose(delta, shift.to(delta.dtype), atol=1e-5, rtol=0):
-            raise NotImplementedError(
-                "portable ESDF sliding windows require an integer-voxel origin shift"
-            )
+        shift = self._window_shift(origin)
         result = torch.zeros_like(value)
         source_slices, destination_slices = [], []
         for axis, size in enumerate(self._esdf_grid_shape):
@@ -323,6 +334,38 @@ class BlockSparseESDFIntegrator:
             destination_slices.append(slice(destination_start, destination_start + extent))
         result[tuple(destination_slices)] = value[tuple(source_slices)]
         return result
+
+    def _window_shift(self, origin: torch.Tensor) -> torch.Tensor:
+        """Validate and return the lossless integer source-window shift."""
+        delta = (origin - self._origin) / self.esdf_voxel_size
+        shift = torch.round(delta).to(torch.int64)
+        if not torch.allclose(delta, shift.to(delta.dtype), atol=1e-5, rtol=0):
+            raise NotImplementedError(
+                "portable ESDF sliding windows require an integer-voxel origin shift"
+            )
+        return shift
+
+    def _normalize_esdf_origin(self, value: Optional[torch.Tensor]) -> torch.Tensor:
+        if value is None:
+            return self._last_esdf_origin
+        if isinstance(value, torch.Tensor) and not _same_torch_device(value.device, self.device):
+            raise ValueError("esdf_origin must share the ESDF field device")
+        origin = torch.as_tensor(value, device=self.device, dtype=self._origin.dtype)
+        if origin.shape != (3,) or not bool(torch.isfinite(origin).all().item()):
+            raise ValueError("esdf_origin must be a finite xyz vector")
+        return origin
+
+    def _normalize_esdf_voxel_size(self, value: Optional[torch.Tensor]) -> torch.Tensor:
+        if value is None:
+            return self._esdf_voxel_size
+        if isinstance(value, torch.Tensor) and not _same_torch_device(value.device, self.device):
+            raise ValueError("esdf_voxel_size must share the ESDF field device")
+        tensor = torch.as_tensor(value, device=self.device, dtype=torch.float32)
+        if tensor.numel() != 1 or not bool(torch.isfinite(tensor).all().item()) or bool((tensor <= 0).any().item()):
+            raise ValueError("esdf_voxel_size must contain one finite positive value")
+        if not math.isclose(float(tensor.reshape(-1)[0].item()), self.config.voxel_size, rel_tol=0.0, abs_tol=1e-7):
+            raise NotImplementedError("portable ESDF resampling requires a dense resampling backend")
+        return tensor.reshape_as(self._esdf_voxel_size)
 
     def _seed_dense_sites(self, occupancy: Optional[torch.Tensor] = None) -> None:
         """Populate a deterministic dense nearest-occupied-site diagnostic.
@@ -379,20 +422,19 @@ class BlockSparseESDFIntegrator:
 
     def compute_esdf(self, esdf_origin: Optional[torch.Tensor] = None,
                      esdf_voxel_size: Optional[torch.Tensor] = None):
-        if esdf_voxel_size is not None:
-            value = float(torch.as_tensor(esdf_voxel_size).reshape(-1)[0].item())
-            if not math.isclose(value, self.config.voxel_size, rel_tol=0.0, abs_tol=1e-7):
-                raise NotImplementedError("portable ESDF resampling requires a dense resampling backend")
-        origin = self._last_esdf_origin
-        if esdf_origin is not None:
-            origin = torch.as_tensor(esdf_origin, device=self.device, dtype=self._origin.dtype)
-            if origin.shape != (3,):
-                raise ValueError("esdf_origin must be an xyz vector")
         if self._tsdf_integrator is None:
             raise RuntimeError("compute_esdf requires grid_shape at construction")
+        origin = self._normalize_esdf_origin(esdf_origin)
+        voxel_size = self._normalize_esdf_voxel_size(esdf_voxel_size)
+        # Check the window before seeding the diagnostic field.  This makes a
+        # rejected fractional window fully transactional, not merely correct
+        # about the public output/origin registration.
+        self._window_shift(origin)
+        if self.is_esdf_current and torch.equal(origin, self._last_esdf_origin):
+            return self._dist_field
         # Keep the public registration transactional: a rejected fractional
         # shift must not leave a valid field mislabeled with a new origin.
-        field = self._compute_esdf_impl(origin, self._esdf_voxel_size)
+        field = self._compute_esdf_impl(origin, voxel_size)
         self._last_esdf_origin.copy_(origin)
         return field
 
@@ -472,6 +514,8 @@ class BlockSparseESDFIntegrator:
             raise RuntimeError("get_voxel_grid requires grid_shape at construction")
         if self._dist_field is None:
             raise RuntimeError("get_voxel_grid requires grid_shape at construction")
+        if not self.is_esdf_current:
+            self.compute_esdf()
         dims = [size * self.esdf_voxel_size for size in self.esdf_grid_shape]
         return VoxelGrid(
             name="block_sparse_esdf_grid",
@@ -490,6 +534,10 @@ class BlockSparseESDFIntegrator:
         """
         if self._tsdf_integrator is None:
             raise RuntimeError("query requires grid_shape at construction")
+        if not isinstance(points, torch.Tensor):
+            raise TypeError("points must be a torch.Tensor")
+        if not _same_torch_device(points.device, self.device):
+            raise ValueError("points must share the ESDF field device")
         if not self.is_esdf_current:
             self.compute_esdf()
         # World-collision's differentiable sampler deliberately supports only
