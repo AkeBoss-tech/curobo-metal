@@ -10,10 +10,15 @@ ignored on CPU/MPS).
 from __future__ import annotations
 
 from numbers import Integral
-from typing import Any
+from typing import Any, List, Optional, Union
 
 import torch
 
+from curobo._src.curobolib.cuda_ops.tensor_checks import check_float16_tensors, check_float32_tensors
+from curobo._src.robot.types.joint_limits import JointLimits
+from curobo._src.transition.robot_state_transition import RobotStateTransition
+
+from .cost_base_cfg import BaseCostCfg
 from .portable import (
     CSpaceCostCfg as _PortableCSpaceCostCfg,
     CSpaceCostType,
@@ -78,7 +83,9 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
         if bool((value < 0).any().item()):
             raise ValueError(f"{name} must be non-negative")
 
-    def _validate_joint_limits(self, bounds: Any) -> None:
+    def _validate_joint_limits(
+        self, bounds: Any, *, cost_type: Optional[CSpaceCostType] = None
+    ) -> None:
         """Validate the limit fields consumed by the portable evaluator.
 
         The high-level evaluator consumes the standard ``JointLimits`` shape
@@ -86,8 +93,9 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
         records, while checking all state fields before a trajectory solve.
         """
         dof = self.dof
+        cost_type = self.cost_type if cost_type is None else cost_type
         required = ("position",)
-        if self.cost_type is CSpaceCostType.STATE:
+        if cost_type is CSpaceCostType.STATE:
             required = ("position", "velocity", "acceleration", "jerk", "effort")
         elif getattr(bounds, "effort", None) is not None:
             # POSITION only evaluates this term when torque is supplied, but
@@ -112,7 +120,10 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
         # CUDA's STATE cost has no meaningful derivative-bound term if one of
         # these ranges is zero.  Reject that configuration deterministically
         # instead of deferring the failure to a CUDA tensor check.
-        if self.cost_type is CSpaceCostType.STATE:
+            if not self.device_cfg.is_same_torch_device(tensor.device):
+                raise ValueError(f"joint_limits.{name} must reside on config.device_cfg.device")
+
+        if cost_type is CSpaceCostType.STATE:
             for name in ("velocity", "acceleration", "jerk"):
                 value = torch.as_tensor(getattr(bounds, name))
                 if bool(torch.max(value[1] - value[0]).eq(0).item()):
@@ -123,7 +134,16 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
             raise TypeError("bounds must be a JointLimits-compatible record")
         # Validate before cloning so malformed custom records fail without
         # invoking arbitrary ``clone`` implementations.
-        self._validate_joint_limits(bounds)
+        # Teleport conversion has a position-only public contract, so it must
+        # not reject a valid position-only bounds record merely because this
+        # config happened to begin as STATE.  The portable base performs the
+        # actual atomic conversion and clones the accepted record.
+        next_cost_type = (
+            CSpaceCostType.POSITION
+            if teleport_mode and self.cost_type is CSpaceCostType.STATE
+            else self.cost_type
+        )
+        self._validate_joint_limits(bounds, cost_type=next_cost_type)
         result = super().set_bounds(bounds, teleport_mode=teleport_mode)
         # Teleport mode converts state cost to POSITION and intentionally no
         # longer requires velocity/acceleration/jerk/effort limits.
@@ -148,4 +168,17 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
         return super().update_dof(int(dof))
 
 
-__all__ = ["CSpaceCostCfg", "CSpaceCostType", "PositionCSpaceCost", "StateCSpaceCost"]
+__all__ = [
+    "BaseCostCfg",
+    "CSpaceCostCfg",
+    "CSpaceCostType",
+    "JointLimits",
+    "List",
+    "Optional",
+    "PositionCSpaceCost",
+    "RobotStateTransition",
+    "StateCSpaceCost",
+    "Union",
+    "check_float16_tensors",
+    "check_float32_tensors",
+]
