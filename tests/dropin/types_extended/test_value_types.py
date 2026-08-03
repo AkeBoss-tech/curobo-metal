@@ -85,5 +85,5 @@ def test_criteria_robot_state_and_high_use_pose_joint_methods():
     assert len(robot) == 2 and robot.tool_frames == []
     with pytest.raises(ValueError, match="Link poses"):
         robot.get_link_pose("missing")
-    assert joints.stack(joints).shape == (2, 2, 3)
+    assert joints.stack(joints).shape == (4, 3)
     assert joints.cat(joints, 0).shape == (4, 3)

@@ -91,7 +91,9 @@ def test_joint_state_cat_and_stack_keep_names_timing_and_autograd() -> None:
     assert appended.control_space is ControlSpace.POSITION
 
     stacked = left.stack(right)
-    assert stacked.position.shape == (2, 2, 2, 3)
+    # Pinned V2's historical ``stack`` name concatenates trajectory waypoints
+    # on the second-to-last axis; it does not create an extra seed dimension.
+    assert stacked.position.shape == (2, 4, 3)
     assert stacked.joint_names == ["a", "b", "c"]
     (stacked.position.square().sum() + appended.position.sum()).backward()
     assert left.position.grad is not None and torch.isfinite(left.position.grad).all()

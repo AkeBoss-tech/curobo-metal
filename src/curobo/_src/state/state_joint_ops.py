@@ -277,4 +277,72 @@ def cat_many(states):
 
 
 def append_joints_to_state(joint_state, other_js):
-    return cat_joint_states(joint_state, other_js, -1)
+    """Append joint channels, broadcasting a locked-state over trajectory axes.
+
+    cuRobo commonly keeps locked joints as a single ``[D_locked]`` state and
+    appends it to active state tensors shaped ``[B, D]`` or ``[B, H, D]``.
+    The CUDA implementation handles that through a mix of JIT repeat and
+    buffer writes.  This direct PyTorch version gives the same public layout
+    while preserving explicit derivative channels and autograd on CPU/MPS.
+
+    Raw packed-knot append remains an explicit boundary: upstream itself
+    raises for it and there is no safe universal relation between independent
+    B-spline control-point layouts.
+    """
+    from .state_joint import JointState
+
+    if not joint_state.joint_names or not other_js.joint_names:
+        raise ValueError("joint_names are required to append")
+    if joint_state.position.device != other_js.position.device:
+        raise ValueError("appended JointStates must be on the same device")
+    if joint_state.position.dtype != other_js.position.dtype:
+        raise ValueError("appended JointStates must share dtype")
+    if joint_state.knot is not None and other_js.knot is not None:
+        raise NotImplementedError("knot append requires a shared knot layout")
+
+    target_shape = tuple(joint_state.position.shape)
+    prefix = target_shape[:-1]
+
+    def broadcast(value, *, channel: str):
+        if value is None:
+            return None
+        if value.ndim == 0 or value.shape[-1] != other_js.position.shape[-1]:
+            raise ValueError(f"{channel} must end in the appended DOF dimension")
+        try:
+            return value.expand(*prefix, value.shape[-1])
+        except RuntimeError as error:
+            raise ValueError(
+                "appending joints requires the new joints to have a shape matching "
+                "the current batch/trajectory prefix or singleton dimensions"
+            ) from error
+
+    right_position = broadcast(other_js.position, channel="position")
+
+    def append_channel(channel: str):
+        left = getattr(joint_state, channel)
+        right = broadcast(getattr(other_js, channel), channel=channel)
+        if left is None and right is None:
+            return None
+        if left is None:
+            left = torch.zeros_like(joint_state.position)
+        if left.shape != joint_state.position.shape:
+            raise ValueError(f"{channel} must match the active position layout")
+        if right is None:
+            right = torch.zeros_like(right_position)
+        return torch.cat((left, right), dim=-1)
+
+    result = JointState(
+        position=torch.cat((joint_state.position, right_position), dim=-1),
+        velocity=append_channel("velocity"),
+        acceleration=append_channel("acceleration"),
+        jerk=append_channel("jerk"),
+        joint_names=joint_state.joint_names + other_js.joint_names,
+        device_cfg=joint_state.device_cfg,
+        # Pinned cuRobo gives a supplied locked-state timing value precedence.
+        dt=_clone(other_js.dt) if other_js.dt is not None else _clone(joint_state.dt),
+        aux_data=dict(joint_state.aux_data),
+        knot=_clone(joint_state.knot),
+        knot_dt=_clone(joint_state.knot_dt),
+        control_space=joint_state.control_space,
+    )
+    return result

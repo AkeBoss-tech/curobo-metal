@@ -299,11 +299,26 @@ class JointState(_MetalJointState, State):
         return output
 
     def copy_data(self, in_joint_state: "JointState"):
-        """Copy tensor contents while retaining this object's metadata buffers."""
+        """Copy tensor contents while retaining this object's metadata buffers.
+
+        This is a deprecated upstream API, but planner buffer owners still use
+        it when a state changes shape.  Match ``copy_``'s useful lifecycle
+        guarantee: reuse compatible allocation, otherwise adopt the source
+        tensor reference rather than silently dropping the new channel.
+        """
         for field in self._tensor_fields():
             source, target = getattr(in_joint_state, field), getattr(self, field)
-            if source is not None and target is not None:
+            if source is None:
+                continue
+            if (
+                target is not None
+                and target.shape == source.shape
+                and target.device == source.device
+                and target.dtype == source.dtype
+            ):
                 target.copy_(source)
+            else:
+                setattr(self, field, source)
         return self
 
     def to(self, device_cfg: DeviceCfg) -> "JointState":
@@ -383,7 +398,12 @@ class JointState(_MetalJointState, State):
         self.copy_reference(value)
 
     def stack(self, new_state: JointState):
-        return self._combine(new_state, torch.stack, join_names=False)
+        # Despite the historical name, pinned cuRobo stacks consecutive
+        # waypoints by concatenating the second-to-last (trajectory) axis.
+        # Using torch.stack here would invent a seed axis and makes callers
+        # pass a rank that the upstream solver never produces.
+        from .state_joint_ops import stack_joint_states
+        return stack_joint_states(self, new_state)
 
     def cat(self, other_js: JointState, dim: int):
         dof_dim = dim if dim >= 0 else self.position.ndim + dim
