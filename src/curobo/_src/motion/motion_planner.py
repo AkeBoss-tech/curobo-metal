@@ -3,24 +3,49 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import torch
 
 from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
 from curobo._src.collision.attachment_manager import AttachmentManager
-from curobo._src.geom.collision.collision_scene import SceneCollision, SceneCollisionCfg
+from curobo._src.geom.collision.collision_scene import (
+    SceneCollision,
+    SceneCollisionCfg,
+    create_scene_collision,
+)
 from curobo._src.geom.types import SceneCfg
 from curobo._src.graph_planner.graph_planner_prm import PRMGraphPlanner
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
+from curobo._src.robot.kinematics.kinematics import Kinematics
+from curobo._src.robot.kinematics.kinematics_state import KinematicsState
 from curobo._src.solver.solver_ik import IKSolver
 from curobo._src.solver.solver_trajopt import TrajOptSolver
+from curobo._src.solver.solver_trajopt_result import TrajOptSolverResult
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_trajectory_ops import get_joint_state_at_horizon_index
 from curobo._src.types.pose import Pose
-from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.trajectory import TrajInterpolationType
+from curobo._src.util.logging import log_and_raise
 
 from .motion_planner_cfg import MotionPlannerCfg
 from .motion_planner_result import GraspPlanResult
+
+
+def _axis_string_to_vector(axis: str) -> List[float]:
+    """Return the canonical unit axis used by grasp approach/lift planning.
+
+    The pinned helper is public enough that application code imports it
+    directly.  Keeping it dependency-free also lets the batch facade share
+    the exact validation semantics without pretending that a Warp vector is
+    available on Metal.
+    """
+    axes = {"x": [1.0, 0.0, 0.0], "y": [0.0, 1.0, 0.0], "z": [0.0, 0.0, 1.0]}
+    try:
+        return axes[axis].copy()
+    except KeyError as error:
+        raise ValueError("axis must be 'x', 'y', or 'z'") from error
 
 
 class MotionPlanner:
@@ -33,6 +58,7 @@ class MotionPlanner:
         # integrations retain this object to mutate their world in place.
         self.scene_collision_checker = None
         self._destroyed = False
+        self._world_generation = 0
         self._initialize_components()
 
     def _initialize_components(self):
@@ -94,6 +120,101 @@ class MotionPlanner:
             "or SceneCollisionCfg; YAML/USD scene asset loading is unavailable"
         )
 
+    def _assert_live(self) -> None:
+        if self._destroyed:
+            raise RuntimeError("MotionPlanner has been destroyed")
+
+    @property
+    def is_destroyed(self) -> bool:
+        """Whether this planner has released its reusable solver state."""
+        return self._destroyed
+
+    @property
+    def world_generation(self) -> int:
+        """Monotonic generation of successful world/cache mutations.
+
+        CUDA cuRobo invalidates captured graphs after a world mutation.  The
+        portable backend has no captured graph, but a generation lets callers
+        invalidate their own cached queries with the same useful lifecycle
+        signal.
+        """
+        return self._world_generation
+
+    def _expected_world_environments(self) -> int:
+        return (
+            int(self.config.ik_solver_config.max_batch_size)
+            if self.config.ik_solver_config.multi_env
+            else 1
+        )
+
+    @staticmethod
+    def _as_scene_list(scene: SceneCfg | List[SceneCfg]) -> List[SceneCfg]:
+        return scene if isinstance(scene, list) else [scene]
+
+    def _validate_scene_count(self, scenes: List[SceneCfg]) -> None:
+        expected = self._expected_world_environments()
+        if len(scenes) != expected:
+            raise ValueError(
+                "updated world environment count must match the planner configuration "
+                f"({expected}), got {len(scenes)}"
+            )
+
+    @staticmethod
+    def _scene_fits_cache(scene: SceneCfg, collision: SceneCollision) -> bool:
+        """Preflight a mutation before ``load_collision_model`` clears a cache."""
+        return (
+            len(scene.cuboid) <= collision._world.primitive_cache.capacity
+            and len(scene.mesh) <= collision._world.mesh_cache.capacity
+            and len(scene.voxel) <= collision._world.voxel_cache.capacity
+        )
+
+    def _record_world_config(self, collision: SceneCollision) -> None:
+        """Keep configuration aliases coherent after a portable world swap."""
+        record = SceneCollisionCfg(
+            device_cfg=self.config.device_cfg,
+            scene_model=collision.scene_model,
+            num_envs=collision.num_envs,
+        )
+        self.config.scene_collision_cfg = record
+        for solver in (self.ik_solver, self.trajopt_solver):
+            core_cfg = getattr(solver.config, "core_cfg", None)
+            if core_cfg is not None:
+                core_cfg.scene_collision_cfg = record
+        pose_ik = getattr(self.trajopt_solver, "_pose_ik", None)
+        if pose_ik is not None:
+            pose_ik.config.core_cfg.scene_collision_cfg = record
+        if self.graph_planner is not None:
+            self.graph_planner.config.scene_collision_cfg = record
+
+    def _install_world(self, collision: SceneCollision) -> None:
+        """Synchronize every planner stage to one validated world adapter."""
+        if collision.device_cfg != self.config.device_cfg:
+            raise ValueError("updated world device_cfg must match MotionPlanner.device_cfg")
+        if collision.num_envs != self._expected_world_environments():
+            raise ValueError(
+                "updated world environment count must match the planner configuration"
+            )
+        previous = self._scene_collision
+        # SolverCore owns an IK-side goal/collision lifecycle, so use its
+        # public update route instead of changing only a private field.
+        self.ik_solver.update_world(collision)
+        collision = self.ik_solver.scene_collision_checker
+        self.trajopt_solver._scene_collision_checker = collision
+        pose_ik = getattr(self.trajopt_solver, "_pose_ik", None)
+        if pose_ik is not None:
+            pose_ik.update_world(collision)
+        self._scene_collision = collision
+        self.scene_collision_checker = collision
+        if previous is not collision:
+            self._attachment_manager = AttachmentManager(
+                self.ik_solver.kinematics, collision, self.config.device_cfg
+            )
+        self._record_world_config(collision)
+        if self.graph_planner is not None:
+            self.graph_planner.scene_collision_checker = collision
+            self.graph_planner.reset_buffer()
+        self._world_generation += 1
+
     def destroy(self):
         """Release planner state exactly once.
 
@@ -134,12 +255,14 @@ class MotionPlanner:
     def kinematics(self): return self.ik_solver.kinematics
 
     def compute_kinematics(self, state: JointState):
+        self._assert_live()
         return self.ik_solver.compute_kinematics(state)
 
     def warmup(
         self, enable_graph: bool = True, warmup_joint_index: int = 0,
         warmup_joint_delta: float = 0.2, num_warmup_iterations: int = 10,
     ):
+        self._assert_live()
         if not 0 <= warmup_joint_index < self.action_dim:
             raise ValueError(
                 f"warmup_joint_index must be in [0, {self.action_dim}), got "
@@ -238,6 +361,7 @@ class MotionPlanner:
         use_implicit_goal: bool = True, max_attempts: int = 5,
         enable_graph_attempt: int = 1,
     ):
+        self._assert_live()
         self._validate_state(current_state, "current_state")
         if not isinstance(goal_tool_poses, GoalToolPose):
             raise TypeError("goal_tool_poses must be a GoalToolPose")
@@ -334,6 +458,7 @@ class MotionPlanner:
         self, goal_state: JointState, current_state: JointState,
         max_attempts: int = 5, enable_graph_attempt: int = 1,
     ):
+        self._assert_live()
         self._validate_state(goal_state, "goal_state")
         self._validate_state(current_state, "current_state")
         if max_attempts < 1:
@@ -401,6 +526,7 @@ class MotionPlanner:
         plan_approach_to_grasp: bool = True, plan_grasp_to_lift: bool = True,
         disable_collision_links: List[str] = None,
     ):
+        self._assert_live()
         started = time.monotonic()
         self._validate_state(current_state, "current_state")
         if not isinstance(grasp_poses, GoalToolPose):
@@ -534,35 +660,70 @@ class MotionPlanner:
         return result
 
     def enable_link_collision(self, enable_collision_links: List[str]):
+        self._assert_live()
+        if not isinstance(enable_collision_links, list) or not all(
+            isinstance(name, str) for name in enable_collision_links
+        ):
+            raise TypeError("enable_collision_links must be a list of link names")
         for link_name in enable_collision_links:
             self.kinematics.config.kinematics_config.enable_link_spheres(link_name)
 
     def disable_link_collision(self, disable_collision_links: List[str]):
+        self._assert_live()
+        if not isinstance(disable_collision_links, list) or not all(
+            isinstance(name, str) for name in disable_collision_links
+        ):
+            raise TypeError("disable_collision_links must be a list of link names")
         for link_name in disable_collision_links:
             self.kinematics.config.kinematics_config.disable_link_spheres(link_name)
 
     def update_world(self, scene_cfg):
-        if self._scene_collision is None:
-            self._scene_collision = self._make_scene_collision(scene_cfg)
-            self.scene_collision_checker = self._scene_collision
-            self.ik_solver._scene_collision_checker = self._scene_collision
-            self.trajopt_solver._scene_collision_checker = self._scene_collision
-            self._attachment_manager = AttachmentManager(
-                self.ik_solver.kinematics, self._scene_collision, self.config.device_cfg
+        """Update the collision world without leaving planner stages stale.
+
+        A ``SceneCfg`` (or complete per-environment list) mutates the existing
+        cache when it fits, preserving references held by callers and by an
+        attachment manager.  An explicit ``SceneCollision`` or config is a
+        replacement.  All variants are validated before mutation, and the IK,
+        TrajOpt pose-composition IK, graph planner, and attachment manager are
+        subsequently pointed at the same object.
+        """
+        self._assert_live()
+        if isinstance(scene_cfg, SceneCollision):
+            self._install_world(scene_cfg)
+            return
+        if isinstance(scene_cfg, SceneCollisionCfg):
+            self._install_world(SceneCollision.from_config(scene_cfg))
+            return
+        if not isinstance(scene_cfg, SceneCfg) and not (
+            isinstance(scene_cfg, list) and all(isinstance(value, SceneCfg) for value in scene_cfg)
+        ):
+            raise NotImplementedError(
+                "portable MotionPlanner world updates require SceneCfg, a list of SceneCfg, "
+                "SceneCollisionCfg, or SceneCollision; YAML/USD scene assets are unavailable"
             )
-        else:
-            self._scene_collision.load_collision_model(scene_cfg)
-        self.config.scene_collision_cfg = scene_cfg
-        if self.graph_planner is not None:
-            self.graph_planner.scene_collision_checker = self._scene_collision
-            self.graph_planner.reset_buffer()
+        scenes = self._as_scene_list(scene_cfg)
+        self._validate_scene_count(scenes)
+        # A cache-too-small replacement is built first, so a rejected update
+        # cannot clear a caller-visible existing world halfway through.
+        if self._scene_collision is None or self._scene_collision.num_envs != len(scenes) or not all(
+            self._scene_fits_cache(value, self._scene_collision) for value in scenes
+        ):
+            self._install_world(self._make_scene_collision(scene_cfg))
+            return
+        for environment, scene in enumerate(scenes):
+            self._scene_collision.load_collision_model(scene, environment)
+        self._install_world(self._scene_collision)
 
     def clear_scene_cache(self):
+        self._assert_live()
         if self._scene_collision is not None:
             self._scene_collision.clear_cache()
         if self.graph_planner is not None:
             self.graph_planner.reset_buffer()
+        self._world_generation += 1
+
     def reset_seed(self):
+        self._assert_live()
         self.ik_solver.reset_seed()
         self.trajopt_solver.reset_seed()
         if self.graph_planner is not None:
@@ -573,6 +734,7 @@ class MotionPlanner:
         self, link_name: str, mass: Optional[float] = None,
         com: Optional[torch.Tensor] = None, inertia: Optional[torch.Tensor] = None,
     ):
+        self._assert_live()
         # The production whole-body backend deliberately exposes immutable
         # inertial parameters today.  Delegate rather than inventing a local
         # mutation cache so callers receive the same explicit backend boundary
@@ -581,7 +743,12 @@ class MotionPlanner:
         self.trajopt_solver.update_link_inertial(link_name, mass, com, inertia)
 
     def update_links_inertial(self, link_properties):
+        self._assert_live()
+        if not isinstance(link_properties, dict):
+            raise TypeError("link_properties must map link names to property mappings")
         for name, values in link_properties.items():
+            if not isinstance(name, str) or not isinstance(values, dict):
+                raise TypeError("link_properties must map link names to property mappings")
             self.update_link_inertial(name, **values)
 
     def update_tool_pose_criteria(
@@ -593,6 +760,7 @@ class MotionPlanner:
         compatibility.  The CUDA-only non-terminal linear rollout weighting
         is not emulated by the underlying portable optimizer.
         """
+        self._assert_live()
         if not isinstance(tool_pose_criteria, dict) or not all(
             isinstance(name, str) and isinstance(value, ToolPoseCriteria)
             for name, value in tool_pose_criteria.items()
@@ -605,4 +773,4 @@ class MotionPlanner:
         self.ik_solver.update_tool_pose_criteria(tool_pose_criteria)
         self.trajopt_solver.update_tool_pose_criteria(tool_pose_criteria)
 
-__all__ = ["MotionPlanner"]
+__all__ = ["MotionPlanner", "_axis_string_to_vector"]

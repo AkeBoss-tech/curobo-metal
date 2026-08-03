@@ -11,17 +11,27 @@ therefore remains a configuration-compatible, persistent-state hint.
 from __future__ import annotations
 
 from dataclasses import fields
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import torch
 
+from curobo._src.collision.attachment_manager import AttachmentManager
 from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
+from curobo._src.geom.collision.collision_scene import SceneCollision, create_scene_collision
+from curobo._src.geom.types import SceneCfg
 from curobo._src.motion.motion_planner_result import GraspPlanResult
+from curobo._src.robot.kinematics.kinematics import Kinematics
+from curobo._src.robot.kinematics.kinematics_state import KinematicsState
+from curobo._src.solver.solver_ik import IKSolver
+from curobo._src.solver.solver_trajopt import TrajOptSolver
+from curobo._src.solver.solver_trajopt_result import TrajOptSolverResult
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_trajectory_ops import get_joint_state_at_horizon_index
 from curobo._src.types.pose import Pose
-from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.logging import log_and_raise
 
-from .motion_planner import MotionPlanner
+from .motion_planner import MotionPlanner, _axis_string_to_vector
 
 
 class BatchMotionPlanner(MotionPlanner):
@@ -95,6 +105,14 @@ class BatchMotionPlanner(MotionPlanner):
         for item in fields(destination):
             name = item.name
             left, right = getattr(destination, name), getattr(source, name)
+            if left is None and right is not None:
+                # A stage which first succeeds on a later retry may materialize
+                # optional payloads (interpolation/debug trajectories) that
+                # were absent from the first result.  Clone the candidate
+                # container once, then select its newly successful rows below.
+                clone = getattr(right, "clone", None)
+                setattr(destination, name, clone() if callable(clone) else right)
+                left = getattr(destination, name)
             if isinstance(left, torch.Tensor) and isinstance(right, torch.Tensor):
                 if left.ndim and right.ndim and left.shape[:1] == right.shape[:1] == mask.shape:
                     left[mask] = right[mask]
@@ -111,6 +129,7 @@ class BatchMotionPlanner(MotionPlanner):
         return best, solved | candidate_solved
 
     def warmup(self, enable_graph: bool = True, num_warmup_iterations: int = 5):
+        self._assert_live()
         if not isinstance(num_warmup_iterations, int) or num_warmup_iterations < 1:
             raise ValueError("num_warmup_iterations must be a positive integer")
         original_exit_early = self.ik_solver.config.exit_early
@@ -151,6 +170,7 @@ class BatchMotionPlanner(MotionPlanner):
         finetune_iters=None,
         finetune_dt_scale: float = 0.55,
     ):
+        self._assert_live()
         batch = self._validate_batch_state(current_state, "current_state")
         if not isinstance(goal_tool_poses, GoalToolPose):
             raise TypeError("goal_tool_poses must be a GoalToolPose")
@@ -231,6 +251,7 @@ class BatchMotionPlanner(MotionPlanner):
         success_ratio: float = 1.0,
         enable_graph_attempt: int = 0,
     ):
+        self._assert_live()
         batch = self._validate_batch_state(current_state, "current_state")
         goal_batch = self._validate_batch_state(goal_states, "goal_states")
         if goal_batch != batch:
@@ -343,6 +364,7 @@ class BatchMotionPlanner(MotionPlanner):
         plan_approach_to_grasp: bool = True, plan_grasp_to_lift: bool = True,
         disable_collision_links: List[str] = None,
     ) -> GraspPlanResult:
+        self._assert_live()
         batch = self._validate_batch_state(current_state, "current_state")
         if not isinstance(grasp_poses, GoalToolPose) or grasp_poses.batch_size != batch:
             raise ValueError("grasp_poses must be a GoalToolPose matching current_state batch")
