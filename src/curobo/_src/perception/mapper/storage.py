@@ -44,6 +44,10 @@ class BlockSparseTSDFCfg:
     truncation_distance: float = 0.04
     device: str = "cuda:0"
     grid_shape: Optional[Tuple[int, int, int]] = None
+    # Portable dense storage maps this directly to PerceptionConfig's batch
+    # axis.  Upstream sparse storage is normally owned per mapper instance;
+    # accepting an explicit count makes that lifecycle usable without CUDA.
+    environments: int = 1
     enable_dynamic: bool = True
     enable_static: bool = False
     static_obstacle_color: Tuple[float, float, float] = (0.5, 0.5, 0.5)
@@ -62,7 +66,11 @@ class BlockSparseTSDFCfg:
         if self.grid_shape is None or len(self.grid_shape) != 3 or any(int(n) < 2 for n in self.grid_shape):
             raise ValueError("portable dense BlockSparseTSDFCfg.grid_shape must contain three integers >= 2")
         self.grid_shape = tuple(int(n) for n in self.grid_shape)
-        if self.voxel_size <= 0 or self.truncation_distance <= 0 or self.accumulator_w_max <= 0:
+        if not isinstance(self.environments, int) or isinstance(self.environments, bool) or self.environments < 1:
+            raise ValueError("environments must be a positive integer")
+        if not all(math.isfinite(float(value)) for value in (
+            self.voxel_size, self.truncation_distance, self.accumulator_w_max
+        )) or self.voxel_size <= 0 or self.truncation_distance <= 0 or self.accumulator_w_max <= 0:
             raise ValueError("voxel_size, truncation_distance, and accumulator_w_max must be positive")
         if self.block_size < 1 or self.block_size > 32 or self.block_size & (self.block_size - 1):
             raise ValueError("block_size must be 1 or a power of two through 32")
@@ -82,6 +90,8 @@ class BlockSparseTSDFCfg:
             self.origin = torch.as_tensor(self.origin, dtype=torch.float32)
         if self.origin.shape != (3,):
             raise ValueError("origin must be an xyz vector")
+        if not bool(torch.isfinite(self.origin).all()):
+            raise ValueError("origin must be finite")
 
 
 @dataclass
@@ -242,17 +252,39 @@ class BlockSparseTSDF:
         if kernels is not None:
             raise NotImplementedError("custom Warp block-sparse kernels are unavailable on CPU/MPS")
         self.config = config
-        self._native = _native or PerceptionMapper(PerceptionConfig(
+        if _native is not None and not isinstance(_native, PerceptionMapper):
+            raise TypeError("native must be a PerceptionMapper")
+        expected = PerceptionConfig(
             shape=config.grid_shape, voxel_size=config.voxel_size,
             grid_center=tuple(config.origin.tolist()), truncation_distance=config.truncation_distance,
             max_weight=config.accumulator_w_max, block_size=config.block_size,
-        ), device=_device(config.device))
+            environments=config.environments,
+        )
+        if _native is not None:
+            native_config = _native.config
+            # Storage deliberately has no knobs for depth gates or ESDF
+            # thresholds.  Validate the geometry and batch fields it *does*
+            # own without rejecting a mapper that legitimately customizes
+            # those higher-level perception settings.
+            owned_match = (
+                native_config.shape == expected.shape
+                and native_config.voxel_size == expected.voxel_size
+                and native_config.grid_center == expected.grid_center
+                and native_config.truncation_distance == expected.truncation_distance
+                and native_config.max_weight == expected.max_weight
+                and native_config.block_size == expected.block_size
+                and native_config.environments == expected.environments
+            )
+            if not owned_match:
+                raise ValueError("native mapper geometry/batch configuration must match portable block storage")
+        self._native = _native or PerceptionMapper(expected, device=_device(config.device))
         self._failure_count = 0
         # A dense map has no allocation queue, but callers use the V2 frame
         # counters to tell whether an integration pass created new coverage.
         # Keep a compact observed-mask snapshot at ``prepare_frame`` so those
         # diagnostics remain meaningful without claiming sparse-pool ABI.
         self._frame_observed: torch.Tensor | None = None
+        self._coords_cache: torch.Tensor | None = None
 
     @classmethod
     def from_native(cls, config: BlockSparseTSDFCfg, native: PerceptionMapper) -> "BlockSparseTSDF":
@@ -270,9 +302,32 @@ class BlockSparseTSDF:
     def grid_center(self) -> torch.Tensor:
         return self.config.origin
 
-    def _observed(self) -> torch.Tensor:
-        """Return the dense dynamic-observation mask as a flattened bool tensor."""
-        return (self.state.weight[0].reshape(-1) > 0)
+    @property
+    def environments(self) -> int:
+        return self.config.environments
+
+    def _environment_index(self, environment: int) -> int:
+        if isinstance(environment, bool) or not isinstance(environment, int) or not 0 <= environment < self.environments:
+            raise ValueError(f"environment must be in [0, {self.environments})")
+        return environment
+
+    def _environment_indices(self, env_indices: torch.Tensor | None) -> torch.Tensor:
+        if env_indices is None:
+            return torch.arange(self.environments, device=self.state.tsdf.device, dtype=torch.int64)
+        if not isinstance(env_indices, torch.Tensor) or env_indices.dtype != torch.int64 or env_indices.ndim != 1:
+            raise ValueError("env_indices must be an int64 vector")
+        values = env_indices.to(self.state.tsdf.device)
+        if len(values) == 0 or bool(((values < 0) | (values >= self.environments)).any()) or len(torch.unique(values)) != len(values):
+            raise ValueError("env_indices must be nonempty, unique, and in range")
+        return values
+
+    def _observed_all(self) -> torch.Tensor:
+        """Return one flattened dense-observation mask per environment."""
+        return self.state.weight.reshape(self.environments, -1) > 0
+
+    def _observed(self, environment: int = 0) -> torch.Tensor:
+        """Return a selected environment's dense observation mask."""
+        return self._observed_all()[self._environment_index(environment)]
 
     def _logical_block_count(self, observed: torch.Tensor | None = None) -> tuple[int, int]:
         """Return ``(active, capacity)`` in logical block units.
@@ -291,26 +346,40 @@ class BlockSparseTSDF:
         keys = torch.div(coordinates, self.config.block_size, rounding_mode="floor")
         return int(torch.unique(keys, dim=0).shape[0]), capacity
 
-    def _frame_new_indices(self, observed: torch.Tensor) -> torch.Tensor:
+    def _frame_new_indices(self, observed: torch.Tensor, environment: int) -> torch.Tensor:
         if self._frame_observed is None:
             return torch.empty(0, device=observed.device, dtype=torch.int32)
         baseline = self._frame_observed.to(device=observed.device)
+        if baseline.ndim == 2:
+            baseline = baseline[self._environment_index(environment)]
         if baseline.shape != observed.shape:
             # This should be impossible without replacing the native mapper,
             # but avoid reporting arbitrary counters if a caller does so.
             return torch.empty(0, device=observed.device, dtype=torch.int32)
         return torch.nonzero(observed & ~baseline, as_tuple=False).flatten().to(torch.int32)
 
-    def _data(self) -> BlockSparseTSDFData:
+    def _coordinates(self) -> torch.Tensor:
         state = self.state
-        n = int(state.tsdf[0].numel())
-        observed = self._observed()
-        new_blocks = self._frame_new_indices(observed)
-        coords = torch.stack(torch.meshgrid(
-            *[torch.arange(v, device=state.tsdf.device, dtype=torch.int32) for v in self.config.grid_shape],
-            indexing="ij",
-        ), -1).reshape(-1, 3)
-        block_data = torch.stack((state.tsdf[0].reshape(-1), state.weight[0].reshape(-1)), -1).unsqueeze(0)
+        expected = (math.prod(self.config.grid_shape), 3)
+        if (
+            self._coords_cache is None
+            or self._coords_cache.shape != expected
+            or self._coords_cache.device != state.tsdf.device
+        ):
+            self._coords_cache = torch.stack(torch.meshgrid(
+                *[torch.arange(v, device=state.tsdf.device, dtype=torch.int32) for v in self.config.grid_shape],
+                indexing="ij",
+            ), -1).reshape(-1, 3)
+        return self._coords_cache
+
+    def _data(self, environment: int = 0) -> BlockSparseTSDFData:
+        environment = self._environment_index(environment)
+        state = self.state
+        n = int(state.tsdf[environment].numel())
+        observed = self._observed(environment)
+        new_blocks = self._frame_new_indices(observed, environment)
+        coords = self._coordinates()
+        block_data = torch.stack((state.tsdf[environment].reshape(-1), state.weight[environment].reshape(-1)), -1).unsqueeze(0)
         empty_int = torch.empty(0, device=state.tsdf.device, dtype=torch.int32)
         # RGB and learned features are deliberately unsupported, but retain a
         # correctly-indexable zero accumulator so ``BlockDataView`` queries
@@ -327,7 +396,7 @@ class BlockSparseTSDF:
             num_allocated=torch.tensor([n], device=state.tsdf.device, dtype=torch.int32), origin=self.config.origin.to(state.tsdf.device),
             truncation_distance=self.config.truncation_distance, voxel_size=self.config.voxel_size,
             allocation_failures=torch.tensor([self._failure_count], device=state.tsdf.device, dtype=torch.int32),
-            block_sums=state.weight[0].reshape(-1), block_to_hash_slot=empty_int, recycle_count=torch.zeros(1, device=state.tsdf.device, dtype=torch.int32),
+            block_sums=state.weight[environment].reshape(-1), block_to_hash_slot=empty_int, recycle_count=torch.zeros(1, device=state.tsdf.device, dtype=torch.int32),
             static_block_data=torch.empty(0, device=state.tsdf.device, dtype=state.tsdf.dtype),
             static_block_sums=torch.empty(0, device=state.tsdf.device, dtype=state.tsdf.dtype),
             has_dynamic=self.config.enable_dynamic,
@@ -336,7 +405,12 @@ class BlockSparseTSDF:
 
     @property
     def data(self) -> BlockSparseTSDFData:
-        return self._data()
+        """Environment-zero source-shaped view; use :meth:`get_data` for batches."""
+        return self._data(0)
+
+    def get_data(self, environment: int = 0) -> BlockSparseTSDFData:
+        """Return a device-resident dense storage view for one environment."""
+        return self._data(environment)
 
     def get_warp_data(self):
         raise NotImplementedError("raw Warp BlockSparseTSDF storage is unavailable on CPU/MPS")
@@ -345,16 +419,35 @@ class BlockSparseTSDF:
         # The production dense mapper has no host hash/cache mirror.  A frame
         # snapshot however may no longer describe a caller-replaced state.
         self._frame_observed = None
+        self._coords_cache = None
 
-    def reset(self) -> None:
-        self._native.reset()
+    def reset(self, env_indices: torch.Tensor | None = None) -> None:
+        """Reset all or selected environments while preserving other batch state."""
+        selected = self._environment_indices(env_indices)
+        self._native.reset(None if env_indices is None else selected)
         self.reset_failure_counter()
-        self._frame_observed = None
+        if env_indices is None:
+            self._frame_observed = None
+        elif self._frame_observed is not None:
+            updated = self._frame_observed.clone()
+            updated[selected] = self._observed_all()[selected].detach()
+            self._frame_observed = updated
 
     def export_blocks(self) -> Dict[str, torch.Tensor]:
         state = self.state
         return {name: getattr(state, name).detach().clone() for name in
                 ("tsdf", "weight", "occupancy", "esdf", "gradient", "generation")}
+
+    def state_dict(self) -> Dict[str, object]:
+        """Export a self-describing, clone-owned portable checkpoint."""
+        return self._native.state_dict()
+
+    def load_state_dict(self, checkpoint: Dict[str, object]) -> None:
+        """Load a portable checkpoint after native shape/dtype validation."""
+        if not isinstance(checkpoint, dict):
+            raise TypeError("checkpoint must be a mapping")
+        self._native.load_state_dict(checkpoint)
+        self.invalidate_cache()
 
     def import_blocks(self, blocks: Dict[str, torch.Tensor]) -> None:
         expected = {"tsdf", "weight", "occupancy", "esdf", "gradient", "generation"}
@@ -365,7 +458,7 @@ class BlockSparseTSDF:
             # PerceptionMapper owns a small self-describing checkpoint envelope.
             # Validate it through its public loader so configuration mismatches
             # are not silently accepted, then return.
-            self._native.load_state_dict(blocks)
+            self.load_state_dict(blocks)
             return
         current = self.state
         for name in expected:
@@ -374,14 +467,24 @@ class BlockSparseTSDF:
                 raise TypeError(f"{name} must be a tensor")
             if value.shape != getattr(current, name).shape:
                 raise ValueError(f"{name} shape does not match dense mapper storage")
+            if value.dtype != getattr(current, name).dtype:
+                raise ValueError(f"{name} dtype does not match dense mapper storage")
         checkpoint = self._native.state_dict()
         checkpoint.update({name: blocks[name].to(device=current.tsdf.device) for name in expected})
-        self._native.load_state_dict(checkpoint)
+        self.load_state_dict(checkpoint)
 
-    def get_stats(self, scan_pool: bool = True, scan_hash: bool = False) -> Dict[str, float]:
-        observed = self._observed()
-        observed_voxels = int(observed.sum().item())
-        active_blocks, capacity_blocks = self._logical_block_count(observed)
+    def get_stats(
+        self, scan_pool: bool = True, scan_hash: bool = False, *, environment: int | None = None
+    ) -> Dict[str, float]:
+        """Return selected-environment or aggregate dense storage diagnostics."""
+        masks = self._observed_all()
+        if environment is not None:
+            masks = masks[self._environment_index(environment)].unsqueeze(0)
+        observed_voxels = int(masks.sum().item())
+        capacity_voxels = int(masks.numel())
+        counts = [self._logical_block_count(mask) for mask in masks]
+        active_blocks = sum(count[0] for count in counts)
+        capacity_blocks = sum(count[1] for count in counts)
         # There is no free-list or hash table in a fixed dense tensor.  Keep
         # the V2 keys so monitoring integrations can run, but represent their
         # actual portable meaning rather than fabricated hash occupancy.
@@ -396,9 +499,9 @@ class BlockSparseTSDF:
             "fragmentation_pct": 0.0,
             "hash_load_pct": 0.0,
             "observed_voxels": observed_voxels,
-            "dense_capacity_voxels": int(observed.numel()),
+            "dense_capacity_voxels": capacity_voxels,
             "dense_logical_blocks": capacity_blocks,
-            "dense_observed_fraction_pct": observed_voxels / max(int(observed.numel()), 1) * 100.0,
+            "dense_observed_fraction_pct": observed_voxels / max(capacity_voxels, 1) * 100.0,
             "allocation_failures": self._failure_count,
             "storage": "dense_portable",
         }
@@ -426,9 +529,19 @@ class BlockSparseTSDF:
     def memory_usage_mb(self) -> float:
         return self.memory_usage_bytes() / 2**20
 
-    def prepare_frame(self) -> None:
+    def prepare_frame(self, env_indices: torch.Tensor | None = None) -> None:
         # Dense tensors are allocated at construction, but preserving the
         # observed mask lets ``data.new_blocks`` report first observations made
         # by the next integration pass.  Clone intentionally owns the
         # snapshot: callers commonly mutate the returned state in-place.
-        self._frame_observed = self._observed().detach().clone()
+        observed = self._observed_all().detach()
+        if env_indices is None or self._frame_observed is None:
+            self._frame_observed = observed.clone()
+        else:
+            selected = self._environment_indices(env_indices)
+            snapshot = self._frame_observed.to(device=observed.device).clone()
+            if snapshot.shape != observed.shape:
+                snapshot = observed.clone()
+            else:
+                snapshot[selected] = observed[selected]
+            self._frame_observed = snapshot
