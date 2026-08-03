@@ -19,7 +19,7 @@ from curobo._src.geom.types import Mesh, SceneCfg
 from curobo_metal.ops.world_collision import Mesh as BackendMesh
 from curobo_metal.ops.world_collision import MeshDistanceResult, mesh_distance
 
-from ._portable import PortableObstacleData, PortableWarpStruct, inverse_pose, raw_warp
+from ._portable import PortableObstacleData, PortableWarpStruct, inverse_pose, pose_vector, raw_warp
 
 
 def _rotation_from_wxyz(quaternion: torch.Tensor) -> torch.Tensor:
@@ -84,8 +84,9 @@ class MeshData(PortableObstacleData):
 
     @classmethod
     def from_scene_cfg(cls, scene_cfg, device_cfg, env_idx=0, num_envs=1, max_n=None, max_dist=0.1):
-        output = cls.create_cache(max_n or max(len(scene_cfg.mesh), 1), num_envs, device_cfg, max_dist)
-        output.load_batch(scene_cfg.mesh, env_idx)
+        meshes = list(getattr(scene_cfg, "mesh", None) or [])
+        output = cls.create_cache(max_n or max(len(meshes), 1), num_envs, device_cfg, max_dist)
+        output.load_batch(meshes, env_idx)
         return output
 
     @classmethod
@@ -93,16 +94,20 @@ class MeshData(PortableObstacleData):
         if not scene_cfg_list:
             raise ValueError("scene_cfg_list must not be empty")
         output = cls.create_cache(
-            max_n or max([len(scene.mesh) for scene in scene_cfg_list] + [1]),
+            max_n or max([len(getattr(scene, "mesh", None) or []) for scene in scene_cfg_list] + [1]),
             len(scene_cfg_list), device_cfg, max_dist,
         )
         for index, scene in enumerate(scene_cfg_list):
-            output.load_batch(scene.mesh, index)
+            output.load_batch(list(getattr(scene, "mesh", None) or []), index)
         return output
 
     def _mesh_tensors(self, mesh: Mesh) -> tuple[torch.Tensor, torch.Tensor]:
         if mesh.vertices is None or mesh.faces is None:
             raise NotImplementedError("file-backed mesh loading requires caller-supplied triangular vertices/faces")
+        if isinstance(mesh.vertices, torch.Tensor) and not self.device_cfg.is_same_torch_device(mesh.vertices.device):
+            raise ValueError("mesh vertices must already reside on the mesh-data device")
+        if isinstance(mesh.faces, torch.Tensor) and not self.device_cfg.is_same_torch_device(mesh.faces.device):
+            raise ValueError("mesh faces must already reside on the mesh-data device")
         vertices = torch.as_tensor(mesh.vertices, **self.device_cfg.as_torch_dict()).clone()
         faces = torch.as_tensor(mesh.faces, dtype=torch.int64, device=self.device_cfg.device).clone()
         if vertices.ndim != 2 or vertices.shape[1:] != (3,) or not len(vertices):
@@ -117,8 +122,10 @@ class MeshData(PortableObstacleData):
             raise ValueError("mesh faces must be nondegenerate triangles")
         return vertices, faces
 
-    def _load_mesh_into_cache(self, mesh: Mesh) -> WarpMeshCache:
-        vertices, faces = self._mesh_tensors(mesh)
+    def _cache_mesh_tensors(
+        self, mesh: Mesh, vertices: torch.Tensor, faces: torch.Tensor
+    ) -> WarpMeshCache:
+        """Return the stable cache record after local geometry was validated."""
         cached = self._mesh_cache.get(mesh.name)
         if cached is not None:
             if not (torch.equal(cached.vertices, vertices) and torch.equal(cached.faces, faces)):
@@ -134,18 +141,71 @@ class MeshData(PortableObstacleData):
         self._mesh_cache[mesh.name] = cached
         return cached
 
+    def _load_mesh_into_cache(self, mesh: Mesh) -> WarpMeshCache:
+        vertices, faces = self._mesh_tensors(mesh)
+        return self._cache_mesh_tensors(mesh, vertices, faces)
+
     _load_mesh_to_warp = _load_mesh_into_cache
+
+    def _validated_pose_vector(self, pose) -> torch.Tensor:
+        """Return a finite, normalized-frame-compatible portable pose row."""
+        raw = pose
+        if hasattr(raw, "get_pose_vector"):
+            raw = raw.get_pose_vector()
+        elif hasattr(raw, "position") and hasattr(raw, "quaternion"):
+            raw = torch.cat((raw.position, raw.quaternion), dim=-1)
+        if isinstance(raw, torch.Tensor) and not self.device_cfg.is_same_torch_device(raw.device):
+            raise ValueError("mesh pose must already reside on the mesh-data device")
+        vector = pose_vector(raw, self.device_cfg)
+        if not bool(torch.isfinite(vector).all().item()):
+            raise ValueError("mesh pose must contain finite values")
+        if bool((torch.linalg.vector_norm(vector[3:]) <= torch.finfo(vector.dtype).eps).item()):
+            raise ValueError("mesh pose quaternion must have nonzero norm")
+        return vector
+
+    def _inverse_world_pose(self, pose) -> torch.Tensor:
+        """Validate a finite nonzero quaternion before storing its inverse."""
+        vector = self._validated_pose_vector(pose)
+        return inverse_pose(vector, self.device_cfg)
+
+    def _clear_environment_buffers(self, env_idx: int) -> None:
+        """Reset every fixed slot, not merely the enable bit, before a load."""
+        self.mesh_ids[env_idx].zero_()
+        self.dims[env_idx].zero_()
+        self.inv_pose[env_idx].zero_()
+        self.inv_pose[env_idx, :, 3] = 1
 
     def load_batch(self, meshes: Sequence[Mesh], env_idx: int):
         self._check_env(env_idx)
+        meshes = list(meshes)
         if len(meshes) > self.max_n:
             raise ValueError("mesh cache capacity exceeded")
+        if any(not isinstance(mesh, Mesh) for mesh in meshes):
+            raise TypeError("meshes must contain curobo Mesh values")
         names = [mesh.name for mesh in meshes]
         if len(set(names)) != len(names):
             raise ValueError("mesh names must be unique within one environment")
-        self.clear(env_idx)
+
+        # Finish every fallible conversion before replacing the live
+        # environment. A malformed mesh must not leave a partially updated
+        # world visible to an active collision checker.
+        prepared = []
         for mesh in meshes:
-            self.add(mesh, env_idx)
+            vertices, faces = self._mesh_tensors(mesh)
+            pose = mesh.pose if mesh.pose is not None else [0, 0, 0, 1, 0, 0, 0]
+            prepared.append((mesh, vertices, faces, self._inverse_world_pose(pose)))
+
+        cached = [self._cache_mesh_tensors(mesh, vertices, faces) for mesh, vertices, faces, _ in prepared]
+        self.clear(env_idx)
+        self._clear_environment_buffers(env_idx)
+        for index, ((mesh, _, _, inverse), entry) in enumerate(zip(prepared, cached)):
+            self.names[env_idx][index] = mesh.name
+            self.mesh_ids[env_idx, index] = entry.mesh_id
+            low, high = entry.get_bounds()
+            self.dims[env_idx, index, :3] = high - low
+            self.inv_pose[env_idx, index, :7] = inverse
+            self.enable[env_idx, index] = 1
+        self.count[env_idx] = len(prepared)
 
     def add(self, mesh: Mesh, env_idx=0):
         self._check_env(env_idx)
@@ -156,13 +216,14 @@ class MeshData(PortableObstacleData):
         index = self.get_active_count(env_idx)
         if index >= self.max_n:
             raise ValueError("mesh cache capacity exceeded")
+        pose = mesh.pose if mesh.pose is not None else [0, 0, 0, 1, 0, 0, 0]
+        inverse = self._inverse_world_pose(pose)
         cached = self._load_mesh_into_cache(mesh)
         self.names[env_idx][index] = mesh.name
         self.mesh_ids[env_idx, index] = cached.mesh_id
         low, high = cached.get_bounds()
         self.dims[env_idx, index, :3] = high - low
-        pose = mesh.pose if mesh.pose is not None else [0, 0, 0, 1, 0, 0, 0]
-        self.inv_pose[env_idx, index, :7] = inverse_pose(pose, self.device_cfg)
+        self.inv_pose[env_idx, index, :7] = inverse
         self.enable[env_idx, index] = 1
         self.count[env_idx] += 1
         return index
@@ -178,18 +239,27 @@ class MeshData(PortableObstacleData):
         self._check_env(env_idx)
         if not self.has_name(mesh.name, env_idx):
             return self.add(mesh, env_idx)
+        pose = mesh.pose if mesh.pose is not None else [0, 0, 0, 1, 0, 0, 0]
+        inverse = self._inverse_world_pose(pose)
         cached = self._load_mesh_into_cache(mesh)
         index = self.get_idx(mesh.name, env_idx)
         self.mesh_ids[env_idx, index] = cached.mesh_id
         low, high = cached.get_bounds()
         self.dims[env_idx, index, :3] = high - low
-        pose = mesh.pose if mesh.pose is not None else [0, 0, 0, 1, 0, 0, 0]
-        self.update_pose(mesh.name, w_obj_pose=pose, env_idx=env_idx)
+        self.inv_pose[env_idx, index, :7] = inverse
         self.enable[env_idx, index] = 1
         return index
 
     def update_pose(self, name, w_obj_pose=None, obj_w_pose=None, env_idx=0):
-        return super().update_pose(name, w_obj_pose, obj_w_pose, env_idx)
+        self._check_env(env_idx)
+        index = self.get_idx(name, env_idx)
+        if w_obj_pose is not None:
+            value = self._inverse_world_pose(w_obj_pose)
+        elif obj_w_pose is not None:
+            value = self._validated_pose_vector(obj_w_pose)
+        else:
+            raise ValueError("w_obj_pose or obj_w_pose is required")
+        self.inv_pose[env_idx, index, :7] = value
 
     def update_from_warp_id(self, warp_mesh_id, name, w_obj_pose=None, obj_w_pose=None, env_idx=0, mesh_idx=None):
         raise NotImplementedError(
@@ -283,7 +353,25 @@ class MeshData(PortableObstacleData):
         )
 
     def clear(self, env_idx=None, clear_warp_cache=False):
+        targets = range(self.num_envs) if env_idx is None else (env_idx,)
+        for index in targets:
+            self._check_env(index)
+        if clear_warp_cache:
+            target_set = set(targets)
+            still_referenced = [
+                name
+                for index, names in enumerate(self.names)
+                if index not in target_set
+                for name in names
+                if name is not None
+            ]
+            if still_referenced:
+                raise ValueError(
+                    "cannot clear the shared mesh cache while another environment still references it"
+                )
         super().clear(env_idx)
+        for index in targets:
+            self._clear_environment_buffers(index)
         if clear_warp_cache:
             self._mesh_cache.clear()
             self._next_mesh_id = 1
