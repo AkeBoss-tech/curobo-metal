@@ -284,9 +284,9 @@ def _clamped_uniform_bspline_basis(
 
 
 def get_bspline_interpolation(
-    input_trajectory: JointState,
-    output_trajectory: JointState,
-    interpolation_dt: torch.Tensor,
+    input_trajectory: Optional[JointState] = None,
+    output_trajectory: Optional[JointState] = None,
+    interpolation_dt: Optional[torch.Tensor] = None,
     current_state: Optional[JointState] = None,
     goal_state: Optional[JointState] = None,
     start_idx: Optional[torch.Tensor] = None,
@@ -305,6 +305,11 @@ def get_bspline_interpolation(
     ``input_trajectory.knot`` and differentiates all position channels with
     standard PyTorch operations.
     """
+    # Retain the old zero-argument CUDA-kernel boundary used by callers that
+    # probe for the raw packed ABI.  Real portable callers provide the typed
+    # state/output/dt contract below and use composed PyTorch interpolation.
+    if input_trajectory is None or output_trajectory is None or interpolation_dt is None:
+        raise NotImplementedError("CUDA spline kernel requires explicit packed buffers")
     if input_trajectory.knot is None:
         raise ValueError("input_trajectory.knot is required for B-spline interpolation")
     knots = input_trajectory.knot
