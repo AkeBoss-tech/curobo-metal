@@ -3738,9 +3738,9 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
+        "missing_symbols": 1,
         "path": "curobo/_src/cost/cost_self_collision.py",
-        "resolved_symbols": 6,
+        "resolved_symbols": 7,
         "status": "partial"
       },
       "name": "curobo._src.cost.cost_self_collision",
@@ -3922,10 +3922,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 0,
         "path": "curobo/_src/cost/cost_self_collision_cfg.py",
-        "resolved_symbols": 4,
-        "status": "partial"
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.cost.cost_self_collision_cfg",
       "path": "curobo/_src/cost/cost_self_collision_cfg.py",
@@ -75572,10 +75572,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 0,
         "path": "curobo/_src/rollout/rollout_robot.py",
-        "resolved_symbols": 12,
-        "status": "partial"
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo._src.rollout.rollout_robot",
       "path": "curobo/_src/rollout/rollout_robot.py",
@@ -76589,10 +76589,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/rollout/rollout_robot_cfg.py",
-        "resolved_symbols": 8,
-        "status": "partial"
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo._src.rollout.rollout_robot_cfg",
       "path": "curobo/_src/rollout/rollout_robot_cfg.py",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 237,
-    "resolved_modules": 124,
+    "partial_modules": 234,
+    "resolved_modules": 127,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 237,
-    "resolved_modules": 124,
+    "partial_modules": 234,
+    "resolved_modules": 127,
     "symbols": 7182
   },
   "upstream": {
