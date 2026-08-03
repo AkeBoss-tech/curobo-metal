@@ -10,14 +10,17 @@ capture objects.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import torch
 
 from curobo._src.curobolib.cuda_ops.geometry import SelfCollisionDistance
 from curobo_metal.ops.collision import sphere_sphere_signed_distance
 
-from .portable import BaseCost, SelfCollisionCostCfg
+from .portable import BaseCost
+
+if TYPE_CHECKING:
+    from .cost_self_collision_cfg import SelfCollisionCostCfg
 
 
 class SelfCollisionCost(BaseCost):
@@ -29,7 +32,7 @@ class SelfCollisionCost(BaseCost):
     exact ties, which makes diagnostics deterministic on CPU and Metal.
     """
 
-    def __init__(self, config: SelfCollisionCostCfg):
+    def __init__(self, config: "SelfCollisionCostCfg"):
         if getattr(config, "self_collision_kin_config", None) is None:
             raise ValueError("SelfCollisionCostCfg must contain self_collision_kin_config")
         super().__init__(config)
@@ -56,11 +59,31 @@ class SelfCollisionCost(BaseCost):
         return result
 
     def setup_batch_tensors(self, batch_size: int, horizon: int):
-        super().setup_batch_tensors(batch_size, horizon)
+        if isinstance(batch_size, bool) or isinstance(horizon, bool):
+            raise TypeError("batch_size and horizon must be integers")
+        if not isinstance(batch_size, int) or not isinstance(horizon, int):
+            raise TypeError("batch_size and horizon must be integers")
+        if batch_size < 0 or horizon < 0:
+            raise ValueError("batch_size and horizon must be non-negative")
         count = int(getattr(self._kinematics_config, "num_spheres", 0))
         if count < 0:
             raise ValueError("self_collision_kin_config.num_spheres must be non-negative")
         pair_count = int(self._pairs(device=self.device_cfg.device).shape[0])
+        same_shape = (
+            self._batch_size == batch_size
+            and self._horizon == horizon
+            and self._out_distance is not None
+            and self._out_grad is not None
+            and self._out_grad.shape[-2] == count
+            and self._pair_distance is not None
+            and (
+                (self.config.store_pair_distance and self._pair_distance.shape == (batch_size, horizon, pair_count))
+                or (not self.config.store_pair_distance and self._pair_distance.shape == (1,))
+            )
+        )
+        if same_shape:
+            return True
+        super().setup_batch_tensors(batch_size, horizon)
         spec = self.device_cfg.as_torch_dict()
         self._out_distance = torch.zeros((batch_size, horizon, 1), **spec)
         self._out_grad = torch.zeros((batch_size, horizon, count, 4), **spec)
@@ -178,7 +201,10 @@ class SelfCollisionCost(BaseCost):
             empty = robot_spheres.new_zeros((batch, horizon, 0))
             winners = torch.empty((batch, horizon), device=robot_spheres.device, dtype=torch.long)
             self._copy_diagnostics(empty, winners, pairs, robot_spheres, empty)
-            return robot_spheres.new_zeros((batch, horizon, 1))
+            # Preserve a zero VJP for an empty topology.  A detached
+            # ``new_zeros`` result makes a perfectly valid loss impossible to
+            # backpropagate through when a robot has no enabled self pairs.
+            return robot_spheres[..., 0].sum(dim=-1, keepdim=True) * 0
 
         flat = robot_spheres.reshape(batch * horizon, robot_spheres.shape[-2], 4)
         # This call supplies the shared input and pair validation, first-tie
@@ -208,7 +234,14 @@ class SelfCollisionCost(BaseCost):
 
     def reset(self, reset_problem_ids: Optional[torch.Tensor] = None, **kwargs) -> None:
         del kwargs
-        buffers = (self._out_distance, self._out_grad, self._sparse_sphere_idx, self._pair_distance)
+        buffers = (
+            self._out_distance,
+            self._out_grad,
+            self._sparse_sphere_idx,
+            self._pair_distance,
+            self._block_batch_max_index,
+            self._block_batch_max_value,
+        )
         if reset_problem_ids is None:
             for buffer in buffers:
                 if buffer is not None:
@@ -225,6 +258,20 @@ class SelfCollisionCost(BaseCost):
             if buffer is not None and buffer.ndim >= 3:
                 buffer[indices] = 0
         return None
+
+
+def __getattr__(name: str):
+    """Retain the early portable module's convenient config re-export.
+
+    Pinned V2 imports the configuration from ``cost_self_collision_cfg``.
+    Resolving the old local convenience lazily avoids that module's import
+    cycle while keeping existing portable callers source-compatible.
+    """
+    if name == "SelfCollisionCostCfg":
+        from .cost_self_collision_cfg import SelfCollisionCostCfg
+
+        return SelfCollisionCostCfg
+    raise AttributeError(name)
 
 
 __all__ = ["BaseCost", "SelfCollisionCost", "SelfCollisionCostCfg", "SelfCollisionDistance"]

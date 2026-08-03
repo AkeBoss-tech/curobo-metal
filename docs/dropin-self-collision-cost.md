@@ -1,18 +1,18 @@
 # Portable self-collision cost
 
-`curobo._src.cost.cost_self_collision.SelfCollisionCost` is a CPU/MPS
-implementation of the pinned V2 cost lifecycle.  It accepts batched robot
-spheres shaped `[batch, horizon, spheres, 4]`, evaluates configured pairs, and
-returns the largest positive squared overlap:
+`curobo._src.cost.cost_self_collision.SelfCollisionCost` evaluates the pinned
+V2 maximum squared sphere-overlap objective on ordinary PyTorch CPU or Apple
+Metal tensors.  `SelfCollisionCostCfg` is the matching factory record and its
+`class_type` points to this concrete implementation.
 
-`0.5 * weight * max(0, (r_i + p_i + r_j + p_j)^2 - ||x_i - x_j||^2)`.
+The input is `[batch, horizon, spheres, 4]`, with `xyzw-radius` values.  The
+configured pair order is deterministic: the first maximum wins.  The cost
+keeps V2-style distance, gradient, sparse-index, optional pair-distance, and
+block-reduction workspaces.  Repeating `setup_batch_tensors` with the same
+shape retains these buffers; `reset(problem_ids)` clears every relevant
+workspace for only those batch entries.  Returned costs remain differentiable
+with respect to sphere centers and radii on CPU and fallback-disabled MPS.
 
-Pair order provides deterministic tie resolution.  `store_pair_distance=True`
-retains unweighted, signed squared-overlap diagnostics in `_pair_distance`;
-`get_gradient_buffer()` exposes the selected-pair derivative workspace.
-`setup_batch_tensors`, subset `reset`, enable/disable, and autograd work on
-CPU and fallback-disabled float32 MPS.
-
-The raw CUDA/Warp launch ABI, CUDA graph capture, and NVIDIA numerical-parity
-claim remain unavailable.  The implementation uses the production portable
-sphere-pair operator rather than emulating CUDA kernels.
+The implementation uses the production CPU/MPS sphere-pair operation rather
+than the CUDA `SelfCollisionDistance` launch ABI.  Raw CUDA graph capture,
+Warp kernels, and their packed launch buffers are intentionally not exposed.
