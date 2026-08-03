@@ -35,8 +35,19 @@ class RobotCostManager:
         self._horizon: Optional[int] = None
 
     def register_cost(self, name: str, component) -> None:
+        if not isinstance(name, str) or not name:
+            raise ValueError("cost component name must be a non-empty string")
         if name in self.costs:
             raise ValueError(f"Component {name} already registered")
+        for method in ("enable_cost", "disable_cost", "setup_batch_tensors", "reset", "update_dt"):
+            if not callable(getattr(component, method, None)):
+                raise TypeError(f"cost component {name!r} must provide {method}()")
+        component_device = getattr(getattr(component, "device_cfg", None), "device", None)
+        if component_device is not None and not self.device_cfg.is_same_torch_device(component_device):
+            raise ValueError(
+                f"cost component {name!r} is configured for {component_device}, "
+                f"not manager device {self.device_cfg.device}"
+            )
         self.costs[name] = component
 
     def get_cost(self, name: str):
@@ -67,7 +78,9 @@ class RobotCostManager:
         return self.costs
 
     def setup_batch_tensors(self, batch_size: int, horizon: int) -> None:
-        if batch_size < 0 or horizon < 0:
+        if (not isinstance(batch_size, int) or isinstance(batch_size, bool)
+                or not isinstance(horizon, int) or isinstance(horizon, bool)
+                or batch_size < 0 or horizon < 0):
             raise ValueError("batch_size and horizon must be non-negative")
         if (batch_size, horizon) == (self._batch_size, self._horizon):
             return
@@ -76,28 +89,77 @@ class RobotCostManager:
         self._batch_size, self._horizon = int(batch_size), int(horizon)
 
     def reset(self, reset_problem_ids: Optional[torch.Tensor] = None, **kwargs) -> None:
+        if reset_problem_ids is not None:
+            if not isinstance(reset_problem_ids, torch.Tensor):
+                raise TypeError("reset_problem_ids must be a tensor")
+            if reset_problem_ids.ndim != 1:
+                raise ValueError("reset_problem_ids must have shape [batch]")
+            if reset_problem_ids.dtype not in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8):
+                raise TypeError("reset_problem_ids must use an integer dtype")
+            if not self.device_cfg.is_same_torch_device(reset_problem_ids.device):
+                raise ValueError("reset_problem_ids device does not match cost manager device")
         for cost in self.costs.values():
             cost.reset(reset_problem_ids=reset_problem_ids, **kwargs)
 
     def update_dt(self, dt: float) -> None:
+        if isinstance(dt, torch.Tensor) and not self.device_cfg.is_same_torch_device(dt.device):
+            raise ValueError("dt device does not match cost manager device")
         for cost in self.costs.values():
             cost.update_dt(dt)
 
+    def _validate_config_devices(self, config) -> None:
+        """Make cross-device configuration mistakes fail before partial setup.
+
+        CUDA's packed buffers make mixed-device configs impossible in
+        practice.  The eager backend has no such implicit allocation, so it
+        must reject them explicitly instead of letting a later cost create a
+        CPU tensor in an MPS rollout.
+        """
+        for name in (
+            "self_collision_cfg", "scene_collision_cfg", "cspace_cfg",
+            "start_cspace_dist_cfg", "target_cspace_dist_cfg", "tool_pose_cfg",
+        ):
+            value = getattr(config, name, None)
+            cfg_device = getattr(getattr(value, "device_cfg", None), "device", None)
+            if cfg_device is not None and not self.device_cfg.is_same_torch_device(cfg_device):
+                raise ValueError(
+                    f"{name} is configured for {cfg_device}, not cost manager device "
+                    f"{self.device_cfg.device}"
+                )
+
     def initialize_from_config(self, config, transition_model=None, scene_collision_checker=None, **kwargs):
         """Instantiate configured cost terms, using only portable components."""
-        if config is None:
-            raise TypeError("config must be RobotCostManagerCfg, not None")
-        self.config = config
+        from .cost_manager_robot_cfg import RobotCostManagerCfg
+
+        if not isinstance(config, RobotCostManagerCfg):
+            raise TypeError("config must be a RobotCostManagerCfg")
+        self._validate_config_devices(config)
+        # Validate all predictable failure modes *before* replacing a usable
+        # manager.  Reconfiguration happens during MPC/world updates; a bad
+        # new config must not strand the old manager half rebuilt.
+        if config.tool_pose_cfg is not None:
+            configured_frames = config.tool_pose_cfg.tool_frames
+            model_frames = getattr(getattr(transition_model, "robot_model", None), "tool_frames", None)
+            if not configured_frames and not model_frames:
+                raise ValueError("tool_pose_cfg.tool_frames is required without a robot transition model")
+
         # Reconfiguration is a normal solver lifecycle operation (for
         # example when an MPC world changes).  CUDA replaces its component
         # instances at construction time; eagerly replacing them here avoids
         # stale weights/checkers and makes the portable path safely
         # idempotent.
-        self.costs.clear()
-        self._batch_size = self._horizon = None
         robot_model = getattr(transition_model, "robot_model", None)
         total_spheres = getattr(robot_model, "total_spheres", None)
         interpolation_steps = int(getattr(transition_model, "interpolation_steps", 1) or 1)
+        new_costs: Dict[str, object] = {}
+
+        def register(name: str, component) -> None:
+            if name in new_costs:
+                raise ValueError(f"Component {name} already registered")
+            component_device = getattr(getattr(component, "device_cfg", None), "device", None)
+            if component_device is not None and not self.device_cfg.is_same_torch_device(component_device):
+                raise ValueError(f"cost component {name!r} device does not match manager")
+            new_costs[name] = component
 
         if config.self_collision_cfg is not None:
             self_collision_kin_config = None
@@ -119,7 +181,7 @@ class RobotCostManager:
                     component = SelfCollisionCost(config.self_collision_cfg)
                 if total_spheres == 0:
                     component.disable_cost()
-                self.register_cost("self_collision", component)
+                register("self_collision", component)
 
         # V2 deliberately does not create an unusable scene cost without a
         # checker.  Retaining that rule keeps unconfigured planning rollouts
@@ -132,25 +194,26 @@ class RobotCostManager:
             component = SceneCollisionCost(config.scene_collision_cfg)
             if total_spheres == 0:
                 component.disable_cost()
-            self.register_cost("scene_collision", component)
+            register("scene_collision", component)
         if config.cspace_cfg is not None:
             if transition_model is not None:
                 config.cspace_cfg.initialize_from_transition_model(transition_model)
-            self.register_cost("cspace", config.cspace_cfg.class_type(config.cspace_cfg))
+            register("cspace", config.cspace_cfg.class_type(config.cspace_cfg))
         if config.tool_pose_cfg is not None:
             if not config.tool_pose_cfg.tool_frames and robot_model is not None:
                 config.tool_pose_cfg.set_tool_frames(robot_model.tool_frames)
-            if not config.tool_pose_cfg.tool_frames:
-                raise ValueError("tool_pose_cfg.tool_frames is required without a robot transition model")
-            self.register_cost("tool_pose", ToolPoseCost(config.tool_pose_cfg))
+            register("tool_pose", ToolPoseCost(config.tool_pose_cfg))
         if config.start_cspace_dist_cfg is not None:
             if transition_model is not None:
                 config.start_cspace_dist_cfg.initialize_from_transition_model(transition_model)
-            self.register_cost("start_cspace_dist", CSpaceDistCost(config.start_cspace_dist_cfg))
+            register("start_cspace_dist", CSpaceDistCost(config.start_cspace_dist_cfg))
         if config.target_cspace_dist_cfg is not None:
             if transition_model is not None:
                 config.target_cspace_dist_cfg.initialize_from_transition_model(transition_model)
-            self.register_cost("target_cspace_dist", CSpaceDistCost(config.target_cspace_dist_cfg))
+            register("target_cspace_dist", CSpaceDistCost(config.target_cspace_dist_cfg))
+        self.costs = new_costs
+        self.config = config
+        self._batch_size = self._horizon = None
         self._initialized = True
         return self
 
@@ -160,7 +223,7 @@ class RobotCostManager:
 
     def _shape(self, state):
         joint_state = self._joint_state(state)
-        if not isinstance(joint_state, JointState) or joint_state.position.ndim < 3:
+        if not isinstance(joint_state, JointState) or joint_state.position.ndim != 3:
             raise ValueError("cost manager expects a JointState/RobotState shaped [batch,horizon,dof]")
         return joint_state, joint_state.position.shape[:2]
 
@@ -199,10 +262,40 @@ class RobotCostManager:
         if not self.device_cfg.is_same_torch_device(spheres.device):
             raise ValueError("state.robot_spheres device does not match cost manager device")
 
+    def _validate_optional_state_tensors(self, state, joint_state: JointState) -> None:
+        torque = getattr(state, "joint_torque", None)
+        if torque is not None:
+            if not isinstance(torque, torch.Tensor):
+                raise TypeError("state.joint_torque must be a tensor")
+            if torque.device != joint_state.position.device:
+                raise ValueError("state.joint_torque must match joint_state device")
+            if torque.shape != joint_state.position.shape:
+                raise ValueError("state.joint_torque must match joint_state shape")
+
+    def _validate_goal_device(self, goal) -> None:
+        if goal is None:
+            return
+        for name in (
+            "idxs_link_pose", "idxs_goal_js", "idxs_current_js", "idxs_env",
+            "current_state_dt",
+        ):
+            value = getattr(goal, name, None)
+            if isinstance(value, torch.Tensor) and not self.device_cfg.is_same_torch_device(value.device):
+                raise ValueError(f"goal.{name} device does not match cost manager device")
+        for name in ("goal_js", "current_js"):
+            value = getattr(goal, name, None)
+            if value is not None and not self.device_cfg.is_same_torch_device(value.position.device):
+                raise ValueError(f"goal.{name} device does not match cost manager device")
+        poses = getattr(goal, "link_goal_poses", None)
+        if poses is not None and not self.device_cfg.is_same_torch_device(poses.position.device):
+            raise ValueError("goal.link_goal_poses device does not match cost manager device")
+
     def compute_costs(self, state, cost_collection: Optional[CostCollection] = None,
                       goal: Optional[GoalRegistry] = None, **kwargs) -> CostCollection:
         joint_state, (batch, horizon) = self._shape(state)
         self._validate_state_device(joint_state)
+        self._validate_optional_state_tensors(state, joint_state)
+        self._validate_goal_device(goal)
         self._validate_collision_horizon(state, batch, horizon)
         self.setup_batch_tensors(batch, horizon)
         output = CostCollection() if cost_collection is None else cost_collection
@@ -223,9 +316,10 @@ class RobotCostManager:
             tool = self.get_cost("tool_pose")
             if tool is not None and tool.enabled and goal.link_goal_poses is not None:
                 poses = getattr(state, "tool_poses", None)
-                if poses is not None:
-                    value, _, _, _ = tool.forward(poses, goal.link_goal_poses, goal.idxs_link_pose)
-                    output.add(value, "tool_pose")
+                if poses is None:
+                    raise ValueError("enabled tool_pose cost requires state.tool_poses")
+                value, _, _, _ = tool.forward(poses, goal.link_goal_poses, goal.idxs_link_pose)
+                output.add(value, "tool_pose")
 
         spheres = getattr(state, "robot_spheres", None)
         self_collision = self.get_cost("self_collision")
@@ -240,6 +334,8 @@ class RobotCostManager:
     def compute_convergence(self, state, goal: Optional[GoalRegistry] = None, **kwargs) -> CostCollection:
         joint_state, (batch, horizon) = self._shape(state)
         self._validate_state_device(joint_state)
+        self._validate_optional_state_tensors(state, joint_state)
+        self._validate_goal_device(goal)
         self.setup_batch_tensors(batch, horizon)
         output = CostCollection()
         if goal is None:
@@ -255,7 +351,9 @@ class RobotCostManager:
                            f"{name}_tolerance")
         tool = self.get_cost("tool_pose")
         poses = getattr(state, "tool_poses", None)
-        if tool is not None and tool.enabled and poses is not None and goal.link_goal_poses is not None:
+        if tool is not None and tool.enabled and goal.link_goal_poses is not None:
+            if poses is None:
+                raise ValueError("enabled tool_pose cost requires state.tool_poses")
             _, position, rotation, goalset = tool.forward(poses, goal.link_goal_poses, goal.idxs_link_pose)
             output.add(position, "tool_pose_position_tolerance")
             output.add(rotation, "tool_pose_orientation_tolerance")

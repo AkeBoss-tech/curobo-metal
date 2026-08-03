@@ -1,21 +1,19 @@
-# Portable rollout and cost-manager compatibility
+# Portable robot cost manager
 
-`curobo._src.rollout` provides eager, differentiable CPU and MPS execution
-for goal indexing, rollout metrics, Rosenbrock rollouts, and robot cost-manager
-composition.  Cost terms use the production portable PyTorch implementations;
-they retain batch/seed index buffers, mutable enable/disable state, cost and
-constraint aggregation, and convergence outputs.
+`curobo._src.rollout.cost_manager.RobotCostManager` composes the portable
+tool-pose, c-space, self-collision, and scene-collision cost implementations
+for regular PyTorch CPU and MPS rollouts.  Its public registry, enable/disable,
+batch setup, reset, `update_dt`, cost, and convergence APIs follow cuRobo V2.
 
-`RobotCostManager.initialize_from_config()` is safely reconfigurable: it
-replaces stale component instances, keeps the caller's self-collision
-configuration reusable when interpolation scaling is needed, disables
-collision terms for robots with no spheres, and does not register a scene
-term without its checker.  State tensors are never copied between CPU and
-MPS by the manager; a device mismatch raises before evaluation so the caller
-keeps control of residency and autograd.
+Configuration is built with `RobotCostManagerCfg.create(...)`.  Each supplied
+cost config must use the manager's `DeviceCfg`; mixing CPU config tensors into
+an MPS manager fails at initialization, rather than inserting a hidden copy.
+Reconfiguration is transactional for the manager: validation errors leave the
+previous valid cost registry usable.  State tensors, torque, collision spheres,
+goal indices, and goal poses likewise remain on the configured device.
 
-The upstream CUDA implementation overlaps cost terms on CUDA streams and may
-capture fixed-shape graphs.  Metal executes the same portable terms eagerly,
-so `reset_cuda_graph()` is intentionally unsupported.  This is a functional
-portable compatibility boundary, not a CUDA ABI or performance-equivalence
-claim.
+The manager uses eager native PyTorch dispatch and autograd.  It intentionally
+does not expose CUDA cost streams, CUDA event synchronization, CUDA graph
+capture, or Warp collision-kernel ABI.  Scene collision still requires a
+portable `SceneCollision`/checker, and swept collision retains the existing
+sampled query semantics rather than claiming CUDA analytic CCD.
