@@ -210,6 +210,8 @@ class Pose(_MetalPose):
             None if self.position is None else self.position.detach(),
             None if self.quaternion is None else self.quaternion.detach(),
             None if self.rotation is None else self.rotation.detach(),
+            name=self.name,
+            normalize_rotation=False,
         )
 
     def get_rotation_matrix(self) -> torch.Tensor | None:
@@ -325,10 +327,21 @@ class Pose(_MetalPose):
         return type(self)(self.position[index], self.quaternion[index], rotation, name=self.name)
 
     def __setitem__(self, idx: int | torch.Tensor, value: "Pose"):
+        if not isinstance(value, Pose):
+            raise TypeError("Pose assignment requires a Pose value")
+        if self.position is None or self.quaternion is None:
+            raise ValueError("cannot assign into an empty Pose")
+        if value.position is None or value.quaternion is None:
+            raise ValueError("cannot assign an empty Pose")
         self.position[idx] = value.position
         self.quaternion[idx] = value.quaternion
-        if self.rotation is not None and value.rotation is not None:
-            self.rotation[idx] = value.rotation
+        # A matrix-backed pose is a mutable value buffer in cuRobo.  Do not
+        # leave its cached representation stale when the source was built
+        # from a quaternion rather than a matrix.
+        if self.rotation is not None:
+            source_rotation = value.get_rotation()
+            assert source_rotation is not None
+            self.rotation[idx] = source_rotation
 
     def apply_kernel(self, kernel_mat):
         if self.position is None:
@@ -357,17 +370,23 @@ class Pose(_MetalPose):
         return self.get_matrix().cpu().numpy()
 
     def copy_(self, pose: Pose):
-        if pose.position is None and pose.quaternion is None:
+        if not isinstance(pose, Pose):
+            raise TypeError("Pose.copy_() requires a Pose")
+        if pose.position is None or pose.quaternion is None:
             raise ValueError("Pose.copy_(): pose.position and pose.quaternion are None")
+        if self.position is None or self.quaternion is None:
+            raise ValueError("Pose.copy_(): destination position and quaternion must be materialized")
         if self.position.shape != pose.position.shape or self.quaternion.shape != pose.quaternion.shape:
             raise ValueError(f"Copy not possible due to shape mismatch: {pose.position.shape} != {self.position.shape}")
         self.position.copy_(pose.position); self.quaternion.copy_(pose.quaternion)
-        if self.rotation is not None and pose.rotation is not None:
-            if self.rotation.shape != pose.rotation.shape:
+        if self.rotation is not None:
+            source_rotation = pose.get_rotation()
+            assert source_rotation is not None
+            if self.rotation.shape != source_rotation.shape:
                 raise ValueError(
-                    f"Copy not possible due to rotation shape mismatch: {pose.rotation.shape} != {self.rotation.shape}"
+                    f"Copy not possible due to rotation shape mismatch: {source_rotation.shape} != {self.rotation.shape}"
                 )
-            self.rotation.copy_(pose.rotation)
+            self.rotation.copy_(source_rotation)
 
     @staticmethod
     def cat(pose_list: List[Pose]):
@@ -416,9 +435,24 @@ class Pose(_MetalPose):
                          gp_out: Optional[torch.Tensor] = None,
                          gq_out: Optional[torch.Tensor] = None,
                          gpt_out: Optional[torch.Tensor] = None):
-        if points.ndim > 2:
-            points = points.reshape(-1, 3)
-        output = super().transform_points(points)
+        if self.position is None or self.quaternion is None:
+            raise ValueError("empty Pose cannot transform points")
+        if not isinstance(points, torch.Tensor) or points.shape[-1] != 3:
+            raise ValueError("points must be a tensor ending in dimension 3")
+        if points.device != self.device or points.dtype != self.position.dtype:
+            raise ValueError("points and pose must share device and dtype")
+        # V2's legacy point transform flattens point ranks above two.  The
+        # CUDA op treats a matching flattened pose batch pairwise, rather
+        # than letting torch broadcasting create an N-by-N cross-product.
+        flattened = points.reshape(-1, 3) if points.ndim > 2 else points
+        position = self.position.reshape(-1, 3)
+        quaternion = self.quaternion.reshape(-1, 4)
+        if position.shape[0] not in (1, flattened.shape[0]):
+            raise ValueError(
+                "transform_points requires one pose or one pose per flattened point; "
+                f"got {position.shape[0]} poses and {flattened.shape[0]} points"
+            )
+        output = _pairwise_transform_points(position, quaternion, flattened)
         if out_buffer is not None:
             out_buffer.copy_(output); return out_buffer
         return output
@@ -427,9 +461,18 @@ class Pose(_MetalPose):
                                gp_out: Optional[torch.Tensor] = None,
                                gq_out: Optional[torch.Tensor] = None,
                                gpt_out: Optional[torch.Tensor] = None):
-        if points.ndim <= 2:
+        if self.position is None or self.quaternion is None:
+            raise ValueError("empty Pose cannot transform points")
+        if not isinstance(points, torch.Tensor) or points.ndim <= 2 or points.shape[-1] != 3:
             raise ValueError("batch_transform requires points to be b,n,3 shape")
+        if points.device != self.device or points.dtype != self.position.dtype:
+            raise ValueError("points and pose must share device and dtype")
         rotation = self.get_rotation().reshape(-1, 3, 3)
+        if rotation.shape[0] != points.shape[0]:
+            raise ValueError(
+                "batch_transform requires the flattened pose batch to match points; "
+                f"got {rotation.shape[0]} poses and {points.shape[0]} point batches"
+            )
         output = torch.einsum("bij,b...j->b...i", rotation, points) + self.position.reshape(-1, 1, 3)
         if out_buffer is not None:
             out_buffer.copy_(output); return out_buffer
@@ -440,7 +483,18 @@ class Pose(_MetalPose):
                                        gp_out: Optional[torch.Tensor] = None,
                                        gq_out: Optional[torch.Tensor] = None,
                                        gpt_out: Optional[torch.Tensor] = None):
+        if self.position is None or self.quaternion is None:
+            raise ValueError("empty Pose cannot transform points")
+        if not isinstance(points, torch.Tensor) or points.ndim <= 2 or points.shape[-1] != 3:
+            raise ValueError("batch_transform_inverse requires points to be b,n,3 shape")
+        if points.device != self.device or points.dtype != self.position.dtype:
+            raise ValueError("points and pose must share device and dtype")
         rotation = self.get_rotation().reshape(-1, 3, 3).transpose(-1, -2)
+        if rotation.shape[0] != points.shape[0]:
+            raise ValueError(
+                "batch_transform_inverse requires the flattened pose batch to match points; "
+                f"got {rotation.shape[0]} poses and {points.shape[0]} point batches"
+            )
         output = torch.einsum("bij,b...j->b...i", rotation,
                               points - self.position.reshape(-1, 1, 3))
         if out_buffer is not None:
@@ -477,6 +531,24 @@ def normalize_quaternion(quaternion: torch.Tensor) -> torch.Tensor:
     if bool((norm == 0).any().item()):
         raise ValueError("quaternion must be nonzero")
     return quaternion / norm
+
+
+def _pairwise_transform_points(
+    position: torch.Tensor, quaternion: torch.Tensor, points: torch.Tensor
+) -> torch.Tensor:
+    """Transform one point per pose, or broadcast a singleton pose.
+
+    The compiled cuRobo transform path has pairwise [N, 3] semantics.  Plain
+    ``torch.matmul`` instead interprets two [N, ...] operands as independent
+    batch dimensions in this layout, producing an unintended [N, N, 3]
+    result.  Keeping this helper in the value layer makes the portable CPU
+    and MPS paths agree while retaining an ordinary differentiable graph.
+    """
+    rotation = quaternion_to_matrix(quaternion)
+    if position.shape[0] == 1:
+        rotation = rotation.expand(points.shape[0], -1, -1)
+        position = position.expand(points.shape[0], -1)
+    return torch.einsum("bij,bj->bi", rotation, points) + position
 
 
 def quaternion_to_matrix(quaternion: torch.Tensor) -> torch.Tensor:
@@ -639,7 +711,41 @@ def transform_points(
     if points is None:
         raise TypeError("raw transform_points requires position, quaternion, points")
     del adj_position, adj_quaternion, adj_points
-    output = torch.matmul(points, quaternion_to_matrix(quaternion).transpose(-1, -2)) + position.unsqueeze(-2)
+    if (
+        not isinstance(position, torch.Tensor)
+        or not isinstance(quaternion, torch.Tensor)
+        or not isinstance(points, torch.Tensor)
+        or position.shape[-1] != 3
+        or quaternion.shape[-1] != 4
+        or points.shape[-1] != 3
+    ):
+        raise ValueError("position, quaternion, and points must end in 3, 4, and 3 respectively")
+    if position.device != quaternion.device or position.device != points.device:
+        raise ValueError("position, quaternion, and points must share a device")
+    if position.dtype != quaternion.dtype or position.dtype != points.dtype:
+        raise ValueError("position, quaternion, and points must share a dtype")
+    rotation = quaternion_to_matrix(quaternion)
+    if points.ndim == position.ndim:
+        # Pointwise transforms, including the common [N, 3] flattened
+        # launch layout.  A singleton pose broadcasts over the point batch.
+        if position.ndim == 2:
+            if position.shape[0] not in (1, points.shape[0]):
+                raise ValueError(
+                    "pointwise transform requires one pose or one pose per point; "
+                    f"got {position.shape[0]} poses and {points.shape[0]} points"
+                )
+            output = _pairwise_transform_points(position, quaternion, points)
+        else:
+            output = torch.einsum("...ij,...j->...i", rotation, points) + position
+    elif points.ndim == position.ndim + 1:
+        # [batch..., n, 3] point clouds: retain batch/horizon dimensions and
+        # apply the corresponding transform to every point in the cloud.
+        output = torch.einsum("...ij,...nj->...ni", rotation, points) + position.unsqueeze(-2)
+    else:
+        raise ValueError(
+            "points must have either the pose rank for pointwise transforms or "
+            "one additional point-set dimension"
+        )
     if out_points is not None:
         out_points.copy_(output)
         return out_points
