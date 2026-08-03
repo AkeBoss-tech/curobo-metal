@@ -25,6 +25,71 @@ from .solver_ik_cfg import IKSolverCfg
 from .solver_ik_result import IKSolverResult
 
 
+def _normalize_current_state_batch(
+    current_state: Optional[JointState], batch_size: int, dof: int
+) -> Optional[JointState]:
+    """Normalize the ergonomic single-state form before max-batch padding.
+
+    The public solver accepts a single ``[dof]`` state for a one-goal request,
+    while graph-oriented V2 callers also rely on max-batch padding.  Padding a
+    rank-one state as though its DOF were a batch dimension corrupts velocity
+    and acceleration data, so make the logical batch axis explicit first.
+    This is ordinary tensor shaping, not a CUDA graph buffer operation.
+    """
+    if current_state is None:
+        return None
+    if not isinstance(current_state, JointState):
+        raise TypeError("current_state must be a JointState")
+    result = current_state.clone()
+    position = result.position
+    if position.ndim == 1:
+        if batch_size != 1 or position.numel() != dof:
+            raise ValueError("rank-one current_state.position is valid only for one goal")
+        result.position = position.unsqueeze(0)
+    elif position.ndim != 2 or position.shape != (batch_size, dof):
+        raise ValueError("current_state.position must have shape [batch, dof]")
+    for name in ("velocity", "acceleration", "jerk", "knot", "knot_dt"):
+        value = getattr(result, name, None)
+        if value is None:
+            continue
+        if value.ndim == 1:
+            if batch_size != 1 or value.numel() != dof:
+                raise ValueError(f"rank-one current_state.{name} is valid only for one goal")
+            setattr(result, name, value.unsqueeze(0))
+        elif value.shape[0] != batch_size:
+            raise ValueError(f"current_state.{name} batch dimension must match the goal batch")
+    if result.dt is not None:
+        dt = result.dt
+        if dt.ndim == 0:
+            result.dt = dt.reshape(1).expand(batch_size).clone()
+        elif dt.shape[0] != batch_size:
+            raise ValueError("current_state.dt batch dimension must match the goal batch")
+    return result
+
+
+def _normalize_seed_batch(seed_config, batch_size: int, dof: int, device_cfg):
+    """Make user-facing rank-one seeds safe to use with max-batch padding."""
+    if seed_config is None:
+        return None
+    if isinstance(seed_config, JointState):
+        return _normalize_current_state_batch(seed_config, batch_size, dof)
+    if not isinstance(seed_config, torch.Tensor):
+        seed_config = device_cfg.to_device(seed_config)
+    if seed_config.ndim == 1:
+        if batch_size != 1 or seed_config.numel() != dof:
+            raise ValueError("rank-one seed_config is valid only for one goal")
+        return seed_config.reshape(1, 1, dof)
+    if seed_config.ndim == 2:
+        if seed_config.shape[-1] != dof:
+            raise ValueError("seed_config final dimension must match solver dof")
+        if seed_config.shape[0] != batch_size:
+            raise ValueError("seed_config batch dimension must match the goal batch")
+        return seed_config.unsqueeze(1)
+    if seed_config.ndim == 3 and seed_config.shape[0] == batch_size and seed_config.shape[-1] == dof:
+        return seed_config
+    raise ValueError("seed_config must have shape [dof], [batch,dof], or [batch,seeds,dof]")
+
+
 def _pad_batch_inputs(
     goal_tool_poses: GoalToolPose,
     current_state: Optional[JointState],
@@ -85,6 +150,14 @@ def _slice_batch_result(result: IKSolverResult, batch_size: int) -> IKSolverResu
         result.js_solution = result.js_solution[:batch_size]
     if result.solution_state is not None:
         result.solution_state = result.solution_state[:batch_size]
+    for mapping_name in ("metrics", "debug_info"):
+        mapping = getattr(result, mapping_name, None)
+        if isinstance(mapping, dict):
+            setattr(result, mapping_name, {
+                key: (value[:batch_size] if isinstance(value, torch.Tensor) and value.ndim > 0
+                      and value.shape[0] >= batch_size else value)
+                for key, value in mapping.items()
+            })
     result.batch_size = batch_size
     return result
 
@@ -107,19 +180,49 @@ class IKSolver:
         self._last_result: Optional[IKSolverResult] = None
         self._tool_pose_tracking = set()
         self._joint_position_tracking = False
+        self._self_collision_cost = None
+        if config.self_collision_check:
+            # SolverCore's generic rollout records do not participate in the
+            # compact eager IK objective below.  Instantiate the same public
+            # self-collision cost explicitly so ``self_collision_check`` has
+            # the documented effect for direct IKSolver users too.
+            from curobo._src.cost.cost_self_collision import SelfCollisionCost
+            from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg
+
+            self_collision_config = self._kinematics.get_self_collision_config()
+            if self_collision_config is not None:
+                self._self_collision_cost = SelfCollisionCost(SelfCollisionCostCfg(
+                    weight=1.0,
+                    device_cfg=self.device_cfg,
+                    self_collision_kin_config=self_collision_config,
+                ))
         self.seed_ik_solver: Optional[SeedIKSolver] = None
         if config.use_lm_seed:
             # The seeded solver is a real torch.linalg damped Gauss--Newton
             # implementation.  It is intentionally separate from CUDA's
             # packed Warp step while supplying useful deterministic seeds on
             # both CPU and MPS.
-            seed_count = max(config.seed_solver_num_seeds, config.num_seeds)
+            # Preserve V2's multi-link seed budget policy.  The CUDA version
+            # uses a different packed-kernel tile for these larger residual
+            # systems; CPU/MPS keeps its ordinary torch.linalg step while
+            # retaining the useful sampling and iteration lifecycle.
+            seed_count = config.seed_solver_num_seeds
+            max_iterations = 16
+            inner_iterations = 4
+            if len(self.tool_frames) > 1:
+                seed_count = max(seed_count, 128)
+                max_iterations = inner_iterations = 20
+            if len(self.tool_frames) > 2:
+                seed_count = max(seed_count, 64)
+                max_iterations = inner_iterations = 30
+            if config.num_seeds > seed_count:
+                seed_count = config.num_seeds * 2
             self.seed_ik_solver = SeedIKSolver(SeedIKSolverCfg.create(
                 config.robot_config,
                 device_cfg=config.device_cfg,
                 num_seeds=seed_count,
-                max_iterations=16,
-                inner_iterations=4,
+                max_iterations=max_iterations,
+                inner_iterations=inner_iterations,
                 position_tolerance=config.position_tolerance,
                 orientation_tolerance=config.orientation_tolerance,
                 use_cuda_graph=False,
@@ -189,6 +292,7 @@ class IKSolver:
             self.seed_ik_solver.destroy()
         self.core.destroy()
         self._goal_buffer = self._solve_state = self._last_result = None
+        self._self_collision_cost = None
 
     def get_all_rollout_instances(self, **kwargs):
         return self.core.get_all_rollout_instances(**kwargs)
@@ -247,12 +351,16 @@ class IKSolver:
         same adapter lazily.  YAML/USD scene assets remain intentionally out
         of scope rather than being interpreted as an empty world.
         """
-        from curobo._src.geom.collision.collision_scene import (
-            SceneCollision,
-            SceneCollisionCfg,
-        )
+        from curobo._src.geom.collision.collision_scene import SceneCollision, SceneCollisionCfg
         from curobo._src.geom.types import SceneCfg
 
+        if isinstance(scene_cfg, SceneCollisionCfg):
+            # Keep SolverCore's typed configuration factory in charge of the
+            # replacement adapter and its rollout propagation.
+            self.core.update_world(scene_cfg)
+            self._scene_collision_checker = self.core.scene_collision_checker
+            self.config.core_cfg.scene_collision_cfg = scene_cfg
+            return
         if isinstance(scene_cfg, SceneCollision):
             self._scene_collision_checker = scene_cfg
         elif isinstance(scene_cfg, SceneCfg) or (
@@ -434,6 +542,12 @@ class IKSolver:
             raise ValueError(
                 f"seed_config batch dimension {supplied.shape[0]} must match goal batch {batch}"
             )
+        if supplied.shape[1] > num_seeds:
+            raise ValueError(
+                "seed_config cannot contain more seeds than the active IK seed count"
+            )
+        if not bool(torch.isfinite(supplied).all().item()):
+            raise ValueError("seed_config must contain only finite values")
         count = min(supplied.shape[1], num_seeds)
         seeds[:, :count] = supplied[:, :count]
         return seeds
@@ -503,6 +617,9 @@ class IKSolver:
         selected_position_error = position_error.gather(-1, gather).squeeze(-1)
         selected_rotation_error = rotation_error.gather(-1, gather).squeeze(-1)
         clearance = self._world_clearance(state, batch, num_seeds)
+        self_collision = q.new_zeros((batch, num_seeds))
+        if self._self_collision_cost is not None and state.robot_spheres is not None:
+            self_collision = self._self_collision_cost(state.robot_spheres).reshape(batch, num_seeds)
         cost = pose_cost
         if include_collision_cost and self._scene_collision_checker is not None:
             activation = torch.as_tensor(
@@ -511,7 +628,12 @@ class IKSolver:
                 dtype=q.dtype,
             )
             cost = cost + 10.0 * (activation - clearance).clamp_min(0).square()
-        return cost, selected_position_error, selected_rotation_error, goal_index, clearance
+        if include_collision_cost and self._self_collision_cost is not None:
+            cost = cost + 10.0 * self_collision
+        return (
+            cost, selected_position_error, selected_rotation_error, goal_index,
+            clearance, self_collision,
+        )
 
     def _compute_solution_velocity(
         self, result: IKSolverResult, current_state: Optional[JointState]
@@ -596,7 +718,7 @@ class IKSolver:
         if run_optimizer:
             for step in range(1, iterations + 1):
                 q = q.requires_grad_(True)
-                cost, _, _, _, _ = self._evaluate_pose_seeds(q, goal_tool_poses, True)
+                cost, _, _, _, _, _ = self._evaluate_pose_seeds(q, goal_tool_poses, True)
                 grad = torch.autograd.grad(cost.sum(), q)[0]
                 # Exact quaternion alignment and degenerate rotational Jacobians can
                 # produce a non-finite intermediate gradient on eager MPS/CPU.
@@ -611,20 +733,21 @@ class IKSolver:
                 ).detach()
                 executed_iterations = step
                 if self.config.exit_early:
-                    _, step_pe, step_re, _, step_clearance = self._evaluate_pose_seeds(
+                    _, step_pe, step_re, _, step_clearance, step_self_collision = self._evaluate_pose_seeds(
                         q, goal_tool_poses, True
                     )
                     step_success = (
                         (step_pe.amax(dim=-1) <= self.config.position_tolerance)
                         & (step_re.amax(dim=-1) <= self.config.orientation_tolerance)
                         & (step_clearance >= 0)
+                        & (step_self_collision <= 0)
                     )
                     if (
                         step_success.any(dim=1).to(q.dtype).mean()
                         >= self.config.exit_early_batch_success_threshold
                     ):
                         break
-        cost, position_error_by_link, rotation_error_by_link, goal_index, clearance = (
+        cost, position_error_by_link, rotation_error_by_link, goal_index, clearance, self_collision = (
             self._evaluate_pose_seeds(q, goal_tool_poses, run_optimizer)
         )
         position_error = position_error_by_link.amax(dim=-1)
@@ -634,10 +757,9 @@ class IKSolver:
         solution = torch.gather(q, 1, take[..., None].expand(-1, -1, self.action_dim))
         pe = torch.gather(position_error, 1, take)
         re = torch.gather(rotation_error, 1, take)
-        feasible = torch.gather(clearance >= 0, 1, take)
+        feasible = torch.gather((clearance >= 0) & (self_collision <= 0), 1, take)
         success = (pe <= self.config.position_tolerance) & (re <= self.config.orientation_tolerance)
-        if not self.config.success_requires_convergence:
-            success = feasible
+        success = success & feasible if self.config.success_requires_convergence else feasible
         selected_goal = torch.gather(goal_index, 1, take)
         result = IKSolverResult(
             success, solution, JointState(solution, joint_names=self.joint_names),
@@ -653,6 +775,7 @@ class IKSolver:
                     rotation_error_by_link, 1, take[..., None].expand(-1, -1, len(self.tool_frames))
                 ),
                 "world_clearance": torch.gather(clearance, 1, take),
+                "self_collision_cost": torch.gather(self_collision, 1, take),
                 "iterations": executed_iterations,
                 "backend": "torch-adam+lm" if self.seed_ik_solver is not None else "torch-adam",
                 "cuda_graph": False,
@@ -739,7 +862,25 @@ class IKSolver:
         goal = self._prepare_pose_goal(goal_tool_poses)
         if return_seeds < 1:
             raise ValueError("return_seeds must be positive")
-        batch = goal.batch_size
+        actual_batch = goal.batch_size
+        current_state = _normalize_current_state_batch(
+            current_state, actual_batch, self.action_dim
+        )
+        seed_config = _normalize_seed_batch(
+            seed_config, actual_batch, self.action_dim, self.device_cfg
+        )
+        # Match V2's max-batch solve lifecycle even though the portable eager
+        # backend does not need CUDA graph addresses.  Keeping the padded
+        # SolveState makes a sequence of small and full requests predictable
+        # for callers sharing goal/seed managers, while result values are
+        # restored to the caller's original batch before they escape.
+        batch = actual_batch
+        padded = batch < self.config.max_batch_size
+        if padded:
+            goal, current_state, seed_config = _pad_batch_inputs(
+                goal, current_state, seed_config, batch, self.config.max_batch_size
+            )
+            batch = self.config.max_batch_size
         num_seeds = max(self.config.num_seeds, return_seeds)
         mode = (SolveMode.SINGLE if batch == 1 else
                 (SolveMode.MULTI_ENV if self.config.multi_env else SolveMode.BATCH))
@@ -749,11 +890,15 @@ class IKSolver:
             num_goalset=goal.num_goalset, num_ik_seeds=num_seeds,
             tool_frames=list(goal.tool_frames),
         )
-        return self._solve_impl(
+        result = self._solve_impl(
             solve_state, goal, num_seeds, current_state=current_state,
             seed_config=seed_config, return_seeds=return_seeds,
             run_optimizer=run_optimizer,
         )
+        if padded:
+            result = _slice_batch_result(result, actual_batch)
+        self._last_result = result
+        return result
 
 
 __all__ = ["IKSolver"]
