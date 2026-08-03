@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
+from numbers import Real
+import time
 
 import torch
 
@@ -73,7 +76,9 @@ def jit_cg_shift_buffers(
     output = []
     for value in (prev_grad, prev_step):
         shifted = torch.zeros_like(value)
-        if amount < value.shape[-1]:
+        if amount == 0:
+            shifted.copy_(value)
+        elif amount < value.shape[-1]:
             shifted[..., :-amount] = value[..., amount:]
         output.append(shifted)
     return tuple(output)
@@ -98,14 +103,38 @@ class ConjugateGradientOptCfg(GradientDescentOptCfg):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if not self.line_search_scale or any(value < 0 for value in self.line_search_scale):
-            raise ValueError("line_search_scale must contain nonnegative values")
+        if isinstance(self.line_search_scale, (str, bytes)):
+            raise TypeError("line_search_scale must be a finite sequence of scales")
+        try:
+            self.line_search_scale = [float(value) for value in self.line_search_scale]
+        except TypeError as error:
+            raise TypeError("line_search_scale must be a finite sequence of scales") from error
+        if (
+            not self.line_search_scale
+            or any(not math.isfinite(value) or value < 0.0 for value in self.line_search_scale)
+        ):
+            raise ValueError("line_search_scale must contain finite nonnegative values")
         if self.beta_type is not None:
             self.cg_method = self.beta_type
         self.cg_method = _cg_method(self.cg_method)
-        if self.max_beta < 0:
-            raise ValueError("max_beta must be nonnegative")
+        for name in ("max_beta", "line_search_wolfe_c_1", "line_search_wolfe_c_2", "initial_step_scale"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
+                raise ValueError(f"{name} must be finite")
+        if self.max_beta < 0.0 or self.initial_step_scale < 0.0:
+            raise ValueError("max_beta and initial_step_scale must be nonnegative")
+        if not 0.0 <= self.line_search_wolfe_c_1 <= 1.0:
+            raise ValueError("line_search_wolfe_c_1 must be in [0, 1]")
+        if not 0.0 <= self.line_search_wolfe_c_2 <= 1.0:
+            raise ValueError("line_search_wolfe_c_2 must be in [0, 1]")
+        if not isinstance(self.fix_terminal_action, bool):
+            raise TypeError("fix_terminal_action must be bool")
+        if not isinstance(self.use_cuda_kernel_line_search, bool):
+            raise TypeError("use_cuda_kernel_line_search must be bool")
         self.line_search_type = LineSearchType(self.line_search_type)
+        # A fixed CPU/MPS tensor candidate loop substitutes for the pinned
+        # CUDA kernel.  Keep the public field inspectable but never claim a
+        # CUDA kernel was selected.
         self.use_cuda_kernel_line_search = False
 
 
@@ -125,61 +154,168 @@ class ConjugateGradientOpt(GradientDescentOpt):
             return value.reshape(-1).sum().reshape(1)
         return value.reshape(action.shape[0], -1).sum(-1)
 
-    def _candidate_step(self, action: torch.Tensor, direction: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # Include a zero step, so an invalid/non-improving candidate cannot
-        # make a problem worse.  ``argmin`` supplies deterministic first ties.
+    def _scale_direction(self, direction: torch.Tensor) -> torch.Tensor:
+        """Apply portable V2 step and terminal-action constraints."""
+        output = direction.detach().clone()
+        if self.config.step_scale not in (0.0, 1.0) and self.action_horizon_step_max is not None:
+            limit = torch.as_tensor(
+                self.action_horizon_step_max, device=output.device, dtype=output.dtype
+            )
+            if bool((limit <= 0).any().item()):
+                raise ValueError("action_horizon_step_max entries must be positive")
+            ratio = (output.abs() / limit).reshape(output.shape[0], -1).amax(dim=-1)
+            output = output / ratio.clamp_min(1.0).reshape((-1,) + (1,) * (output.ndim - 1))
+        if self.config.fix_terminal_action and output.shape[-2] > 1:
+            output[:, -1:] = 0.0
+        return output
+
+    def _candidate_step(
+        self,
+        action: torch.Tensor,
+        direction: torch.Tensor,
+        base_cost: torch.Tensor,
+        base_gradient: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Perform a deterministic batched Greedy/Armijo/Wolfe line search."""
         scales = torch.as_tensor(
             [0.0, *self.config.line_search_scale], device=action.device, dtype=action.dtype
         )
         candidates = action[:, None] + scales.reshape(1, -1, *([1] * (action.ndim - 1))) * direction[:, None]
-        flattened = candidates.reshape((-1,) + tuple(action.shape[1:]))
+        flattened = self._apply_action_bounds(
+            candidates.reshape((-1,) + tuple(action.shape[1:]))
+        ).detach().requires_grad_(True)
         costs = self._cost(flattened).reshape(action.shape[0], scales.numel())
+        gradient = (
+            torch.autograd.grad(costs.sum(), flattened, allow_unused=True)[0]
+            if costs.requires_grad
+            else None
+        )
+        if gradient is None:
+            gradient = torch.zeros_like(flattened)
+        candidate_gradient = gradient.reshape_as(candidates)
         selection_cost = torch.where(torch.isfinite(costs), costs, torch.full_like(costs, torch.inf))
-        index = selection_cost.argmin(dim=1)
+        if self.config.line_search_type == LineSearchType.GREEDY:
+            index = selection_cost.argmin(dim=1)
+        else:
+            directional = (base_gradient.reshape(base_gradient.shape[0], -1) * direction.reshape(direction.shape[0], -1)).sum(-1)
+            armijo = torch.isfinite(costs) & (
+                costs <= base_cost[:, None] + float(self.config.line_search_wolfe_c_1) * scales[None] * directional[:, None]
+            )
+            candidate_directional = (
+                candidate_gradient.reshape(action.shape[0], scales.numel(), -1)
+                * direction[:, None].reshape(action.shape[0], 1, -1)
+            ).sum(-1)
+            kind = self.config.line_search_type
+            if kind in (LineSearchType.WOLFE, LineSearchType.APPROX_WOLFE):
+                accepted = armijo & (candidate_directional >= float(self.config.line_search_wolfe_c_2) * directional[:, None])
+            elif kind in (LineSearchType.STRONG_WOLFE, LineSearchType.APPROX_STRONG_WOLFE):
+                accepted = armijo & (candidate_directional.abs() <= float(self.config.line_search_wolfe_c_2) * directional.abs()[:, None])
+            else:  # ARMlJO
+                accepted = armijo
+            # Match V2's deterministic largest-accepted-scale rule.  Zero is
+            # always present as a finite fallback when the base action is valid.
+            ranked = torch.where(accepted, scales[None], torch.full_like(scales[None], -torch.inf))
+            index = ranked.argmax(dim=1)
         gather = index.reshape(-1, 1, *([1] * (action.ndim - 1))).expand(-1, 1, *action.shape[1:])
-        return candidates.gather(1, gather).squeeze(1).detach(), costs.gather(1, index[:, None]).squeeze(1)
+        return (
+            flattened.reshape_as(candidates).gather(1, gather).squeeze(1).detach(),
+            costs.gather(1, index[:, None]).squeeze(1).detach(),
+        )
 
     def optimize(self, seed_action: torch.Tensor) -> torch.Tensor:
         if not self.enabled:
             return seed_action
-        if not isinstance(seed_action, torch.Tensor) or seed_action.ndim < 3:
-            raise ValueError("ConjugateGradientOpt expects [batch, horizon, action_dim] seed_action")
-        x = seed_action.detach()
+        # Upstream's gradient core adopts the batch dimension supplied by a
+        # rollout seed.  Keep that ergonomic path for lightweight callers
+        # that leave ``num_problems`` at its default of one.
+        if isinstance(seed_action, torch.Tensor) and self.config.num_problems != seed_action.shape[0]:
+            if (
+                seed_action.ndim == 3
+                and tuple(seed_action.shape[-2:]) == (self.action_horizon, self.action_dim)
+            ) or (
+                seed_action.ndim == 2
+                and seed_action.shape[-1] == self.action_horizon * self.action_dim
+            ):
+                self.update_num_problems(int(seed_action.shape[0]))
+        original_shape = tuple(seed_action.shape) if isinstance(seed_action, torch.Tensor) else None
+        x = self._apply_action_bounds(self._canonical_action(seed_action)).detach()
+        if self._reinitialized_action is not None:
+            if self._reinitialized_action.shape != x.shape:
+                raise ValueError("reinitialized action shape no longer matches optimizer seed shape")
+            if self._reinitialized_action.device != x.device or self._reinitialized_action.dtype != x.dtype:
+                raise ValueError("reinitialized action must share seed device and dtype")
+            x = self._reinitialized_action
+            self._reinitialized_action = None
         best = x.clone()
         best_cost = self._cost(best)
-        previous_gradient = None
-        previous_direction = None
+        previous_cost = best_cost
+        previous_gradient = self._prev_grad_q if self._prev_grad_q is not None and self._prev_grad_q.shape == x.shape and self._prev_grad_q.device == x.device and self._prev_grad_q.dtype == x.dtype else None
+        previous_direction = (
+            self._prev_step
+            if previous_gradient is not None
+            and self._prev_step is not None
+            and self._prev_step.shape == x.shape
+            and self._prev_step.device == x.device
+            and self._prev_step.dtype == x.dtype
+            else None
+        )
+        if previous_gradient is not None and (
+            not bool(torch.isfinite(previous_gradient).all())
+            or previous_direction is None
+            or not bool(torch.isfinite(previous_direction).all())
+        ):
+            previous_gradient = previous_direction = None
+        self._converged = None
+        self._convergence_count = None
+        self._iteration = 0
         trace: list[torch.Tensor] = []
-        for _ in range(self.config.num_iters):
-            leaf = x.detach().requires_grad_(True)
-            cost = self._cost(leaf)
-            gradient = torch.autograd.grad(
-                torch.where(torch.isfinite(cost), cost, torch.zeros_like(cost)).sum(),
-                leaf,
-                create_graph=torch.is_grad_enabled(),
-                allow_unused=True,
-            )[0]
-            if gradient is None:
-                gradient = torch.zeros_like(leaf)
-            if previous_gradient is None:
-                direction = -gradient
-            else:
-                direction = jit_cg_compute_step_direction(
-                    gradient, previous_gradient, previous_direction, self.config.max_beta, self.config.cg_method
+        start = time.perf_counter()
+        with torch.enable_grad():
+            for iteration in range(self.config.num_iters):
+                leaf = x.detach().requires_grad_(True)
+                cost = self._cost(leaf)
+                scalar = torch.where(torch.isfinite(cost), cost, torch.zeros_like(cost)).sum()
+                gradient = (
+                    torch.autograd.grad(scalar, leaf, create_graph=False, allow_unused=True)[0]
+                    if scalar.requires_grad
+                    else None
                 )
-            x, current_cost = self._candidate_step(leaf.detach(), direction.detach())
-            improved = torch.isfinite(current_cost) & (current_cost < best_cost)
-            best = torch.where(improved.reshape(-1, 1, 1), x, best)
-            best_cost = torch.where(improved, current_cost, best_cost)
-            previous_gradient = gradient.detach()
-            previous_direction = direction.detach()
-            if self.config.store_debug:
-                trace.append(best_cost.detach().clone())
+                if gradient is None:
+                    gradient = torch.zeros_like(leaf)
+                if previous_gradient is None:
+                    direction = -gradient
+                else:
+                    direction = jit_cg_compute_step_direction(
+                        gradient, previous_gradient, previous_direction, self.config.max_beta, self.config.cg_method
+                    )
+                direction = self._scale_direction(direction)
+                x, current_cost = self._candidate_step(leaf.detach(), direction, cost.detach(), gradient.detach())
+                improved = torch.isfinite(current_cost) & (current_cost < best_cost)
+                best = torch.where(improved.reshape(-1, 1, 1), x, best)
+                best_cost = torch.where(improved, current_cost, best_cost)
+                previous_gradient = gradient.detach()
+                previous_direction = direction.detach()
+                if self.config.store_debug:
+                    trace.append(best_cost.detach().clone())
+                self._iteration = iteration + 1
+                if self._should_stop(previous_cost, best_cost, self._iteration):
+                    break
+                previous_cost = best_cost
+        if x.device.type == "mps":
+            torch.mps.synchronize()
+        self.opt_dt = time.perf_counter() - start
         self._prev_grad_q = previous_gradient
         self._prev_step = previous_direction
         self._best_action, self._best_cost = best.clone(), best_cost.clone()
-        self.debug = {"objective": tuple(trace)} if self.config.store_debug else None
-        return best if self.config.return_best_action else x
+        self.debug = (
+            {"objective": tuple(trace), "converged": self._converged.detach().clone() if self._converged is not None else None}
+            if self.config.store_debug else None
+        )
+        current_finite = torch.isfinite(self._cost(x))
+        current = torch.where(current_finite.reshape((-1,) + (1,) * (x.ndim - 1)), x, best)
+        output = best if self.config.return_best_action else current
+        assert original_shape is not None
+        return output.reshape(original_shape)
 
     def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False):
         super().reinitialize(action, mask, clear_optimizer_state, reset_num_iters)
@@ -187,13 +323,34 @@ class ConjugateGradientOpt(GradientDescentOpt):
             self._prev_grad_q = None
             self._prev_step = None
 
+    def reset(self):
+        super().reset()
+        self._prev_grad_q = None
+        self._prev_step = None
+
+    def reset_shape(self):
+        super().reset_shape()
+        self._prev_grad_q = None
+        self._prev_step = None
+
+    def update_num_problems(self, num_problems: int):
+        super().update_num_problems(num_problems)
+        self._prev_grad_q = None
+        self._prev_step = None
+
     def shift(self, shift_steps: int = 0):
         if shift_steps < 0:
             raise ValueError("shift_steps must be nonnegative")
+        super().shift(shift_steps)
         if self._prev_grad_q is not None and self._prev_step is not None:
-            self._prev_grad_q, self._prev_step = jit_cg_shift_buffers(
-                self._prev_grad_q, self._prev_step, shift_steps, self.action_dim
+            shape = self._prev_grad_q.shape
+            gradient, step = jit_cg_shift_buffers(
+                self._prev_grad_q.reshape(shape[0], 1, -1),
+                self._prev_step.reshape(shape[0], 1, -1),
+                shift_steps,
+                self.action_dim,
             )
+            self._prev_grad_q, self._prev_step = gradient.reshape(shape), step.reshape(shape)
         return True
 
     _shift = shift
