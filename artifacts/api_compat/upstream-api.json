@@ -45113,9 +45113,9 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 13,
         "path": "curobo/_src/optim/particle/mppi.py",
-        "resolved_symbols": 22,
+        "resolved_symbols": 23,
         "status": "partial"
       },
       "name": "curobo._src.optim.particle.mppi",
