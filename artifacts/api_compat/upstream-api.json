@@ -29978,10 +29978,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 0,
         "path": "curobo/_src/motion/motion_planner_cfg.py",
-        "resolved_symbols": 19,
-        "status": "partial"
+        "resolved_symbols": 23,
+        "status": "resolved"
       },
       "name": "curobo._src.motion.motion_planner_cfg",
       "path": "curobo/_src/motion/motion_planner_cfg.py",
@@ -73581,9 +73581,9 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 7,
         "path": "curobo/_src/rollout/cost_manager/cost_manager_robot_cfg.py",
-        "resolved_symbols": 4,
+        "resolved_symbols": 5,
         "status": "partial"
       },
       "name": "curobo._src.rollout.cost_manager.cost_manager_robot_cfg",
@@ -81890,9 +81890,9 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
+        "missing_symbols": 14,
         "path": "curobo/_src/solver/solver_ik.py",
-        "resolved_symbols": 13,
+        "resolved_symbols": 14,
         "status": "partial"
       },
       "name": "curobo._src.solver.solver_ik",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 234,
-    "resolved_modules": 127,
+    "partial_modules": 233,
+    "resolved_modules": 128,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 234,
-    "resolved_modules": 127,
+    "partial_modules": 233,
+    "resolved_modules": 128,
     "symbols": 7182
   },
   "upstream": {
