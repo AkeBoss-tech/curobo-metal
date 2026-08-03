@@ -17,3 +17,13 @@ The facade also exposes portable forward dynamics, mass-matrix, and
 semi-implicit rollout helpers for direct adapters.  CUDA packed RNEA buffers,
 raw kernel launch ABI, and paired NVIDIA numerical equivalence remain outside
 this backend's supported contract.
+
+`DynamicsCfg` validates its kinematics/device pairing and finite world gravity
+at construction.  Gravity remains a mutable public three-value list for
+source-compatible workflows; changing it is observed at the next inverse
+dynamics, forward-dynamics, mass-matrix, or rollout call.  The facade also
+exposes the source-visible kinematics metadata (`_fixed_transforms`, packed
+mass/COM and inertia records, tree maps, and level CSR data) as portable
+tensors.  Inertial update helpers keep those metadata views and the compiled
+PyTorch model synchronized.  They do not expose or emulate the CUDA packed
+RNEA launch ABI.

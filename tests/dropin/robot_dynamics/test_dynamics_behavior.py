@@ -39,6 +39,27 @@ def test_dynamics_lifecycle_and_spatial_gravity_convention() -> None:
         dynamics.setup_batch_size(0)
 
 
+def test_config_validation_metadata_aliases_and_live_gravity() -> None:
+    dynamics, cfg = _dynamics()
+    # These fields are consumed by source-compatible callers inspecting the
+    # compiled RNEA layout.  Here they remain meaningful portable tensors.
+    assert dynamics._fixed_transforms.shape == (cfg.kinematics_config.num_links, 4, 4)
+    assert dynamics._link_masses_com.shape == (cfg.kinematics_config.num_links, 4)
+    assert dynamics._link_inertias.shape == (cfg.kinematics_config.num_links, 8)
+    assert dynamics._level_starts[-1].item() == cfg.kinematics_config.num_links
+
+    state = _state(cfg, batch=1, horizon=1)
+    before = dynamics.compute_inverse_dynamics(state)
+    dynamics.config.gravity[:] = [0.0, 0.0, 0.0]
+    after = dynamics.compute_inverse_dynamics(state)
+    assert not torch.allclose(before, after)
+
+    with pytest.raises(ValueError, match="three values"):
+        DynamicsCfg(cfg.kinematics_config, cfg.device_cfg, [0.0, 0.0])
+    with pytest.raises(ValueError, match="finite"):
+        DynamicsCfg(cfg.kinematics_config, cfg.device_cfg, [0.0, float("nan"), 0.0])
+
+
 def test_external_wrenches_broadcast_and_autograd() -> None:
     dynamics, cfg = _dynamics()
     state = _state(cfg)
@@ -89,6 +110,13 @@ def test_forward_mass_rollout_and_mutation_lifecycle() -> None:
     assert rollout.position.shape == (2, 3, cfg.dof)
     dynamics.update_link_inertial("panda_link1", mass=3.0)
     assert dynamics.kinematics_config.get_link_masses_com("panda_link1")[-1].item() == 3.0
+    assert dynamics._link_masses_com[
+        dynamics._get_link_index("panda_link1"), 3
+    ].item() == 3.0
+    dynamics.update_link_inertia("panda_link1", torch.eye(3))
+    assert dynamics._link_inertias[
+        dynamics._get_link_index("panda_link1"), :3
+    ].tolist() == [1.0, 1.0, 1.0]
     with pytest.raises(ValueError, match="at least one"):
         dynamics.update_link_inertial("panda_link1")
     with pytest.raises(ValueError, match="cannot be empty"):

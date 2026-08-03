@@ -69,13 +69,27 @@ class Dynamics:
         self._model = robot_cfg.to_whole_body_model(
             device=config.device_cfg.device, dtype=config.device_cfg.dtype
         )
-        self._model.gravity.copy_(config.device_cfg.to_device(config.gravity))
+        self._model.gravity.copy_(config.get_gravity())
         self._backend_joint_names = tuple(self._model.joint_names)
         self._joint_reorder_indices: torch.Tensor | None = None
         self._joint_reorder_source: tuple[str, ...] | None = None
         self._n_links = self._model.link_count
         self._n_dof = self._model.dof
         self._gravity_spatial = config.get_gravity_spatial()
+        # Keep the source-visible metadata aliases.  They are ordinary
+        # portable tensors, not arguments for a raw CUDA packed-buffer launch,
+        # but consumers use them for introspection and inertial updates.
+        kp = self.kinematics_config
+        self._fixed_transforms = kp.fixed_transforms
+        self._link_masses_com = kp.link_masses_com
+        self._link_inertias = kp.link_inertias
+        self._joint_map_type = kp.joint_map_type
+        self._joint_map = kp.joint_map
+        self._link_map = kp.link_map
+        self._joint_offset_map = kp.joint_offset_map
+        self._level_starts = kp.link_level_offsets
+        self._level_links = kp.link_level_data
+        self._n_levels = kp.n_tree_levels
         self._threads_per_batch = _compute_threads_per_batch(
             self.kinematics_config.max_level_width
         )
@@ -120,6 +134,39 @@ class Dynamics:
     def _ensure_buffer_capacity(self, total_batch: int) -> None:
         if self._tau_buffer is None or self._tau_buffer.shape[0] < total_batch:
             self._allocate_buffers(total_batch)
+
+    def _sync_gravity(self) -> None:
+        """Apply public config mutations before the next eager RNEA call."""
+        gravity = self.config.get_gravity()
+        with torch.no_grad():
+            self._model.gravity.copy_(gravity)
+        self._gravity_spatial = self.config.get_gravity_spatial()
+
+    def _validate_state_channels(
+        self, state: JointState, *, require_acceleration: bool
+    ) -> torch.Size:
+        """Enforce the tensor contract before flattening batch/horizon ranks."""
+        if state.velocity is None:
+            raise ValueError("joint velocity is required")
+        if require_acceleration and state.acceleration is None:
+            raise ValueError("joint acceleration is required")
+        shape = state.position.shape
+        if state.position.ndim not in (1, 2, 3) or shape[-1] != self._model.dof:
+            raise ValueError(f"joint state must end in {self._model.dof} values")
+        channels = (state.position, state.velocity, state.acceleration)
+        for channel in channels:
+            if channel is None:
+                continue
+            if channel.shape != shape:
+                raise ValueError("position, velocity, and acceleration must have identical shapes")
+            if (
+                channel.device.type != self._model.device.type
+                or channel.dtype != self._model.dtype
+            ):
+                raise TypeError("joint state must match the dynamics device and dtype")
+            if not bool(torch.isfinite(channel).all().item()):
+                raise ValueError("joint state must contain only finite values")
+        return shape
 
     def _check_and_reorder_joints(self, joint_state: JointState) -> JointState:
         if joint_state.joint_names is None:
@@ -201,13 +248,8 @@ class Dynamics:
         self, joint_state: JointState, f_ext: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         state = self._check_and_reorder_joints(joint_state)
-        if state.velocity is None or state.acceleration is None:
-            raise ValueError("joint velocity and acceleration are required")
-        shape = state.position.shape
-        if state.position.ndim not in (1, 2, 3) or shape[-1] != self._model.dof:
-            raise ValueError(f"joint state must end in {self._model.dof} values")
-        if state.velocity.shape != shape or state.acceleration.shape != shape:
-            raise ValueError("position, velocity, and acceleration must have identical shapes")
+        shape = self._validate_state_channels(state, require_acceleration=True)
+        self._sync_gravity()
         total_batch = int(np.prod(shape[:-1])) if len(shape) > 1 else 1
         self._ensure_buffer_capacity(total_batch)
         q = state.position.reshape(total_batch, shape[-1])
@@ -218,9 +260,18 @@ class Dynamics:
             tuple(self._model.joint_names),
         )).torque
         if f_ext is not None:
-            result = result - self._external_wrench_torque(
-                q, self._flatten_external_wrenches(f_ext, shape)
-            )
+            flat_wrenches = self._flatten_external_wrenches(f_ext, shape)
+            if flat_wrenches.requires_grad:
+                if (
+                    self._grad_f_ext_buffer is None
+                    or self._grad_f_ext_buffer.shape[0] < total_batch
+                ):
+                    self._grad_f_ext_buffer = torch.zeros(
+                        (total_batch, self._n_links, 6),
+                        device=self._model.device,
+                        dtype=self._model.dtype,
+                    )
+            result = result - self._external_wrench_torque(q, flat_wrenches)
         return result.reshape(shape)
 
     def compute_forward_dynamics(
@@ -228,11 +279,14 @@ class Dynamics:
     ) -> torch.Tensor:
         """Solve generalized accelerations on CPU/MPS for portable consumers."""
         state = self._check_and_reorder_joints(joint_state)
-        if state.velocity is None:
-            raise ValueError("joint velocity is required for forward dynamics")
-        shape = state.position.shape
-        if state.position.ndim not in (1, 2, 3) or torque.shape != shape:
+        shape = self._validate_state_channels(state, require_acceleration=False)
+        if torque.shape != shape:
             raise ValueError("joint state and torque must have matching [.., dof] shapes")
+        if torque.device.type != self._model.device.type or torque.dtype != self._model.dtype:
+            raise TypeError("torque must match the dynamics device and dtype")
+        if not bool(torch.isfinite(torque).all().item()):
+            raise ValueError("torque must contain only finite values")
+        self._sync_gravity()
         total_batch = int(np.prod(shape[:-1])) if len(shape) > 1 else 1
         result = forward_dynamics(
             self._model,
@@ -246,6 +300,16 @@ class Dynamics:
         """Return a differentiable mass matrix for direct portable adapters."""
         if joint_position.ndim not in (1, 2):
             raise ValueError("joint_position must have shape [dof] or [batch, dof]")
+        if joint_position.shape[-1] != self._n_dof:
+            raise ValueError(f"joint_position must end in {self._n_dof} values")
+        if (
+            joint_position.device.type != self._model.device.type
+            or joint_position.dtype != self._model.dtype
+        ):
+            raise TypeError("joint_position must match the dynamics device and dtype")
+        if not bool(torch.isfinite(joint_position).all().item()):
+            raise ValueError("joint_position must contain only finite values")
+        self._sync_gravity()
         return mass_matrix(self._model, joint_position)
 
     def rollout(
@@ -253,6 +317,8 @@ class Dynamics:
     ):
         """Semi-implicit Euler rollout; CUDA rollout kernels are not emulated."""
         state = self._check_and_reorder_joints(initial_state)
+        self._validate_state_channels(state, require_acceleration=False)
+        self._sync_gravity()
         return rollout_dynamics(
             self._model,
             WholeBodyState(state.position, state.velocity, state.acceleration, tuple(self._model.joint_names)),
@@ -272,6 +338,7 @@ class Dynamics:
         index = self._get_link_index(link_name)
         self._model.mass[index] = mass
         self.kinematics_config.update_link_mass(link_name, mass)
+        self._link_masses_com = self.kinematics_config.link_masses_com
 
     def update_link_com(self, link_name: str, com: torch.Tensor) -> None:
         value = torch.as_tensor(com, device=self._model.device, dtype=self._model.dtype)
@@ -279,6 +346,7 @@ class Dynamics:
             raise ValueError("com must have shape [3]")
         self._model.com[self._get_link_index(link_name)].copy_(value)
         self.kinematics_config.update_link_com(link_name, value)
+        self._link_masses_com = self.kinematics_config.link_masses_com
 
     def update_link_inertia(self, link_name: str, inertia: torch.Tensor) -> None:
         value = torch.as_tensor(inertia, device=self._model.device, dtype=self._model.dtype)
@@ -292,6 +360,7 @@ class Dynamics:
             ))
         self._model.inertia[self._get_link_index(link_name)].copy_(value)
         self.kinematics_config.update_link_inertia(link_name, value)
+        self._link_inertias = self.kinematics_config.link_inertias
 
     def update_link_inertial(
         self,
