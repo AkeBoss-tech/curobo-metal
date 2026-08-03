@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
 
+import torch
+
 from curobo._src.geom.data.data_cuboid import CuboidData
 from curobo._src.geom.data.data_mesh import MeshData
 from curobo._src.geom.data.data_voxel import VoxelData
@@ -46,17 +48,23 @@ class SceneData:
     ) -> "SceneData":
         if num_envs < 1:
             raise ValueError("num_envs must be positive")
+        if cuboid_cache is not None and cuboid_cache < 0:
+            raise ValueError("cuboid_cache must be non-negative")
+        if mesh_cache is not None and mesh_cache < 0:
+            raise ValueError("mesh_cache must be non-negative")
         cuboids = CuboidData.create_cache(cuboid_cache, num_envs, device_cfg) if cuboid_cache else None
         meshes = MeshData.create_cache(mesh_cache, num_envs, device_cfg, mesh_max_dist) if mesh_cache else None
         voxels = None
         if voxel_cache is not None:
+            if not isinstance(voxel_cache, dict):
+                raise TypeError("voxel_cache must be a dictionary")
             dims = voxel_cache.get("dims", [1.0, 1.0, 1.0])
             size = voxel_cache.get("voxel_size", 0.02)
-            count = 1
-            for dim in dims:
-                count *= round(float(dim) / float(size))
+            layers = int(voxel_cache.get("layers", 1))
             voxels = VoxelData.create_cache(
-                voxel_cache.get("layers", 1), num_envs, device_cfg, max_voxels=max(1, count)
+                layers, num_envs, device_cfg, grid_dims=dims, voxel_size=size,
+                max_esdf_distance=float(voxel_cache.get("max_esdf_distance", 100.0)),
+                max_voxels=voxel_cache.get("max_voxels"),
             )
         return cls(cuboids, meshes, voxels, num_envs, device_cfg)
 
@@ -74,7 +82,14 @@ class SceneData:
         voxel_spec = voxel_cache
         if voxel_spec is None and scene_cfg.voxel:
             first = scene_cfg.voxel[0]
-            voxel_spec = {"layers": len(scene_cfg.voxel), "dims": first.dims, "voxel_size": first.voxel_size}
+            voxel_spec = {
+                "layers": len(scene_cfg.voxel), "dims": first.dims, "voxel_size": first.voxel_size,
+                "max_voxels": max(
+                    int(grid.feature_tensor.numel()) if grid.feature_tensor is not None
+                    else int(torch.tensor(grid.get_grid_shape()[0]).prod().item())
+                    for grid in scene_cfg.voxel
+                ),
+            }
         result = cls.create_cache(num_envs, device_cfg, cuboid_capacity, mesh_capacity, mesh_max_dist, voxel_spec)
         result.load_from_scene_cfg(scene_cfg, env_idx, store_reference=True)
         return result
@@ -94,7 +109,16 @@ class SceneData:
             grids = [grid for scene in scene_cfg_list for grid in scene.voxel]
             if grids:
                 first = grids[0]
-                voxel_spec = {"layers": max(len(scene.voxel) for scene in scene_cfg_list), "dims": first.dims, "voxel_size": first.voxel_size}
+                voxel_spec = {
+                    "layers": max(len(scene.voxel) for scene in scene_cfg_list),
+                    "dims": first.dims,
+                    "voxel_size": first.voxel_size,
+                    "max_voxels": max(
+                        int(grid.feature_tensor.numel()) if grid.feature_tensor is not None
+                        else int(torch.tensor(grid.get_grid_shape()[0]).prod().item())
+                        for grid in grids
+                    ),
+                }
         result = cls.create_cache(len(scene_cfg_list), device_cfg, cuboid_capacity, mesh_capacity, mesh_max_dist, voxel_spec)
         for env_idx, scene in enumerate(scene_cfg_list):
             result.load_from_scene_cfg(scene, env_idx, store_reference=False)
@@ -108,6 +132,10 @@ class SceneData:
         return cls.from_scene_cfg(scene_model, device_cfg)
 
     def add_obstacle(self, obstacle: Obstacle, env_idx: int = 0) -> int:
+        if not 0 <= int(env_idx) < self.num_envs:
+            raise IndexError("env_idx is outside num_envs")
+        if self.check_obstacle_exists(obstacle.name, env_idx):
+            raise ValueError(f"obstacle already exists with name: {obstacle.name!r}")
         if isinstance(obstacle, Cuboid):
             if self.cuboids is None:
                 raise ValueError("Cuboid cache is not initialized")
@@ -119,8 +147,7 @@ class SceneData:
         if isinstance(obstacle, VoxelGrid):
             if self.voxels is None:
                 raise ValueError("Voxel cache is not initialized")
-            self.voxels.update_data(obstacle, env_idx)
-            return self.voxels.get_idx(obstacle.name, env_idx)
+            return self.voxels.add(obstacle, env_idx)
         raise NotImplementedError(
             f"{type(obstacle).__name__} is not a native SceneData collision layer; "
             "convert it with SceneCfg.get_collision_check_world()"
@@ -149,6 +176,11 @@ class SceneData:
             data.clear(env_idx)
 
     def load_from_scene_cfg(self, scene_cfg: SceneCfg, env_idx: int = 0, store_reference: bool = True) -> None:
+        if not 0 <= int(env_idx) < self.num_envs:
+            raise IndexError("env_idx is outside num_envs")
+        names = [obstacle.name for obstacle in (*scene_cfg.cuboid, *scene_cfg.mesh, *scene_cfg.voxel)]
+        if len(names) != len(set(names)):
+            raise ValueError("scene obstacle names must be unique across collision layers")
         if store_reference:
             self.scene_model = scene_cfg
         self.clear(env_idx)
