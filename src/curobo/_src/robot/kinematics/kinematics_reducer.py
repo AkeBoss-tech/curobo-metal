@@ -281,13 +281,13 @@ class KinematicsReducer:
         if isinstance(value, torch.Tensor):
             if value.ndim == 0:
                 return value.clone()
-            if value.ndim != 1 or value.numel() != source_dof:
-                raise ValueError(f"{field} must be scalar or contain one value per source joint")
+            if value.ndim != 1 or value.numel() < source_dof:
+                raise ValueError(f"{field} must be scalar or contain at least one value per source joint")
             index = torch.tensor(indices, dtype=torch.long, device=value.device)
             return value.index_select(0, index).clone()
         if isinstance(value, (list, tuple)):
-            if len(value) != source_dof:
-                raise ValueError(f"{field} must contain one value per source joint")
+            if len(value) < source_dof:
+                raise ValueError(f"{field} must contain at least one value per source joint")
             subset = [value[index] for index in indices]
             return tuple(subset) if isinstance(value, tuple) else subset
         # Scalar limits/scales describe all DOFs and are valid unchanged.

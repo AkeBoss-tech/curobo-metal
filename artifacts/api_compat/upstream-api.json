@@ -65983,10 +65983,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/robot_segmenter.py",
-        "resolved_symbols": 19,
-        "status": "partial"
+        "resolved_symbols": 23,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.robot_segmenter",
       "path": "curobo/_src/perception/robot_segmenter.py",
@@ -69107,9 +69107,9 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
+        "missing_symbols": 2,
         "path": "curobo/_src/robot/kinematics/kinematics_reducer.py",
-        "resolved_symbols": 9,
+        "resolved_symbols": 10,
         "status": "partial"
       },
       "name": "curobo._src.robot.kinematics.kinematics_reducer",
@@ -95853,9 +95853,9 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 9,
         "path": "curobo/_src/types/robot.py",
-        "resolved_symbols": 5,
+        "resolved_symbols": 6,
         "status": "partial"
       },
       "name": "curobo._src.types.robot",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 224,
-    "resolved_modules": 137,
+    "partial_modules": 223,
+    "resolved_modules": 138,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
     "missing_modules": 225,
     "modules": 586,
-    "partial_modules": 224,
-    "resolved_modules": 137,
+    "partial_modules": 223,
+    "resolved_modules": 138,
     "symbols": 7182
   },
   "upstream": {
