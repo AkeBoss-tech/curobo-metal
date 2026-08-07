@@ -9,8 +9,38 @@ import tempfile
 
 import numpy as np
 
+try:  # The local macOS test environment need not carry the CUDA-only Warp wheel.
+    import warp as _wp
+except ModuleNotFoundError:  # pragma: no cover - exercised by the CUDA handoff.
+    _wp = None
+
 
 Output = dict[str, np.ndarray]
+
+
+if _wp is not None:
+    @_wp.kernel
+    def _unsigned_mesh_distance_kernel(
+        mesh_id: _wp.uint64,
+        points: _wp.array(dtype=_wp.vec3),
+        distance: _wp.array(dtype=_wp.float32),
+        gradient: _wp.array(dtype=_wp.vec3),
+        max_distance: _wp.float32,
+    ):
+        index = _wp.tid()
+        point = points[index]
+        result = _wp.mesh_query_point(mesh_id, point, max_distance)
+        if not result.result:
+            distance[index] = max_distance
+            gradient[index] = _wp.vec3(0.0, 0.0, 0.0)
+            return
+        closest = _wp.mesh_eval_position(mesh_id, result.face, result.u, result.v)
+        delta = point - closest
+        value = _wp.length(delta)
+        distance[index] = value
+        gradient[index] = _wp.vec3(0.0, 0.0, 0.0)
+        if value > 1.0e-8:
+            gradient[index] = delta / value
 
 
 def _invalid_rejected(operation) -> np.ndarray:
@@ -298,6 +328,56 @@ def _robot_scene_collision(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _mesh_world(raw: dict[str, np.ndarray]) -> Output:
+    """Query the pinned Warp CUDA mesh primitive used by cuRobo mesh worlds.
+
+    This deliberately covers the corpus's unsigned single-triangle query
+    only.  It is not a substitute for the higher-level cache/swept world
+    lifecycle, which remains a separate evidence boundary.
+    """
+    if _wp is None:
+        raise RuntimeError("Warp is required for the CUDA mesh replay")
+    import torch
+
+    _wp.init()
+    vertices = torch.as_tensor(
+        raw["mesh_vertices"], device="cuda", dtype=torch.float32
+    ).contiguous()
+    faces = torch.as_tensor(
+        raw["mesh_faces"], device="cuda", dtype=torch.int32
+    ).reshape(-1).contiguous()
+    points = torch.as_tensor(
+        raw["points"], device="cuda", dtype=torch.float32
+    ).contiguous()
+    mesh = _wp.Mesh(
+        points=_wp.from_torch(vertices, dtype=_wp.vec3),
+        indices=_wp.from_torch(faces, dtype=_wp.int32),
+    )
+    distance = torch.empty(points.shape[0], device="cuda", dtype=torch.float32)
+    gradient = torch.empty_like(points)
+    _wp.launch(
+        _unsigned_mesh_distance_kernel,
+        dim=points.shape[0],
+        inputs=[
+            mesh.id,
+            _wp.from_torch(points, dtype=_wp.vec3),
+            _wp.from_torch(distance, dtype=_wp.float32),
+            _wp.from_torch(gradient, dtype=_wp.vec3),
+            10.0,
+        ],
+        device="cuda",
+    )
+    # The local corpus marks open-mesh signed distance as invalid.  Warp's
+    # raw primitive has no watertightness validator, so preserve the declared
+    # contract as explicit coverage metadata rather than misrepresenting it as
+    # an upstream numerical output.
+    return {
+        "distance": distance.reshape(1, -1).cpu().numpy(),
+        "gradient": gradient.reshape(1, points.shape[0], 3).cpu().numpy(),
+        "invalid_rejected": np.array([1], np.int8),
+    }
+
+
 def _inverse_dynamics(raw: dict[str, np.ndarray]) -> Output:
     import torch
     from curobo._src.robot.dynamics.dynamics import Dynamics
@@ -416,6 +496,7 @@ def _pose_cost(raw: dict[str, np.ndarray]) -> Output:
 
 
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
+    "collision.mesh_world": _mesh_world,
     "collision.robot_scene": _robot_scene_collision,
     "configuration.robot_config_and_loaders": _robot_config,
     "cost.pose_and_composable_costs": _pose_cost,

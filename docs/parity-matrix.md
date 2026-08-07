@@ -47,14 +47,15 @@ evidence issue.
 On 2026-08-07, the checked-in handoff ran against the exact upstream revision
 on an NVIDIA RTX A4500 (CUDA 12.6, PyTorch 2.7.1+cu126). The resulting hashed
 [paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-07.json)
-passes all 10 currently asset-independent CUDA adapters: configuration,
+passes all 11 currently asset-independent CUDA adapters: configuration,
 `DeviceCfg`, `Pose`, `JointState`, solver results, forward kinematics,
-geometric Jacobians, robot-scene sphere collision, position pose cost, and
-inverse dynamics. The last category includes torque plus first-order VJPs for
-position, velocity, and acceleration.
+geometric Jacobians, robot-scene sphere collision, a bounded unsigned Warp
+mesh query, position pose cost, and inverse dynamics. The last category
+includes torque plus first-order VJPs for position, velocity, and
+acceleration.
 
 This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
-serialized probes only. The remaining nine registry cases still need genuine
+serialized probes only. The remaining eight registry cases still need genuine
 upstream adapters and broader batch/layout/world/solver coverage, so the
 inventory correctly remains evidence-blocked and this does **not** make a
 full drop-in claim.

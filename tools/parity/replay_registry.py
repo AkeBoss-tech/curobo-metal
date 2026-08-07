@@ -34,7 +34,7 @@ _ROWS = [
     ("kinematics.forward_kinematics", "forward_kinematics", 8e-5, 8e-5, "fk", "wrong_dof", "empty_batch", "real compiled CUDA FK adapter available for the license-clean serialized robot"),
     ("kinematics.geometric_jacobian", "geometric_jacobian", 1e-4, 1e-5, "fk", "invalid_link", "noncontiguous_batch", "real compiled CUDA geometric-Jacobian adapter available for the license-clean serialized robot"),
     ("collision.robot_scene", "robot_scene_collision", 2e-5, 2e-6, "sphere", "bad_pair_index", "tangent_spheres", "real asset-independent CUDA self-collision adapter available; execution requires an NVIDIA runtime"),
-    ("collision.mesh_world", "mesh_world", 2e-5, 2e-6, "mesh", "non_watertight_signed", "triangle_face", "requires upstream Warp/CUDA mesh acceleration structures; no portable clean-runner constructor"),
+    ("collision.mesh_world", "mesh_world", 2e-5, 2e-6, "mesh", "non_watertight_signed", "triangle_face", "real pinned Warp CUDA mesh query adapter available for the serialized unsigned triangle corpus"),
     ("collision.voxel_esdf_query", "voxel_esdf", 3e-5, 3e-6, "voxel", "bad_environment", "grid_boundary", "requires upstream CUDA voxel cache allocation and collision buffers"),
     ("cost.pose_and_composable_costs", "pose_costs", 2e-5, 2e-6, "cost", "invalid_pose_cost_input", "zero_pose_error", "real asset-independent upstream ToolPoseCost CUDA adapter available for position cost and gradient replay"),
     ("optim.particle_evolution", "particle_evolution", 2e-4, 2e-5, "particle", "bad_covariance", "deterministic_seed", "upstream RNG stream and optimizer construction require CUDA rollout objects"),

@@ -17,6 +17,6 @@
     "run parity test suite",
     "build and inspect wheel",
     "install wheel in clean macOS virtual environment",
-    "extend paired CUDA/Metal replay coverage beyond the 10 checked-in bounded probes before claiming numerical parity"
+    "extend paired CUDA/Metal replay coverage beyond the 11 checked-in bounded probes before claiming numerical parity"
   ]
 }

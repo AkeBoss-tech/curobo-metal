@@ -58,6 +58,7 @@ def test_inputs_are_capability_owned_and_safe_npz():
 
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
     assert set(ADAPTERS) == {
+        "collision.mesh_world",
         "collision.robot_scene",
         "configuration.robot_config_and_loaders",
         "cost.pose_and_composable_costs",
