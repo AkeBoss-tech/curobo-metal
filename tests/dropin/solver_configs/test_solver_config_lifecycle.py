@@ -64,6 +64,7 @@ def test_trajopt_factory_and_legacy_direct_constructor_have_coherent_core():
     )
     assert cfg.max_iterations == 7
     assert cfg.optimizer_name == "lbfgs"
+    assert cfg.action_horizon == 16
     assert cfg.requested_use_cuda_graph and not cfg.use_cuda_graph
     assert cfg.clone(action_horizon=8).action_horizon == 8
 

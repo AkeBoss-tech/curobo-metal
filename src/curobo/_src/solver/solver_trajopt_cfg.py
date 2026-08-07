@@ -167,7 +167,11 @@ class TrajOptSolverCfg:
     interpolation_dt: float = 0.025
     interpolation_type: TrajInterpolationType = TrajInterpolationType.BSPLINE_KNOTS_CUDA
     interpolation_buffer_size: int = 1000
-    action_horizon: int = 32
+    # Pinned V2's default Franka TrajOpt configuration uses 16 B-spline
+    # control knots.  The portable solver emits the action/control sequence
+    # as ``result.solution``, so its default must retain that public layout
+    # rather than exposing an unrelated 32-sample interpolation horizon.
+    action_horizon: int = 16
     max_iterations: int = 200
     optimizer_name: str = "adam"
     # Kept for source compatibility with early portable direct constructors.
