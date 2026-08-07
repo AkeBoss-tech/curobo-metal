@@ -25,6 +25,7 @@ from curobo._src.solver.solver_trajopt_result import TrajOptSolverResult
 from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_joint_trajectory_ops import get_joint_state_at_horizon_index
 from curobo._src.types.pose import Pose
+from curobo._src.types.control_space import ControlSpace
 from curobo._src.types.tool_pose import GoalToolPose, ToolPose
 from curobo._src.util.trajectory import TrajInterpolationType
 from curobo._src.util.logging import log_and_raise
@@ -360,6 +361,17 @@ class MotionPlanner:
         # clamped-uniform B-spline basis rather than treating controls as a
         # piecewise-linear trajectory.
         sparse = result.js_solution
+        spline_valid_prefix = None
+        if self.config.trajopt_solver_config.interpolation_type == TrajInterpolationType.BSPLINE_KNOTS_CUDA:
+            # V2's B-spline CUDA interpolation reports the number of logical
+            # spline knots (including its two endpoint samples) as the valid
+            # prefix in its fixed interpolation buffer.  The portable solver
+            # expands the same controls with composed Torch, so carry this
+            # public buffer contract forward instead of exposing its internal
+            # 16-control fallback length.
+            spline_valid_prefix = ControlSpace.spline_total_knots(
+                ControlSpace.BSPLINE_3, sparse.position.shape[-2]
+            ) + 1
         public_horizon = 81
         if sparse.position.shape[-2] != public_horizon:
             from curobo_metal.ops.trajectory.dynamics_aware import bspline_matrices
@@ -417,6 +429,12 @@ class MotionPlanner:
                 dt=with_seed_axis(interpolated.dt),
             )
             last = with_seed_axis(last)
+        if spline_valid_prefix is not None:
+            if spline_valid_prefix > capacity:
+                raise ValueError(
+                    "interpolation_buffer_size is too small for the configured B-spline prefix"
+                )
+            last = torch.full_like(last, spline_valid_prefix)
         result.interpolated_trajectory = interpolated
         result.interpolated_last_tstep = last
         return result
