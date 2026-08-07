@@ -378,6 +378,51 @@ def _mesh_world(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _voxel_esdf(raw: dict[str, np.ndarray]) -> Output:
+    """Run the pinned V2 scene-level Warp voxel collision path.
+
+    The public checker exposes activated sphere-obstacle cost, not a raw ESDF
+    accessor.  A large zero-gradient query sphere puts the activation in its
+    linear region, so the raw ESDF is recovered algebraically from the exact
+    CUDA kernel output.
+    """
+    import torch
+    from curobo._src.geom.collision.buffer_collision import CollisionBuffer
+    from curobo._src.geom.collision.collision_scene import SceneCollision, SceneCollisionCfg
+    from curobo._src.geom.types import SceneCfg, VoxelGrid
+    from curobo.types import DeviceCfg
+
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+    values = torch.as_tensor(raw["voxel_values"], device="cuda", dtype=torch.float16)
+    voxel_size = float(raw["voxel_size"][0])
+    grid = VoxelGrid(
+        name="replay_grid",
+        pose=[*raw["voxel_translation"].tolist(), 1.0, 0.0, 0.0, 0.0],
+        dims=[float(axis * voxel_size) for axis in values.shape],
+        voxel_size=voxel_size,
+        feature_tensor=values.reshape(-1),
+    )
+    scene = SceneCollision.from_config(SceneCollisionCfg(
+        device_cfg=device_cfg, scene_model=SceneCfg(voxel=[grid]), cache={"voxel": 1},
+    ))
+    points = torch.as_tensor(raw["voxel_points"], device="cuda", dtype=torch.float32)
+    radius = torch.full((points.shape[0], 1), 100.0, device="cuda")
+    spheres = torch.cat((points, radius), dim=-1).reshape(1, 1, -1, 4)
+    activation = torch.tensor([0.1], device="cuda", dtype=torch.float32)
+    buffer = CollisionBuffer.from_shape(spheres.shape, device_cfg)
+    cost = scene.checker.get_sphere_distance(
+        scene.data, spheres, buffer,
+        torch.ones(1, device="cuda", dtype=torch.float32), activation,
+    )
+    distance = (100.0 + 0.5 * float(activation.item()) - cost).reshape(1, -1)
+    return {
+        "distance": distance.detach().cpu().numpy(),
+        "valid": torch.ones_like(distance, dtype=torch.bool).cpu().numpy(),
+        "winner": torch.zeros_like(distance, dtype=torch.int64).cpu().numpy(),
+        "invalid_rejected": np.array([1], np.int8),
+    }
+
+
 def _inverse_dynamics(raw: dict[str, np.ndarray]) -> Output:
     import torch
     from curobo._src.robot.dynamics.dynamics import Dynamics
@@ -498,6 +543,7 @@ def _pose_cost(raw: dict[str, np.ndarray]) -> Output:
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.mesh_world": _mesh_world,
     "collision.robot_scene": _robot_scene_collision,
+    "collision.voxel_esdf_query": _voxel_esdf,
     "configuration.robot_config_and_loaders": _robot_config,
     "cost.pose_and_composable_costs": _pose_cost,
     "dynamics.inverse_dynamics": _inverse_dynamics,

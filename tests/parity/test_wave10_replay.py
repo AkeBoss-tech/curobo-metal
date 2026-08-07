@@ -60,6 +60,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
     assert set(ADAPTERS) == {
         "collision.mesh_world",
         "collision.robot_scene",
+        "collision.voxel_esdf_query",
         "configuration.robot_config_and_loaders",
         "cost.pose_and_composable_costs",
         "dynamics.inverse_dynamics",
