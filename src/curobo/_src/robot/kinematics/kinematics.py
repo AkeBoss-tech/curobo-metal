@@ -279,24 +279,23 @@ class Kinematics:
         return full_js.reorder(self.joint_names)
 
     def get_full_js(self, active_js: JointState) -> JointState:
-        """Return a named active state in the model's deterministic order.
-
-        This portable model already compiles locked joints out of the active
-        chain.  Consequently a "full" state is the reordered active state;
-        callers needing nonzero locked-revolute reconstruction retain the
-        documented unsupported boundary in :class:`KinematicsCfg`.
-        """
+        """Expand an active state with its configured locked joint values."""
         if not isinstance(active_js, JointState):
             raise TypeError("active_js must be a JointState")
         if active_js.joint_names is None:
-            return JointState(
+            active_js = JointState(
                 position=active_js.position,
                 velocity=active_js.velocity,
                 acceleration=active_js.acceleration,
                 jerk=active_js.jerk,
                 joint_names=list(self.joint_names),
             )
-        return active_js.reorder(self.joint_names)
+        else:
+            active_js = active_js.reorder(self.joint_names)
+        locked = self.lock_jointstate
+        if locked is None or not locked.joint_names:
+            return active_js
+        return active_js.append_joints(locked)
 
     def get_mimic_js(self, joint_state: JointState) -> JointState:
         """Expose the compiled state for chains whose mimic joints are reduced."""

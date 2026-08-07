@@ -47,8 +47,8 @@ def test_motion_planner_cspace_and_batch_facade_execute():
     goal = JointState.from_position(start.position + 0.01, planner.joint_names)
     result = planner.plan_cspace(goal, start, max_attempts=1)
     assert result.success.tolist() == [[True]]
-    assert result.js_solution.position.shape == (1, 1, 16, 7)
-    assert result.interpolated_trajectory.position.shape[0] == 1
+    assert result.js_solution.position.shape == (1, 1, 16, 9)
+    assert result.interpolated_trajectory.position.shape == (1, 1000, 9)
 
     batch = BatchMotionPlanner(planner.config)
     starts = JointState.from_position(

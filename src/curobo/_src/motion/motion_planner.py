@@ -352,6 +352,27 @@ class MotionPlanner:
             self.config.trajopt_solver_config.interpolation_dt,
         )
         interpolated, last = self.trajopt_solver.get_interpolated_trajectory(optimized)
+        # Solver internals optimize only active joints, but V2's public
+        # MotionPlanner result restores configured locked joints (Franka's
+        # fingers) in both sparse and interpolated trajectories.
+        result.js_solution = self.trajopt_solver.get_full_js(result.js_solution)
+        result.solution = result.js_solution.position
+        interpolated = self.trajopt_solver.get_full_js(interpolated)
+        # V2 publishes a fixed-capacity interpolation buffer.  Preserve the
+        # valid prefix and deterministically hold its final state in unused
+        # capacity, while ``interpolated_last_tstep`` identifies the prefix.
+        capacity = self.config.trajopt_solver_config.interpolation_buffer_size
+        if interpolated.position.shape[-2] < capacity:
+            count = capacity - interpolated.position.shape[-2]
+            def extend(value):
+                if value is None:
+                    return None
+                return torch.cat((value, value[..., -1:, :].expand(*value.shape[:-2], count, value.shape[-1])), dim=-2)
+            interpolated = JointState(
+                extend(interpolated.position), extend(interpolated.velocity),
+                extend(interpolated.acceleration), interpolated.joint_names,
+                extend(interpolated.jerk), dt=interpolated.dt,
+            )
         result.interpolated_trajectory = interpolated
         result.interpolated_last_tstep = last
         return result

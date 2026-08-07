@@ -556,9 +556,14 @@ class TrajOptSolver:
         return full_js.reorder(self.joint_names)
 
     def get_full_js(self, active_js):
-        # This portable facade plans in the complete non-fixed c-space.  There
-        # are no omitted mimic coordinates to reconstruct after reduction.
-        return self.get_active_js(active_js)
+        from curobo._src.robot.kinematics.kinematics import Kinematics
+        from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
+        from curobo._src.robot.types.kinematics_params import KinematicsParams
+        params = KinematicsParams(self.config.robot_config.kinematics)
+        model = Kinematics(KinematicsCfg(
+            self.device_cfg, self.config.robot_config.kinematics.tool_frames, params
+        ))
+        return model.get_full_js(active_js)
 
     def sample_configs(self, num_samples, rejection_ratio=10):
         if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples < 1:

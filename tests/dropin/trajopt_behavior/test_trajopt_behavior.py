@@ -120,7 +120,9 @@ def test_seed_state_reordering_sampling_and_reset_are_deterministic(tmp_path):
     full = JointState.from_position(values.flip(-1), reverse_names)
     active = solver.get_active_js(full)
     torch.testing.assert_close(active.position, values)
-    torch.testing.assert_close(solver.get_full_js(active).position, values)
+    restored = solver.get_full_js(active)
+    torch.testing.assert_close(restored.position[..., :7], values)
+    torch.testing.assert_close(restored.position[..., 7:], torch.full((1, 2), 0.04))
 
     first = solver.sample_configs(4)
     solver.reset_seed()
