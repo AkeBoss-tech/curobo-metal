@@ -355,7 +355,27 @@ class MotionPlanner:
         # Solver internals optimize only active joints, but V2's public
         # MotionPlanner result restores configured locked joints (Franka's
         # fingers) in both sparse and interpolated trajectories.
-        result.js_solution = self.trajopt_solver.get_full_js(result.js_solution)
+        # Pinned V2 expands its 16 B-spline controls to the 81-state rollout
+        # horizon before publishing a MotionPlanner result.  The portable
+        # solver keeps controls internally; linearly materialize the public
+        # rollout sequence with endpoint preservation at this boundary.
+        sparse = result.js_solution
+        public_horizon = 81
+        if sparse.position.shape[-2] != public_horizon:
+            def resample(value):
+                if value is None:
+                    return None
+                shape = value.shape
+                flat = value.reshape(-1, shape[-2], shape[-1]).transpose(1, 2)
+                return torch.nn.functional.interpolate(
+                    flat, size=public_horizon, mode="linear", align_corners=True
+                ).transpose(1, 2).reshape(*shape[:-2], public_horizon, shape[-1])
+            sparse = JointState(
+                resample(sparse.position), resample(sparse.velocity),
+                resample(sparse.acceleration), sparse.joint_names,
+                resample(sparse.jerk), dt=sparse.dt,
+            )
+        result.js_solution = self.trajopt_solver.get_full_js(sparse)
         result.solution = result.js_solution.position
         interpolated = self.trajopt_solver.get_full_js(interpolated)
         # V2 publishes a fixed-capacity interpolation buffer.  Preserve the
