@@ -459,6 +459,37 @@ def _inverse_kinematics(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _trajectory_optimization(raw: dict[str, np.ndarray]) -> Output:
+    """Run pinned V2 C-space TrajOpt and compare solver-independent outcome."""
+    import torch
+    from curobo._src.solver.solver_trajopt import TrajOptSolver
+    from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
+    from curobo._src.state.state_joint import JointState
+    from curobo._src.types.device_cfg import DeviceCfg
+
+    cfg = TrajOptSolverCfg.create(
+        "franka.yml", device_cfg=DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+        num_seeds=2, use_cuda_graph=False, load_collision_spheres=False,
+        self_collision_check=False,
+    )
+    solver = TrajOptSolver(cfg)
+    start = solver.default_joint_state.position
+    goal = start + torch.tensor([0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device="cuda")
+    result = solver.solve_cspace(
+        JointState.from_position(goal[None], solver.joint_names),
+        JointState.from_position(start[None], solver.joint_names),
+        return_seeds=1, finetune_attempts=0,
+    )
+    return {
+        "success": result.success.detach().cpu().numpy(),
+        "solution_shape": np.asarray(result.solution.shape, dtype=np.int64),
+        "status_utf8": np.frombuffer(b"success", np.uint8),
+        "endpoint_converged": (
+            (result.solution[:, :, -1] - goal).abs().amax(dim=-1) <= 1e-5
+        ).detach().cpu().numpy(),
+    }
+
+
 def _inverse_dynamics(raw: dict[str, np.ndarray]) -> Output:
     import torch
     from curobo._src.robot.dynamics.dynamics import Dynamics
@@ -583,6 +614,7 @@ ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "configuration.robot_config_and_loaders": _robot_config,
     "cost.pose_and_composable_costs": _pose_cost,
     "ik.inverse_kinematics": _inverse_kinematics,
+    "trajectory.trajectory_optimization": _trajectory_optimization,
     "dynamics.inverse_dynamics": _inverse_dynamics,
     "kinematics.forward_kinematics": _forward_kinematics,
     "kinematics.geometric_jacobian": _geometric_jacobian,

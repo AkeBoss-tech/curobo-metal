@@ -33,7 +33,7 @@
   "operation": "trajectory_optimization",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "d4da110a450b5dacf17217f84476e55b5d6e018c74a94d7c0a7fba03d77470b2"
+    "sha256": "69e36dfbec25ecd0ca2e0d94ca0db165f5d292896cad275fc489ea802fc5c1fa"
   },
   "runtime": {
     "python": "3.13.9",

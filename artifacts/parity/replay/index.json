@@ -73,7 +73,7 @@
     {
       "capability": "trajectory.trajectory_optimization",
       "manifest": "trajectory.trajectory_optimization/metal-manifest.json",
-      "manifest_sha256": "091767efbb3dbb5a978c54ad95695cba93e6a2ea60196811d9836707c80c16b4"
+      "manifest_sha256": "64be65e55617f01797ad84934157cb14f210057f3e4b7f41a9920b92725bf047"
     },
     {
       "capability": "trajectory.dynamics_aware_bspline",

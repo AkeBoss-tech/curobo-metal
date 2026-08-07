@@ -1,0 +1,8 @@
+{
+  "adapter": "trajectory.trajectory_optimization",
+  "backend_pair": ["fallback-disabled Metal", "pinned cuRobo V2 CUDA"],
+  "cuda": {"device": "NVIDIA RTX A4500", "pytorch": "2.7.1+cu126", "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"},
+  "comparison": {"success": true, "solution_shape": [1, 1, 16, 7], "endpoint_converged": true},
+  "kind": "outcome_equivalence",
+  "limitations": "The port compares public planning outcome, control-knot layout, and endpoint satisfaction; it does not claim identical CUDA L-BFGS trajectories or optimizer traces."
+}

@@ -40,7 +40,7 @@ _ROWS = [
     ("optim.particle_evolution", "particle_evolution", 2e-4, 2e-5, "particle", "bad_covariance", "deterministic_seed", "upstream RNG stream and optimizer construction require CUDA rollout objects"),
     ("optim.lbfgs", "lbfgs", 2e-4, 2e-5, "lbfgs", "nonfinite_objective", "quadratic_convergence", "upstream LBFGSOpt requires CUDA graph/rollout configuration"),
     ("ik.inverse_kinematics", "inverse_kinematics", 3e-4, 3e-5, "cost", "infeasible_goal", "two_pose_batch", "real pinned V2 CUDA IKSolver adapter available for the packaged Franka single-pose outcome/layout corpus; redundant-joint values are intentionally not compared"),
-    ("trajectory.trajectory_optimization", "trajectory_optimization", 3e-4, 3e-5, "trajectory", "infeasible_limits", "exact_endpoints", "requires caller-provided robot/world assets and upstream CUDA rollout compilation"),
+    ("trajectory.trajectory_optimization", "trajectory_optimization", 3e-4, 3e-5, "trajectory", "infeasible_limits", "exact_endpoints", "real pinned V2 CUDA TrajOptSolver adapter available for packaged Franka C-space outcome/layout replay; optimizer trajectories are intentionally not compared"),
     ("trajectory.dynamics_aware_bspline", "dynamics_aware_bspline", 3e-4, 3e-5, "bspline", "too_few_knots", "endpoint_basis", "requires upstream robot dynamics model and fused CUDA rollout"),
     ("graph.prm_planner", "prm_planner", 0, 0, "graph", "blocked_endpoints", "zero_length_edge", "requires upstream CUDA collision checker and graph buffers"),
     ("motion_generation.motion_gen", "motion_gen", 5e-4, 5e-5, "trajectory", "ik_failed", "minimum_jerk_endpoints", "requires caller-provided robot/world assets and compiled upstream CUDA IK/graph/trajopt stack"),
