@@ -394,6 +394,29 @@ class MotionPlanner:
                 extend(interpolated.acceleration), interpolated.joint_names,
                 extend(interpolated.jerk), dt=interpolated.dt,
             )
+        # ``js_solution`` deliberately retains the seed axis used by V2's
+        # public MotionPlanner result.  Interpolation above operates on the
+        # selected seed to keep the portable solver internals simple; restore
+        # that singleton axis before publishing so both result fields have the
+        # same [batch, seed, horizon, dof] convention.
+        if result.js_solution.position.ndim == 4 and interpolated.position.ndim == 3:
+            def with_seed_axis(value):
+                # ``dt`` may be scalar while state channels are batched.  A
+                # scalar describes every state and must remain scalar rather
+                # than acquiring an invalid axis.
+                if value is None or value.ndim == 0:
+                    return value
+                return value.unsqueeze(1)
+
+            interpolated = JointState(
+                with_seed_axis(interpolated.position),
+                with_seed_axis(interpolated.velocity),
+                with_seed_axis(interpolated.acceleration),
+                interpolated.joint_names,
+                with_seed_axis(interpolated.jerk),
+                dt=with_seed_axis(interpolated.dt),
+            )
+            last = with_seed_axis(last)
         result.interpolated_trajectory = interpolated
         result.interpolated_last_tstep = last
         return result

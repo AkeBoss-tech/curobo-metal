@@ -57,8 +57,11 @@ def test_scene_collision_and_kinematics_aliases_use_portable_backends() -> None:
         kinematics.default_joint_position, joint_names=kinematics.joint_names
     )
     full = kinematics.get_full_js(active)
-    assert full.joint_names == kinematics.joint_names
-    assert kinematics.get_mimic_js(active).position.shape == active.position.shape
+    # ``get_full_js`` publishes the configured full robot state, including
+    # Franka's two locked finger joints; active joint names remain its prefix.
+    assert full.joint_names[: len(kinematics.joint_names)] == kinematics.joint_names
+    assert len(full.joint_names) == len(kinematics.joint_names) + 2
+    assert kinematics.get_mimic_js(active).position.shape == full.position.shape
 
     class SphereChecker:
         collision_buffer = "portable-buffer"
