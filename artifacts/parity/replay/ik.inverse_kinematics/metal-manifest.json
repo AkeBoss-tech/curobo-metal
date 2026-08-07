@@ -15,7 +15,7 @@
       "executed": true,
       "output": "edge_observed"
     },
-    "gradient": true,
+    "gradient": false,
     "invalid": {
       "case": "infeasible_goal",
       "executed": true,
@@ -33,7 +33,7 @@
   "operation": "inverse_kinematics",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "945c824175782e8236580ef261b19e077b4b9d41a4721dd66efea1f23f3f7212"
+    "sha256": "e528dace87a7336ad476ecbbdc9c9d091a2e30091b59244a1c3c4b184239bf81"
   },
   "runtime": {
     "python": "3.13.9",

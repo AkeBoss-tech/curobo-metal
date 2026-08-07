@@ -55,6 +55,14 @@ inverse dynamics. The last category
 includes torque plus first-order VJPs for position, velocity, and
 acceleration.
 
+The same runner also has a real high-level `IKSolver` CUDA adapter for the
+packaged Franka single-pose corpus.  On 2026-08-07 it matched the portable
+solver's public success flag, `[batch, seed, dof]` solution layout, and
+position/orientation convergence flags.  Franka is redundant, so the replay
+deliberately does not treat distinct valid joint-space minima as a numerical
+failure.  This is outcome-equivalence evidence, not identical-solution or
+full solver-trajectory parity.
+
 This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
 serialized probes only. The remaining seven registry cases still need genuine
 upstream adapters and broader batch/layout/world/solver coverage, so the

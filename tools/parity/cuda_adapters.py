@@ -423,6 +423,42 @@ def _voxel_esdf(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _inverse_kinematics(raw: dict[str, np.ndarray]) -> Output:
+    """Run the pinned public IK lifecycle and compare solver-independent outcomes.
+
+    Franka is redundant, so distinct joint minima are not evidence of a port
+    defect.  The paired replay therefore checks public success, output layout,
+    and configured position/orientation convergence for the identical target.
+    """
+    import torch
+    from curobo._src.solver.solver_ik import IKSolver
+    from curobo._src.solver.solver_ik_cfg import IKSolverCfg
+    from curobo._src.types.device_cfg import DeviceCfg
+    from curobo._src.types.pose import Pose
+    from curobo._src.types.tool_pose import GoalToolPose
+
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+    cfg = IKSolverCfg.create(
+        "franka.yml", device_cfg=device_cfg, num_seeds=4, use_cuda_graph=False,
+        load_collision_spheres=False, self_collision_check=False,
+    )
+    solver = IKSolver(cfg)
+    target = torch.as_tensor(raw["pose_cost_position"][:1], device="cuda", dtype=torch.float32)
+    goal = GoalToolPose.from_poses({
+        solver.kinematics.tool_frames[0]: Pose(
+            position=target,
+            quaternion=torch.tensor([[1.0, 0.0, 0.0, 0.0]], device="cuda"),
+        )
+    })
+    result = solver.solve_pose(goal)
+    return {
+        "success": result.success.detach().cpu().numpy(),
+        "solution_shape": np.asarray(result.solution.shape, dtype=np.int64),
+        "position_converged": (result.position_error <= cfg.position_tolerance).detach().cpu().numpy(),
+        "rotation_converged": (result.rotation_error <= cfg.orientation_tolerance).detach().cpu().numpy(),
+    }
+
+
 def _inverse_dynamics(raw: dict[str, np.ndarray]) -> Output:
     import torch
     from curobo._src.robot.dynamics.dynamics import Dynamics
@@ -546,6 +582,7 @@ ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.voxel_esdf_query": _voxel_esdf,
     "configuration.robot_config_and_loaders": _robot_config,
     "cost.pose_and_composable_costs": _pose_cost,
+    "ik.inverse_kinematics": _inverse_kinematics,
     "dynamics.inverse_dynamics": _inverse_dynamics,
     "kinematics.forward_kinematics": _forward_kinematics,
     "kinematics.geometric_jacobian": _geometric_jacobian,

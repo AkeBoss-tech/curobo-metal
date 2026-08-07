@@ -63,6 +63,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "collision.voxel_esdf_query",
         "configuration.robot_config_and_loaders",
         "cost.pose_and_composable_costs",
+        "ik.inverse_kinematics",
         "dynamics.inverse_dynamics",
         "kinematics.forward_kinematics",
         "kinematics.geometric_jacobian",

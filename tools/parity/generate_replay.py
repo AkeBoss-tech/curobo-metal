@@ -281,6 +281,37 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         )
         out = query_esdf(_tensor(raw["voxel_points"], device), [[grid]])
         return {"distance": out.distance.cpu().numpy(), "valid": out.valid.cpu().numpy(), "winner": out.winning_grid.cpu().numpy()}
+    if case.capability == "ik.inverse_kinematics":
+        # IK for a redundant arm can produce distinct, valid joint solutions
+        # across optimizer implementations.  Compare the public solve outcome
+        # and convergence/layout contract rather than pretending a particular
+        # local minimum is a numerical tensor ABI.
+        from curobo._src.solver.solver_ik import IKSolver
+        from curobo._src.solver.solver_ik_cfg import IKSolverCfg
+        from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
+        from curobo._src.types.pose import Pose as CompatPose
+        from curobo._src.types.tool_pose import GoalToolPose as CompatGoalToolPose
+
+        cfg = IKSolverCfg.create(
+            "franka.yml", device_cfg=CompatDeviceCfg(device=torch.device(device), dtype=torch.float32),
+            num_seeds=4, use_cuda_graph=False, load_collision_spheres=False,
+            self_collision_check=False,
+        )
+        solver = IKSolver(cfg)
+        target = _tensor(raw["pose_cost_position"][:1], device)
+        goal = CompatGoalToolPose.from_poses({
+            solver.kinematics.tool_frames[0]: CompatPose(
+                position=target,
+                quaternion=torch.tensor([[1.0, 0.0, 0.0, 0.0]], device=device),
+            )
+        })
+        result = solver.solve_pose(goal)
+        return {
+            "success": result.success.detach().cpu().numpy(),
+            "solution_shape": np.asarray(result.solution.shape, dtype=np.int64),
+            "position_converged": (result.position_error <= cfg.position_tolerance).detach().cpu().numpy(),
+            "rotation_converged": (result.rotation_error <= cfg.orientation_tolerance).detach().cpu().numpy(),
+        }
     if case.probe == "cost":
         position = _tensor(raw["pose_cost_position"], device).requires_grad_(True)
         error = torch.cat((position, torch.zeros_like(position)), dim=-1)
@@ -363,6 +394,13 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
 
 def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np.ndarray:
     """Execute a local invalid-input sentinel for probes without native output."""
+    if case.capability == "ik.inverse_kinematics":
+        from curobo._src.solver.solver_ik_cfg import IKSolverCfg
+        from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
+        return _invalid_rejected(lambda: IKSolverCfg.create(
+            "franka.yml", device_cfg=CompatDeviceCfg(device=torch.device(device), dtype=torch.float32),
+            num_seeds=0, use_cuda_graph=False,
+        ))
     if case.probe == "mesh":
         mesh = Mesh(_tensor(raw["mesh_vertices"], device), _tensor(raw["mesh_faces"], device), False)
         return _invalid_rejected(lambda: mesh_distance(
@@ -408,6 +446,26 @@ def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np
 def _required_edge(case: Case, raw: dict[str, np.ndarray], device: str) -> np.ndarray:
     """Exercise one declared singleton/empty/boundary behavior per case."""
     q = _tensor(raw["q"], device) if "q" in raw else None
+    if case.capability == "ik.inverse_kinematics":
+        from curobo._src.solver.solver_ik import IKSolver
+        from curobo._src.solver.solver_ik_cfg import IKSolverCfg
+        from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
+        from curobo._src.types.pose import Pose as CompatPose
+        from curobo._src.types.tool_pose import GoalToolPose as CompatGoalToolPose
+        cfg = IKSolverCfg.create(
+            "franka.yml", device_cfg=CompatDeviceCfg(device=torch.device(device), dtype=torch.float32),
+            num_seeds=2, max_batch_size=2, use_cuda_graph=False,
+            load_collision_spheres=False, self_collision_check=False,
+        )
+        solver = IKSolver(cfg)
+        target = _tensor(raw["pose_cost_position"], device)
+        goal = CompatGoalToolPose.from_poses({
+            solver.kinematics.tool_frames[0]: CompatPose(
+                position=target,
+                quaternion=torch.tensor([[1.0, 0.0, 0.0, 0.0]], device=device).expand(2, -1),
+            )
+        })
+        return _edge_observed(lambda: solver.solve_pose(goal))
     if case.probe == "device":
         return _edge_observed(lambda: DeviceCfg(device, torch.float32).to_device(_tensor(raw["empty"], device)))
     if case.probe == "pose":

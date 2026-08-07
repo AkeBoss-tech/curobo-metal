@@ -68,7 +68,7 @@
     {
       "capability": "ik.inverse_kinematics",
       "manifest": "ik.inverse_kinematics/metal-manifest.json",
-      "manifest_sha256": "c6fb5b9e21553480cf53aa17192726f24a4717bb4b00ce8a7c5f6c9b0cc9bd54"
+      "manifest_sha256": "9faf39cabf5da15f0e3eb7dcace0a82e8c63d8a3c787a5e2d51d211129d10b34"
     },
     {
       "capability": "trajectory.trajectory_optimization",
