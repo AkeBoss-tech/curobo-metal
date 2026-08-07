@@ -18,7 +18,7 @@
     {
       "capability": "types.joint_state",
       "manifest": "types.joint_state/metal-manifest.json",
-      "manifest_sha256": "eb654f2fd933c83b80f930b520e1582bb7e6d2c865bd61784f392e3ffa8cc349"
+      "manifest_sha256": "61f161db0fd43741ed8964fb45c999d3b07e67542a669bd974aba2a3336b225f"
     },
     {
       "capability": "types.solver_results",
@@ -28,12 +28,12 @@
     {
       "capability": "kinematics.forward_kinematics",
       "manifest": "kinematics.forward_kinematics/metal-manifest.json",
-      "manifest_sha256": "80c418f35b9d9de67a18237aa79a979d8e19fbd40a1d8d6ba573aecb3ca9ad56"
+      "manifest_sha256": "3f5095470f844cc7f2cc41f385560dc8df585a6b5b03b5dc36c1301b17ca7f41"
     },
     {
       "capability": "kinematics.geometric_jacobian",
       "manifest": "kinematics.geometric_jacobian/metal-manifest.json",
-      "manifest_sha256": "a6e15f3985f54958deaedff6bf0ca70917574eaef1aae06730b45a0f4861cd0e"
+      "manifest_sha256": "8ac78e37b01a9fd8f3af70692d32f3d2ab33840d78ba7d4549b5afa0953c9e33"
     },
     {
       "capability": "collision.robot_scene",
@@ -93,7 +93,7 @@
     {
       "capability": "dynamics.inverse_dynamics",
       "manifest": "dynamics.inverse_dynamics/metal-manifest.json",
-      "manifest_sha256": "3fb1ca6617f124d243b5127743e962b716178f312290deadbdef4077cbe53ee3"
+      "manifest_sha256": "e18793dc3a398d90795e84562aec61c767e4c28c7e960a1c564f1965539ebeb2"
     }
   ],
   "format": "curobo-metal-paired-replay",

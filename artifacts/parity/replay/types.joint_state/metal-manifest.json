@@ -33,7 +33,7 @@
   "operation": "joint_state",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "2c806faa089f86f7e811aac4168770eea745bc3b04f6b67d9c0ac2192c9d9dc3"
+    "sha256": "f4d9d6894052341abf37c96300ce58c9624ddbcc3550939d1e9459e197a931fb"
   },
   "runtime": {
     "python": "3.13.9",

@@ -2,6 +2,7 @@
   "capability": "kinematics.forward_kinematics",
   "format": "curobo-metal-replay-corpus",
   "inputs": [
+    "robot_urdf_utf8",
     "q"
   ],
   "required_evidence": {

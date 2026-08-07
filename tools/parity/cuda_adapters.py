@@ -360,11 +360,16 @@ def _inverse_dynamics(raw: dict[str, np.ndarray]) -> Output:
 
 def _pose_cost(raw: dict[str, np.ndarray]) -> Output:
     import torch
+    import warp as wp
     from curobo._src.cost.cost_tool_pose import ToolPoseCost
     from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCostCfg
     from curobo._src.types.tool_pose import GoalToolPose, ToolPose
     from curobo.types import DeviceCfg
 
+    # cuRobo's upstream tool-pose implementation launches a Warp kernel.  The
+    # application normally initializes Warp during solver construction; this
+    # isolated replay adapter has no such application bootstrap.
+    wp.init()
     device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
     position = torch.as_tensor(
         raw["pose_cost_position"], device="cuda", dtype=torch.float32
@@ -392,7 +397,12 @@ def _pose_cost(raw: dict[str, np.ndarray]) -> Output:
         )
     )
     cost.setup_batch_tensors(position.shape[0], 1)
-    value, _, _, _ = cost.forward(current, goal)
+    # The pinned CUDA ToolPose kernel requires one goalset index per batch
+    # item even when the corpus deliberately supplies a single goal.
+    idxs_goal = torch.zeros(
+        (position.shape[0], 1), device="cuda", dtype=torch.int32
+    )
+    value, _, _, _ = cost.forward(current, goal, idxs_goal=idxs_goal)
     scalar = value.sum(dim=-1).reshape(-1)
     scalar.sum().backward()
     invalid = ToolPose(["wrong"], position.detach(), quaternion)
@@ -400,7 +410,7 @@ def _pose_cost(raw: dict[str, np.ndarray]) -> Output:
         "value": scalar.detach().cpu().numpy(),
         "position_gradient": position.grad.reshape(-1, 3).cpu().numpy(),
         "invalid_rejected": _invalid_rejected(
-            lambda: cost.forward(invalid, goal)
+            lambda: cost.forward(invalid, goal, idxs_goal=idxs_goal)
         ),
     }
 

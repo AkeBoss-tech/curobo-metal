@@ -155,10 +155,19 @@ def compare_capability(
         np.load(metal_output, allow_pickle=False) as metal,
         np.load(cuda_output, allow_pickle=False) as cuda,
     ):
-        if set(metal.files) != set(cuda.files):
+        # Invalid-input and edge-case probes are executed and retained on the
+        # Metal side as coverage evidence.  They deliberately are not part of
+        # the upstream CUDA adapter payload: several pinned public APIs do
+        # not expose an equivalent low-level probe without constructing
+        # unrelated CUDA/Warp state.  Validate that evidence above, then
+        # compare only the declared numerical operation outputs.
+        evidence_outputs = {"invalid_rejected", "edge_observed"}
+        metal_keys = set(metal.files) - evidence_outputs
+        cuda_keys = set(cuda.files) - evidence_outputs
+        if metal_keys != cuda_keys:
             raise ValueError(
                 f"{capability}: output keys differ: "
-                f"{sorted(set(metal.files) ^ set(cuda.files))}"
+                f"{sorted(metal_keys ^ cuda_keys)}"
             )
         _validate_required_evidence(metal_manifest, metal, capability)
         declared = cuda_manifest["output"].get("tensors")
@@ -168,7 +177,7 @@ def compare_capability(
         }
         if declared != actual:
             raise ValueError(f"{capability}: CUDA tensor schema does not match manifest")
-        for key in sorted(metal.files):
+        for key in sorted(metal_keys):
             left, right = metal[key], cuda[key]
             item: dict[str, Any]
             if left.shape != right.shape or left.dtype != right.dtype:

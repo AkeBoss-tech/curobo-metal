@@ -53,6 +53,22 @@ class Dynamics:
         self.dof = config.kinematics_config.num_dof
         self.device = config.device_cfg.device.type
         robot_cfg = deepcopy(self.kinematics_config.robot_cfg)
+        # Dynamics in pinned V2 consumes ``KinematicsParams``' packed
+        # inertial tensors, rather than reparsing the authored URDF at launch.
+        # Materialize those values into the portable tree before compiling
+        # RNEA so loader-compatible mass/CoM/default-inertia semantics are
+        # observed by CPU and MPS alike.
+        inertial_tree = self.kinematics_config._tree()
+        masses_com = self.kinematics_config.link_masses_com.detach().cpu()
+        inertias = self.kinematics_config.link_inertias.detach().cpu()
+        links_by_name = {link.name: link for link in robot_cfg.links}
+        for index, tree_link in enumerate(inertial_tree.links):
+            link = links_by_name[tree_link.name]
+            packed = masses_com[index]
+            link.com = tuple(float(value) for value in packed[:3].tolist())
+            link.mass = float(packed[3].item())
+            inertia = inertias[index, :6]
+            link.inertia = tuple(float(value) for value in inertia.tolist())
         # Several standard cuRobo URDF assets contain inertial coefficients
         # that are not positive semidefinite. The CUDA implementation accepts
         # them; project onto the physical PSD cone before compiling RNEA.

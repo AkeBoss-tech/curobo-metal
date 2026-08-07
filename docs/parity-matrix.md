@@ -22,8 +22,8 @@ The inventory deliberately separates five conclusions:
   viewer features belong to external ecosystems and are outside the core
   package;
 - **evidence-blocked**: a plausible implementation exists, but the required
-  paired pinned-upstream NVIDIA replay was unavailable, so equivalence is not
-  claimed.
+  paired pinned-upstream NVIDIA replay has not covered its full supported
+  surface, so equivalence is not claimed.
 
 ## Audit result
 
@@ -41,6 +41,23 @@ but are not independent evidence from the pinned NVIDIA implementation. It is
 therefore evidence-blocked until a paired runner produces matching replay
 bundles. Production differentiable inverse dynamics has the same remaining
 evidence issue.
+
+### First pinned CUDA evidence
+
+On 2026-08-07, the checked-in handoff ran against the exact upstream revision
+on an NVIDIA RTX A4500 (CUDA 12.6, PyTorch 2.7.1+cu126). The resulting hashed
+[paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-07.json)
+passes all 10 currently asset-independent CUDA adapters: configuration,
+`DeviceCfg`, `Pose`, `JointState`, solver results, forward kinematics,
+geometric Jacobians, robot-scene sphere collision, position pose cost, and
+inverse dynamics. The last category includes torque plus first-order VJPs for
+position, velocity, and acceleration.
+
+This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
+serialized probes only. The remaining nine registry cases still need genuine
+upstream adapters and broader batch/layout/world/solver coverage, so the
+inventory correctly remains evidence-blocked and this does **not** make a
+full drop-in claim.
 
 The collision semantic-equivalence records are deliberately smaller than an
 upstream checker API: discrete sphere/sphere and sphere/oriented-cuboid signed

@@ -183,7 +183,16 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         }
     if case.probe == "joint_state":
         assert q is not None
-        state = JointState.from_position(q, ["j0", "j1"]).finite_difference(0.25)
+        # Use the public compatibility value and its V2 finite-difference
+        # convention: a trajectory derivative has one fewer knot rather than
+        # duplicating the initial finite difference.
+        from curobo._src.state.state_joint_ops import calculate_fd_from_position
+        from curobo.types import JointState as CompatJointState
+
+        state = calculate_fd_from_position(
+            CompatJointState.from_position(q, ["j0", "j1"]),
+            torch.tensor(0.25, device=device, dtype=torch.float32),
+        )
         return {
             "position": state.position.cpu().numpy(),
             "velocity": state.velocity.cpu().numpy(),
@@ -310,14 +319,29 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "robot.urdf"
             path.write_bytes(raw["robot_urdf_utf8"].tobytes())
-            robot = RobotCfg.create(path, device_cfg=DeviceCfg(device))
-            model = robot.to_whole_body_model()
+            # Exercise the public V2-compatible dynamics lifecycle, whose
+            # packed URDF inertial conversion is the contract used by the
+            # pinned CUDA RNEA implementation.
+            from curobo._src.robot.dynamics import Dynamics, DynamicsCfg
+            from curobo._src.state.state_joint import JointState as CompatJointState
+            from curobo._src.types.robot import RobotCfg as CompatRobotCfg
+            from curobo.types import DeviceCfg as CompatDeviceCfg
+
+            robot = CompatRobotCfg.create(
+                _robot_mapping(str(path)), CompatDeviceCfg(device, torch.float32),
+                load_collision_spheres=False,
+            )
+            params = CompatRobotCfg._kinematics_params(robot.kinematics)
+            model = Dynamics(DynamicsCfg(params, CompatDeviceCfg(device, torch.float32)))
             position = _tensor(raw["q"], device).requires_grad_(True)
             velocity = _tensor(raw["dynamics_velocity"], device).requires_grad_(True)
             acceleration = _tensor(
                 raw["dynamics_acceleration"], device
             ).requires_grad_(True)
-            torque = inverse_dynamics(model, position, velocity, acceleration).torque
+            torque = model.compute_inverse_dynamics(CompatJointState(
+                position=position, velocity=velocity, acceleration=acceleration,
+                joint_names=params.joint_names,
+            ))
             gradients = torch.autograd.grad(
                 torque.sum(), (position, velocity, acceleration)
             )
@@ -328,7 +352,10 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
                 "acceleration_gradient": gradients[2].cpu().numpy(),
                 "status_utf8": np.frombuffer(b"success", np.uint8),
                 "invalid_rejected": _invalid_rejected(
-                    lambda: inverse_dynamics(model, position, velocity, None)
+                    lambda: model.compute_inverse_dynamics(CompatJointState(
+                        position=position, velocity=velocity, acceleration=None,
+                        joint_names=params.joint_names,
+                    ))
                 ),
             }
     raise AssertionError(case.probe)

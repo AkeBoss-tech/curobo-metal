@@ -3,7 +3,7 @@
   "capability": "kinematics.forward_kinematics",
   "corpus": {
     "case_file": "kinematics.forward_kinematics.json",
-    "case_sha256": "a7295824889800cbb99f436ee81504f3e026fdf03333c60c29bfd99000620a4b",
+    "case_sha256": "9bca90c535eddb7281144f8f825acf8438f07abe0aba0542ff2a471450a251b3",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -28,7 +28,7 @@
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
+    "sha256": "a73cdab8d12d3b9e3f6c223050b38b48631268e19a9160f5255b2ef4cb2ff96d"
   },
   "operation": "forward_kinematics",
   "output": {

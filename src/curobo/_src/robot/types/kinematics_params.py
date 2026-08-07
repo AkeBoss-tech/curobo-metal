@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from xml.etree import ElementTree as ET
+import math
 
 import torch
 
@@ -38,6 +39,9 @@ class KinematicsParams:
     _fixed_transforms: torch.Tensor | None = field(default=None, init=False, repr=False)
     _link_masses_com: torch.Tensor | None = field(default=None, init=False, repr=False)
     _link_inertias: torch.Tensor | None = field(default=None, init=False, repr=False)
+    _inertial_overrides: dict[str, dict[str, object]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         self._validate_robot_cfg()
@@ -110,6 +114,77 @@ class KinematicsParams:
         self._fixed_transforms = None
         self._link_masses_com = None
         self._link_inertias = None
+
+    def _v2_urdf_inertials(self) -> dict[str, tuple[tuple[float, float, float], float, tuple[float, float, float, float, float, float]]] | None:
+        """Return the pinned loader's inertial representation for a URDF.
+
+        This is intentionally not the authored URDF inertia.  The pinned V2
+        loader composes an inertial origin pose with a position pose (thereby
+        applying the origin translation twice) and retains its small default
+        inertia buffer when reading URDF links.  Dynamics consumes that packed
+        representation, so matching it here is necessary for a compatible
+        public ``KinematicsParams``/``Dynamics`` lifecycle.
+        """
+        path = getattr(self.robot_cfg, "urdf_path", None)
+        if not path:
+            return None
+        try:
+            root = ET.parse(path).getroot()
+        except (OSError, ET.ParseError):
+            return None
+
+        def rotation(values: tuple[float, float, float]) -> torch.Tensor:
+            roll, pitch, yaw = values
+            cr, sr = math.cos(roll), math.sin(roll)
+            cp, sp = math.cos(pitch), math.sin(pitch)
+            cy, sy = math.cos(yaw), math.sin(yaw)
+            return torch.tensor(((cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr),
+                                 (sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr),
+                                 (-sp, cp * sr, cp * cr)), dtype=torch.float64)
+
+        result: dict[str, tuple[tuple[float, float, float], float, tuple[float, float, float, float, float, float]]] = {}
+        for link in root.findall("link"):
+            name = link.get("name")
+            if not name:
+                continue
+            inertial = link.find("inertial")
+            mass = 0.01
+            com = torch.zeros(3, dtype=torch.float64)
+            if inertial is not None:
+                mass_node = inertial.find("mass")
+                if mass_node is not None:
+                    try:
+                        mass = max(float(mass_node.get("value", "0")), 0.01)
+                    except ValueError:
+                        return None
+                origin = inertial.find("origin")
+                if origin is not None:
+                    try:
+                        xyz = torch.tensor(
+                            [float(value) for value in origin.get("xyz", "0 0 0").split()],
+                            dtype=torch.float64,
+                        )
+                        rpy = tuple(float(value) for value in origin.get("rpy", "0 0 0").split())
+                    except ValueError:
+                        return None
+                    if xyz.shape != (3,) or len(rpy) != 3:
+                        return None
+                    # ``Pose.from_matrix(origin).multiply(Pose(xyz, I))`` in
+                    # pinned V2 yields origin.xyz + R(origin) @ origin.xyz.
+                    com = xyz + rotation(rpy) @ xyz
+            result[name] = (
+                tuple(float(value) for value in com.tolist()), mass,
+                (1.0e-4, 1.0e-4, 1.0e-4, 0.0, 0.0, 0.0),
+            )
+        for name, values in self._inertial_overrides.items():
+            if name not in result:
+                continue
+            com, mass, inertia = result[name]
+            result[name] = (
+                values.get("com", com), values.get("mass", mass),
+                values.get("inertia", inertia),
+            )
+        return result
 
     @property
     def num_dof(self) -> int:
@@ -277,8 +352,13 @@ class KinematicsParams:
         """Packed ``[link, xyz-com, mass]`` inertial metadata."""
         if self._link_masses_com is None:
             raw = {link.name: link for link in self.robot_cfg.links}
+            v2 = self._v2_urdf_inertials()
             self._link_masses_com = self.device_cfg.to_device(
-                [[*raw[link.name].com, raw[link.name].mass] for link in self._tree().links]
+                [
+                    [*(v2[link.name][0] if v2 is not None and link.name in v2 else raw[link.name].com),
+                     v2[link.name][1] if v2 is not None and link.name in v2 else raw[link.name].mass]
+                    for link in self._tree().links
+                ]
             ).reshape(-1, 4).contiguous()
         return self._link_masses_com
 
@@ -292,9 +372,14 @@ class KinematicsParams:
         """
         if self._link_inertias is None:
             raw = {link.name: link for link in self.robot_cfg.links}
+            v2 = self._v2_urdf_inertials()
             values = []
             for link in self._tree().links:
-                packed = raw[link.name].inertia
+                packed = (
+                    v2[link.name][2]
+                    if v2 is not None and link.name in v2
+                    else raw[link.name].inertia
+                )
                 values.append([
                     packed[0], packed[1], packed[2], packed[3], packed[4], packed[5], 0.0, 0.0,
                 ])
@@ -671,6 +756,7 @@ class KinematicsParams:
         if not torch.isfinite(torch.tensor(mass)) or mass < 0:
             raise ValueError("mass must be finite and non-negative")
         link.mass = float(mass)
+        self._inertial_overrides.setdefault(link_name, {})["mass"] = float(mass)
         self._link_masses_com = None
         self._tree_cache = None
 
@@ -684,6 +770,7 @@ class KinematicsParams:
         if not bool(torch.isfinite(values).all().item()):
             raise ValueError("com must contain finite values")
         link.com = tuple(values.cpu().tolist())
+        self._inertial_overrides.setdefault(link_name, {})["com"] = link.com
         self._link_masses_com = None
         self._tree_cache = None
 
@@ -700,6 +787,7 @@ class KinematicsParams:
         if not bool(torch.isfinite(values).all().item()):
             raise ValueError("inertia must contain finite values")
         link.inertia = tuple(values.cpu().tolist())
+        self._inertial_overrides.setdefault(link_name, {})["inertia"] = link.inertia
         self._link_inertias = None
         self._tree_cache = None
 

@@ -2,6 +2,7 @@
   "capability": "kinematics.geometric_jacobian",
   "format": "curobo-metal-replay-corpus",
   "inputs": [
+    "robot_urdf_utf8",
     "q"
   ],
   "required_evidence": {
