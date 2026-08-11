@@ -14,6 +14,8 @@ def test_distribution_metadata_and_license():
     assert metadata["readme"] == "README.md"
     assert Path("LICENSE").is_file()
     assert Path("THIRD_PARTY_NOTICES.md").is_file()
+    assert Path("CHANGELOG.md").is_file()
+    assert Path("SECURITY.md").is_file()
 
 
 def test_top_level_import_is_torch_lazy():

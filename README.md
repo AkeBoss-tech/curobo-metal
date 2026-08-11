@@ -22,6 +22,12 @@ implementation; the current release is not yet drop-in complete. See
 [PLAN.md](PLAN.md), [docs/dropin-roadmap.md](docs/dropin-roadmap.md), and
 [docs/compatibility.md](docs/compatibility.md).
 
+> **Alpha namespace warning:** NVIDIA cuRobo and `curobo-metal` both install the
+> `curobo` Python package. They must not be co-installed. Use a dedicated virtual
+> environment and uninstall `nvidia-curobo` (or any source-installed cuRobo)
+> before installing this distribution. The release smoke test fails if another
+> distribution also claims the namespace.
+
 ## Pinned upstream
 
 Compatibility is developed against cuRoboV2 commit:
@@ -51,6 +57,10 @@ Metal shaders are compiled through `torch.mps.compile_shader`. A full Xcode
 installation is not required for the current runtime-compiled kernels.
 
 ## Install and test
+
+The forthcoming `0.1.0a1` is a bounded preview, not a stable drop-in release.
+Its exact included behavior and exclusions are listed in
+[CHANGELOG.md](CHANGELOG.md) and [docs/parity-matrix.md](docs/parity-matrix.md).
 
 Install the locked development environment with
 [uv](https://docs.astral.sh/uv/):

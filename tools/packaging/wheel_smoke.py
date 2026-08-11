@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from importlib.metadata import packages_distributions, version
 
 import torch
 
@@ -38,6 +39,12 @@ from curobo.util_file import load_yaml
 def main() -> None:
     package_root = Path(curobo.__file__).resolve().parent
     assert "site-packages" in package_root.as_posix(), package_root
+    owners = set(packages_distributions().get("curobo", []))
+    assert owners == {"curobo-metal"}, (
+        "the curobo namespace must be owned only by curobo-metal; "
+        f"found {sorted(owners)}"
+    )
+    assert curobo.__version__ == version("curobo-metal")
 
     robot_config = get_robot_path("franka")
     config = load_yaml(str(robot_config))["robot_cfg"]["kinematics"]
