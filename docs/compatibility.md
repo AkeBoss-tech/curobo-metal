@@ -81,6 +81,9 @@ A stable drop-in claim requires all of the following:
    mutation/cache, gradient, collision-boundary, and repeatability cases.
 3. Classify the 211 pinned upstream test modules and 14 examples; execute every
    applicable item unchanged against the installed wheel and record exclusions.
+   `artifacts/api_compat/upstream-execution-census.json` now tracks all 225
+   entries and intentionally fails `--require-reviewed` until that review is
+   complete.
 4. Pass clean wheel and sdist installs on the supported Python matrix, full
    fallback-disabled Apple MPS tests, CUDA replay, metadata/license checks, and
    namespace-conflict checks from a clean tagged commit.

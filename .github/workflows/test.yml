@@ -21,6 +21,11 @@ jobs:
             --local-root src \
             --output artifacts/api_compat/upstream-api.json \
             --check
+      - name: Validate upstream test and example census
+        run: |
+          python tools/api_compat/upstream_execution_census.py \
+            --inventory artifacts/api_compat/upstream-api.json \
+            --census artifacts/api_compat/upstream-execution-census.json
 
   cpu:
     runs-on: ubuntu-latest
