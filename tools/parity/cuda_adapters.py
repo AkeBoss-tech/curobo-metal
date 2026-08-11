@@ -670,11 +670,19 @@ def _prm_planner(raw: dict[str, np.ndarray]) -> Output:
 
         def check_samples_feasibility(self, action_samples):
             points = action_samples.reshape(-1, action_samples.shape[-1])
+            within_bounds = (
+                (points >= lower) & (points <= upper)
+            ).all(dim=-1)
             blocked = (
                 (points >= self.corpus_box_lower)
                 & (points <= self.corpus_box_upper)
             ).all(dim=-1)
-            return (~blocked).reshape(action_samples.shape[:-1])
+            # The serialized corpus owns a tighter bounded configuration
+            # space than the generic two-joint URDF.  Enforce it in the same
+            # feasibility callback used for sampling and edge validation so
+            # a wall spanning [-1, 1] cannot be bypassed through wider URDF
+            # joint limits.
+            return (within_bounds & ~blocked).reshape(action_samples.shape[:-1])
 
     def valid(points: torch.Tensor, index: int) -> torch.Tensor:
         return ~(
