@@ -1,5 +1,10 @@
 # API surface compatibility — Wave 7C
 
+> Historical scope note: this page records the Wave 7C strict adapter at the
+> time it landed. Later portable implementations supersede several rejection
+> statements below. Use `docs/compatibility.md` for release claims and the
+> current tests/capability inventory for member-level behavior.
+
 This surface targets pinned cuRobo revision
 `8e734f3ced1df898990bcd92de40abce475907db` while retaining the established
 MotionGen integration vocabulary. It is an adapter, not an assertion that

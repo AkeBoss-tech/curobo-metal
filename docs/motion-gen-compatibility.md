@@ -1,5 +1,10 @@
 # Motion generation compatibility
 
+> Historical scope note: this page documents the package-owned
+> `curobo_metal.motion_gen` JSON facade. It does not describe every newer
+> `curobo` high-level compatibility loader. The release-wide contract is
+> `docs/compatibility.md`.
+
 The portable facade targets the motion-planning concepts in pinned cuRoboV2
 revision `8e734f3ced1df898990bcd92de40abce475907db`. At that revision upstream's
 new public name is `MotionPlanner`/`MotionPlannerCfg`; `MotionGen` remains the

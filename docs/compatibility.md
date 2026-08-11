@@ -1,126 +1,89 @@
-# cuRoboV2 compatibility boundary
+# Release compatibility contract
 
-## Supported pin and public API targets
+This is the authoritative human-readable compatibility contract for
+`curobo-metal` 0.1.0a1. Machine-readable evidence lives in
+`artifacts/parity/capabilities.json`, `artifacts/api_compat/upstream-api.json`,
+and `artifacts/parity/replay/`. Older `dropin-*` and wave documents describe
+individual implementation slices; when they conflict with this page, this page
+and the checked release artifacts control.
 
-The compatibility seam targets only NVlabs/cuRobo commit
-`8e734f3ced1df898990bcd92de40abce475907db`. Updating the pin requires a
-reviewed change to the adapter, tests, audit artifact, and this document.
+## Release status
 
-The upstream public entry points in scope are:
+The alpha is a bounded Apple Silicon/MPS preview, not a complete source-
+unchanged replacement for NVIDIA cuRobo. Compatibility targets exactly cuRobo
+commit `8e734f3ced1df898990bcd92de40abce475907db`.
 
-- `curobo.kinematics.KinematicsCfg.from_robot_yaml_file`,
-  `from_config_file`, `from_data_dict`, and `from_basic_urdf`, which generate a
-  `KinematicsCfg`;
-- `curobo.types.robot.RobotCfg.create`, whose `kinematics` member is a
-  `KinematicsCfg`;
-- `curobo.kinematics.Kinematics`, specifically the configuration consumed by
-  its constructor and later by `compute_kinematics`;
-- the public tensor fields on
-  `curobo._src.robot.types.kinematics_params.KinematicsParams`: fixed
-  transforms, link/parent maps, joint maps/types/offsets, tool-frame map,
-  collision spheres and their link map, names, base link, and degree count.
+The distribution exposes both `curobo_metal` and a compatibility-oriented
+`curobo` namespace. NVIDIA cuRobo and `curobo-metal` must not be installed in
+the same environment because both own `curobo`.
 
-`curobo_metal.compat.convert_kinematics_config` accepts a generated
-`KinematicsCfg`, its `KinematicsParams`, or a mapping serialized with those
-field names. It copies the data to C-contiguous NumPy arrays. NumPy is the
-backend-neutral interchange representation; an FK or collision backend owns
-the later one-time transfer to CPU, MPS, or another device.
+## Audited alpha claims
 
-The adapter deliberately does not call the YAML/URDF constructors. Applications
-may generate the tensor config in an existing cuRobo environment and serialize
-the narrow fields, or pass an already generated object. This prevents import of
-cuRobo's CUDA backend and avoids the eager Warp initialization in
-`RobotSceneCollisionCfg.load_from_config`.
+- All 361 pinned upstream runtime module paths import from the installed wheel.
+- The documented non-`_src` public facades have no known static export or
+  callable-shape differences in the current inventory audit.
+- CPU and Apple MPS production paths exist for the documented configuration,
+  types, kinematics, collision, cost, IK, trajectory, graph-planning,
+  perception, dynamics, and high-level planning slices. Requested MPS execution
+  never silently falls back to CPU in release tests.
+- Fifteen of nineteen bounded replay capabilities have checked-in paired
+  pinned-CUDA/Metal evidence. Passing a bounded replay is evidence only for its
+  serialized operation and schema, not for every method or numerical regime in
+  that subsystem.
+- The wheel includes a hash-pinned Franka 0.7.0 URDF/mesh subset and five
+  NVIDIA YAML configs. See `THIRD_PARTY_NOTICES.md` and
+  `artifacts/release/asset-provenance.json`.
 
-## Output contract
+## Not yet claimed
 
-`BackendRobotConfig` contains:
+The alpha does not claim full `_src` compatibility. The strict audit currently
+reports 1,263 missing AST-discovered exports and 446 callable-shape differences
+under `_src`; many are imported typing/backend implementation names, but the
+remaining user-relevant members have not all been classified and closed.
 
-| Field | Shape | Meaning |
-|---|---:|---|
-| `fixed_transforms` | `[L,4,4]` | Homogeneous parent-to-link transforms |
-| `parent_link` | `[L]` | Parent link index |
-| `joint_index` | `[L]` | Active joint index, or `-1` for fixed |
-| `joint_type` | `[L]` | Pinned cuRobo `JointType` integer (`-1..11`) |
-| `joint_offset` | `[L,2]` | Joint multiplier and additive offset |
-| `tool_link` | `[T]` | Link indices selected as tool frames |
-| `link_spheres` | `[E,S,4]` or absent | Link-local xyz and radius per environment |
-| `sphere_link` | `[S]` or absent | Owning link of each sphere |
+The following four replay labels do not yet have valid end-to-end CUDA parity
+evidence:
 
-Names, base link, degree count, and the upstream revision travel with the
-arrays. Float data is normalized to float64 and indices to explicit integer
-dtypes for deterministic portable handoff. This is configuration conversion,
-not a production FK or collision implementation.
+- PRM graph planning: the old replay exercised edge interpolation, not a PRM.
+- L-BFGS: the optimizer contract and invalid/nonfinite semantics need a shared
+  differentiable rollout and capability-specific validation.
+- Particle evolution: the old local replay exercised CEM while the capability
+  names upstream `EvolutionStrategies`; cross-device RNG identity is not a
+  valid contract.
+- Motion generation: the old replay exercised minimum-jerk interpolation, not
+  the real MotionPlanner/MotionGen stack.
 
-## Reproducible upstream workflow
+These four names remain evidence-blocked until their probes are replaced and
+run on the pinned CUDA host.
 
-The manager never places upstream source in this repository:
+## Platform and integration boundaries
 
-```bash
-python3 tools/upstream/manage.py fetch --destination /tmp/curobo-v2
-python3 tools/upstream/manage.py verify --source /tmp/curobo-v2
-python3 tools/upstream/manage.py audit \
-  --source /tmp/curobo-v2 \
-  --output artifacts/compat/macos-import-audit.json
-```
+CUDA graph capture, CUDA streams, NVRTC, raw Warp packed ABIs, Isaac Sim,
+Omniverse, ROS, USD authoring/viewers, and NVIDIA-only visualization or external
+asset integrations are platform substitutions or external-unavailable
+features. They must fail explicitly; the project does not emulate them with
+unrelated behavior.
 
-`fetch` requests the immutable commit directly and checks it out detached.
-`verify` resolves `HEAD^{commit}`, reads the raw Git commit object, and
-recomputes its Git SHA-1 (`SHA1("commit " + length + NUL + bytes)`). Thus a
-matching branch name, tag, or checkout label is insufficient.
+Portable observable solver behavior remains in scope. Mesh, voxel/ESDF,
+collision, dynamics, attachments/world mutation, spline interpolation, and
+particle/gradient optimizer support vary by the specific documented facade;
+do not infer support or rejection from an older wave note. Consult the runtime
+API, its tests, and the capability inventory for the exact slice.
 
-For an isolated upstream import experiment, install the verified source without
-dependencies into a disposable target:
+## Stable-release gates
 
-```bash
-python3 tools/upstream/manage.py install \
-  --source /tmp/curobo-v2 \
-  --target /tmp/curobo-v2-install
-```
+A stable drop-in claim requires all of the following:
 
-Upstream's normal runtime dependencies must be supplied separately. They are
-not dependencies of `curobo-metal` and the compatibility conversion does not
-need that install.
+1. Classify every strict `_src` export/signature difference and make the
+   supported-symbol gate fail closed.
+2. Replace and pass all four invalid parity probes, then broaden all nineteen
+   capabilities across dtype/device, batch/layout, invalid/infeasible,
+   mutation/cache, gradient, collision-boundary, and repeatability cases.
+3. Classify the 211 pinned upstream test modules and 14 examples; execute every
+   applicable item unchanged against the installed wheel and record exclusions.
+4. Pass clean wheel and sdist installs on the supported Python matrix, full
+   fallback-disabled Apple MPS tests, CUDA replay, metadata/license checks, and
+   namespace-conflict checks from a clean tagged commit.
 
-## Import and device policy
-
-Importing `curobo_metal.compat` may import NumPy and the Python standard
-library. It must not import PyTorch, CUDA bindings, Warp, Isaac Sim, or
-Omniverse. Tensor-like inputs are handled structurally through
-`detach().cpu().numpy()`; NumPy mappings need none of those methods. The audit
-checks both the static import graph and a fresh runtime import, while the tests
-exercise mapping and tensor-like conversion with CUDA unavailable.
-
-No device fallback occurs in this layer: it owns no execution device and
-launches no operations. A future backend must make transfer and dispatch
-explicit.
-
-## Explicitly unsupported upstream features
-
-The adapter rejects branching kinematic trees, malformed joint maps, unknown
-joint types, and inconsistent sphere/tool maps. The following features remain
-unsupported and are never silently discarded:
-
-- URDF, USD, XRDF, or YAML parsing inside `curobo-metal`;
-- mimic joints whose generated joint map is not a simple serial active-joint
-  sequence, and arbitrary-axis joints outside pinned cuRobo `JointType`;
-- multiple branches, multiple roots, closed chains, and whole-body models;
-- `Kinematics.compute_kinematics` execution, Jacobians, center of mass,
-  dynamics, gradients, and any production FK kernel;
-- `RobotSceneCollisionCfg`, `RobotCollisionCheckerCfg`, and
-  `RobotSceneCollision` construction;
-- self-collision pair generation/reduction and all collision query execution;
-- cuboid, mesh/BVH, voxel, ESDF, swept-volume, continuous collision, and sphere
-  fitting;
-- CUDA/PyBind and `cuda-core` backend launches, CUDA Graph capture, Warp
-  initialization/launch, Isaac Sim, Omniverse, and USD integration;
-- Motion generation is provided separately by the Wave 6B portable facade
-  documented in `motion-gen-compatibility.md`; it consumes the production
-  operators rather than extending this configuration-conversion seam;
-- attached-object mutation after conversion, per-environment sphere mutation,
-  mesh export, visualization, and asset resolution;
-- joint limits, c-space weights, lock-state reconstruction, inertial data,
-  grasp-contact metadata, and self-collision padding/ignore metadata.
-
-Those omissions define the end of Wave 2C. Later work must add an explicit
-backend contract and tests before consuming more upstream state.
+Until those gates close, release notes and package metadata must retain the
+alpha/non-drop-in warning.
