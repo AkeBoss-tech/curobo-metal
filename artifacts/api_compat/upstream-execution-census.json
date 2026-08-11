@@ -8,101 +8,142 @@
   },
   "entries": [
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "not_applicable",
+      "evidence": [
+        "Pinned source: curobo/examples/__init__.py is an empty package marker with no executable workload."
+      ],
       "module": "curobo.examples",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "Package initialization alone does not test or demonstrate a release behavior.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "platform_substituted",
+      "evidence": [
+        "docs/getting-started-portable.md documents the executed portable URDF-build workflow and its mesh-fitting boundary.",
+        "tests/integration/test_portable_getting_started_examples.py exercises the portable getting-started workflows."
+      ],
       "module": "curobo.examples.getting_started.build_robot_model",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "The relevant URDF construction workflow has portable evidence, but the pinned self-test selects device='cuda' and its full mesh sphere-fitting path depends on Warp/MorphIt behavior; the unchanged module has not run on Metal.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "external_unavailable",
+      "evidence": [
+        "Pinned source: curobo/examples/getting_started/feature_mapping.py requires a Sun3D dataset, downloads NVlabs/RADIO through torch.hub, and uses CUDA by default.",
+        "docs/getting-started-portable.md records feature-volume fusion as outside the portable smoke."
+      ],
       "module": "curobo.examples.getting_started.feature_mapping",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "Execution depends on an externally downloaded Sun3D corpus and C-RADIO checkpoint (and optionally Hugging Face authentication/Viser), while the pinned implementation also selects CUDA.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "platform_substituted",
+      "evidence": [
+        "docs/upstream-example-replay.md records an executed MPS adaptation and the failed literal unchanged attempt.",
+        "artifacts/correctness/upstream_fk_example.json records the adapted fallback-disabled MPS result."
+      ],
       "module": "curobo.examples.getting_started.forward_kinematics",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "The tutorial workload has concrete Metal evidence, but the pinned file hard-codes CUDA tensors and CUDA timing events, so it cannot be classified as unchanged execution on Apple Silicon.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "external_unavailable",
+      "evidence": [
+        "Pinned source: curobo/examples/getting_started/humanoid_retargeting.py imports warp and the separately distributed soma_retargeter package and expects Unitree retargeting assets.",
+        "docs/getting-started-portable.md records this tutorial as outside the portable smoke."
+      ],
       "module": "curobo.examples.getting_started.humanoid_retargeting",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "The unchanged example requires the external soma_retargeter ecosystem, Warp, Unitree configuration/motion assets, and optional Viser/USD export; those dependencies are not part of the alpha distribution.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "platform_substituted",
+      "evidence": [
+        "docs/getting-started-portable.md documents the executed portable reachable-pose IK workflow.",
+        "tests/integration/test_portable_getting_started_examples.py exercises the portable getting-started workflows."
+      ],
       "module": "curobo.examples.getting_started.inverse_kinematics",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "Portable IK is exercised, but the pinned tutorial constructs CUDA device state/configuration and its interactive modes require Viser; no unchanged Metal execution is claimed.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "platform_substituted",
+      "evidence": [
+        "docs/getting-started-portable.md documents the executed portable IK-plus-trajectory planning route.",
+        "tests/integration/test_portable_getting_started_examples.py exercises the portable getting-started workflows."
+      ],
       "module": "curobo.examples.getting_started.motion_planning",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "The planning workflow has portable evidence, but the pinned module selects CUDA and uses CUDA graph warmup/timing; interactive operation additionally uses Viser and plotting dependencies.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "platform_substituted",
+      "evidence": [
+        "docs/getting-started-portable.md identifies the portable MPC coverage and CUDA-graph/Viser boundary.",
+        "tests/dropin/mpc_runtime documents executable portable MPC behavior."
+      ],
       "module": "curobo.examples.getting_started.reactive_control",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "Underlying MPC behavior is tested portably, but the pinned real-time tutorial depends on CUDA-oriented runtime behavior and its interactive route requires Viser; the unchanged example has not run on Metal.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "external_unavailable",
+      "evidence": [
+        "Pinned source: curobo/examples/getting_started/volumetric_mapping.py requires a separately downloaded Sun3D RGB-D scene and defaults to cuda:0.",
+        "docs/getting-started-portable.md documents synthetic portable mapping as a substitution, not unchanged Sun3D execution."
+      ],
       "module": "curobo.examples.getting_started.volumetric_mapping",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "The unchanged workload cannot be executed without the external ~1.4 GB Sun3D scene; its CUDA block-map implementation and optional Viser visualization also require substitution on Metal.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "platform_substituted",
+      "evidence": [
+        "Pinned source: curobo/examples/guides/custom_optimization.py constructs DeviceCfg(device=torch.device('cuda:0')) and uses CudaEventTimer.",
+        "tests/dropin and tests/parity contain portable Rosenbrock optimizer coverage, but no unchanged-example execution artifact."
+      ],
       "module": "curobo.examples.guides.custom_optimization",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "Rosenbrock optimization is a relevant portable surface, but the bundled guide hard-codes CUDA and CUDA timing and therefore requires a device/timer substitution; it is not an unchanged pass.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "external_unavailable",
+      "evidence": [
+        "Pinned source: curobo/examples/reference/lidar_volumetric_mapping.py requires an Oxford Spires sequence from the ori-drs/oxford_spires_dataset Hugging Face dataset.",
+        "The same source optionally imports the feature-mapping C-RADIO pipeline and defaults integration to CUDA."
+      ],
       "module": "curobo.examples.reference.lidar_volumetric_mapping",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "No unchanged run is possible without the external Oxford Spires lidar/camera dataset; feature-query mode adds C-RADIO downloads and Viser, and full integration requires CUDA substitution.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "external_unavailable",
+      "evidence": [
+        "Pinned source: curobo/examples/reference/live_volumetric_mapping_mpc.py imports pyrealsense2 inside camera capture and defaults to cuda:0.",
+        "Pinned source constructs a ViserVisualizer for the live target and reconstruction interface."
+      ],
       "module": "curobo.examples.reference.live_volumetric_mapping_mpc",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "The reference application requires a live Intel RealSense camera/pyrealsense2 and Viser interactive service; its mapper/MPC loop is CUDA-oriented. Those hardware and service dependencies are unavailable in the release gate.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "external_unavailable",
+      "evidence": [
+        "Pinned source: curobo/examples/reference/robot_pose_calibration.py unconditionally constructs ViserVisualizer and defaults its robot/point tensors to cuda:0.",
+        "No checked-in unchanged execution artifact exists for this interactive reference example."
+      ],
       "module": "curobo.examples.reference.robot_pose_calibration",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "This is an interactive Viser calibration server rather than a headless alpha example, and its pinned implementation is CUDA-specific; both the external viewer and backend require substitution.",
       "surface": "bundled_example"
     },
     {
-      "disposition": "unreviewed",
-      "evidence": [],
+      "disposition": "external_unavailable",
+      "evidence": [
+        "Pinned source: curobo/examples/reference/sphere_fit_comparison.py imports trimesh and viser and starts an interactive Viser server.",
+        "No checked-in unchanged execution artifact exists for this interactive reference example."
+      ],
       "module": "curobo.examples.reference.sphere_fit_comparison",
-      "rationale": "Pending applicability and dependency review.",
+      "rationale": "The example is an interactive mesh-visualization comparison requiring external trimesh/Viser dependencies and robot mesh assets; it is not a headless unchanged release gate.",
       "surface": "bundled_example"
     },
     {
@@ -1587,10 +1628,10 @@
   "summary": {
     "by_disposition": {
       "applicable_unchanged": 0,
-      "external_unavailable": 0,
-      "not_applicable": 0,
-      "platform_substituted": 0,
-      "unreviewed": 225
+      "external_unavailable": 7,
+      "not_applicable": 1,
+      "platform_substituted": 6,
+      "unreviewed": 211
     },
     "by_surface": {
       "bundled_example": 14,

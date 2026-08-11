@@ -20,11 +20,11 @@ def test_checked_in_census_is_exact_and_fail_closed() -> None:
         "total": 225,
         "by_surface": {"bundled_test": 211, "bundled_example": 14},
         "by_disposition": {
-            "unreviewed": 225,
+            "unreviewed": 211,
             "applicable_unchanged": 0,
-            "platform_substituted": 0,
-            "external_unavailable": 0,
-            "not_applicable": 0,
+            "platform_substituted": 6,
+            "external_unavailable": 7,
+            "not_applicable": 1,
         },
         "review_complete": False,
     }
@@ -43,11 +43,21 @@ def test_missing_entry_is_rejected() -> None:
 
 def test_reviewed_entry_requires_evidence() -> None:
     changed = copy.deepcopy(CENSUS)
-    changed["entries"][0]["disposition"] = "not_applicable"
+    entry = next(item for item in changed["entries"] if item["disposition"] == "unreviewed")
+    entry["disposition"] = "not_applicable"
+    entry["evidence"] = []
     with pytest.raises(ValueError, match="reviewed entry has no evidence"):
         validate(INVENTORY, changed)
 
 
 def test_release_gate_rejects_unreviewed_entries() -> None:
-    with pytest.raises(ValueError, match="225 unreviewed"):
+    with pytest.raises(ValueError, match="211 unreviewed"):
         validate(INVENTORY, CENSUS, require_reviewed=True)
+
+
+def test_bundled_examples_are_reviewed_without_unexecuted_pass_claims() -> None:
+    examples = [entry for entry in CENSUS["entries"] if entry["surface"] == "bundled_example"]
+    assert len(examples) == 14
+    assert all(entry["disposition"] != "unreviewed" for entry in examples)
+    assert all(entry["disposition"] != "applicable_unchanged" for entry in examples)
+    assert all(entry["evidence"] for entry in examples)
