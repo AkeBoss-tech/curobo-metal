@@ -58,7 +58,7 @@
     {
       "capability": "optim.particle_evolution",
       "manifest": "optim.particle_evolution/metal-manifest.json",
-      "manifest_sha256": "596570517cafc7836f73bf8d854f55edad9b6c33b05a01c7d3895be683cb5136"
+      "manifest_sha256": "1eec259bb353b02aa0f63941c19d173b7ccb86e61fe85ff1fd49c0516af05386"
     },
     {
       "capability": "optim.lbfgs",
@@ -83,7 +83,7 @@
     {
       "capability": "graph.prm_planner",
       "manifest": "graph.prm_planner/metal-manifest.json",
-      "manifest_sha256": "5a612b347a9ad4df15bf6c3773d39ab6180efc5f2f569e9c659aaab7ad6ecc13"
+      "manifest_sha256": "c0f6345649eaa2df14c2b689d061140c2fc28bb861807d43a2cb5581fefc4ecd"
     },
     {
       "capability": "motion_generation.motion_gen",

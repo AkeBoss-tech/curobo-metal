@@ -2,16 +2,61 @@
   "capability": "optim.particle_evolution",
   "format": "curobo-metal-replay-corpus",
   "inputs": [
-    "q"
+    "particle_initial",
+    "particle_target",
+    "particle_lower",
+    "particle_upper",
+    "particle_seeds",
+    "particle_invalid_covariance"
   ],
   "required_evidence": {
     "edge": {
-      "case": "deterministic_seed",
+      "case": "facade_lifecycle",
       "output": "edge_observed"
     },
     "invalid": {
-      "case": "bad_covariance",
+      "case": "invalid_covariance",
       "output": "invalid_rejected"
+    }
+  },
+  "tensors": {
+    "particle_initial": {
+      "data": [
+        [[-0.8, 0.7], [-0.6, 0.5], [-0.4, 0.3]],
+        [[0.9, -0.7], [0.7, -0.5], [0.5, -0.3]],
+        [[-0.9, -0.8], [-0.7, -0.6], [-0.5, -0.4]]
+      ],
+      "dtype": "float32",
+      "shape": [3, 3, 2]
+    },
+    "particle_target": {
+      "data": [
+        [[0.25, -0.2], [0.3, -0.1], [0.35, 0.0]],
+        [[-0.25, 0.2], [-0.3, 0.1], [-0.35, 0.0]],
+        [[0.1, 0.15], [0.15, 0.2], [0.2, 0.25]]
+      ],
+      "dtype": "float32",
+      "shape": [3, 3, 2]
+    },
+    "particle_lower": {
+      "data": [[[-1.0, -1.0], [-1.0, -1.0], [-1.0, -1.0]]],
+      "dtype": "float32",
+      "shape": [1, 3, 2]
+    },
+    "particle_upper": {
+      "data": [[[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]]],
+      "dtype": "float32",
+      "shape": [1, 3, 2]
+    },
+    "particle_seeds": {
+      "data": [7, 19, 43, 71, 101],
+      "dtype": "int64",
+      "shape": [5]
+    },
+    "particle_invalid_covariance": {
+      "data": [[1.0, 2.0], [2.0, 1.0]],
+      "dtype": "float32",
+      "shape": [2, 2]
     }
   },
   "version": 1

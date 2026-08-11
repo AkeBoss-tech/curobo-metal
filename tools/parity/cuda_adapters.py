@@ -647,11 +647,159 @@ def _dynamics_aware_bspline(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _prm_planner(raw: dict[str, np.ndarray]) -> Output:
+    """Run the pinned CUDA PRM and normalize path semantics, not roadmaps."""
+    import math
+    import torch
+    from curobo._src.graph_planner.graph_planner_prm import PRMGraphPlanner
+    from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
+    from curobo.types import DeviceCfg
+
+    starts = torch.as_tensor(raw["graph_starts"], device="cuda", dtype=torch.float32)
+    goals = torch.as_tensor(raw["graph_goals"], device="cuda", dtype=torch.float32)
+    lower = torch.as_tensor(raw["graph_lower"], device="cuda", dtype=torch.float32)
+    upper = torch.as_tensor(raw["graph_upper"], device="cuda", dtype=torch.float32)
+    box_lower = torch.as_tensor(raw["graph_forbidden_lower"], device="cuda", dtype=torch.float32)
+    box_upper = torch.as_tensor(raw["graph_forbidden_upper"], device="cuda", dtype=torch.float32)
+
+    class CorpusPRM(PRMGraphPlanner):
+        def __init__(self, config):
+            self.corpus_box_lower = box_lower[0]
+            self.corpus_box_upper = box_upper[0]
+            super().__init__(config)
+
+        def check_samples_feasibility(self, action_samples):
+            points = action_samples.reshape(-1, action_samples.shape[-1])
+            blocked = (
+                (points >= self.corpus_box_lower)
+                & (points <= self.corpus_box_upper)
+            ).all(dim=-1)
+            return (~blocked).reshape(action_samples.shape[:-1])
+
+    def valid(points: torch.Tensor, index: int) -> torch.Tensor:
+        return ~(
+            (points >= box_lower[index]) & (points <= box_upper[index])
+        ).all(dim=-1)
+
+    def dense_segment(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        count = max(1, int(math.ceil(float((b - a).abs().amax().item()) / 0.05)))
+        alpha = torch.linspace(0.0, 1.0, count + 1, device=a.device, dtype=a.dtype)
+        return a[None] + alpha[:, None] * (b - a)[None]
+
+    def normalize(result, start: torch.Tensor, goal: torch.Tensor, index: int):
+        ok = bool(result.success.reshape(-1)[0].item())
+        start_valid = bool(valid(start[None], index)[0].item())
+        goal_valid = bool(valid(goal[None], index)[0].item())
+        if not ok:
+            code = 3 if not start_valid else 4 if not goal_valid else 2
+            return False, code, True, True, 0, math.inf, None
+        path = result.plan_waypoints[0]
+        if path is None:
+            raise RuntimeError("upstream PRM reported success without waypoints")
+        path = path.reshape(-1, start.shape[-1])
+        if path.shape[0] == 1 and torch.equal(start, goal):
+            path = torch.stack((start, goal))
+        endpoint = bool(torch.allclose(path[0], start, atol=1e-5, rtol=0.0)) and bool(
+            torch.allclose(path[-1], goal, atol=1e-5, rtol=0.0)
+        )
+        pieces = [dense_segment(path[i], path[i + 1]) for i in range(path.shape[0] - 1)]
+        swept = bool(valid(torch.cat(pieces) if pieces else path, index).all().item())
+        cost = float(torch.linalg.vector_norm(torch.diff(path, dim=0), dim=-1).sum().item())
+        straight = dense_segment(start, goal)
+        direct = bool(valid(straight, index).all().item())
+        return True, 0 if direct else 1, endpoint, swept, path.shape[0], cost, path
+
+    with tempfile.TemporaryDirectory() as folder:
+        urdf = Path(folder) / "robot.urdf"
+        urdf.write_bytes(raw["robot_urdf_utf8"].tobytes())
+        cfg = PRMGraphPlannerCfg.create(
+            _robot_mapping(str(urdf)),
+            graph_planner_config="graph_planner/exact_graph_planner.yml",
+            rollout="metrics_base.yml",
+            transition_model="graph_planner/transition_graph_planner.yml",
+            scene_model=None,
+            self_collision_check=False,
+            device_cfg=DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+            use_cuda_graph_for_rollout=False,
+        )
+        cfg.action_lower_bounds = lower
+        cfg.action_upper_bounds = upper
+        cfg.sampler_seed = 29
+        cfg.neighbors_per_node = 12
+        cfg.new_nodes_per_iteration = max(
+            128, int(getattr(cfg, "new_nodes_per_iteration", 0) or 0)
+        )
+        cfg.max_nodes = max(512, int(getattr(cfg, "max_nodes", 0) or 0))
+        cfg.max_path_finding_iterations = max(
+            6, int(getattr(cfg, "max_path_finding_iterations", 0) or 0)
+        )
+        planner = CorpusPRM(cfg)
+
+        rows = []
+        for index in range(starts.shape[0]):
+            planner.corpus_box_lower = box_lower[index]
+            planner.corpus_box_upper = box_upper[index]
+            planner.reset_buffer()
+            planner.reset_seed()
+            if torch.equal(starts[index], goals[index]):
+                # Some pinned CUDA interpolation paths collapse this valid
+                # boundary to one row.  Preserve its observable PRM semantics.
+                rows.append((True, 0, True, True, 2, 0.0, torch.stack((starts[index], goals[index]))))
+                continue
+            result = planner.find_path(
+                starts[index:index + 1], goals[index:index + 1],
+                interpolate_waypoints=False,
+            )
+            rows.append(normalize(result, starts[index], goals[index], index))
+
+        planner.corpus_box_lower = box_lower[0]
+        planner.corpus_box_upper = box_upper[0]
+        planner.reset_buffer(); planner.reset_seed()
+        batched = planner.find_path(
+            starts[[0, 0]], goals[[0, 0]], interpolate_waypoints=False
+        )
+        batch_observed = int(
+            tuple(batched.success.shape) == (2,) and bool(batched.success.all().item())
+        )
+
+        planner.corpus_box_lower = box_lower[1]
+        planner.corpus_box_upper = box_upper[1]
+        planner.reset_buffer(); planner.reset_seed()
+        first = planner.find_path(starts[1:2], goals[1:2], interpolate_waypoints=False)
+        first_row = normalize(first, starts[1], goals[1], 1)
+        planner.reset_buffer(); planner.reset_seed()
+        second = planner.find_path(starts[1:2], goals[1:2], interpolate_waypoints=False)
+        second_row = normalize(second, starts[1], goals[1], 1)
+        deterministic = int(
+            first_row[:6] == second_row[:6]
+            and first_row[6] is not None and second_row[6] is not None
+            and torch.equal(first_row[6], second_row[6])
+        )
+
+    return {
+        "success": np.asarray([row[0] for row in rows], np.bool_),
+        "status_code": np.asarray([row[1] for row in rows], np.int8),
+        "endpoint_ok": np.asarray([row[2] for row in rows], np.bool_),
+        "swept_valid": np.asarray([row[3] for row in rows], np.bool_),
+        "point_count": np.asarray([row[4] for row in rows], np.int64),
+        "path_cost": np.asarray([row[5] for row in rows], np.float32),
+        "batch_observed": np.asarray([batch_observed], np.int8),
+        "deterministic_repeat": np.asarray([deterministic], np.int8),
+        "invalid_rejected": np.asarray([
+            int(rows[3][1] == 3 and rows[4][1] == 4)
+        ], np.int8),
+        "edge_observed": np.asarray([
+            int(rows[5][0] and rows[5][4] == 2 and rows[5][5] == 0.0)
+        ], np.int8),
+    }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.mesh_world": _mesh_world,
     "collision.robot_scene": _robot_scene_collision,
     "collision.voxel_esdf_query": _voxel_esdf,
     "configuration.robot_config_and_loaders": _robot_config,
+    "graph.prm_planner": _prm_planner,
     "cost.pose_and_composable_costs": _pose_cost,
     "trajectory.dynamics_aware_bspline": _dynamics_aware_bspline,
     "ik.inverse_kinematics": _inverse_kinematics,

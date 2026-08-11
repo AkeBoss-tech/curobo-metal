@@ -12,6 +12,7 @@ import pytest
 
 from tools.parity.compare_paired import (
     _validate_lbfgs_semantics,
+    _validate_particle_semantics,
     _validate_prm_semantics,
     _validate_required_evidence,
     compare_ready,
@@ -156,6 +157,48 @@ def test_lbfgs_semantic_validator_rejects_missing_improvement(tmp_path):
     assert not report["objective_improved"]["passed"]
 
 
+def test_particle_replay_exercises_es_facade_semantics(tmp_path):
+    case = BY_ID["optim.particle_evolution"]
+    raw, _ = load_corpus(ARTIFACT / "corpus", case)
+    assert set(raw) == {
+        "particle_initial", "particle_target", "particle_lower", "particle_upper",
+        "particle_seeds", "particle_invalid_covariance",
+    }
+    output = probe(case, raw, "cpu")
+    assert output["solution"].shape == (3, 3, 2)
+    assert output["objective_improved"].all()
+    for key in (
+        "solution_finite", "bounds_satisfied", "deterministic_repeat",
+        "batch_independent", "shift_observed", "fixed_sample_repeat",
+    ):
+        assert output[key].item() == 1
+    assert np.all(output["multi_seed_improvement_rate"] >= 0.8)
+
+    inputs_path, output_path = tmp_path / "inputs.npz", tmp_path / "outputs.npz"
+    np.savez(inputs_path, **raw)
+    np.savez(output_path, **output)
+    with np.load(inputs_path, allow_pickle=False) as inputs, np.load(
+        output_path, allow_pickle=False
+    ) as outputs:
+        report = _validate_particle_semantics(outputs, inputs, "cpu-reference")
+    assert report and all(item["passed"] for item in report.values())
+
+
+def test_particle_semantic_validator_rejects_rng_identical_but_unimproved_result(tmp_path):
+    case = BY_ID["optim.particle_evolution"]
+    raw, _ = load_corpus(ARTIFACT / "corpus", case)
+    output = probe(case, raw, "cpu")
+    output["solution"] = raw["particle_initial"].copy()
+    inputs_path, output_path = tmp_path / "inputs.npz", tmp_path / "outputs.npz"
+    np.savez(inputs_path, **raw)
+    np.savez(output_path, **output)
+    with np.load(inputs_path, allow_pickle=False) as inputs, np.load(
+        output_path, allow_pickle=False
+    ) as outputs:
+        report = _validate_particle_semantics(outputs, inputs, "test")
+    assert not report["objective_improved"]["passed"]
+
+
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
     assert set(ADAPTERS) == {
         "collision.mesh_world",
@@ -163,6 +206,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "collision.voxel_esdf_query",
         "configuration.robot_config_and_loaders",
         "cost.pose_and_composable_costs",
+        "graph.prm_planner",
         "ik.inverse_kinematics",
         "trajectory.trajectory_optimization",
         "trajectory.dynamics_aware_bspline",
@@ -223,6 +267,7 @@ def _fake_cuda_evidence(root: Path) -> None:
                 "sha256": sha256(output),
                 "tensors": tensors,
             },
+            "evidence": metal["evidence"],
             "equivalence_claimed": False,
             "tolerance": {"rtol": case.rtol, "atol": case.atol},
         }
@@ -321,7 +366,7 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
     gradients = statuses = 0
     for capability, case in BY_ID.items():
         manifest = json.loads((ARTIFACT / capability / "metal-manifest.json").read_text())
-        if capability in {"graph.prm_planner", "optim.lbfgs"}:
+        if capability == "optim.lbfgs":
             assert manifest["device"] == "cpu"
             assert manifest["backend"] == "cpu-reference"
             assert manifest["evidence_state"] == "portable_reference_pending_mps"

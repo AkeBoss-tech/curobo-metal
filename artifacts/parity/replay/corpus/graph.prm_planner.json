@@ -7,7 +7,8 @@
     "graph_lower",
     "graph_upper",
     "graph_forbidden_lower",
-    "graph_forbidden_upper"
+    "graph_forbidden_upper",
+    "robot_urdf_utf8"
   ],
   "tensors": {
     "graph_forbidden_lower": {"data": [[2.0, 2.0], [-0.2, -0.35], [-0.2, -1.0], [-0.9, -0.1], [0.7, -0.1], [2.0, 2.0]], "dtype": "float32", "shape": [6, 2]},

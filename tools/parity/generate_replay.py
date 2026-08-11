@@ -32,7 +32,7 @@ from curobo_metal.ops.graph_planning import (
 from curobo._src.state.state_joint import JointState as ReplayJointState
 from curobo._src.util.trajectory import _cubic_boundary_spline
 from curobo_metal.ops.world_collision import Mesh, VoxelGrid, mesh_distance, query_esdf
-from curobo_metal.optim import LBFGSConfig, ParticleConfig, lbfgs_optimize, particle_optimize
+from curobo_metal.optim import LBFGSConfig, lbfgs_optimize
 from curobo_metal.reference import SerialRobot
 from curobo_metal.types import DeviceCfg, JointState, MotionGenStatus, PlanningResult, Pose
 from curobo_metal.ops.collision import sphere_sphere_signed_distance
@@ -153,6 +153,117 @@ def _lbfgs_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarr
             int(bool(torch.equal(solution, reset_solution)))
         ], dtype=np.int8),
         "nonfinite_status": nonfinite_status,
+    }
+
+
+def _particle_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
+    """Exercise the public EvolutionStrategies facade using semantic outcomes."""
+    from curobo._src.optim.components.particle_opt_core import SampleMode
+    from curobo._src.optim.particle.evolution_strategies import (
+        EvolutionStrategies,
+        EvolutionStrategiesCfg,
+    )
+    from curobo._src.optim.particle.sample_strategies import ParticleSamplerCfg
+    from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
+
+    initial = _tensor(raw["particle_initial"], device)
+    target = _tensor(raw["particle_target"], device)
+    lower = _tensor(raw["particle_lower"], device)
+    upper = _tensor(raw["particle_upper"], device)
+    seeds = raw["particle_seeds"].astype(np.int64, copy=False)
+    device_cfg = CompatDeviceCfg(device=torch.device(device), dtype=torch.float32)
+
+    class QuadraticRollout:
+        action_horizon = initial.shape[1]
+        horizon = initial.shape[1]
+        action_dim = initial.shape[2]
+        action_bound_lows = lower
+        action_bound_highs = upper
+        action_step_max = None
+        action_horizon_step_max = None
+
+        def __init__(self, goal: torch.Tensor):
+            self.goal = goal
+
+        def __call__(self, action: torch.Tensor) -> torch.Tensor:
+            if action.shape[0] % self.goal.shape[0]:
+                raise ValueError("ES rollout batch must be a multiple of the corpus batch")
+            repeat = action.shape[0] // self.goal.shape[0]
+            goal = self.goal.repeat_interleave(repeat, dim=0)
+            return (action - goal).square().sum(dim=(-2, -1))
+
+    def build(seed: int, goal: torch.Tensor = target, *, fixed_samples: bool = False):
+        sampler = ParticleSamplerCfg(
+            device_cfg=device_cfg, fixed_samples=fixed_samples, seed=int(seed)
+        )
+        config = EvolutionStrategiesCfg(
+            device_cfg=device_cfg, num_iters=8, num_particles=48,
+            num_problems=initial.shape[0], null_act_frac=0.0,
+            init_cov=0.35, seed=int(seed), sample_params=sampler,
+            sample_mode=SampleMode.BEST, store_debug=True,
+            learning_rate=0.08, step_size_mean=0.8, step_size_cov=0.1,
+        )
+        rollout = QuadraticRollout(goal)
+        return EvolutionStrategies(config, [rollout], use_cuda_graph=False), rollout
+
+    optimizer, rollout = build(int(seeds[0]))
+    initial_objective = rollout(initial)
+    solution = optimizer.optimize(initial)
+    final_objective = rollout(solution)
+    repeat_optimizer, _ = build(int(seeds[0]))
+    repeat_solution = repeat_optimizer.optimize(initial)
+
+    shifted_target = target.clone()
+    shifted_target[1] = -shifted_target[1]
+    independent_optimizer, _ = build(int(seeds[0]), shifted_target)
+    independent_solution = independent_optimizer.optimize(initial)
+
+    mean_before_shift = optimizer.mean_action.detach().clone()
+    optimizer.shift(1)
+    shifted_mean = optimizer.mean_action.detach().clone()
+    expected_shift = torch.roll(mean_before_shift, shifts=-1, dims=-2)
+    expected_shift[:, -1] = mean_before_shift[:, -1]
+
+    fixed_optimizer, _ = build(int(seeds[0]), fixed_samples=True)
+    fixed_optimizer.update_seed(initial)
+    population_zero = fixed_optimizer._population(
+        initial.shape[0], initial.shape[1], initial.shape[2],
+        device=initial.device, dtype=initial.dtype, iteration=0,
+    )
+    population_one = fixed_optimizer._population(
+        initial.shape[0], initial.shape[1], initial.shape[2],
+        device=initial.device, dtype=initial.dtype, iteration=1,
+    )
+
+    seed_initial, seed_final = [], []
+    for seed in seeds:
+        seeded, seeded_rollout = build(int(seed))
+        seed_initial.append(seeded_rollout(initial))
+        seed_final.append(seeded_rollout(seeded.optimize(initial)))
+    initial_samples = torch.stack(seed_initial)
+    final_samples = torch.stack(seed_final)
+
+    return {
+        "solution": solution.detach().cpu().numpy(),
+        "solution_shape": np.asarray(solution.shape, np.int64),
+        "initial_objective": initial_objective.detach().cpu().numpy(),
+        "final_objective": final_objective.detach().cpu().numpy(),
+        "objective_improved": (final_objective < initial_objective).detach().cpu().numpy(),
+        "solution_finite": np.asarray([int(bool(torch.isfinite(solution).all().item()))], np.int8),
+        "bounds_satisfied": np.asarray([
+            int(bool(((solution >= lower) & (solution <= upper)).all().item()))
+        ], np.int8),
+        "deterministic_repeat": np.asarray([int(bool(torch.equal(solution, repeat_solution)))], np.int8),
+        "batch_independent": np.asarray([
+            int(bool(torch.equal(solution[0], independent_solution[0]) and
+                     torch.equal(solution[2], independent_solution[2])))
+        ], np.int8),
+        "shift_observed": np.asarray([int(bool(torch.equal(shifted_mean, expected_shift)))], np.int8),
+        "fixed_sample_repeat": np.asarray([int(bool(torch.equal(population_zero, population_one)))], np.int8),
+        "multi_seed_initial_mean": initial_samples.mean(0).detach().cpu().numpy(),
+        "multi_seed_final_mean": final_samples.mean(0).detach().cpu().numpy(),
+        "multi_seed_final_std": final_samples.std(0, unbiased=False).detach().cpu().numpy(),
+        "multi_seed_improvement_rate": (final_samples < initial_samples).float().mean(0).detach().cpu().numpy(),
     }
 
 
@@ -531,12 +642,7 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
     if case.probe == "lbfgs":
         return _lbfgs_replay(raw, device)
     if case.probe == "particle":
-        assert q is not None
-        def objective(x):
-            return ((x - .2) ** 2).sum(-1)
-
-        result = particle_optimize(objective, q, config=ParticleConfig(iterations=3, particles=8, elite_count=2, seed=7))
-        return {"solution": result.solution.detach().cpu().numpy(), "objective": result.objective.detach().cpu().numpy(), "converged": result.converged.cpu().numpy()}
+        return _particle_replay(raw, device)
     if case.capability == "trajectory.trajectory_optimization":
         from curobo._src.solver.solver_trajopt import TrajOptSolver
         from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
@@ -654,12 +760,37 @@ def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np
             env_indices=torch.ones(len(raw["voxel_points"]), dtype=torch.int64, device=device),
         ))
     if case.probe == "particle":
-        q = _tensor(raw["q"], device)
-        return _invalid_rejected(lambda: particle_optimize(
-            lambda x: x.square().sum(-1), q,
-            config=ParticleConfig(iterations=2, particles=4, elite_count=1,
-                                  covariance=torch.ones(3, device=device)),
-        ))
+        from curobo._src.optim.particle.evolution_strategies import (
+            EvolutionStrategies,
+            EvolutionStrategiesCfg,
+        )
+        from curobo._src.optim.particle.sample_strategies import ParticleSamplerCfg
+        from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
+
+        initial = _tensor(raw["particle_initial"], device)
+        covariance = _tensor(raw["particle_invalid_covariance"], device)
+
+        class InvalidCovarianceRollout:
+            action_horizon = initial.shape[1]
+            horizon = initial.shape[1]
+            action_dim = initial.shape[2]
+
+            def __call__(self, action):
+                return action.square().sum(dim=(-2, -1))
+
+        def invalid_covariance():
+            device_cfg = CompatDeviceCfg(device=torch.device(device), dtype=torch.float32)
+            sampler = ParticleSamplerCfg(
+                device_cfg=device_cfg, seed=7
+            )
+            config = EvolutionStrategiesCfg(
+                device_cfg=device_cfg, num_iters=2, num_particles=8,
+                num_problems=initial.shape[0], sample_params=sampler,
+                init_cov=covariance,
+            )
+            return EvolutionStrategies(config, [InvalidCovarianceRollout()]).optimize(initial)
+
+        return _invalid_rejected(invalid_covariance)
     if case.probe == "lbfgs":
         from curobo._src.optim.gradient.lbfgs import LBFGSOptCfg
         return _invalid_rejected(lambda: LBFGSOptCfg(history=0))
@@ -736,8 +867,12 @@ def _required_edge(case: Case, raw: dict[str, np.ndarray], device: str) -> np.nd
     if case.probe == "cost":
         return _edge_observed(lambda: pose_cost(torch.zeros((1, 6), device=device)))
     if case.probe == "particle":
-        assert q is not None
-        return _edge_observed(lambda: particle_optimize(lambda x: x.square().sum(-1), q[:1], config=ParticleConfig(iterations=2, particles=4, elite_count=1, seed=7)))
+        output = _particle_replay(raw, device)
+        observed = all(int(output[key][0]) == 1 for key in (
+            "solution_finite", "bounds_satisfied", "deterministic_repeat",
+            "batch_independent", "shift_observed", "fixed_sample_repeat",
+        )) and bool(output["objective_improved"].all())
+        return np.asarray([int(observed)], dtype=np.int8)
     if case.probe == "lbfgs":
         output = _lbfgs_replay(raw, device)
         observed = all(int(output[key][0]) == 1 for key in (

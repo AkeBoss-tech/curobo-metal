@@ -44,12 +44,16 @@ remaining user-relevant members have not all been classified and closed.
 The following four replay labels do not yet have valid end-to-end CUDA parity
 evidence:
 
-- PRM graph planning: the old replay exercised edge interpolation, not a PRM.
-- L-BFGS: the optimizer contract and invalid/nonfinite semantics need a shared
-  differentiable rollout and capability-specific validation.
-- Particle evolution: the old local replay exercised CEM while the capability
-  names upstream `EvolutionStrategies`; cross-device RNG identity is not a
-  valid contract.
+- PRM graph planning: the old interpolation probe has been replaced with real
+  declarative PRM scenarios and a pinned-upstream CUDA adapter, but that new
+  adapter has not yet been executed on the NVIDIA host.
+- L-BFGS: the old generic probe has been replaced with a bounded batched
+  `LBFGSOpt` facade contract, but it still needs a selective MPS replay and a
+  pinned-upstream CUDA adapter.
+- Particle evolution: the old CEM probe has been replaced with an
+  `EvolutionStrategies` facade contract that validates outcome semantics
+  across multiple seeds without requiring cross-device RNG identity. It still
+  needs a pinned-upstream CUDA adapter and execution.
 - Motion generation: the old replay exercised minimum-jerk interpolation, not
   the real MotionPlanner/MotionGen stack.
 

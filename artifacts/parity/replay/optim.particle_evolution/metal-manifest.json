@@ -3,7 +3,7 @@
   "capability": "optim.particle_evolution",
   "corpus": {
     "case_file": "optim.particle_evolution.json",
-    "case_sha256": "9bf6b6c9989db1aa0fd9fd25c68ffa82777a84f6b149185ab9a4d8a9f524a6e5",
+    "case_sha256": "7065e14535e329ea1e35533c0a9e04ae8c380166414364ce9cfa7254cdc7ae7e",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -11,37 +11,38 @@
   "equivalence_claimed": false,
   "evidence": {
     "edge": {
-      "case": "deterministic_seed",
+      "case": "facade_lifecycle",
       "executed": true,
       "output": "edge_observed"
     },
     "gradient": false,
     "invalid": {
-      "case": "bad_covariance",
+      "case": "invalid_covariance",
       "executed": true,
       "output": "invalid_rejected"
     },
     "probe_scope": "particle",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
+    "sha256": "ce0b0f6c692a5d6ccd79d329da5af13c293a7b67ca753fe4eea4266637fffc4c"
   },
-  "operation": "particle_evolution",
+  "operation": "evolution_strategies",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "a00c4e42896a9e8e85029d440a29de39ccda7abbdee2a2328b2a29aa847a03b4"
+    "sha256": "eb075c92e840b1513e934d8225acdba07b963a4034e70f2fc9a0273614c196a2"
   },
   "runtime": {
     "python": "3.13.9",
     "torch": "2.13.0"
   },
   "tolerance": {
-    "atol": 2e-05,
-    "rtol": 0.0002
+    "atol": 0,
+    "rtol": 0
   },
   "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
   "version": 1

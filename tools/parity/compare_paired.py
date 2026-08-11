@@ -200,6 +200,71 @@ def _validate_lbfgs_semantics(
     return report
 
 
+def _validate_particle_semantics(
+    outputs: np.lib.npyio.NpzFile, inputs: np.lib.npyio.NpzFile, backend: str
+) -> dict[str, dict[str, Any]]:
+    """Validate ES outcomes without requiring identical device RNG streams."""
+    report: dict[str, dict[str, Any]] = {}
+
+    def record(key: str, passed: bool) -> None:
+        report[key] = {"passed": bool(passed), "semantic": True, "backend": backend}
+
+    initial = inputs["particle_initial"]
+    target = inputs["particle_target"]
+    lower, upper = inputs["particle_lower"], inputs["particle_upper"]
+    solution = outputs["solution"] if "solution" in outputs.files else np.array([])
+    expected_shape = initial.shape
+    shape_ok = (
+        solution.shape == expected_shape
+        and "solution_shape" in outputs.files
+        and np.array_equal(outputs["solution_shape"], np.asarray(expected_shape, np.int64))
+    )
+    record("solution_shape", shape_ok)
+    finite = shape_ok and bool(np.isfinite(solution).all())
+    record("solution_finite", finite and "solution_finite" in outputs.files
+           and outputs["solution_finite"].shape == (1,)
+           and outputs["solution_finite"].dtype == np.int8
+           and int(outputs["solution_finite"][0]) == 1)
+    bounded = finite and bool(np.all(solution >= lower - 1e-6)) and bool(np.all(solution <= upper + 1e-6))
+    record("bounds_satisfied", bounded and "bounds_satisfied" in outputs.files
+           and outputs["bounds_satisfied"].shape == (1,)
+           and int(outputs["bounds_satisfied"][0]) == 1)
+
+    expected_initial = ((initial - target) ** 2).sum(axis=(-2, -1))
+    expected_final = ((solution - target) ** 2).sum(axis=(-2, -1)) if finite else np.array([])
+    initial_value = outputs["initial_objective"] if "initial_objective" in outputs.files else np.array([])
+    final_value = outputs["final_objective"] if "final_objective" in outputs.files else np.array([])
+    record("initial_objective", initial_value.shape == expected_initial.shape
+           and np.allclose(initial_value, expected_initial, rtol=2e-5, atol=2e-6))
+    record("final_objective", finite and final_value.shape == expected_final.shape
+           and np.allclose(final_value, expected_final, rtol=2e-5, atol=2e-6))
+    improved = expected_final < expected_initial if finite else np.array([], dtype=bool)
+    record("objective_improved", improved.shape == (initial.shape[0],) and bool(improved.all())
+           and "objective_improved" in outputs.files
+           and np.array_equal(outputs["objective_improved"], improved))
+
+    for key in (
+        "deterministic_repeat", "batch_independent", "shift_observed", "fixed_sample_repeat"
+    ):
+        record(key, key in outputs.files and outputs[key].shape == (1,)
+               and outputs[key].dtype == np.int8 and int(outputs[key][0]) == 1)
+
+    initial_mean = outputs["multi_seed_initial_mean"] if "multi_seed_initial_mean" in outputs.files else np.array([])
+    final_mean = outputs["multi_seed_final_mean"] if "multi_seed_final_mean" in outputs.files else np.array([])
+    final_std = outputs["multi_seed_final_std"] if "multi_seed_final_std" in outputs.files else np.array([])
+    rate = outputs["multi_seed_improvement_rate"] if "multi_seed_improvement_rate" in outputs.files else np.array([])
+    record("multi_seed_initial_mean", initial_mean.shape == expected_initial.shape
+           and np.allclose(initial_mean, expected_initial, rtol=2e-5, atol=2e-6))
+    record("multi_seed_final_mean", final_mean.shape == expected_initial.shape
+           and np.isfinite(final_mean).all() and bool(np.all(final_mean < expected_initial)))
+    record("multi_seed_final_std", final_std.shape == expected_initial.shape
+           and np.isfinite(final_std).all() and bool(np.all(final_std >= 0.0)))
+    record("multi_seed_improvement_rate", rate.shape == expected_initial.shape
+           and np.isfinite(rate).all() and bool(np.all(rate >= 0.8))
+           and bool(np.all(rate <= 1.0)))
+    return report
+
+
 def compare_capability(
     metal_root: Path, cuda_root: Path, capability: str
 ) -> dict[str, Any]:
@@ -285,16 +350,17 @@ def compare_capability(
         }
         if declared != actual:
             raise ValueError(f"{capability}: CUDA tensor schema does not match manifest")
-        if capability in {"graph.prm_planner", "optim.lbfgs"}:
+        if capability in {"graph.prm_planner", "optim.lbfgs", "optim.particle_evolution"}:
             # Planner roadmaps and optimizer iteration histories need not be
             # identical across devices. Require both backends to satisfy the
             # capability's observable outcome invariants instead.
             _validate_required_evidence(cuda_manifest, cuda, capability)
             with np.load(input_path, allow_pickle=False) as inputs:
-                validator = (
-                    _validate_prm_semantics if capability == "graph.prm_planner"
-                    else _validate_lbfgs_semantics
-                )
+                validator = {
+                    "graph.prm_planner": _validate_prm_semantics,
+                    "optim.lbfgs": _validate_lbfgs_semantics,
+                    "optim.particle_evolution": _validate_particle_semantics,
+                }[capability]
                 metal_semantics = validator(metal, inputs, "metal")
                 cuda_semantics = validator(cuda, inputs, "cuda")
             for key in sorted(metal_semantics):

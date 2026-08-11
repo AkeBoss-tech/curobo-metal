@@ -1,13 +1,13 @@
 {
-  "backend": "cpu-reference",
+  "backend": "metal",
   "capability": "graph.prm_planner",
   "corpus": {
     "case_file": "graph.prm_planner.json",
-    "case_sha256": "8c60f0b412a19d1ecf8426c8e3ae768a27bd250ae6851f0a63cecb726dd03668",
+    "case_sha256": "f4e256db547f4aa8367e0a7d8e24ca1200941cc26a0f41dc5f310ce66a4c0e46",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
-  "device": "cpu",
+  "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
     "edge": {
@@ -24,12 +24,12 @@
     "probe_scope": "graph",
     "status": true
   },
-  "evidence_state": "portable_reference_pending_mps",
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "3d43ed8c1e12e5f11a11dc411eff8b26a07f4e1b7021894cff3ab053e8577e42"
+    "sha256": "ba55adee467ea31a470dc2d960f7b19ebaefc4af84d00d5f89c150c56d05ffca"
   },
   "operation": "prm_planner",
   "output": {
