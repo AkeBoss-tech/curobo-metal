@@ -38,7 +38,7 @@ _ROWS = [
     ("collision.voxel_esdf_query", "voxel_esdf", 3e-5, 3e-6, "voxel", "bad_environment", "grid_boundary", "real pinned V2 scene-level CUDA voxel cache and Warp ESDF adapter available for the serialized identity-grid corpus"),
     ("cost.pose_and_composable_costs", "pose_costs", 2e-5, 2e-6, "cost", "invalid_pose_cost_input", "zero_pose_error", "real asset-independent upstream ToolPoseCost CUDA adapter available for position cost and gradient replay"),
     ("optim.particle_evolution", "particle_evolution", 2e-4, 2e-5, "particle", "bad_covariance", "deterministic_seed", "upstream RNG stream and optimizer construction require CUDA rollout objects"),
-    ("optim.lbfgs", "lbfgs", 2e-4, 2e-5, "lbfgs", "nonfinite_objective", "quadratic_convergence", "upstream LBFGSOpt requires CUDA graph/rollout configuration"),
+    ("optim.lbfgs", "lbfgs", 2e-4, 2e-5, "lbfgs", "invalid_history_configuration", "bounded_fixed_terminal", "upstream LBFGSOpt requires CUDA graph/rollout configuration"),
     ("ik.inverse_kinematics", "inverse_kinematics", 3e-4, 3e-5, "cost", "infeasible_goal", "two_pose_batch", "real pinned V2 CUDA IKSolver adapter available for the packaged Franka single-pose outcome/layout corpus; redundant-joint values are intentionally not compared"),
     ("trajectory.trajectory_optimization", "trajectory_optimization", 3e-4, 3e-5, "trajectory", "infeasible_limits", "exact_endpoints", "real pinned V2 CUDA TrajOptSolver adapter available for packaged Franka C-space outcome/layout replay; optimizer trajectories are intentionally not compared"),
     ("trajectory.dynamics_aware_bspline", "dynamics_aware_bspline", 3e-4, 3e-5, "bspline", "invalid_horizon", "endpoint_constraints", "real pinned CUDA cubic B-spline boundary-kernel adapter available"),

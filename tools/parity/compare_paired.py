@@ -138,6 +138,68 @@ def _validate_prm_semantics(
     return report
 
 
+def _validate_lbfgs_semantics(
+    outputs: np.lib.npyio.NpzFile, inputs: np.lib.npyio.NpzFile, backend: str
+) -> dict[str, dict[str, Any]]:
+    """Validate optimizer outcomes without requiring identical iteration paths."""
+    report: dict[str, dict[str, Any]] = {}
+
+    def record(key: str, passed: bool) -> None:
+        report[key] = {"passed": bool(passed), "semantic": True, "backend": backend}
+
+    initial = inputs["lbfgs_initial"]
+    target = inputs["lbfgs_target"]
+    weight = inputs["lbfgs_weight"]
+    lower, upper = inputs["lbfgs_lower"], inputs["lbfgs_upper"]
+    solution = outputs["solution"] if "solution" in outputs.files else np.array([])
+    expected_shape = initial.shape
+    record("solution_shape", solution.shape == expected_shape and "solution_shape" in outputs.files
+           and np.array_equal(outputs["solution_shape"], np.asarray(expected_shape, np.int64)))
+    finite_solution = solution.shape == expected_shape and np.isfinite(solution).all()
+    record("solution_finite", finite_solution)
+    record("bounds_satisfied", finite_solution and np.all(solution >= lower - 1e-6)
+           and np.all(solution <= upper + 1e-6) and "bounds_satisfied" in outputs.files
+           and outputs["bounds_satisfied"].shape == (1,) and int(outputs["bounds_satisfied"][0]) == 1)
+    projected = np.minimum(np.maximum(initial, lower), upper)
+    record("fixed_terminal_satisfied", finite_solution
+           and np.array_equal(solution[:, -1], projected[:, -1])
+           and "fixed_terminal_satisfied" in outputs.files
+           and outputs["fixed_terminal_satisfied"].shape == (1,)
+           and int(outputs["fixed_terminal_satisfied"][0]) == 1)
+
+    expected_initial = (0.5 * weight * (projected - target) ** 2).sum(axis=(-2, -1))
+    expected_final = ((0.5 * weight * (solution - target) ** 2).sum(axis=(-2, -1))
+                      if finite_solution else np.array([]))
+    initial_value = outputs["initial_objective"] if "initial_objective" in outputs.files else np.array([])
+    final_value = outputs["final_objective"] if "final_objective" in outputs.files else np.array([])
+    record("initial_objective", initial_value.shape == expected_initial.shape
+           and np.allclose(initial_value, expected_initial, rtol=2e-5, atol=2e-6))
+    record("final_objective", finite_solution and final_value.shape == expected_final.shape
+           and np.allclose(final_value, expected_final, rtol=2e-5, atol=2e-6))
+    improvement = expected_final < expected_initial if finite_solution else np.array([], dtype=bool)
+    record("objective_improved", improvement.shape == (initial.shape[0],) and improvement.all()
+           and "objective_improved" in outputs.files
+           and np.array_equal(outputs["objective_improved"], improvement))
+
+    expected_norm = (np.linalg.norm((weight * (solution - target))[:, :-1].reshape(initial.shape[0], -1), axis=-1)
+                     if finite_solution else np.array([]))
+    gradient_norm = outputs["free_gradient_norm"] if "free_gradient_norm" in outputs.files else np.array([])
+    record("free_gradient_norm", gradient_norm.shape == expected_norm.shape
+           and np.allclose(gradient_norm, expected_norm, rtol=2e-5, atol=2e-6)
+           and np.all(gradient_norm <= 2e-3))
+    codes = outputs["convergence_code"] if "convergence_code" in outputs.files else np.array([])
+    record("convergence_code", codes.shape == (initial.shape[0],) and codes.dtype == np.int8
+           and np.all(codes == 0))
+    for key in ("batch_observed", "reset_equivalent"):
+        record(key, key in outputs.files and outputs[key].shape == (1,)
+               and outputs[key].dtype == np.int8 and int(outputs[key][0]) == 1)
+    record("nonfinite_status", "nonfinite_status" in outputs.files
+           and outputs["nonfinite_status"].shape == (1,)
+           and outputs["nonfinite_status"].dtype == np.int8
+           and int(outputs["nonfinite_status"][0]) == 2)
+    return report
+
+
 def compare_capability(
     metal_root: Path, cuda_root: Path, capability: str
 ) -> dict[str, Any]:
@@ -223,14 +285,18 @@ def compare_capability(
         }
         if declared != actual:
             raise ValueError(f"{capability}: CUDA tensor schema does not match manifest")
-        if capability == "graph.prm_planner":
-            # Unlike numerical kernels, independent PRMs need not construct
-            # identical sampled roadmaps or waypoint sequences.  Require both
-            # backends to satisfy the same path/outcome invariants instead.
+        if capability in {"graph.prm_planner", "optim.lbfgs"}:
+            # Planner roadmaps and optimizer iteration histories need not be
+            # identical across devices. Require both backends to satisfy the
+            # capability's observable outcome invariants instead.
             _validate_required_evidence(cuda_manifest, cuda, capability)
             with np.load(input_path, allow_pickle=False) as inputs:
-                metal_semantics = _validate_prm_semantics(metal, inputs, "metal")
-                cuda_semantics = _validate_prm_semantics(cuda, inputs, "cuda")
+                validator = (
+                    _validate_prm_semantics if capability == "graph.prm_planner"
+                    else _validate_lbfgs_semantics
+                )
+                metal_semantics = validator(metal, inputs, "metal")
+                cuda_semantics = validator(cuda, inputs, "cuda")
             for key in sorted(metal_semantics):
                 left, right = metal_semantics[key], cuda_semantics[key]
                 item = {

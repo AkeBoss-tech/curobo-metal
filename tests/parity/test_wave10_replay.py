@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from tools.parity.compare_paired import (
+    _validate_lbfgs_semantics,
     _validate_prm_semantics,
     _validate_required_evidence,
     compare_ready,
@@ -111,6 +112,48 @@ def test_prm_cuda_evidence_is_required(tmp_path):
         broken["evidence"].pop("edge")
         with pytest.raises(ValueError, match="required invalid/edge evidence"):
             _validate_required_evidence(broken, values, case.capability)
+
+
+def test_lbfgs_replay_executes_bounded_batch_and_failure_semantics(tmp_path):
+    case = BY_ID["optim.lbfgs"]
+    raw, _ = load_corpus(ARTIFACT / "corpus", case)
+    output = probe(case, raw, "cpu")
+    assert output["solution"].shape == (3, 3, 2)
+    assert output["objective_improved"].all()
+    assert np.all(output["free_gradient_norm"] <= 2e-3)
+    assert output["convergence_code"].tolist() == [0, 0, 0]
+    for key in (
+        "bounds_satisfied", "fixed_terminal_satisfied", "batch_observed",
+        "reset_equivalent",
+    ):
+        assert output[key].item() == 1
+    assert output["nonfinite_status"].item() == 2
+
+    inputs_path, output_path = tmp_path / "inputs.npz", tmp_path / "outputs.npz"
+    np.savez(inputs_path, **raw)
+    np.savez(output_path, **output)
+    with np.load(inputs_path, allow_pickle=False) as inputs, np.load(
+        output_path, allow_pickle=False
+    ) as outputs:
+        report = _validate_lbfgs_semantics(outputs, inputs, "cpu-reference")
+    assert report and all(item["passed"] for item in report.values())
+
+
+def test_lbfgs_semantic_validator_rejects_missing_improvement(tmp_path):
+    case = BY_ID["optim.lbfgs"]
+    raw, _ = load_corpus(ARTIFACT / "corpus", case)
+    output = probe(case, raw, "cpu")
+    output["solution"] = raw["lbfgs_initial"].clip(
+        raw["lbfgs_lower"], raw["lbfgs_upper"]
+    )
+    inputs_path, output_path = tmp_path / "inputs.npz", tmp_path / "outputs.npz"
+    np.savez(inputs_path, **raw)
+    np.savez(output_path, **output)
+    with np.load(inputs_path, allow_pickle=False) as inputs, np.load(
+        output_path, allow_pickle=False
+    ) as outputs:
+        report = _validate_lbfgs_semantics(outputs, inputs, "test")
+    assert not report["objective_improved"]["passed"]
 
 
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
@@ -278,7 +321,7 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
     gradients = statuses = 0
     for capability, case in BY_ID.items():
         manifest = json.loads((ARTIFACT / capability / "metal-manifest.json").read_text())
-        if capability == "graph.prm_planner":
+        if capability in {"graph.prm_planner", "optim.lbfgs"}:
             assert manifest["device"] == "cpu"
             assert manifest["backend"] == "cpu-reference"
             assert manifest["evidence_state"] == "portable_reference_pending_mps"

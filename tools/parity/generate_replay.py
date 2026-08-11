@@ -67,6 +67,95 @@ def _tensor(data, device):
     return torch.as_tensor(data, device=device)
 
 
+def _lbfgs_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
+    """Exercise the public L-BFGS facade on a shared convex quadratic."""
+    from curobo._src.optim.gradient.lbfgs import LBFGSOpt, LBFGSOptCfg
+    from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
+
+    initial = _tensor(raw["lbfgs_initial"], device)
+    target = _tensor(raw["lbfgs_target"], device)
+    weight = _tensor(raw["lbfgs_weight"], device)
+    lower = _tensor(raw["lbfgs_lower"], device)
+    upper = _tensor(raw["lbfgs_upper"], device)
+
+    class QuadraticRollout:
+        action_horizon = initial.shape[1]
+        horizon = initial.shape[1]
+        action_dim = initial.shape[2]
+        action_bound_lows = lower
+        action_bound_highs = upper
+        action_step_max = None
+        action_horizon_step_max = None
+
+        def __call__(self, action: torch.Tensor) -> torch.Tensor:
+            if action.shape[0] % target.shape[0]:
+                raise ValueError("quadratic rollout batch must be a multiple of the corpus batch")
+            repeat = action.shape[0] // target.shape[0]
+            expanded_target = target.repeat_interleave(repeat, dim=0)
+            return (0.5 * weight * (action - expanded_target).square()).sum(dim=(-2, -1))
+
+    rollout = QuadraticRollout()
+    config = LBFGSOptCfg(
+        num_iters=16, inner_iters=1, num_problems=initial.shape[0],
+        device_cfg=CompatDeviceCfg(device=torch.device(device), dtype=torch.float32),
+        history=5, step_scale=1.0, line_search_scale=[0.1, 0.3, 0.7, 1.0],
+        fixed_iters=True, fix_terminal_action=True, return_best_action=True,
+    )
+    optimizer = LBFGSOpt(config, [rollout, rollout], use_cuda_graph=False)
+    projected_initial = initial.clamp(lower, upper)
+    initial_objective = rollout(projected_initial)
+    solution = optimizer.optimize(initial)
+    final_objective = rollout(solution)
+    free_gradient_norm = torch.linalg.vector_norm(
+        (weight * (solution - target))[:, :-1].reshape(initial.shape[0], -1), dim=-1
+    )
+    improved = final_objective < initial_objective
+    convergence_code = torch.where(
+        free_gradient_norm <= 2e-3,
+        torch.zeros_like(free_gradient_norm, dtype=torch.int8),
+        torch.where(improved, torch.ones_like(improved, dtype=torch.int8),
+                    torch.full_like(improved, 2, dtype=torch.int8)),
+    )
+    terminal_expected = projected_initial[:, -1]
+
+    optimizer.reset()
+    reset_solution = optimizer.optimize(initial)
+
+    class NonfiniteRollout(QuadraticRollout):
+        def __call__(self, action: torch.Tensor) -> torch.Tensor:
+            return torch.full(
+                (action.shape[0],), float("nan"), dtype=action.dtype, device=action.device
+            )
+
+    nonfinite = NonfiniteRollout()
+    nonfinite_optimizer = LBFGSOpt(config, [nonfinite, nonfinite], use_cuda_graph=False)
+    nonfinite_solution = nonfinite_optimizer.optimize(initial)
+    nonfinite_status = np.asarray([
+        2 if not bool(torch.isfinite(nonfinite(nonfinite_solution)).all().item()) else 0
+    ], dtype=np.int8)
+
+    return {
+        "solution": solution.detach().cpu().numpy(),
+        "solution_shape": np.asarray(solution.shape, dtype=np.int64),
+        "initial_objective": initial_objective.detach().cpu().numpy(),
+        "final_objective": final_objective.detach().cpu().numpy(),
+        "objective_improved": improved.detach().cpu().numpy(),
+        "free_gradient_norm": free_gradient_norm.detach().cpu().numpy(),
+        "convergence_code": convergence_code.detach().cpu().numpy(),
+        "bounds_satisfied": np.asarray([
+            int(bool(((solution >= lower) & (solution <= upper)).all().item()))
+        ], dtype=np.int8),
+        "fixed_terminal_satisfied": np.asarray([
+            int(bool(torch.equal(solution[:, -1], terminal_expected)))
+        ], dtype=np.int8),
+        "batch_observed": np.asarray([int(solution.shape[0] == 3)], dtype=np.int8),
+        "reset_equivalent": np.asarray([
+            int(bool(torch.equal(solution, reset_solution)))
+        ], dtype=np.int8),
+        "nonfinite_status": nonfinite_status,
+    }
+
+
 def _invalid_rejected(operation) -> np.ndarray:
     """Normalize an exception or non-finite result into one portable bit."""
     try:
@@ -439,15 +528,14 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
                 lambda: pose_cost(error, torch.ones(5, device=device))
             ),
         }
-    if case.probe in {"particle", "lbfgs"}:
+    if case.probe == "lbfgs":
+        return _lbfgs_replay(raw, device)
+    if case.probe == "particle":
         assert q is not None
         def objective(x):
             return ((x - .2) ** 2).sum(-1)
 
-        if case.probe == "particle":
-            result = particle_optimize(objective, q, config=ParticleConfig(iterations=3, particles=8, elite_count=2, seed=7))
-        else:
-            result = lbfgs_optimize(objective, q, config=LBFGSConfig(iterations=5))
+        result = particle_optimize(objective, q, config=ParticleConfig(iterations=3, particles=8, elite_count=2, seed=7))
         return {"solution": result.solution.detach().cpu().numpy(), "objective": result.objective.detach().cpu().numpy(), "converged": result.converged.cpu().numpy()}
     if case.capability == "trajectory.trajectory_optimization":
         from curobo._src.solver.solver_trajopt import TrajOptSolver
@@ -573,11 +661,8 @@ def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np
                                   covariance=torch.ones(3, device=device)),
         ))
     if case.probe == "lbfgs":
-        q = _tensor(raw["q"], device)
-        return _invalid_rejected(lambda: lbfgs_optimize(
-            lambda x: torch.full(x.shape[:-1], float("nan"), dtype=x.dtype, device=x.device),
-            q, config=LBFGSConfig(iterations=2),
-        ).objective)
+        from curobo._src.optim.gradient.lbfgs import LBFGSOptCfg
+        return _invalid_rejected(lambda: LBFGSOptCfg(history=0))
     if case.probe == "trajectory":
         q = _tensor(raw["q"], device)
         return _invalid_rejected(lambda: minimum_jerk_trajectory(q[0], q[1], 1))
@@ -654,8 +739,11 @@ def _required_edge(case: Case, raw: dict[str, np.ndarray], device: str) -> np.nd
         assert q is not None
         return _edge_observed(lambda: particle_optimize(lambda x: x.square().sum(-1), q[:1], config=ParticleConfig(iterations=2, particles=4, elite_count=1, seed=7)))
     if case.probe == "lbfgs":
-        assert q is not None
-        return _edge_observed(lambda: lbfgs_optimize(lambda x: x.square().sum(-1), q[:1], config=LBFGSConfig(iterations=2)))
+        output = _lbfgs_replay(raw, device)
+        observed = all(int(output[key][0]) == 1 for key in (
+            "bounds_satisfied", "fixed_terminal_satisfied", "batch_observed", "reset_equivalent"
+        ))
+        return np.asarray([int(observed)], dtype=np.int8)
     if case.probe == "trajectory":
         assert q is not None
         return _edge_observed(lambda: minimum_jerk_trajectory(q[0], q[1], 2))
