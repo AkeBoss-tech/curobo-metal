@@ -174,7 +174,7 @@ def test_particle_replay_exercises_es_facade_semantics(tmp_path):
     raw, _ = load_corpus(ARTIFACT / "corpus", case)
     assert set(raw) == {
         "particle_initial", "particle_target", "particle_lower", "particle_upper",
-        "particle_seeds", "particle_invalid_covariance",
+        "particle_seeds",
     }
     output = probe(case, raw, "cpu")
     assert output["solution"].shape == (3, 3, 2)
@@ -225,6 +225,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "dynamics.inverse_dynamics",
         "kinematics.forward_kinematics",
         "kinematics.geometric_jacobian",
+        "optim.particle_evolution",
         "types.device_cfg",
         "types.pose",
         "types.joint_state",

@@ -58,7 +58,7 @@
     {
       "capability": "optim.particle_evolution",
       "manifest": "optim.particle_evolution/metal-manifest.json",
-      "manifest_sha256": "1eec259bb353b02aa0f63941c19d173b7ccb86e61fe85ff1fd49c0516af05386"
+      "manifest_sha256": "da174a1f7732bf9fc639f1b95088780f7239d522a7128be30c463020aae34c3b"
     },
     {
       "capability": "optim.lbfgs",

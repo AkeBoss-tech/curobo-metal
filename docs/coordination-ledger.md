@@ -44,7 +44,7 @@ Parent integration suite after the upstream-example replay wave: 285 tests passi
 The portable implementation and deterministic MPS replay corpus are complete.
 On 2026-08-10 the self-verifying handoff executed successfully on iLab1 against
 the exact pinned upstream revision using an NVIDIA RTX A4500, CUDA 12.6, and
-PyTorch 2.7.1+cu126. On 2026-08-11, all 16 registered adapters passed the strict
+PyTorch 2.7.1+cu126. On 2026-08-11, all 17 registered adapters passed the strict
 paired comparison; the latest dated aggregate report is checked in under
 `artifacts/parity/cuda-replay/paired-report-2026-08-11.json`.
 The replay runner now has real, asset-independent pinned-upstream CUDA adapters
@@ -63,7 +63,9 @@ position gradients and mismatched-tool rejection. High-level Franka IK and
 trajectory-optimization outcome/layout adapters are also included. A compiled
 cubic B-spline adapter compares position through jerk against the portable
 boundary-constrained implementation. The PRM adapter now passes pinned CUDA
-outcome replay against the declarative forbidden-box corpus; the other three
+outcome replay against the declarative forbidden-box corpus, and the
+EvolutionStrategies adapter passes multi-seed natural-gradient mean-update
+outcomes without requiring identical RNG streams; the other two
 cases continue to fail closed with explicit constraints. The ready-suite
 command binds CUDA evidence to the exact committed
 input and Metal output hashes, requires executed invalid-case evidence for every

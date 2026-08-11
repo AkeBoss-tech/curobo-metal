@@ -802,12 +802,157 @@ def _prm_planner(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _particle_evolution(raw: dict[str, np.ndarray]) -> Output:
+    """Run pinned EvolutionStrategies and compare outcomes, not RNG streams."""
+    import torch
+    from curobo._src.optim.components.particle_opt_core import SampleMode
+    from curobo._src.optim.particle.evolution_strategies import (
+        EvolutionStrategies,
+        EvolutionStrategiesCfg,
+    )
+    from curobo._src.optim.particle.sample_strategies.particle_sampler_cfg import (
+        ParticleSamplerCfg,
+    )
+    from curobo._src.rollout.metrics import (
+        CostCollection,
+        CostsAndConstraints,
+        RolloutResult,
+    )
+    from curobo.types import DeviceCfg
+
+    initial = torch.as_tensor(raw["particle_initial"], device="cuda", dtype=torch.float32)
+    target = torch.as_tensor(raw["particle_target"], device="cuda", dtype=torch.float32)
+    lower = torch.as_tensor(raw["particle_lower"], device="cuda", dtype=torch.float32)
+    upper = torch.as_tensor(raw["particle_upper"], device="cuda", dtype=torch.float32)
+    seeds = raw["particle_seeds"].astype(np.int64, copy=False)
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+
+    class QuadraticRollout:
+        action_horizon = initial.shape[1]
+        horizon = initial.shape[1]
+        action_dim = initial.shape[2]
+        action_bound_lows = lower[0, 0]
+        action_bound_highs = upper[0, 0]
+        action_step_max = None
+        action_horizon_step_max = None
+        dt = 1.0
+        sum_horizon = False
+
+        def __init__(self, goal: torch.Tensor):
+            self.goal = goal
+
+        def get_initial_action(self):
+            return initial.clone()
+
+        def update_batch_size(self, batch_size: int):
+            self.batch_size = batch_size
+
+        def evaluate_action(self, action: torch.Tensor, **_kwargs):
+            if action.shape[0] % self.goal.shape[0]:
+                raise ValueError("ES rollout batch must be a multiple of the corpus batch")
+            repeat = action.shape[0] // self.goal.shape[0]
+            goal = self.goal.repeat_interleave(repeat, dim=0)
+            cost = (action - goal).square().sum(dim=-1, keepdim=True)
+            return RolloutResult(
+                actions=action,
+                costs_and_constraints=CostsAndConstraints(
+                    costs=CostCollection(values=[cost], names=["quadratic"])
+                ),
+            )
+
+    def build(seed: int, goal: torch.Tensor = target, *, fixed_samples: bool = False):
+        sampler = ParticleSamplerCfg(
+            device_cfg=device_cfg, fixed_samples=fixed_samples, seed=int(seed)
+        )
+        config = EvolutionStrategiesCfg(
+            device_cfg=device_cfg, num_iters=8, num_particles=48,
+            num_problems=initial.shape[0], null_act_frac=0.0,
+            init_cov=0.35, seed=int(seed), sample_params=sampler,
+            sample_mode=SampleMode.BEST, store_debug=True,
+            learning_rate=0.08, step_size_mean=0.8, step_size_cov=0.1,
+            update_cov=False,
+        )
+        rollout = QuadraticRollout(goal)
+        return EvolutionStrategies(config, [rollout], use_cuda_graph=False), rollout
+
+    def objective(action: torch.Tensor, goal: torch.Tensor = target):
+        return (action - goal).square().sum(dim=(-2, -1))
+
+    optimizer, _ = build(int(seeds[0]))
+    initial_objective = objective(initial)
+    solution = optimizer.optimize(initial)
+    final_objective = objective(solution)
+    repeat_solution = build(int(seeds[0]))[0].optimize(initial)
+
+    shifted_target = target.clone()
+    shifted_target[1] = -shifted_target[1]
+    independent_solution = build(int(seeds[0]), shifted_target)[0].optimize(initial)
+
+    mean_before_shift = optimizer.mean_action.detach().clone()
+    optimizer.shift(1)
+    shifted_mean = optimizer.mean_action.detach().clone()
+    expected_shift = torch.roll(mean_before_shift, shifts=-1, dims=-2)
+    expected_shift[:, -1] = mean_before_shift[:, -1]
+
+    fixed_optimizer, _ = build(int(seeds[0]), fixed_samples=True)
+    fixed_optimizer.update_seed(initial)
+    population_zero = fixed_optimizer.sample_actions(None)
+    population_one = fixed_optimizer.sample_actions(None)
+
+    seed_initial, seed_final = [], []
+    for seed in seeds:
+        seeded, _ = build(int(seed))
+        seed_initial.append(objective(initial))
+        seed_final.append(objective(seeded.optimize(initial)))
+    initial_samples = torch.stack(seed_initial)
+    final_samples = torch.stack(seed_final)
+
+    def invalid():
+        config = EvolutionStrategiesCfg(
+            device_cfg=device_cfg, num_iters=2, num_particles=8,
+            num_problems=0,
+        )
+        return EvolutionStrategies(
+            config, [QuadraticRollout(target)], use_cuda_graph=False
+        ).optimize(initial)
+
+    flags = {
+        "solution_finite": int(bool(torch.isfinite(solution).all().item())),
+        "bounds_satisfied": int(bool(((solution >= lower) & (solution <= upper)).all().item())),
+        "deterministic_repeat": int(bool(torch.equal(solution, repeat_solution))),
+        "batch_independent": int(bool(
+            torch.equal(solution[0], independent_solution[0])
+            and torch.equal(solution[2], independent_solution[2])
+        )),
+        "shift_observed": int(bool(torch.equal(shifted_mean, expected_shift))),
+        "fixed_sample_repeat": int(bool(torch.equal(population_zero, population_one))),
+    }
+    edge = int(all(flags.values()) and bool((final_objective < initial_objective).all().item()))
+    return {
+        "solution": solution.detach().cpu().numpy(),
+        "solution_shape": np.asarray(solution.shape, np.int64),
+        "initial_objective": initial_objective.detach().cpu().numpy(),
+        "final_objective": final_objective.detach().cpu().numpy(),
+        "objective_improved": (final_objective < initial_objective).detach().cpu().numpy(),
+        **{key: np.asarray([value], np.int8) for key, value in flags.items()},
+        "multi_seed_initial_mean": initial_samples.mean(0).detach().cpu().numpy(),
+        "multi_seed_final_mean": final_samples.mean(0).detach().cpu().numpy(),
+        "multi_seed_final_std": final_samples.std(0, unbiased=False).detach().cpu().numpy(),
+        "multi_seed_improvement_rate": (
+            (final_samples < initial_samples).float().mean(0).detach().cpu().numpy()
+        ),
+        "invalid_rejected": _invalid_rejected(invalid),
+        "edge_observed": np.asarray([edge], np.int8),
+    }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.mesh_world": _mesh_world,
     "collision.robot_scene": _robot_scene_collision,
     "collision.voxel_esdf_query": _voxel_esdf,
     "configuration.robot_config_and_loaders": _robot_config,
     "graph.prm_planner": _prm_planner,
+    "optim.particle_evolution": _particle_evolution,
     "cost.pose_and_composable_costs": _pose_cost,
     "trajectory.dynamics_aware_bspline": _dynamics_aware_bspline,
     "ik.inverse_kinematics": _inverse_kinematics,

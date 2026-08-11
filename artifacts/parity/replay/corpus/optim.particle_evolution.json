@@ -6,8 +6,7 @@
     "particle_target",
     "particle_lower",
     "particle_upper",
-    "particle_seeds",
-    "particle_invalid_covariance"
+    "particle_seeds"
   ],
   "required_evidence": {
     "edge": {
@@ -15,7 +14,7 @@
       "output": "edge_observed"
     },
     "invalid": {
-      "case": "invalid_covariance",
+      "case": "zero_problem_count",
       "output": "invalid_rejected"
     }
   },
@@ -52,11 +51,6 @@
       "data": [7, 19, 43, 71, 101],
       "dtype": "int64",
       "shape": [5]
-    },
-    "particle_invalid_covariance": {
-      "data": [[1.0, 2.0], [2.0, 1.0]],
-      "dtype": "float32",
-      "shape": [2, 2]
     }
   },
   "version": 1

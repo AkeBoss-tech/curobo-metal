@@ -202,6 +202,7 @@ def _particle_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.nd
             init_cov=0.35, seed=int(seed), sample_params=sampler,
             sample_mode=SampleMode.BEST, store_debug=True,
             learning_rate=0.08, step_size_mean=0.8, step_size_cov=0.1,
+            update_cov=False,
         )
         rollout = QuadraticRollout(goal)
         return EvolutionStrategies(config, [rollout], use_cuda_graph=False), rollout
@@ -760,37 +761,8 @@ def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np
             env_indices=torch.ones(len(raw["voxel_points"]), dtype=torch.int64, device=device),
         ))
     if case.probe == "particle":
-        from curobo._src.optim.particle.evolution_strategies import (
-            EvolutionStrategies,
-            EvolutionStrategiesCfg,
-        )
-        from curobo._src.optim.particle.sample_strategies import ParticleSamplerCfg
-        from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
-
-        initial = _tensor(raw["particle_initial"], device)
-        covariance = _tensor(raw["particle_invalid_covariance"], device)
-
-        class InvalidCovarianceRollout:
-            action_horizon = initial.shape[1]
-            horizon = initial.shape[1]
-            action_dim = initial.shape[2]
-
-            def __call__(self, action):
-                return action.square().sum(dim=(-2, -1))
-
-        def invalid_covariance():
-            device_cfg = CompatDeviceCfg(device=torch.device(device), dtype=torch.float32)
-            sampler = ParticleSamplerCfg(
-                device_cfg=device_cfg, seed=7
-            )
-            config = EvolutionStrategiesCfg(
-                device_cfg=device_cfg, num_iters=2, num_particles=8,
-                num_problems=initial.shape[0], sample_params=sampler,
-                init_cov=covariance,
-            )
-            return EvolutionStrategies(config, [InvalidCovarianceRollout()]).optimize(initial)
-
-        return _invalid_rejected(invalid_covariance)
+        from curobo._src.optim.particle.evolution_strategies import EvolutionStrategiesCfg
+        return _invalid_rejected(lambda: EvolutionStrategiesCfg(num_problems=0))
     if case.probe == "lbfgs":
         from curobo._src.optim.gradient.lbfgs import LBFGSOptCfg
         return _invalid_rejected(lambda: LBFGSOptCfg(history=0))

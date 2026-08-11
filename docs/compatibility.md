@@ -26,7 +26,7 @@ the same environment because both own `curobo`.
   types, kinematics, collision, cost, IK, trajectory, graph-planning,
   perception, dynamics, and high-level planning slices. Requested MPS execution
   never silently falls back to CPU in release tests.
-- Sixteen of nineteen bounded replay capabilities have checked-in paired
+- Seventeen of nineteen bounded replay capabilities have checked-in paired
   pinned-CUDA/Metal evidence. Passing a bounded replay is evidence only for its
   serialized operation and schema, not for every method or numerical regime in
   that subsystem.
@@ -41,21 +41,22 @@ reports 1,263 missing AST-discovered exports and 446 callable-shape differences
 under `_src`; many are imported typing/backend implementation names, but the
 remaining user-relevant members have not all been classified and closed.
 
-The following three replay labels do not yet have valid end-to-end CUDA parity
+The following two replay labels do not yet have valid end-to-end CUDA parity
 evidence:
 
 - L-BFGS: the old generic probe has been replaced with a bounded batched
   `LBFGSOpt` facade contract, but it still needs a selective MPS replay and a
   pinned-upstream CUDA adapter.
-- Particle evolution: the old CEM probe has been replaced with an
-  `EvolutionStrategies` facade contract that validates outcome semantics
-  across multiple seeds without requiring cross-device RNG identity. It still
-  needs a pinned-upstream CUDA adapter and execution.
 - Motion generation: the old replay exercised minimum-jerk interpolation, not
   the real MotionPlanner/MotionGen stack.
 
-These three names remain evidence-blocked until their probes are replaced and
+These two names remain evidence-blocked until their probes are replaced and
 run on the pinned CUDA host.
+
+The paired EvolutionStrategies contract covers the stable natural-gradient
+mean update with covariance updates disabled. The pinned upstream covariance
+update produced non-finite results for the shared signed-utility corpus, so
+covariance adaptation is explicitly outside the current equivalence claim.
 
 ## Platform and integration boundaries
 
@@ -77,7 +78,7 @@ A stable drop-in claim requires all of the following:
 
 1. Classify every strict `_src` export/signature difference and make the
    supported-symbol gate fail closed.
-2. Replace and pass all three remaining invalid parity probes, then broaden all nineteen
+2. Replace and pass both remaining invalid parity probes, then broaden all nineteen
    capabilities across dtype/device, batch/layout, invalid/infeasible,
    mutation/cache, gradient, collision-boundary, and repeatability cases.
 3. Classify the 211 pinned upstream test modules and 14 examples; execute every

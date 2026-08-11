@@ -13,6 +13,7 @@
     "ik.inverse_kinematics",
     "kinematics.forward_kinematics",
     "kinematics.geometric_jacobian",
+    "optim.particle_evolution",
     "trajectory.dynamics_aware_bspline",
     "trajectory.trajectory_optimization",
     "types.device_cfg",
@@ -287,6 +288,99 @@
           "max_abs": 1.1920928955078125e-07,
           "mean_abs": 1.3704296956499698e-08,
           "passed": true
+        }
+      }
+    },
+    {
+      "atol": 0,
+      "capability": "optim.particle_evolution",
+      "operation": "evolution_strategies",
+      "passed": true,
+      "rtol": 0,
+      "tensors": {
+        "batch_independent": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "bounds_satisfied": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "deterministic_repeat": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "final_objective": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "fixed_sample_repeat": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "initial_objective": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "multi_seed_final_mean": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "multi_seed_final_std": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "multi_seed_improvement_rate": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "multi_seed_initial_mean": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "objective_improved": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "shift_observed": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "solution_finite": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "solution_shape": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
         }
       }
     },
