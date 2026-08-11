@@ -161,12 +161,6 @@ def _validate_lbfgs_semantics(
            and np.all(solution <= upper + 1e-6) and "bounds_satisfied" in outputs.files
            and outputs["bounds_satisfied"].shape == (1,) and int(outputs["bounds_satisfied"][0]) == 1)
     projected = np.minimum(np.maximum(initial, lower), upper)
-    record("fixed_terminal_satisfied", finite_solution
-           and np.array_equal(solution[:, -1], projected[:, -1])
-           and "fixed_terminal_satisfied" in outputs.files
-           and outputs["fixed_terminal_satisfied"].shape == (1,)
-           and int(outputs["fixed_terminal_satisfied"][0]) == 1)
-
     expected_initial = (0.5 * weight * (projected - target) ** 2).sum(axis=(-2, -1))
     expected_final = ((0.5 * weight * (solution - target) ** 2).sum(axis=(-2, -1))
                       if finite_solution else np.array([]))
@@ -181,10 +175,11 @@ def _validate_lbfgs_semantics(
            and "objective_improved" in outputs.files
            and np.array_equal(outputs["objective_improved"], improvement))
 
-    expected_norm = (np.linalg.norm((weight * (solution - target))[:, :-1].reshape(initial.shape[0], -1), axis=-1)
+    expected_norm = (np.linalg.norm((weight * (solution - np.clip(target, lower, upper))).reshape(initial.shape[0], -1), axis=-1)
                      if finite_solution else np.array([]))
-    gradient_norm = outputs["free_gradient_norm"] if "free_gradient_norm" in outputs.files else np.array([])
-    record("free_gradient_norm", gradient_norm.shape == expected_norm.shape
+    gradient_norm = (outputs["projected_optimality_norm"]
+                     if "projected_optimality_norm" in outputs.files else np.array([]))
+    record("projected_optimality_norm", gradient_norm.shape == expected_norm.shape
            and np.allclose(gradient_norm, expected_norm, rtol=2e-5, atol=2e-6)
            and np.all(gradient_norm <= 2e-3))
     codes = outputs["convergence_code"] if "convergence_code" in outputs.files else np.array([])

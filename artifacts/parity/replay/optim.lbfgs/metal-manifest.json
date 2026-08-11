@@ -1,40 +1,40 @@
 {
-  "backend": "cpu-reference",
+  "backend": "metal",
   "capability": "optim.lbfgs",
   "corpus": {
     "case_file": "optim.lbfgs.json",
-    "case_sha256": "0da6bf3b44439c3a30c1d60fd816c74543bbe8565889bcbf96b27c3b05b12ce3",
+    "case_sha256": "18380fb03dbe1284fbba28268185a99264d80c252cedce794ad9b67fd5a60160",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
-  "device": "cpu",
+  "device": "mps",
   "equivalence_claimed": false,
   "evidence": {
     "edge": {
-      "case": "bounded_fixed_terminal",
+      "case": "action_range_batch_solve",
       "executed": true,
       "output": "edge_observed"
     },
     "gradient": false,
     "invalid": {
-      "case": "invalid_history_configuration",
+      "case": "unstable_mode_disabled",
       "executed": true,
       "output": "invalid_rejected"
     },
     "probe_scope": "lbfgs",
     "status": false
   },
-  "evidence_state": "portable_reference_pending_mps",
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "f5a492a47411cc948fb87b822b3ddcea16647c2dd9891ea03f264f2c8858f5c9"
+    "sha256": "dc66594d0d2b722efb22cf16a1031ef318a1d1d798444524069be86eb45bed9d"
   },
   "operation": "lbfgs",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "94d8b6ac3d33a941eb71115dc0bf7187038afea2949328235fa57c2d810665b1"
+    "sha256": "5983e85ce3c3d974b84b7ce918953c336c5c26f284468955956f1573d4f82fa8"
   },
   "runtime": {
     "python": "3.13.9",

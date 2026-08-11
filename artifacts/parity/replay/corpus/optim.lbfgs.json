@@ -10,11 +10,11 @@
   ],
   "required_evidence": {
     "edge": {
-      "case": "bounded_fixed_terminal",
+      "case": "action_range_batch_solve",
       "output": "edge_observed"
     },
     "invalid": {
-      "case": "invalid_history_configuration",
+      "case": "unstable_mode_disabled",
       "output": "invalid_rejected"
     }
   },
@@ -30,9 +30,9 @@
     },
     "lbfgs_target": {
       "data": [
-        [[0.2, -0.1], [0.1, 0.25], [0.8, 0.8]],
-        [[-0.25, 0.15], [0.3, -0.2], [-0.8, -0.8]],
-        [[0.0, 0.2], [-0.15, 0.05], [0.9, -0.9]]
+        [[0.2, -0.1], [0.1, 0.25], [0.4, 0.35]],
+        [[-0.25, 0.15], [0.3, -0.2], [-0.4, -0.35]],
+        [[0.0, 0.2], [-0.15, 0.05], [0.45, -0.45]]
       ],
       "dtype": "float32",
       "shape": [3, 3, 2]

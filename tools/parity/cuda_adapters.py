@@ -946,12 +946,143 @@ def _particle_evolution(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _lbfgs(raw: dict[str, np.ndarray]) -> Output:
+    """Run pinned LBFGSOpt on the shared bounded convex quadratic."""
+    import torch
+    from curobo._src.optim.gradient.lbfgs import LBFGSOpt, LBFGSOptCfg
+    from curobo._src.rollout.metrics import (
+        CostCollection,
+        CostsAndConstraints,
+        RolloutResult,
+    )
+    from curobo.types import DeviceCfg
+
+    initial = torch.as_tensor(raw["lbfgs_initial"], device="cuda", dtype=torch.float32)
+    target = torch.as_tensor(raw["lbfgs_target"], device="cuda", dtype=torch.float32)
+    weight = torch.as_tensor(raw["lbfgs_weight"], device="cuda", dtype=torch.float32)
+    lower = torch.as_tensor(raw["lbfgs_lower"], device="cuda", dtype=torch.float32)
+    upper = torch.as_tensor(raw["lbfgs_upper"], device="cuda", dtype=torch.float32)
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+
+    class QuadraticRollout:
+        action_horizon = initial.shape[1]
+        horizon = initial.shape[1]
+        action_dim = initial.shape[2]
+        action_bound_lows = lower[0, 0]
+        action_bound_highs = upper[0, 0]
+        action_step_max = None
+        action_horizon_step_max = None
+        dt = 1.0
+        sum_horizon = False
+
+        def update_batch_size(self, batch_size: int):
+            self.batch_size = batch_size
+
+        def evaluate_action(self, action: torch.Tensor, **_kwargs):
+            if action.shape[0] % target.shape[0]:
+                raise ValueError("LBFGS rollout batch must be a multiple of the corpus batch")
+            repeat = action.shape[0] // target.shape[0]
+            expanded_target = target.repeat_interleave(repeat, dim=0)
+            cost = 0.5 * weight * (action - expanded_target).square()
+            return RolloutResult(
+                actions=action,
+                costs_and_constraints=CostsAndConstraints(
+                    costs=CostCollection(values=[cost], names=["quadratic"])
+                ),
+            )
+
+    class NonfiniteRollout(QuadraticRollout):
+        def evaluate_action(self, action: torch.Tensor, **_kwargs):
+            # Keep the NaN connected to the action so upstream autograd can
+            # execute the same failure-path probe rather than rejecting a
+            # constant tensor with no gradient function.
+            cost = action.sum(dim=-1, keepdim=True) * float("nan")
+            return RolloutResult(
+                actions=action,
+                costs_and_constraints=CostsAndConstraints(
+                    costs=CostCollection(values=[cost], names=["nonfinite"])
+                ),
+            )
+
+    def build(rollout):
+        config = LBFGSOptCfg(
+            num_iters=16, inner_iters=1, num_problems=initial.shape[0],
+            device_cfg=device_cfg, history=5, step_scale=1.0,
+            line_search_scale=[0.1, 0.3, 0.7, 1.0], fixed_iters=True,
+            fix_terminal_action=False, return_best_action=True,
+            use_cuda_kernel_line_search=False,
+            use_cuda_kernel_step_direction=False,
+        )
+        return LBFGSOpt(config, [rollout, rollout], use_cuda_graph=False)
+
+    def objective(action: torch.Tensor):
+        return (0.5 * weight * (action - target).square()).sum(dim=(-2, -1))
+
+    rollout = QuadraticRollout()
+    optimizer = build(rollout)
+    projected_initial = initial.clamp(lower, upper)
+    initial_objective = objective(projected_initial)
+    solution = optimizer.optimize(initial)
+    final_objective = objective(solution)
+    projected_optimality_norm = torch.linalg.vector_norm(
+        (weight * (solution - target.clamp(lower, upper))).reshape(initial.shape[0], -1), dim=-1
+    )
+    improved = final_objective < initial_objective
+    convergence_code = torch.where(
+        projected_optimality_norm <= 2e-3,
+        torch.zeros_like(projected_optimality_norm, dtype=torch.int8),
+        torch.where(
+            improved,
+            torch.ones_like(improved, dtype=torch.int8),
+            torch.full_like(improved, 2, dtype=torch.int8),
+        ),
+    )
+
+    optimizer.reinitialize(initial, clear_optimizer_state=True)
+    reset_solution = optimizer.optimize(initial)
+    nonfinite = NonfiniteRollout()
+    nonfinite_solution = build(nonfinite).optimize(initial)
+    nonfinite_result = nonfinite.evaluate_action(nonfinite_solution)
+    nonfinite_cost = (
+        nonfinite_result.costs_and_constraints.get_sum_cost_and_constraint(sum_horizon=True)
+    )
+
+    return {
+        "solution": solution.detach().cpu().numpy(),
+        "solution_shape": np.asarray(solution.shape, np.int64),
+        "initial_objective": initial_objective.detach().cpu().numpy(),
+        "final_objective": final_objective.detach().cpu().numpy(),
+        "objective_improved": improved.detach().cpu().numpy(),
+        "projected_optimality_norm": projected_optimality_norm.detach().cpu().numpy(),
+        "convergence_code": convergence_code.detach().cpu().numpy(),
+        "bounds_satisfied": np.asarray([
+            int(bool(((solution >= lower) & (solution <= upper)).all().item()))
+        ], np.int8),
+        "batch_observed": np.asarray([int(solution.shape[0] == 3)], np.int8),
+        "reset_equivalent": np.asarray([
+            int(bool(torch.equal(solution, reset_solution)))
+        ], np.int8),
+        "nonfinite_status": np.asarray([
+            2 if not bool(torch.isfinite(nonfinite_cost).all().item()) else 0
+        ], np.int8),
+        "invalid_rejected": _invalid_rejected(lambda: LBFGSOptCfg(stable_mode=False)),
+        "edge_observed": np.asarray([
+            int(bool(
+                improved.all().item()
+                and ((solution >= lower) & (solution <= upper)).all().item()
+                and bool((projected_optimality_norm <= 2e-3).all().item())
+            ))
+        ], np.int8),
+    }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.mesh_world": _mesh_world,
     "collision.robot_scene": _robot_scene_collision,
     "collision.voxel_esdf_query": _voxel_esdf,
     "configuration.robot_config_and_loaders": _robot_config,
     "graph.prm_planner": _prm_planner,
+    "optim.lbfgs": _lbfgs,
     "optim.particle_evolution": _particle_evolution,
     "cost.pose_and_composable_costs": _pose_cost,
     "trajectory.dynamics_aware_bspline": _dynamics_aware_bspline,

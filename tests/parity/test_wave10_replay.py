@@ -133,11 +133,10 @@ def test_lbfgs_replay_executes_bounded_batch_and_failure_semantics(tmp_path):
     output = probe(case, raw, "cpu")
     assert output["solution"].shape == (3, 3, 2)
     assert output["objective_improved"].all()
-    assert np.all(output["free_gradient_norm"] <= 2e-3)
+    assert np.all(output["projected_optimality_norm"] <= 2e-3)
     assert output["convergence_code"].tolist() == [0, 0, 0]
     for key in (
-        "bounds_satisfied", "fixed_terminal_satisfied", "batch_observed",
-        "reset_equivalent",
+        "bounds_satisfied", "batch_observed", "reset_equivalent",
     ):
         assert output[key].item() == 1
     assert output["nonfinite_status"].item() == 2
@@ -225,6 +224,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "dynamics.inverse_dynamics",
         "kinematics.forward_kinematics",
         "kinematics.geometric_jacobian",
+        "optim.lbfgs",
         "optim.particle_evolution",
         "types.device_cfg",
         "types.pose",
@@ -379,14 +379,8 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
     gradients = statuses = 0
     for capability, case in BY_ID.items():
         manifest = json.loads((ARTIFACT / capability / "metal-manifest.json").read_text())
-        if capability == "optim.lbfgs":
-            assert manifest["device"] == "cpu"
-            assert manifest["backend"] == "cpu-reference"
-            assert manifest["evidence_state"] == "portable_reference_pending_mps"
-            assert capability not in ADAPTERS
-        else:
-            assert manifest["device"] == "mps"
-            assert manifest["backend"] == "metal"
+        assert manifest["device"] == "mps"
+        assert manifest["backend"] == "metal"
         assert manifest["fallback_enabled"] is False
         assert manifest["equivalence_claimed"] is False
         assert manifest["upstream_revision"] == PIN

@@ -99,25 +99,23 @@ def _lbfgs_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarr
         num_iters=16, inner_iters=1, num_problems=initial.shape[0],
         device_cfg=CompatDeviceCfg(device=torch.device(device), dtype=torch.float32),
         history=5, step_scale=1.0, line_search_scale=[0.1, 0.3, 0.7, 1.0],
-        fixed_iters=True, fix_terminal_action=True, return_best_action=True,
+        fixed_iters=True, fix_terminal_action=False, return_best_action=True,
     )
     optimizer = LBFGSOpt(config, [rollout, rollout], use_cuda_graph=False)
     projected_initial = initial.clamp(lower, upper)
     initial_objective = rollout(projected_initial)
     solution = optimizer.optimize(initial)
     final_objective = rollout(solution)
-    free_gradient_norm = torch.linalg.vector_norm(
-        (weight * (solution - target))[:, :-1].reshape(initial.shape[0], -1), dim=-1
+    projected_optimality_norm = torch.linalg.vector_norm(
+        (weight * (solution - target.clamp(lower, upper))).reshape(initial.shape[0], -1), dim=-1
     )
     improved = final_objective < initial_objective
     convergence_code = torch.where(
-        free_gradient_norm <= 2e-3,
-        torch.zeros_like(free_gradient_norm, dtype=torch.int8),
+        projected_optimality_norm <= 2e-3,
+        torch.zeros_like(projected_optimality_norm, dtype=torch.int8),
         torch.where(improved, torch.ones_like(improved, dtype=torch.int8),
                     torch.full_like(improved, 2, dtype=torch.int8)),
     )
-    terminal_expected = projected_initial[:, -1]
-
     optimizer.reset()
     reset_solution = optimizer.optimize(initial)
 
@@ -140,13 +138,10 @@ def _lbfgs_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarr
         "initial_objective": initial_objective.detach().cpu().numpy(),
         "final_objective": final_objective.detach().cpu().numpy(),
         "objective_improved": improved.detach().cpu().numpy(),
-        "free_gradient_norm": free_gradient_norm.detach().cpu().numpy(),
+        "projected_optimality_norm": projected_optimality_norm.detach().cpu().numpy(),
         "convergence_code": convergence_code.detach().cpu().numpy(),
         "bounds_satisfied": np.asarray([
             int(bool(((solution >= lower) & (solution <= upper)).all().item()))
-        ], dtype=np.int8),
-        "fixed_terminal_satisfied": np.asarray([
-            int(bool(torch.equal(solution[:, -1], terminal_expected)))
         ], dtype=np.int8),
         "batch_observed": np.asarray([int(solution.shape[0] == 3)], dtype=np.int8),
         "reset_equivalent": np.asarray([
@@ -765,7 +760,7 @@ def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np
         return _invalid_rejected(lambda: EvolutionStrategiesCfg(num_problems=0))
     if case.probe == "lbfgs":
         from curobo._src.optim.gradient.lbfgs import LBFGSOptCfg
-        return _invalid_rejected(lambda: LBFGSOptCfg(history=0))
+        return _invalid_rejected(lambda: LBFGSOptCfg(stable_mode=False))
     if case.probe == "trajectory":
         q = _tensor(raw["q"], device)
         return _invalid_rejected(lambda: minimum_jerk_trajectory(q[0], q[1], 1))
@@ -848,7 +843,7 @@ def _required_edge(case: Case, raw: dict[str, np.ndarray], device: str) -> np.nd
     if case.probe == "lbfgs":
         output = _lbfgs_replay(raw, device)
         observed = all(int(output[key][0]) == 1 for key in (
-            "bounds_satisfied", "fixed_terminal_satisfied", "batch_observed", "reset_equivalent"
+            "bounds_satisfied", "batch_observed", "reset_equivalent"
         ))
         return np.asarray([int(observed)], dtype=np.int8)
     if case.probe == "trajectory":

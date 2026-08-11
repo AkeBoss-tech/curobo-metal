@@ -47,13 +47,14 @@ evidence issue.
 On 2026-08-11, the checked-in handoff ran against the exact upstream revision
 on an NVIDIA RTX A4500 (CUDA 12.6, PyTorch 2.7.1+cu126). The resulting hashed
 [paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-11.json)
-passes all 17 available CUDA adapters: configuration,
+passes all 18 available CUDA adapters: configuration,
 `DeviceCfg`, `Pose`, `JointState`, solver results, forward kinematics,
 geometric Jacobians, robot-scene sphere collision, a bounded unsigned Warp
 mesh query, bounded scene-level voxel/ESDF queries, position pose cost, and
 inverse dynamics, high-level IK and trajectory-optimization outcomes, and the
 compiled cubic B-spline boundary kernel, declarative PRM planning outcomes,
-and multi-seed EvolutionStrategies mean-update outcomes.
+multi-seed EvolutionStrategies mean-update outcomes, and eager batched L-BFGS
+quadratic outcomes.
 The dynamics category
 includes torque plus first-order VJPs for position, velocity, and
 acceleration.
@@ -67,8 +68,8 @@ failure.  This is outcome-equivalence evidence, not identical-solution or
 full solver-trajectory parity.
 
 This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
-serialized probes only. The remaining two registry cases—L-BFGS and
-MotionGen—still need genuine upstream adapters and broader
+serialized probes only. The remaining registry case—MotionGen—still needs a
+genuine upstream adapter and broader
 batch/layout/world/solver coverage, so the
 inventory correctly remains evidence-blocked and this does **not** make a
 full drop-in claim.
@@ -99,13 +100,14 @@ python3 tools/parity/inventory.py \
 ## CUDA-versus-Metal replay
 
 Wave 10 adds a turnkey, registry-driven replay corpus at
-`artifacts/parity/replay/`. Eighteen records retain fallback-disabled MPS
+`artifacts/parity/replay/`. All nineteen records retain fallback-disabled MPS
 output bundles. `graph.prm_planner` now executes real PRM scenarios and
 `optim.particle_evolution` now exercises the `EvolutionStrategies` facade with
 multi-seed semantic checks; both have fresh Metal evidence, and both
-now also have pinned CUDA outcome evidence. `optim.lbfgs`
-remains an explicit CPU reference after its old narrow bundle was replaced
-with bounded quadratic-optimizer semantics, pending a selective MPS rerun.
+now also have pinned CUDA outcome evidence. `optim.lbfgs` likewise has fresh
+fallback-disabled MPS and pinned-CUDA semantic evidence for its eager batched
+quadratic contract. That contract does not claim terminal freezing or hard
+action projection, which the pinned upstream line search rejects or omits.
 Each case owns an explicit JSON corpus
 specification under `artifacts/parity/replay/corpus/`; its input NPZ contains
 only that capability's declared tensors rather than a shared opaque superset.

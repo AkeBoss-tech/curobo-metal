@@ -13,6 +13,7 @@
     "ik.inverse_kinematics",
     "kinematics.forward_kinematics",
     "kinematics.geometric_jacobian",
+    "optim.lbfgs",
     "optim.particle_evolution",
     "trajectory.dynamics_aware_bspline",
     "trajectory.trajectory_optimization",
@@ -288,6 +289,81 @@
           "max_abs": 1.1920928955078125e-07,
           "mean_abs": 1.3704296956499698e-08,
           "passed": true
+        }
+      }
+    },
+    {
+      "atol": 2e-05,
+      "capability": "optim.lbfgs",
+      "operation": "lbfgs",
+      "passed": true,
+      "rtol": 0.0002,
+      "tensors": {
+        "batch_observed": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "bounds_satisfied": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "convergence_code": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "final_objective": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "initial_objective": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "nonfinite_status": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "objective_improved": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "projected_optimality_norm": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "reset_equivalent": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "solution_finite": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "solution_shape": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
         }
       }
     },

@@ -63,7 +63,7 @@
     {
       "capability": "optim.lbfgs",
       "manifest": "optim.lbfgs/metal-manifest.json",
-      "manifest_sha256": "ff069636f042b83035f4d4e82c41b40d6c62dac5f8d83e6b46d734addf2e53f3"
+      "manifest_sha256": "2f9d5203bfe148334fda096466cc7a9aeb46cf93829e6c1426ab40e7be755e57"
     },
     {
       "capability": "ik.inverse_kinematics",

@@ -63,7 +63,7 @@ def main() -> None:
             "equivalence_claimed": False,
             "tolerance": {"rtol": case.rtol, "atol": case.atol},
         }
-        if args.capability in {"graph.prm_planner", "optim.particle_evolution"}:
+        if args.capability in {"graph.prm_planner", "optim.lbfgs", "optim.particle_evolution"}:
             for key in ("invalid_rejected", "edge_observed"):
                 value = outputs.get(key)
                 if value is None or value.shape != (1,) or value.dtype != np.int8 or int(value[0]) != 1:
