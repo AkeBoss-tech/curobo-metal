@@ -38,3 +38,25 @@ def test_surface_gate_reports_exports_and_callable_shape(tmp_path: Path) -> None
     assert row["callables"]["matching"] == 0
     assert row["callables"]["different"] == ["Config", "calculate"]
     assert report["method"]["imports_executed"] is False
+
+
+def test_public_facade_scope_excludes_private_src(tmp_path: Path) -> None:
+    package = tmp_path / "src/curobo"
+    (package / "_src").mkdir(parents=True)
+    (package / "public.py").write_text("value = 1\n", encoding="utf-8")
+    (package / "_src/private.py").write_text("value = 1\n", encoding="utf-8")
+    inventory = {
+        "upstream": {"revision": surface_gate.PINNED_REVISION},
+        "modules": [
+            {"name": "curobo.public", "surface": "runtime", "symbols": [{"name": "value", "kind": "assignment"}]},
+            {"name": "curobo._src.private", "surface": "runtime", "symbols": [{"name": "missing", "kind": "assignment"}]},
+        ],
+    }
+    full = surface_gate.build_report(inventory, tmp_path / "src")
+    scoped = surface_gate.build_report(
+        inventory, tmp_path / "src", public_facades_only=True
+    )
+    assert full["summary"]["modules"] == 2
+    assert scoped["summary"]["modules"] == 1
+    assert scoped["summary"]["expected_exports"] == scoped["summary"]["present_exports"] == 1
+    assert scoped["method"]["module_contract"] == "runtime_modules_excluding_curobo._src"

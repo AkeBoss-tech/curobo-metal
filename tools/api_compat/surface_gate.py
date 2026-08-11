@@ -112,14 +112,22 @@ def compare_module(upstream: dict[str, Any], local_root: Path) -> dict[str, Any]
     }
 
 
-def build_report(payload: dict[str, Any], local_root: Path) -> dict[str, Any]:
+def build_report(
+    payload: dict[str, Any],
+    local_root: Path,
+    *,
+    public_facades_only: bool = False,
+) -> dict[str, Any]:
     upstream = payload.get("upstream")
     if not isinstance(upstream, dict) or upstream.get("revision") != PINNED_REVISION:
         raise ValueError("inventory is not pinned to the expected cuRobo V2 revision")
     modules = payload.get("modules")
     if not isinstance(modules, list):
         raise ValueError("inventory modules must be a list")
-    compared = [compare_module(module, local_root) for module in modules if module.get("surface") == "runtime"]
+    selected = [module for module in modules if module.get("surface") == "runtime"]
+    if public_facades_only:
+        selected = [module for module in selected if not module.get("name", "").startswith("curobo._src")]
+    compared = [compare_module(module, local_root) for module in selected]
     compared.sort(key=lambda item: item["name"])
     return {
         "schema_version": SCHEMA_VERSION,
@@ -128,6 +136,11 @@ def build_report(payload: dict[str, Any], local_root: Path) -> dict[str, Any]:
             "parser": "python-ast",
             "imports_executed": False,
             "scope": "top_level_exports_and_declared_callable_shapes",
+            "module_contract": (
+                "runtime_modules_excluding_curobo._src"
+                if public_facades_only
+                else "all_runtime_modules"
+            ),
             "non_claims": [
                 "numerical equivalence",
                 "CUDA or Warp ABI equivalence",
@@ -159,9 +172,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--local-root", type=Path, default=Path("src"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--require-exact-exports", action="store_true")
+    parser.add_argument(
+        "--public-facades-only",
+        action="store_true",
+        help="exclude curobo._src from the scoped alpha facade report",
+    )
     args = parser.parse_args(argv)
     try:
-        report = build_report(json.loads(args.inventory.read_text(encoding="utf-8")), args.local_root.resolve())
+        report = build_report(
+            json.loads(args.inventory.read_text(encoding="utf-8")),
+            args.local_root.resolve(),
+            public_facades_only=args.public_facades_only,
+        )
     except (OSError, ValueError, SyntaxError, json.JSONDecodeError) as error:
         parser.error(str(error))
     encoded = _encoded(report)

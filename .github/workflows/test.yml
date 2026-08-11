@@ -26,6 +26,13 @@ jobs:
           python tools/api_compat/upstream_execution_census.py \
             --inventory artifacts/api_compat/upstream-api.json \
             --census artifacts/api_compat/upstream-execution-census.json
+      - name: Require exact documented public facades for alpha
+        run: |
+          python tools/api_compat/surface_gate.py \
+            --inventory artifacts/api_compat/upstream-api.json \
+            --local-root src \
+            --public-facades-only \
+            --require-exact-exports
 
   cpu:
     runs-on: ubuntu-latest
