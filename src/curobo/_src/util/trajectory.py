@@ -283,6 +283,92 @@ def _clamped_uniform_bspline_basis(
     return basis[:, :controls]
 
 
+def _cubic_boundary_spline(
+    action: torch.Tensor,
+    start: JointState,
+    goal: JointState,
+    interpolation_dt: torch.Tensor,
+    horizon: int,
+    start_idx: Optional[torch.Tensor] = None,
+    goal_idx: Optional[torch.Tensor] = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Match the pinned CUDA cubic B-spline boundary kernel.
+
+    cuRobo's action knots are surrounded by four fixed knots reconstructed
+    from endpoint position, velocity, and acceleration.  The implicit-goal
+    kernel omits the final action knot and appends four goal knots, yielding
+    ``action_knots + 4`` cardinal spline segments.
+    """
+    if action.ndim != 3 or action.shape[1] < 1:
+        raise ValueError("cubic spline actions must be [batch, knot, dof]")
+    segments = action.shape[1] + 4
+    if (horizon - 1) % segments != 0:
+        raise ValueError("cubic spline horizon minus one must be divisible by action knots plus four")
+    interpolation_steps = (horizon - 1) // segments
+    if interpolation_steps < 1:
+        raise ValueError("cubic spline horizon is too short for the action knot count")
+    step_dt = torch.as_tensor(interpolation_dt, device=action.device, dtype=action.dtype)
+    if step_dt.numel() != 1 or bool((step_dt <= 0).any().item()):
+        raise ValueError("interpolation_dt must be one positive scalar")
+    knot_dt = step_dt.reshape(()) * interpolation_steps
+
+    def fixed(state: JointState, indices: Optional[torch.Tensor]) -> torch.Tensor:
+        position = state.position.reshape(-1, action.shape[-1])
+        velocity = state.velocity.reshape_as(position)
+        acceleration = state.acceleration.reshape_as(position)
+        if indices is not None:
+            lookup = torch.as_tensor(indices, device=action.device, dtype=torch.int64).reshape(-1)
+            if lookup.numel() == 1:
+                lookup = lookup.expand(action.shape[0])
+            if lookup.numel() != action.shape[0] or bool((lookup < 0).any().item()) or bool((lookup >= position.shape[0]).any().item()):
+                raise ValueError("boundary indices must select one state per spline batch")
+            position, velocity, acceleration = position[lookup], velocity[lookup], acceleration[lookup]
+        elif position.shape[0] == 1:
+            position = position.expand(action.shape[0], -1)
+            velocity = velocity.expand(action.shape[0], -1)
+            acceleration = acceleration.expand(action.shape[0], -1)
+        elif position.shape[0] != action.shape[0]:
+            raise ValueError("boundary state batch must be one or match spline actions")
+        vel_coeff = action.new_tensor([-1.0, 0.0, 1.0, 2.0])
+        acc_coeff = action.new_tensor([1.0 / 3.0, -1.0 / 6.0, 1.0 / 3.0, 11.0 / 6.0])
+        return (
+            position[:, None, :]
+            + velocity[:, None, :] * knot_dt * vel_coeff[None, :, None]
+            + acceleration[:, None, :] * knot_dt.square() * acc_coeff[None, :, None]
+        )
+
+    controls = torch.cat((fixed(start, start_idx), action[:, :-1, :], fixed(goal, goal_idx)), dim=1)
+    sample = torch.arange(horizon, device=action.device)
+    segment = torch.div(sample, interpolation_steps, rounding_mode="floor").clamp_max(segments - 1)
+    local = (sample.to(action.dtype) / interpolation_steps) - torch.div(
+        sample, interpolation_steps, rounding_mode="floor"
+    ).to(action.dtype)
+    local[-1] = 1.0
+    window = torch.stack([controls[:, segment + offset, :] for offset in range(4)], dim=-2)
+    one_minus = 1.0 - local
+    position_basis = torch.stack((
+        one_minus.pow(3) / 6.0,
+        (4.0 - 6.0 * local.square() + 3.0 * local.pow(3)) / 6.0,
+        (1.0 + 3.0 * local + 3.0 * local.square() - 3.0 * local.pow(3)) / 6.0,
+        local.pow(3) / 6.0,
+    ), dim=-1)
+    velocity_basis = torch.stack((
+        -0.5 * one_minus.square(),
+        0.5 * (3.0 * local.square() - 4.0 * local),
+        0.5 * (1.0 + 2.0 * local - 3.0 * local.square()),
+        0.5 * local.square(),
+    ), dim=-1) / knot_dt
+    acceleration_basis = torch.stack((
+        one_minus, 3.0 * local - 2.0, 1.0 - 3.0 * local, local,
+    ), dim=-1) / knot_dt.square()
+    jerk_basis = action.new_tensor([-1.0, 3.0, -3.0, 1.0]).expand(horizon, -1) / knot_dt.pow(3)
+
+    def evaluate(basis: torch.Tensor) -> torch.Tensor:
+        return (window * basis[None, :, :, None]).sum(dim=-2)
+
+    return evaluate(position_basis), evaluate(velocity_basis), evaluate(acceleration_basis), evaluate(jerk_basis)
+
+
 def get_bspline_interpolation(
     input_trajectory: Optional[JointState] = None,
     output_trajectory: Optional[JointState] = None,
@@ -298,12 +384,10 @@ def get_bspline_interpolation(
     """Materialise a clamped-uniform B-spline trajectory on CPU or MPS.
 
     The function keeps the pinned CUDA-named signature so normal cuRobo
-    callers can exercise B-spline TrajOpt results on Metal.  It intentionally
-    does *not* claim byte-for-byte equivalence to the CUDA kernel: that kernel
-    has a distinct packed launch layout and implicit-boundary implementation.
-    This path defines its portable contract as a clamped uniform spline over
-    ``input_trajectory.knot`` and differentiates all position channels with
-    standard PyTorch operations.
+    callers can exercise B-spline TrajOpt results on Metal. Cubic implicit-goal
+    trajectories with a uniform full horizon reproduce the pinned CUDA fixed-
+    knot boundary contract. Other degree, mixed-goal, and variable-horizon
+    combinations retain the portable clamped-uniform implementation.
     """
     # Retain the old zero-argument CUDA-kernel boundary used by callers that
     # probe for the raw packed ABI.  Real portable callers provide the typed
@@ -351,6 +435,29 @@ def get_bspline_interpolation(
                 raise ValueError("use_implicit_goal_state must be scalar or [batch]")
         terminal = torch.where(implicit_goal[:, None], goal, controls[:, -1, :])
         controls = torch.cat((controls[:, :-1, :], terminal[:, None, :]), dim=1)
+
+    implicit_cuda_mode = use_implicit_goal_state is None or bool(
+        torch.as_tensor(use_implicit_goal_state, device=knots.device, dtype=torch.bool).all().item()
+    )
+    uniform_full_horizon = bool((steps == output.position.shape[1]).all().item())
+    if (
+        bspline_degree == 3 and start is not None and goal is not None
+        and implicit_cuda_mode and uniform_full_horizon
+        and (output.position.shape[1] - 1) % (knots.shape[1] + 4) == 0
+    ):
+        position, velocity, acceleration, jerk = _cubic_boundary_spline(
+            knots, current_state, goal_state, interpolation_dt, output.position.shape[1],
+            start_idx=start_idx, goal_idx=goal_idx,
+        )
+        output.position = position
+        output.velocity = velocity
+        output.acceleration = acceleration
+        output.jerk = jerk
+        output.dt = torch.as_tensor(interpolation_dt, device=knots.device, dtype=knots.dtype).expand(batch)
+        output.knot = input_trajectory.knot
+        output.knot_dt = input_trajectory.knot_dt
+        output.control_space = input_trajectory.control_space
+        return output
 
     # Keep output-buffer semantics: fill every batch row, then extend the
     # final valid knot through any shared maximum-horizon tail.

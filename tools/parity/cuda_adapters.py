@@ -607,12 +607,53 @@ def _pose_cost(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _dynamics_aware_bspline(raw: dict[str, np.ndarray]) -> Output:
+    import torch
+    from curobo._src.curobolib.cuda_ops.trajectory import BSplineIdxKernel
+
+    q = torch.as_tensor(raw["q"], device="cuda", dtype=torch.float32)
+    batch, dof, knots, degree = 1, q.shape[-1], 6, 3
+    start, goal = q[:1], q[1:]
+    fraction = torch.linspace(0.0, 1.0, knots + 2, device=q.device)[1:-1]
+    action = start[:, None] * (1.0 - fraction[None, :, None]) + goal[:, None] * fraction[None, :, None]
+    zeros_state = torch.zeros_like(start)
+
+    def run(horizon: int):
+        outputs = [torch.zeros((batch, horizon, dof), device=q.device) for _ in range(4)]
+        out_dt = torch.zeros((batch,), device=q.device)
+        result = BSplineIdxKernel.apply(
+            action, start, zeros_state, zeros_state, zeros_state,
+            goal, zeros_state, zeros_state, zeros_state,
+            torch.zeros((batch,), device=q.device, dtype=torch.int32),
+            torch.zeros((batch,), device=q.device, dtype=torch.int32),
+            *outputs, out_dt, torch.full((batch,), 0.1, device=q.device),
+            torch.ones((batch,), device=q.device, dtype=torch.uint8),
+            torch.zeros_like(action), degree, False,
+        )
+        torch.cuda.synchronize()
+        return result
+
+    position, velocity, acceleration, jerk = run(21)
+    invalid = _invalid_rejected(lambda: run(9)[1])
+    endpoint = torch.stack((position[:, 0], position[:, -1]), dim=1)
+    expected_endpoint = torch.stack((start, goal), dim=1)
+    edge_observed = np.array([
+        int(bool(torch.allclose(endpoint, expected_endpoint, rtol=0.0, atol=1e-6)))
+    ], np.int8)
+    return {
+        "position": position.cpu().numpy(), "velocity": velocity.cpu().numpy(),
+        "acceleration": acceleration.cpu().numpy(), "jerk": jerk.cpu().numpy(),
+        "invalid_rejected": invalid, "edge_observed": edge_observed,
+    }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.mesh_world": _mesh_world,
     "collision.robot_scene": _robot_scene_collision,
     "collision.voxel_esdf_query": _voxel_esdf,
     "configuration.robot_config_and_loaders": _robot_config,
     "cost.pose_and_composable_costs": _pose_cost,
+    "trajectory.dynamics_aware_bspline": _dynamics_aware_bspline,
     "ik.inverse_kinematics": _inverse_kinematics,
     "trajectory.trajectory_optimization": _trajectory_optimization,
     "dynamics.inverse_dynamics": _inverse_dynamics,

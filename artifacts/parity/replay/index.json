@@ -78,7 +78,7 @@
     {
       "capability": "trajectory.dynamics_aware_bspline",
       "manifest": "trajectory.dynamics_aware_bspline/metal-manifest.json",
-      "manifest_sha256": "bda0fd7fe8daf079994e032533cd7e18ea4e15414b5898589c34d97fa13b1703"
+      "manifest_sha256": "73a19b2f1ece7350c648b53196afa3de8dc88aa1b76bc7248611565e7b4e266c"
     },
     {
       "capability": "graph.prm_planner",

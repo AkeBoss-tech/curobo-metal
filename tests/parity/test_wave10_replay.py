@@ -65,6 +65,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "cost.pose_and_composable_costs",
         "ik.inverse_kinematics",
         "trajectory.trajectory_optimization",
+        "trajectory.dynamics_aware_bspline",
         "dynamics.inverse_dynamics",
         "kinematics.forward_kinematics",
         "kinematics.geometric_jacobian",

@@ -66,6 +66,25 @@ def test_bspline_boundary_tables_variable_lengths_and_output_tail_are_explicit()
     assert knots.grad is not None and start.position.grad is not None and goal.position.grad is not None
 
 
+def test_cubic_cuda_parity_path_honors_boundary_table_indices():
+    knots = torch.zeros((2, 6, 1), requires_grad=True)
+    source = JointState.from_position(knots.clone())
+    source.knot = knots
+    source.knot_dt = torch.full((2,), 0.2)
+    source.control_space = ControlSpace.BSPLINE_3
+    start = JointState.from_position(torch.tensor([[10.0], [20.0], [30.0]]))
+    goal = JointState.from_position(torch.tensor([[40.0], [50.0], [60.0]]))
+    result = get_bspline_interpolation(
+        source, JointState.zeros((2, 21, 1), DeviceCfg()), torch.tensor(0.1),
+        current_state=start, goal_state=goal,
+        start_idx=torch.tensor([2, 0]), goal_idx=torch.tensor([1, 2]),
+        use_implicit_goal_state=torch.ones(2, dtype=torch.bool),
+        interpolated_horizon=torch.tensor([21, 21]), bspline_degree=3,
+    )
+    torch.testing.assert_close(result.position[:, 0, 0], torch.tensor([30.0, 10.0]))
+    torch.testing.assert_close(result.position[:, -1, 0], torch.tensor([50.0, 60.0]))
+
+
 def test_spline_mode_rejects_incomplete_or_incompatible_metadata_before_output_mutation():
     source = JointState.from_position(torch.zeros(1, 4, 1))
     with pytest.raises(ValueError, match="knot"):

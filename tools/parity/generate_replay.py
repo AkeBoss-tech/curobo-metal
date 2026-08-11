@@ -24,7 +24,8 @@ from curobo_metal.ops.kinematics import (
     geometric_jacobian,
 )
 from curobo_metal.ops.trajectory import minimum_jerk_trajectory
-from curobo_metal.ops.trajectory.dynamics_aware import bspline_matrices
+from curobo._src.state.state_joint import JointState as ReplayJointState
+from curobo._src.util.trajectory import _cubic_boundary_spline
 from curobo_metal.ops.world_collision import Mesh, VoxelGrid, mesh_distance, query_esdf
 from curobo_metal.optim import LBFGSConfig, ParticleConfig, lbfgs_optimize, particle_optimize
 from curobo_metal.reference import SerialRobot
@@ -365,8 +366,17 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         out = minimum_jerk_trajectory(q[0], q[1], 5)
         return {"trajectory": out.detach().cpu().numpy(), "status_utf8": np.frombuffer(b"success", np.uint8)}
     if case.probe == "bspline":
-        out = bspline_matrices(6, 9, degree=3, dtype=torch.float32, device=torch.device(device))
-        return {"position_matrix": out.position.cpu().numpy(), "velocity_matrix": out.velocity.cpu().numpy()}
+        assert q is not None
+        start, goal = ReplayJointState.from_position(q[:1]), ReplayJointState.from_position(q[1:])
+        fraction = torch.linspace(0.0, 1.0, 8, device=q.device, dtype=q.dtype)[1:-1]
+        action = q[:1, None] * (1.0 - fraction[None, :, None]) + q[1:, None] * fraction[None, :, None]
+        position, velocity, acceleration, jerk = _cubic_boundary_spline(
+            action, start, goal, torch.tensor(0.1, device=q.device), 21
+        )
+        return {
+            "position": position.cpu().numpy(), "velocity": velocity.cpu().numpy(),
+            "acceleration": acceleration.cpu().numpy(), "jerk": jerk.cpu().numpy(),
+        }
     if case.probe == "graph":
         assert q is not None
         from curobo_metal.ops.graph_planning import interpolate_edge
@@ -461,7 +471,12 @@ def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np
         q = _tensor(raw["q"], device)
         return _invalid_rejected(lambda: minimum_jerk_trajectory(q[0], q[1], 1))
     if case.probe == "bspline":
-        return _invalid_rejected(lambda: bspline_matrices(2, 2, degree=3, device=device))
+        q = _tensor(raw["q"], device)
+        start, goal = ReplayJointState.from_position(q[:1]), ReplayJointState.from_position(q[1:])
+        return _invalid_rejected(lambda: _cubic_boundary_spline(
+            q[:1, None].expand(-1, 6, -1), start, goal,
+            torch.tensor(0.1, device=device), 9,
+        )[0])
     if case.probe == "graph":
         q = _tensor(raw["q"], device)
         from curobo_metal.ops.graph_planning import interpolate_edge
@@ -536,7 +551,13 @@ def _required_edge(case: Case, raw: dict[str, np.ndarray], device: str) -> np.nd
         assert q is not None
         return _edge_observed(lambda: minimum_jerk_trajectory(q[0], q[1], 2))
     if case.probe == "bspline":
-        return _edge_observed(lambda: bspline_matrices(2, 2, degree=1, device=device))
+        q = _tensor(raw["q"], device)
+        start, goal = ReplayJointState.from_position(q[:1]), ReplayJointState.from_position(q[1:])
+        fraction = torch.linspace(0.0, 1.0, 8, device=q.device, dtype=q.dtype)[1:-1]
+        action = q[:1, None] * (1.0 - fraction[None, :, None]) + q[1:, None] * fraction[None, :, None]
+        return _edge_observed(lambda: _cubic_boundary_spline(
+            action, start, goal, torch.tensor(0.1, device=device), 21,
+        )[0][..., (0, -1), :])
     if case.probe == "graph":
         assert q is not None
         from curobo_metal.ops.graph_planning import interpolate_edge

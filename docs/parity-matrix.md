@@ -44,14 +44,15 @@ evidence issue.
 
 ### First pinned CUDA evidence
 
-On 2026-08-07, the checked-in handoff ran against the exact upstream revision
+On 2026-08-10, the checked-in handoff ran against the exact upstream revision
 on an NVIDIA RTX A4500 (CUDA 12.6, PyTorch 2.7.1+cu126). The resulting hashed
-[paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-07.json)
-passes all 12 currently asset-independent CUDA adapters: configuration,
+[paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-10.json)
+passes all 15 currently available CUDA adapters: configuration,
 `DeviceCfg`, `Pose`, `JointState`, solver results, forward kinematics,
 geometric Jacobians, robot-scene sphere collision, a bounded unsigned Warp
 mesh query, bounded scene-level voxel/ESDF queries, position pose cost, and
-inverse dynamics. The last category
+inverse dynamics, high-level IK and trajectory-optimization outcomes, and the
+compiled cubic B-spline boundary kernel. The dynamics category
 includes torque plus first-order VJPs for position, velocity, and
 acceleration.
 
@@ -64,7 +65,7 @@ failure.  This is outcome-equivalence evidence, not identical-solution or
 full solver-trajectory parity.
 
 This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
-serialized probes only. The remaining seven registry cases still need genuine
+serialized probes only. The remaining four registry cases still need genuine
 upstream adapters and broader batch/layout/world/solver coverage, so the
 inventory correctly remains evidence-blocked and this does **not** make a
 full drop-in claim.
@@ -205,8 +206,9 @@ position-tracking subspace of upstream `ToolPoseCost` is also replay-ready:
 identical current/goal pose tensors compare scalar costs and current-position
 gradients, while an executed mismatched-tool case proves invalid-input
 handling. Rotation-cost replay remains outside this bounded adapter. The other
-9 cases deliberately emit `external_constraint`: world and solver
-surfaces still require additional assets or compiled
+4 cases deliberately emit `external_constraint`: optimizer, graph, and full
+motion-generation surfaces still require additional
+upstream rollout/collision objects or caller-provided assets and compiled
 upstream objects. The exact per-capability constraint is in
 `tools/parity/replay_registry.py`; no CUDA result is synthesized.
 

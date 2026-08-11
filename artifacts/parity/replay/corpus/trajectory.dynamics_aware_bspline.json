@@ -6,11 +6,11 @@
   ],
   "required_evidence": {
     "edge": {
-      "case": "endpoint_basis",
+      "case": "endpoint_constraints",
       "output": "edge_observed"
     },
     "invalid": {
-      "case": "too_few_knots",
+      "case": "invalid_horizon",
       "output": "invalid_rejected"
     }
   },

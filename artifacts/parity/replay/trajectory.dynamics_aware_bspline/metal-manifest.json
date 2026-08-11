@@ -3,7 +3,7 @@
   "capability": "trajectory.dynamics_aware_bspline",
   "corpus": {
     "case_file": "trajectory.dynamics_aware_bspline.json",
-    "case_sha256": "7a4abbda9487dc89e5ce34ce611780c9ef63fc69a2270b447f12fc69aaf900ab",
+    "case_sha256": "7f05359bed018125615bed41c5ac7db6aba874426db534f01b1488ad14cf11c0",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -11,13 +11,13 @@
   "equivalence_claimed": false,
   "evidence": {
     "edge": {
-      "case": "endpoint_basis",
+      "case": "endpoint_constraints",
       "executed": true,
       "output": "edge_observed"
     },
     "gradient": false,
     "invalid": {
-      "case": "too_few_knots",
+      "case": "invalid_horizon",
       "executed": true,
       "output": "invalid_rejected"
     },
@@ -33,7 +33,7 @@
   "operation": "dynamics_aware_bspline",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "b97a562541fcb1702c562d5180584217a9149f939fbd6b5c7039c649fef0bc17"
+    "sha256": "5c7439e8abb2b705a6fc11a274c014ec0e92843c403c0b93d76e1321bce23ea5"
   },
   "runtime": {
     "python": "3.13.9",

@@ -30,3 +30,4 @@ curobo = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --import-mode=importlib"
+pythonpath = [".", "src"]

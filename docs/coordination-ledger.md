@@ -42,9 +42,11 @@ Parent integration suite after the upstream-example replay wave: 285 tests passi
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
 
 The portable implementation and deterministic MPS replay corpus are complete.
-Paired CUDA equivalence evidence remains externally blocked: three attempts to
-reach the saved `robo` NVIDIA host failed before task execution (SSH hostname
-resolution from the workspace, followed by two Codex SSH path-probe timeouts).
+On 2026-08-10 the self-verifying handoff executed successfully on iLab1 against
+the exact pinned upstream revision using an NVIDIA RTX A4500, CUDA 12.6, and
+PyTorch 2.7.1+cu126. All 15 registered CUDA adapters passed the strict paired
+comparison; the dated aggregate report is checked in under
+`artifacts/parity/cuda-replay/paired-report-2026-08-10.json`.
 The replay runner now has real, asset-independent pinned-upstream CUDA adapters
 for `DeviceCfg`, `Pose`, `JointState`, and shared `BaseSolverResult`
 construction/clone behavior. A fifth adapter uses a license-clean serialized
@@ -57,21 +59,20 @@ invalid-pair evidence. A ninth adapter reuses the serialized robot's inertial
 model for native upstream CUDA RNEA torque and first-order VJP evidence,
 including missing-acceleration rejection. A tenth adapter exercises the
 position-tracking subspace of upstream `ToolPoseCost`, including first-order
-position gradients and mismatched-tool rejection. The other 9 cases continue to fail
-closed with explicit
-constraints. No CUDA
-equivalence claim is made until the adapters
-execute on a reachable NVIDIA host and their outputs pass the strict paired
-verifier. The ready-suite command binds CUDA evidence to the exact committed
+position gradients and mismatched-tool rejection. High-level Franka IK and
+trajectory-optimization outcome/layout adapters are also included. A compiled
+cubic B-spline adapter compares position through jerk against the portable
+boundary-constrained implementation. The other 4 cases continue to fail closed
+with explicit constraints. The ready-suite
+command binds CUDA evidence to the exact committed
 input and Metal output hashes, requires executed invalid-case evidence for every
 ready adapter, records CUDA/GPU runtime provenance, and writes an aggregate
 report. A deterministic self-verifying archive supports transfer to an NVIDIA
 host that cannot clone this repository directly.
 
-A resumed runner audit also checked the alternate saved-host routes. Handoff to
-both `robo` and `amarel` was unavailable, while the two reachable destinations
-resolved to Apple ARM64 macOS systems without NVIDIA tooling or CUDA-enabled
-PyTorch. All standalone examples and the isolated macOS wheel build/import
+A resumed runner audit established a working password-authenticated IPv4 route
+to iLab1. The saved two-hop `robo` helper remains unnecessary for the current
+evidence run. All standalone examples and the isolated macOS wheel build/import
 smoke pass on the current integration commit.
 
 The pinned upstream Franka forward-kinematics tutorial workload now runs on
