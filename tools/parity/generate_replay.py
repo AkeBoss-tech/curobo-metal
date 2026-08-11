@@ -24,6 +24,11 @@ from curobo_metal.ops.kinematics import (
     geometric_jacobian,
 )
 from curobo_metal.ops.trajectory import minimum_jerk_trajectory
+from curobo_metal.ops.graph_planning import (
+    GraphPlanningProblem,
+    PersistentRoadmap,
+    plan_graph,
+)
 from curobo._src.state.state_joint import JointState as ReplayJointState
 from curobo._src.util.trajectory import _cubic_boundary_spline
 from curobo_metal.ops.world_collision import Mesh, VoxelGrid, mesh_distance, query_esdf
@@ -35,7 +40,7 @@ from curobo_metal.ops.whole_body import inverse_dynamics
 from curobo_metal.config import RobotCfg
 
 from .replay_corpus import load as load_corpus
-from .replay_registry import CASES, PIN, Case
+from .replay_registry import BY_ID, CASES, PIN, Case
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = ROOT / "artifacts/parity/replay"
@@ -114,6 +119,115 @@ def _robot_mapping(urdf_path: str) -> dict:
             }
         }
     }
+
+
+_GRAPH_STATUS_CODES = {
+    "direct_success": 0,
+    "success": 1,
+    "disconnected": 2,
+    "invalid_start": 3,
+    "invalid_goal": 4,
+    "search_limit": 5,
+}
+
+
+def _graph_validity(lower: torch.Tensor, upper: torch.Tensor):
+    """Return a device-resident forbidden-box validity callback."""
+    def valid(points: torch.Tensor) -> torch.Tensor:
+        blocked = ((points >= lower) & (points <= upper)).all(dim=-1)
+        return ~blocked
+    return valid
+
+
+def _graph_result_semantics(
+    result, starts: torch.Tensor, goals: torch.Tensor, validities
+) -> dict[str, np.ndarray]:
+    endpoint_ok, swept_valid, point_count, path_cost = [], [], [], []
+    for index, path in enumerate(result.paths):
+        if bool(result.success[index].item()):
+            endpoint_ok.append(bool(torch.allclose(path[0], starts[index])) and
+                               bool(torch.allclose(path[-1], goals[index])))
+            swept_valid.append(bool(validities[index](path).all().item()))
+            point_count.append(path.shape[0])
+            path_cost.append(float(result.metrics[index].path_cost))
+        else:
+            endpoint_ok.append(path.shape[0] == 0)
+            swept_valid.append(path.shape[0] == 0)
+            point_count.append(0)
+            path_cost.append(np.inf)
+    return {
+        "success": result.success.detach().cpu().numpy(),
+        "status_code": np.asarray([_GRAPH_STATUS_CODES[x] for x in result.status], np.int8),
+        "endpoint_ok": np.asarray(endpoint_ok, np.bool_),
+        "swept_valid": np.asarray(swept_valid, np.bool_),
+        "point_count": np.asarray(point_count, np.int64),
+        "path_cost": np.asarray(path_cost, np.float32),
+    }
+
+
+def _prm_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
+    """Exercise real PRM planning over six deterministic 2-DoF scenarios."""
+    starts = _tensor(raw["graph_starts"], device)
+    goals = _tensor(raw["graph_goals"], device)
+    lower = _tensor(raw["graph_lower"], device)
+    upper = _tensor(raw["graph_upper"], device)
+    forbidden_lower = _tensor(raw["graph_forbidden_lower"], device)
+    forbidden_upper = _tensor(raw["graph_forbidden_upper"], device)
+    validities = [
+        _graph_validity(forbidden_lower[i], forbidden_upper[i])
+        for i in range(starts.shape[0])
+    ]
+    results = []
+    problems = []
+    for index, valid in enumerate(validities):
+        problem = GraphPlanningProblem(
+            starts[index], goals[index], lower, upper, validity=valid,
+            sample_count=128, seed=29, k_neighbors=12, edge_step=0.05,
+            interpolation_step=0.05,
+        )
+        problems.append(problem)
+        results.append(plan_graph(problem))
+
+    class _Merged:
+        success = torch.cat([item.success for item in results])
+        status = tuple(value for item in results for value in item.status)
+        paths = tuple(value for item in results for value in item.paths)
+        metrics = tuple(value for item in results for value in item.metrics)
+
+    output = _graph_result_semantics(_Merged, starts, goals, validities)
+
+    # Exercise a true batched planner call separately.  Its members are the
+    # all-free direct query and identical-terminal query, which share validity.
+    free = _graph_validity(forbidden_lower[0], forbidden_upper[0])
+    batched = plan_graph(GraphPlanningProblem(
+        starts[[0, 5]], goals[[0, 5]], lower, upper, validity=free,
+        sample_count=32, seed=29, k_neighbors=8, edge_step=0.05,
+        interpolation_step=0.05,
+    ))
+    output["batch_observed"] = np.asarray([
+        int(batched.success.shape == (2,) and bool(batched.success.all().item()))
+    ], np.int8)
+
+    # Reset must discard cached samples without perturbing seeded planning.
+    roadmap = PersistentRoadmap()
+    first = roadmap.plan(problems[1])
+    roadmap.reset()
+    second = roadmap.plan(problems[1])
+    deterministic = (
+        first.status == second.status
+        and len(first.paths) == len(second.paths)
+        and all(torch.equal(a, b) for a, b in zip(first.paths, second.paths))
+    )
+    output["deterministic_repeat"] = np.asarray([int(deterministic)], np.int8)
+    output["invalid_rejected"] = np.asarray([
+        int(results[3].status == ("invalid_start",) and
+            results[4].status == ("invalid_goal",))
+    ], np.int8)
+    output["edge_observed"] = np.asarray([
+        int(results[5].status == ("direct_success",) and
+            float(results[5].metrics[0].path_cost) == 0.0)
+    ], np.int8)
+    return output
 
 
 def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
@@ -378,10 +492,7 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
             "acceleration": acceleration.cpu().numpy(), "jerk": jerk.cpu().numpy(),
         }
     if case.probe == "graph":
-        assert q is not None
-        from curobo_metal.ops.graph_planning import interpolate_edge
-        out = interpolate_edge(q[0], q[1], .25)
-        return {"path": out.cpu().numpy(), "status_utf8": np.frombuffer(b"success", np.uint8)}
+        return _prm_replay(raw, device)
     if case.probe == "dynamics":
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "robot.urdf"
@@ -478,9 +589,7 @@ def _required_invalid(case: Case, raw: dict[str, np.ndarray], device: str) -> np
             torch.tensor(0.1, device=device), 9,
         )[0])
     if case.probe == "graph":
-        q = _tensor(raw["q"], device)
-        from curobo_metal.ops.graph_planning import interpolate_edge
-        return _invalid_rejected(lambda: interpolate_edge(q[0], q[1], 0.0))
+        return _prm_replay(raw, device)["invalid_rejected"]
     raise AssertionError(f"no invalid sentinel for {case.probe}")
 
 
@@ -559,22 +668,31 @@ def _required_edge(case: Case, raw: dict[str, np.ndarray], device: str) -> np.nd
             action, start, goal, torch.tensor(0.1, device=device), 21,
         )[0][..., (0, -1), :])
     if case.probe == "graph":
-        assert q is not None
-        from curobo_metal.ops.graph_planning import interpolate_edge
-        return _edge_observed(lambda: interpolate_edge(q[0], q[0], 0.25))
+        return _prm_replay(raw, device)["edge_observed"]
     # Serialization, result, and dynamics edge behavior is already executed by their
     # primary probes: a complete robot, mixed status batch, and two-item RNEA batch.
     return np.array([1], np.int8)
 
 
-def generate(output: Path, device: str, corpus: Path = DEFAULT_CORPUS) -> None:
+def generate(
+    output: Path,
+    device: str,
+    corpus: Path = DEFAULT_CORPUS,
+    capability: str | None = None,
+) -> None:
     if os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK", "0") != "0":
         raise SystemExit("PYTORCH_ENABLE_MPS_FALLBACK must be unset or 0")
     if device == "mps" and not torch.backends.mps.is_available():
         raise SystemExit("MPS is unavailable")
     output.mkdir(parents=True, exist_ok=True)
-    index = {"format": "curobo-metal-paired-replay", "version": 1, "upstream_revision": PIN, "cases": []}
+    index_path = output / "index.json"
+    if capability is not None and index_path.is_file():
+        index = json.loads(index_path.read_text())
+    else:
+        index = {"format": "curobo-metal-paired-replay", "version": 1, "upstream_revision": PIN, "cases": []}
     for case in CASES:
+        if capability is not None and case.capability != capability:
+            continue
         raw, corpus_provenance = load_corpus(corpus, case)
         folder = output / case.capability
         if folder.exists():
@@ -599,6 +717,7 @@ def generate(output: Path, device: str, corpus: Path = DEFAULT_CORPUS) -> None:
             "capability": case.capability, "operation": case.operation,
             "backend": "metal" if device == "mps" else "cpu-reference",
             "device": device, "fallback_enabled": False, "upstream_revision": PIN,
+            "evidence_state": "metal" if device == "mps" else "portable_reference_pending_mps",
             "input": {"file": input_path.name, "sha256": sha(input_path)},
             "output": {"file": output_path.name, "sha256": sha(output_path)},
             "corpus": {
@@ -626,8 +745,15 @@ def generate(output: Path, device: str, corpus: Path = DEFAULT_CORPUS) -> None:
             "equivalence_claimed": False,
         }
         (folder / "metal-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-        index["cases"].append({"capability": case.capability, "manifest": f"{case.capability}/metal-manifest.json", "manifest_sha256": sha(folder / "metal-manifest.json")})
-    (output / "index.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+        record = {"capability": case.capability, "manifest": f"{case.capability}/metal-manifest.json", "manifest_sha256": sha(folder / "metal-manifest.json")}
+        if capability is None:
+            index["cases"].append(record)
+        else:
+            matches = [i for i, row in enumerate(index["cases"]) if row["capability"] == capability]
+            if len(matches) != 1:
+                raise RuntimeError(f"index must contain exactly one row for {capability}")
+            index["cases"][matches[0]] = record
+    index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
 
 
 def main() -> None:
@@ -635,8 +761,9 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--device", choices=("cpu", "mps"), default="mps" if torch.backends.mps.is_available() else "cpu")
+    parser.add_argument("--capability", choices=sorted(BY_ID))
     args = parser.parse_args()
-    generate(args.output, args.device, args.corpus)
+    generate(args.output, args.device, args.corpus, args.capability)
 
 
 if __name__ == "__main__":

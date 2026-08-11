@@ -85,7 +85,14 @@ def load(corpus_root: Path, case: Case) -> tuple[dict[str, np.ndarray], dict[str
     common_tensors = shared.get("tensors")
     if not isinstance(common_tensors, dict):
         raise ValueError("common replay corpus has no tensors object")
-    missing = sorted(set(keys) - set(common_tensors))
+    case_tensors = spec.get("tensors", {})
+    if not isinstance(case_tensors, dict):
+        raise ValueError(f"case-local tensors must be an object: {case.capability}")
+    overlap = sorted(set(common_tensors) & set(case_tensors))
+    if overlap:
+        raise ValueError(f"case-local tensors duplicate common tensor(s) {overlap}: {case.capability}")
+    tensors = {**common_tensors, **case_tensors}
+    missing = sorted(set(keys) - set(tensors))
     if missing:
         raise ValueError(f"corpus references unknown tensor(s) {missing}: {case.capability}")
     evidence = spec.get("required_evidence")
@@ -95,7 +102,7 @@ def load(corpus_root: Path, case: Case) -> tuple[dict[str, np.ndarray], dict[str
     }
     if evidence != expected_evidence:
         raise ValueError(f"corpus evidence contract mismatch: {case.capability}")
-    return ({key: _tensor(key, common_tensors[key]) for key in keys}, {
+    return ({key: _tensor(key, tensors[key]) for key in keys}, {
         "case_file": case_path,
         "case_sha256": sha256(case_path),
         "common_file": shared_path,

@@ -92,6 +92,52 @@ def _validate_required_evidence(
             raise ValueError(f"{capability}: committed {label}-case evidence did not execute")
 
 
+def _validate_prm_semantics(
+    outputs: np.lib.npyio.NpzFile, inputs: np.lib.npyio.NpzFile, backend: str
+) -> dict[str, dict[str, Any]]:
+    """Validate outcome-equivalent PRM evidence without comparing roadmaps."""
+    expected = {
+        "success": np.asarray([True, True, False, False, False, True]),
+        "status_code": np.asarray([0, 1, 2, 3, 4, 0], np.int8),
+        "endpoint_ok": np.ones(6, np.bool_),
+        "swept_valid": np.ones(6, np.bool_),
+    }
+    report: dict[str, dict[str, Any]] = {}
+    for key, value in expected.items():
+        passed = key in outputs.files and outputs[key].shape == value.shape and bool(
+            np.array_equal(outputs[key], value)
+        )
+        report[key] = {"passed": passed, "semantic": True, "backend": backend}
+    for key in ("batch_observed", "deterministic_repeat"):
+        passed = (
+            key in outputs.files and outputs[key].shape == (1,)
+            and outputs[key].dtype == np.int8 and int(outputs[key][0]) == 1
+        )
+        report[key] = {"passed": passed, "semantic": True, "backend": backend}
+
+    counts = outputs["point_count"] if "point_count" in outputs.files else np.array([])
+    count_ok = (
+        counts.shape == (6,) and np.issubdtype(counts.dtype, np.integer)
+        and bool(np.all(counts[[0, 1]] >= 2)) and int(counts[5]) == 2
+        and bool(np.all(counts[2:5] == 0))
+    )
+    report["point_count"] = {"passed": count_ok, "semantic": True, "backend": backend}
+
+    costs = outputs["path_cost"] if "path_cost" in outputs.files else np.array([])
+    starts, goals = inputs["graph_starts"], inputs["graph_goals"]
+    direct = np.linalg.norm(goals - starts, axis=-1)
+    cost_ok = (
+        costs.shape == (6,) and np.issubdtype(costs.dtype, np.floating)
+        and np.isfinite(costs[[0, 1, 5]]).all()
+        and bool(np.isinf(costs[2:5]).all())
+        and bool(costs[0] >= direct[0] - 1e-5)
+        and bool(costs[1] > direct[1] + 1e-4)
+        and abs(float(costs[5])) <= 1e-7
+    )
+    report["path_cost"] = {"passed": cost_ok, "semantic": True, "backend": backend}
+    return report
+
+
 def compare_capability(
     metal_root: Path, cuda_root: Path, capability: str
 ) -> dict[str, Any]:
@@ -177,6 +223,25 @@ def compare_capability(
         }
         if declared != actual:
             raise ValueError(f"{capability}: CUDA tensor schema does not match manifest")
+        if capability == "graph.prm_planner":
+            # Unlike numerical kernels, independent PRMs need not construct
+            # identical sampled roadmaps or waypoint sequences.  Require both
+            # backends to satisfy the same path/outcome invariants instead.
+            _validate_required_evidence(cuda_manifest, cuda, capability)
+            with np.load(input_path, allow_pickle=False) as inputs:
+                metal_semantics = _validate_prm_semantics(metal, inputs, "metal")
+                cuda_semantics = _validate_prm_semantics(cuda, inputs, "cuda")
+            for key in sorted(metal_semantics):
+                left, right = metal_semantics[key], cuda_semantics[key]
+                item = {
+                    "passed": bool(left["passed"] and right["passed"]),
+                    "semantic": True,
+                    "metal_passed": bool(left["passed"]),
+                    "cuda_passed": bool(right["passed"]),
+                }
+                report["tensors"][key] = item
+                report["passed"] = report["passed"] and item["passed"]
+            return report
         for key in sorted(metal_keys):
             left, right = metal[key], cuda[key]
             item: dict[str, Any]

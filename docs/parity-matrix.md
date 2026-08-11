@@ -96,8 +96,11 @@ python3 tools/parity/inventory.py \
 ## CUDA-versus-Metal replay
 
 Wave 10 adds a turnkey, registry-driven replay corpus at
-`artifacts/parity/replay/`. It has one fallback-disabled MPS output bundle for
-each of the 19 evidence-blocked records. Each case owns an explicit JSON corpus
+`artifacts/parity/replay/`. Eighteen records retain fallback-disabled MPS
+output bundles. `graph.prm_planner` is now an explicitly marked CPU reference
+after its old interpolation-only bundle was replaced with real PRM semantics;
+it remains pending a selective MPS rerun and does not count as Metal evidence.
+Each case owns an explicit JSON corpus
 specification under `artifacts/parity/replay/corpus/`; its input NPZ contains
 only that capability's declared tensors rather than a shared opaque superset.
 The manifest hashes both the input/output data and the common/case corpus JSON

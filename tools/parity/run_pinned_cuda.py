@@ -63,6 +63,15 @@ def main() -> None:
             "equivalence_claimed": False,
             "tolerance": {"rtol": case.rtol, "atol": case.atol},
         }
+        if args.capability == "graph.prm_planner":
+            for key in ("invalid_rejected", "edge_observed"):
+                value = outputs.get(key)
+                if value is None or value.shape != (1,) or value.dtype != np.int8 or int(value[0]) != 1:
+                    raise RuntimeError(f"{args.capability}: CUDA {key} evidence did not execute")
+            record["evidence"] = {
+                "invalid": {"case": case.invalid_case, "output": "invalid_rejected", "executed": True},
+                "edge": {"case": case.edge_case, "output": "edge_observed", "executed": True},
+            }
         (args.output / "cuda-manifest.json").write_text(
             json.dumps(record, indent=2, sort_keys=True) + "\n"
         )

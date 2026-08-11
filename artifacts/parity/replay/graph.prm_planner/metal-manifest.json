@@ -1,13 +1,13 @@
 {
-  "backend": "metal",
+  "backend": "cpu-reference",
   "capability": "graph.prm_planner",
   "corpus": {
     "case_file": "graph.prm_planner.json",
-    "case_sha256": "1dfdc029a02ac28519b30f5238b1a0ea2e481053315a3ccbd11dde16686dfd80",
+    "case_sha256": "8c60f0b412a19d1ecf8426c8e3ae768a27bd250ae6851f0a63cecb726dd03668",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
-  "device": "mps",
+  "device": "cpu",
   "equivalence_claimed": false,
   "evidence": {
     "edge": {
@@ -24,16 +24,17 @@
     "probe_scope": "graph",
     "status": true
   },
+  "evidence_state": "portable_reference_pending_mps",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
+    "sha256": "3d43ed8c1e12e5f11a11dc411eff8b26a07f4e1b7021894cff3ab053e8577e42"
   },
   "operation": "prm_planner",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "553719361a7ebcc57262570040ba688728aa0916e4830fb4983284f365e0d0dd"
+    "sha256": "0b92a5b6027d282e25fe200118d62db7593bdf390bbbc6e8e5caf674de5d4534"
   },
   "runtime": {
     "python": "3.13.9",

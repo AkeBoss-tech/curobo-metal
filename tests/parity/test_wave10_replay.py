@@ -10,12 +10,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tools.parity.compare_paired import compare_ready, sha256
+from tools.parity.compare_paired import (
+    _validate_prm_semantics,
+    _validate_required_evidence,
+    compare_ready,
+    sha256,
+)
 from tools.parity.build_cuda_handoff import build as build_cuda_handoff
 from tools.parity.replay_registry import BY_ID, PIN
 from tools.parity.cuda_adapters import ADAPTERS
 from tools.parity import cuda_runtime
 from tools.parity.replay_corpus import load as load_corpus
+from tools.parity.generate_replay import probe
 
 
 ROOT = Path(__file__).parents[2]
@@ -54,6 +60,57 @@ def test_inputs_are_capability_owned_and_safe_npz():
     # Several small math probes intentionally share q, but they must no longer
     # all serialize the prior single opaque 15-tensor input blob.
     assert len(hashes) > 5
+
+
+def test_prm_replay_executes_real_planning_scenarios():
+    case = BY_ID["graph.prm_planner"]
+    raw, _ = load_corpus(ARTIFACT / "corpus", case)
+    output = probe(case, raw, "cpu")
+    assert output["success"].tolist() == [True, True, False, False, False, True]
+    assert output["status_code"].tolist() == [0, 1, 2, 3, 4, 0]
+    assert output["endpoint_ok"].all() and output["swept_valid"].all()
+    assert output["point_count"][1] > 2  # obstacle detour, not interpolation-only
+    assert np.isinf(output["path_cost"][2:5]).all()
+    assert output["batch_observed"].item() == 1
+    assert output["deterministic_repeat"].item() == 1
+    assert output["invalid_rejected"].item() == 1
+    assert output["edge_observed"].item() == 1
+
+
+def test_prm_semantic_comparison_allows_distinct_valid_roadmaps(tmp_path):
+    case = BY_ID["graph.prm_planner"]
+    raw, _ = load_corpus(ARTIFACT / "corpus", case)
+    output = probe(case, raw, "cpu")
+    output["point_count"] = output["point_count"].copy()
+    output["point_count"][:2] += np.asarray([7, 11])
+    output["path_cost"] = output["path_cost"].copy()
+    output["path_cost"][1] += 0.2
+    inputs_path, output_path = tmp_path / "inputs.npz", tmp_path / "outputs.npz"
+    np.savez(inputs_path, **raw)
+    np.savez(output_path, **output)
+    with np.load(inputs_path, allow_pickle=False) as inputs, np.load(
+        output_path, allow_pickle=False
+    ) as outputs:
+        report = _validate_prm_semantics(outputs, inputs, "cuda")
+    assert report and all(item["passed"] for item in report.values())
+
+
+def test_prm_cuda_evidence_is_required(tmp_path):
+    output = tmp_path / "output.npz"
+    np.savez(output, invalid_rejected=np.array([1], np.int8), edge_observed=np.array([1], np.int8))
+    case = BY_ID["graph.prm_planner"]
+    manifest = {
+        "evidence": {
+            "invalid": {"case": case.invalid_case, "output": "invalid_rejected", "executed": True},
+            "edge": {"case": case.edge_case, "output": "edge_observed", "executed": True},
+        }
+    }
+    with np.load(output, allow_pickle=False) as values:
+        _validate_required_evidence(manifest, values, case.capability)
+        broken = {"evidence": dict(manifest["evidence"])}
+        broken["evidence"].pop("edge")
+        with pytest.raises(ValueError, match="required invalid/edge evidence"):
+            _validate_required_evidence(broken, values, case.capability)
 
 
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
@@ -221,8 +278,14 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
     gradients = statuses = 0
     for capability, case in BY_ID.items():
         manifest = json.loads((ARTIFACT / capability / "metal-manifest.json").read_text())
-        assert manifest["device"] == "mps"
-        assert manifest["backend"] == "metal"
+        if capability == "graph.prm_planner":
+            assert manifest["device"] == "cpu"
+            assert manifest["backend"] == "cpu-reference"
+            assert manifest["evidence_state"] == "portable_reference_pending_mps"
+            assert capability not in ADAPTERS
+        else:
+            assert manifest["device"] == "mps"
+            assert manifest["backend"] == "metal"
         assert manifest["fallback_enabled"] is False
         assert manifest["equivalence_claimed"] is False
         assert manifest["upstream_revision"] == PIN

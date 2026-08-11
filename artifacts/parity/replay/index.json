@@ -83,7 +83,7 @@
     {
       "capability": "graph.prm_planner",
       "manifest": "graph.prm_planner/metal-manifest.json",
-      "manifest_sha256": "f30e0996447dcb45723e8a725e942d9dc492e89ae7a406cd8a04a7b8bd96b193"
+      "manifest_sha256": "5a612b347a9ad4df15bf6c3773d39ab6180efc5f2f569e9c659aaab7ad6ecc13"
     },
     {
       "capability": "motion_generation.motion_gen",
