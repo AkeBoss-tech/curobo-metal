@@ -1,0 +1,1603 @@
+{
+  "classification_contract": {
+    "applicable_unchanged": "The pinned module must run without edits against the installed wheel.",
+    "external_unavailable": "Execution requires an unavailable external ecosystem or service.",
+    "not_applicable": "The module does not test or demonstrate the supported release contract.",
+    "platform_substituted": "The workload is relevant but requires a documented non-CUDA execution substitution.",
+    "unreviewed": "No release claim may be derived until this entry is reviewed."
+  },
+  "entries": [
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.build_robot_model",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.feature_mapping",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.forward_kinematics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.humanoid_retargeting",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.inverse_kinematics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.motion_planning",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.reactive_control",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.getting_started.volumetric_mapping",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.guides.custom_optimization",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.reference.lidar_volumetric_mapping",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.reference.live_volumetric_mapping_mpc",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.reference.robot_pose_calibration",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.examples.reference.sphere_fit_comparison",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_example"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.collision",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.collision.test_attachment_manager",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.collision.test_collision_robot_scene",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.collision.test_mesh_collision_sdf",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost.test_cost_base",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost.test_cost_cspace",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost.test_cost_scene_collision",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost.test_cost_self_collision",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost.test_cost_support_polygon",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost.test_cost_tool_pose",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.cost.test_cost_types",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.curobolib",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.curobolib.cuda_ops",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.curobolib.cuda_ops.test_tensor_checks",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.sdf",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.sdf.test_sdf_grid",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.sdf.test_voxel_collision",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_convex_polygon_helper",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_cv",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_data_scene",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_geom_types",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_mesh_triangulation",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_pose",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_quaternion",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_sphere_fit",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_transform",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.geom.test_types",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.graph_planner",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.graph_planner.test_constructor",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.graph_planner.test_graph_planner_batch_seed",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.graph_planner.test_graph_planner_prm",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.graph_planner.test_node_manager",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.graph_planner.test_node_sampling_strategy",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.graph_planner.test_path_finder_networkx",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner_batch",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner_esdf",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner_grasp_goalset",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner_num_envs",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner_result",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_planner_shared_kinematics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_retargeter_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.motion.test_motion_retargeter_lock_joints",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.external",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.external.test_scipy_opt",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.external.test_torch_opt",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.gradient.test_conjugate_gradient",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.gradient.test_lbfgs",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.gradient.test_lsr1",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.sample_strategies",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.sample_strategies.test_processor_knot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.sample_strategies.test_processor_standard",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.sample_strategies.test_processor_stomp",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.test_mppi",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.particle.test_parallel_optimizers",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.test_multi_stage_optimizer",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.test_optim_factory",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.optim.test_optimizer_cuda_graph",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.conftest",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_block_checkpoint",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_block_decay",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_block_hash",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_block_integrate",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_block_marching_cubes",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_builder",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_comparison",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_feature_grid",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_feature_matching",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_generated_observation_correctness",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_integrator",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_lidar_projection",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_multi_camera",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_occupied_voxel_texture",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_renderer",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.mapper.test_texture_visibility",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_detection_result",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_filter_depth",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_geometry",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_mesh_robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_pose_detector",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_pose_detector_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_sdf_cuda_graph",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_sdf_pose_detector",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.builder",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.builder.test_builder_robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.builder.test_debugger_robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.dynamics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.dynamics.rnea_numpy_reference",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.dynamics.test_rnea_cuda",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.dynamics.test_rnea_reference",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_extra_links_insert",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_jacobian_gradcheck",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_kinematics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_kinematics_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_kinematics_com",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_kinematics_extended",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_kinematics_multi_env_spheres",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_kinematics_reducer",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_kinematics_state",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.kinematics.test_mimic_joint",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.loader",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.loader.test_kinematics_loader",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.loader.test_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.parser",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.parser.test_parser_urdf",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.types",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.types.test_joint_limits",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.types.test_kinematics_params",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.robot.types.test_types",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.cost_manager",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.cost_manager.test_cost_manager_integration",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.cost_manager.test_multi_env_idxs_env",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.test_goal_registry",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.test_metrics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.test_rollout_protocol",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.test_rollout_robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.test_rollout_robot_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.rollout.test_rollout_rosenbrock",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.seed_ik",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.seed_ik.test_seed_ik_solver",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.seed_ik.test_seed_ik_solver_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.seed_ik.test_seed_ik_state",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.seed_ik.test_seed_iteration_state_manager",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_copy_at_batch_indices",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_manager_goal",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_manager_seed",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solve_mode",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solve_state",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_base_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_base_result",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_ik_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_mpc",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_mpc_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_mpc_result",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_trajopt",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_trajopt_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.solver.test_solver_trajopt_result",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.state",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.state.test_filter_coeff",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.state.test_state_base",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.state.test_state_joint",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.state.test_state_robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.state.test_state_robot_extended",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.transition",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.transition.test_fns_state_transition",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.transition.test_robot_state_transition",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.transition.test_robot_state_transition_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.transition.test_transition_error_handling",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.transition.test_transition_gradients",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_camera",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_content_path",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_control_space",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_device_cfg",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_pose",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_robot_config",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_sequence_tool_pose",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.types.test_tool_pose",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.sampling",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.sampling.test_sample_buffer",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.sampling.test_sequencer_base",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.sampling.test_sequencer_halton",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.sampling.test_sequencer_random",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.sampling.test_sequencer_roberts",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_benchmark_metrics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_config_io",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_cuda_graph_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_cuda_stream_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_error_metrics",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_helpers",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_interpolation",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_logging",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_python_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_state_filter",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_tensor_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_torch_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_trajectory",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_trajectory_execution_manager",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_trajectory_seed_generator",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_usd_scene_parser",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_usd_writer",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_usd_writer_robot",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_version",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_viser_visualizer",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_warp",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests._src.util.test_xrdf_util",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests.conftest",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests.test_curobo_version",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    },
+    {
+      "disposition": "unreviewed",
+      "evidence": [],
+      "module": "curobo.tests.test_examples",
+      "rationale": "Pending applicability and dependency review.",
+      "surface": "bundled_test"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "by_disposition": {
+      "applicable_unchanged": 0,
+      "external_unavailable": 0,
+      "not_applicable": 0,
+      "platform_substituted": 0,
+      "unreviewed": 225
+    },
+    "by_surface": {
+      "bundled_example": 14,
+      "bundled_test": 211
+    },
+    "review_complete": false,
+    "total": 225
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+}
