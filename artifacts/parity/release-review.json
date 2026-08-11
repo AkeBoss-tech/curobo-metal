@@ -5,12 +5,14 @@
   "license": {
     "project": "Apache-2.0",
     "license_file_packaged": true,
+    "third_party_notice_packaged": true,
     "upstream_code_copied": false
   },
   "assets": {
-    "upstream_assets_distributed": false,
+    "upstream_assets_distributed": true,
     "reviewed_extensions": [".stl", ".dae", ".obj", ".usd", ".usda", ".usdc"],
-    "finding": "No upstream robot, mesh, or USD assets are tracked."
+    "provenance_manifest": "artifacts/release/asset-provenance.json",
+    "finding": "A byte-identical, Apache-2.0 subset is distributed: Franka 0.7.0 URDF/OBJ/DAE assets plus five NVIDIA cuRobo YAML configs. No USD assets are tracked."
   },
   "release_gates": [
     "regenerate pinned capability inventory",

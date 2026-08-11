@@ -32,10 +32,7 @@ URDF, OBJ, and COLLADA/DAE files are packaged and path-resolvable, but this slic
 does not claim to parse mesh geometry or XRDF/USD/NVblox formats. It imports no
 CUDA, Isaac Sim, or Warp modules.
 
-The repository's current setuptools metadata does not yet declare non-Python
-package data, and changing that metadata is outside this slice's ownership.
-Therefore a wheel built before the packaging slice is integrated contains the
-Python helpers but omits YAML, URDF, OBJ, DAE, and license files. The packaging
-owner must include `curobo/content/**/*` (and declare PyYAML, as pinned cuRoboV2
-does) before claiming installed-wheel asset lookup; the source/editable layout
-is complete and tested here.
+Setuptools includes the YAML, URDF, OBJ, DAE, and adjacent Franka license in the
+wheel. `THIRD_PARTY_NOTICES.md` is installed as distribution license metadata,
+and `artifacts/release/asset-provenance.json` records SHA-256 hashes verified
+against the pinned upstream checkout.

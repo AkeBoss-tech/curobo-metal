@@ -228,9 +228,12 @@ evidence.
 
 ## Packaging and license
 
-Project code is Apache-2.0. No upstream robot, mesh, USD, or other separately
-licensed asset is distributed. Upstream `LICENSE_ASSETS` governs assets a user
-obtains separately.
+Project code is Apache-2.0. The wheel distributes the Apache-2.0 Franka 0.7.0
+URDF/OBJ/DAE tree and five NVIDIA cuRobo YAML configs, byte-identical to pinned
+cuRobo commit `8e734f3ced1df898990bcd92de40abce475907db`. Copyright/SPDX headers and the
+Franka license are retained; `THIRD_PARTY_NOTICES.md` records attribution and
+`artifacts/release/asset-provenance.json` pins every distributed file hash. No
+USD or other upstream robot family is distributed.
 
 Build and import in a disposable macOS environment with:
 

@@ -1,4 +1,6 @@
 import ast
+import hashlib
+import json
 import subprocess
 import sys
 import tomllib
@@ -8,9 +10,10 @@ from pathlib import Path
 def test_distribution_metadata_and_license():
     metadata = tomllib.loads(Path("pyproject.toml").read_text())["project"]
     assert metadata["license"] == "Apache-2.0"
-    assert metadata["license-files"] == ["LICENSE"]
+    assert metadata["license-files"] == ["LICENSE", "THIRD_PARTY_NOTICES.md"]
     assert metadata["readme"] == "README.md"
     assert Path("LICENSE").is_file()
+    assert Path("THIRD_PARTY_NOTICES.md").is_file()
 
 
 def test_top_level_import_is_torch_lazy():
@@ -38,3 +41,12 @@ def test_public_modules_parse_and_only_approved_robot_assets_are_vendored():
     assert asset_paths
     assert all(path.startswith(approved_roots) for path in asset_paths)
     assert f"{approved_roots[0]}LICENSE" in tracked
+
+
+def test_vendored_asset_provenance_manifest_matches_bytes():
+    manifest = json.loads(Path("artifacts/release/asset-provenance.json").read_text())
+    assert manifest["upstream_revision"] == "8e734f3ced1df898990bcd92de40abce475907db"
+    assert manifest["verification"] == "byte-for-byte-sha256"
+    for relative_path, expected_hash in manifest["files"].items():
+        payload = Path(relative_path).read_bytes()
+        assert hashlib.sha256(payload).hexdigest() == expected_hash, relative_path
