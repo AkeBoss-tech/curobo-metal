@@ -44,15 +44,16 @@ evidence issue.
 
 ### First pinned CUDA evidence
 
-On 2026-08-10, the checked-in handoff ran against the exact upstream revision
+On 2026-08-11, the checked-in handoff ran against the exact upstream revision
 on an NVIDIA RTX A4500 (CUDA 12.6, PyTorch 2.7.1+cu126). The resulting hashed
-[paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-10.json)
-passes all 15 CUDA adapters available at the time of that run: configuration,
+[paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-11.json)
+passes all 16 available CUDA adapters: configuration,
 `DeviceCfg`, `Pose`, `JointState`, solver results, forward kinematics,
 geometric Jacobians, robot-scene sphere collision, a bounded unsigned Warp
 mesh query, bounded scene-level voxel/ESDF queries, position pose cost, and
 inverse dynamics, high-level IK and trajectory-optimization outcomes, and the
-compiled cubic B-spline boundary kernel. The dynamics category
+compiled cubic B-spline boundary kernel, and declarative PRM planning outcomes.
+The dynamics category
 includes torque plus first-order VJPs for position, velocity, and
 acceleration.
 
@@ -65,9 +66,9 @@ failure.  This is outcome-equivalence evidence, not identical-solution or
 full solver-trajectory parity.
 
 This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
-serialized probes only. Of the remaining four registry cases, PRM now has a
-genuine upstream adapter awaiting execution while particle evolution, L-BFGS,
-and MotionGen still need adapters and broader batch/layout/world/solver coverage, so the
+serialized probes only. The remaining three registry cases—particle evolution,
+L-BFGS, and MotionGen—still need genuine upstream adapters and broader
+batch/layout/world/solver coverage, so the
 inventory correctly remains evidence-blocked and this does **not** make a
 full drop-in claim.
 

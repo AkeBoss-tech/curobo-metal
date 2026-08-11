@@ -28,6 +28,7 @@ from tools.parity.generate_replay import probe
 
 ROOT = Path(__file__).parents[2]
 ARTIFACT = ROOT / "artifacts/parity/replay"
+LATEST_CUDA_REPORT = ROOT / "artifacts/parity/cuda-replay/paired-report-2026-08-11.json"
 
 
 def run(module, *args, env=None):
@@ -47,6 +48,17 @@ def test_committed_corpus_covers_inventory_and_validates():
     index = json.loads((ARTIFACT / "index.json").read_text())
     assert {row["capability"] for row in index["cases"]} == set(BY_ID)
     assert len(index["cases"]) == 19
+
+
+def test_latest_pinned_cuda_report_covers_every_ready_adapter():
+    report = json.loads(LATEST_CUDA_REPORT.read_text())
+    assert report["format"] == "curobo-metal-paired-report"
+    assert report["upstream_revision"] == PIN
+    assert report["errors"] == []
+    assert report["passed"] is True
+    assert set(report["required_capabilities"]) == set(ADAPTERS)
+    assert {row["capability"] for row in report["results"]} == set(ADAPTERS)
+    assert all(row["passed"] for row in report["results"])
 
 
 def test_inputs_are_capability_owned_and_safe_npz():

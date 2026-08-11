@@ -1,0 +1,447 @@
+{
+  "errors": [],
+  "format": "curobo-metal-paired-report",
+  "passed": true,
+  "required_capabilities": [
+    "collision.mesh_world",
+    "collision.robot_scene",
+    "collision.voxel_esdf_query",
+    "configuration.robot_config_and_loaders",
+    "cost.pose_and_composable_costs",
+    "dynamics.inverse_dynamics",
+    "graph.prm_planner",
+    "ik.inverse_kinematics",
+    "kinematics.forward_kinematics",
+    "kinematics.geometric_jacobian",
+    "trajectory.dynamics_aware_bspline",
+    "trajectory.trajectory_optimization",
+    "types.device_cfg",
+    "types.joint_state",
+    "types.pose",
+    "types.solver_results"
+  ],
+  "results": [
+    {
+      "atol": 2e-06,
+      "capability": "collision.mesh_world",
+      "operation": "mesh_world",
+      "passed": true,
+      "rtol": 2e-05,
+      "tensors": {
+        "distance": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "gradient": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 2e-06,
+      "capability": "collision.robot_scene",
+      "operation": "robot_scene_collision",
+      "passed": true,
+      "rtol": 2e-05,
+      "tensors": {
+        "distance": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "input_gradient": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 3e-06,
+      "capability": "collision.voxel_esdf_query",
+      "operation": "voxel_esdf",
+      "passed": true,
+      "rtol": 3e-05,
+      "tensors": {
+        "distance": {
+          "max_abs": 7.62939453125e-06,
+          "mean_abs": 6.198883056640625e-06,
+          "passed": true
+        },
+        "valid": {
+          "exact": true,
+          "passed": true
+        },
+        "winner": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 0,
+      "capability": "configuration.robot_config_and_loaders",
+      "operation": "robot_config",
+      "passed": true,
+      "rtol": 0,
+      "tensors": {
+        "effort_limits": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "joint_names_utf8": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "position_limits": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "retract_config": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "velocity_limits": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 2e-06,
+      "capability": "cost.pose_and_composable_costs",
+      "operation": "pose_costs",
+      "passed": true,
+      "rtol": 2e-05,
+      "tensors": {
+        "position_gradient": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "value": {
+          "max_abs": 7.450580596923828e-09,
+          "mean_abs": 3.725290298461914e-09,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 2e-05,
+      "capability": "dynamics.inverse_dynamics",
+      "operation": "inverse_dynamics",
+      "passed": true,
+      "rtol": 0.0002,
+      "tensors": {
+        "acceleration_gradient": {
+          "max_abs": 2.9802322387695312e-08,
+          "mean_abs": 1.4901161193847656e-08,
+          "passed": true
+        },
+        "position_gradient": {
+          "max_abs": 1.1920928955078125e-07,
+          "mean_abs": 3.166496753692627e-08,
+          "passed": true
+        },
+        "status_utf8": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "torque": {
+          "max_abs": 4.76837158203125e-07,
+          "mean_abs": 1.341104507446289e-07,
+          "passed": true
+        },
+        "velocity_gradient": {
+          "max_abs": 5.960464477539063e-08,
+          "mean_abs": 2.3283064365386963e-08,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 0,
+      "capability": "graph.prm_planner",
+      "operation": "prm_planner",
+      "passed": true,
+      "rtol": 0,
+      "tensors": {
+        "batch_observed": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "deterministic_repeat": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "endpoint_ok": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "path_cost": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "point_count": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "status_code": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "success": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "swept_valid": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        }
+      }
+    },
+    {
+      "atol": 3e-05,
+      "capability": "ik.inverse_kinematics",
+      "operation": "inverse_kinematics",
+      "passed": true,
+      "rtol": 0.0003,
+      "tensors": {
+        "position_converged": {
+          "exact": true,
+          "passed": true
+        },
+        "rotation_converged": {
+          "exact": true,
+          "passed": true
+        },
+        "solution_shape": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "success": {
+          "exact": true,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 8e-05,
+      "capability": "kinematics.forward_kinematics",
+      "operation": "forward_kinematics",
+      "passed": true,
+      "rtol": 8e-05,
+      "tensors": {
+        "input_gradient": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "tool_position": {
+          "max_abs": 2.9802322387695312e-08,
+          "mean_abs": 4.967053731282552e-09,
+          "passed": true
+        },
+        "tool_quaternion": {
+          "max_abs": 1.1920928955078125e-07,
+          "mean_abs": 4.563480615615845e-08,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 1e-05,
+      "capability": "kinematics.geometric_jacobian",
+      "operation": "geometric_jacobian",
+      "passed": true,
+      "rtol": 0.0001,
+      "tensors": {
+        "tool_jacobian": {
+          "max_abs": 1.1920928955078125e-07,
+          "mean_abs": 1.3704296956499698e-08,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 3e-05,
+      "capability": "trajectory.dynamics_aware_bspline",
+      "operation": "dynamics_aware_bspline",
+      "passed": true,
+      "rtol": 0.0003,
+      "tensors": {
+        "acceleration": {
+          "max_abs": 3.814697265625e-06,
+          "mean_abs": 4.903191544209611e-07,
+          "passed": true
+        },
+        "jerk": {
+          "max_abs": 3.0517578125e-05,
+          "mean_abs": 7.965025377286241e-06,
+          "passed": true
+        },
+        "position": {
+          "max_abs": 5.960464477539063e-08,
+          "mean_abs": 1.0554989178975424e-08,
+          "passed": true
+        },
+        "velocity": {
+          "max_abs": 2.384185791015625e-07,
+          "mean_abs": 4.771919477553595e-08,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 3e-05,
+      "capability": "trajectory.trajectory_optimization",
+      "operation": "trajectory_optimization",
+      "passed": true,
+      "rtol": 0.0003,
+      "tensors": {
+        "endpoint_converged": {
+          "exact": true,
+          "passed": true
+        },
+        "solution_shape": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "status_utf8": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "success": {
+          "exact": true,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 0,
+      "capability": "types.device_cfg",
+      "operation": "device_cfg",
+      "passed": true,
+      "rtol": 0,
+      "tensors": {
+        "device_code": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "value": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 1e-07,
+      "capability": "types.joint_state",
+      "operation": "joint_state",
+      "passed": true,
+      "rtol": 1e-06,
+      "tensors": {
+        "position": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "velocity": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 1e-07,
+      "capability": "types.pose",
+      "operation": "pose",
+      "passed": true,
+      "rtol": 1e-06,
+      "tensors": {
+        "matrix": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "points": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        }
+      }
+    },
+    {
+      "atol": 0,
+      "capability": "types.solver_results",
+      "operation": "solver_results",
+      "passed": true,
+      "rtol": 0,
+      "tensors": {
+        "debug_tensor": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "js_position": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "solution": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "solve_time": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "status_code": {
+          "max_abs": 0.0,
+          "mean_abs": 0.0,
+          "passed": true
+        },
+        "success": {
+          "exact": true,
+          "passed": true
+        }
+      }
+    }
+  ],
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}
