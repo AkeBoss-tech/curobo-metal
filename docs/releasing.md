@@ -5,9 +5,11 @@ not upload a locally built wheel or sdist.
 
 ## One-time repository setup
 
-1. Confirm ownership/availability of the `curobo-metal` project on TestPyPI and
-   PyPI. A registry 404 is not a reservation; ownership is established only by
-   the index account/project configuration.
+1. Confirm availability of `curobo-metal` on TestPyPI and PyPI, then configure
+   a pending Trusted Publisher for the new project on each index. A registry
+   404 and a pending publisher do not reserve the name; the first successful
+   upload creates the project. Follow PyPI's
+   [new-project OIDC procedure](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 2. On each index, configure a Trusted Publisher for this GitHub repository and
    `.github/workflows/release.yml`. Use the `testpypi` environment for TestPyPI
    and the `pypi` environment for production.
