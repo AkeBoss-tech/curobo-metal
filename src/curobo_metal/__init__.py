@@ -6,13 +6,9 @@ compatibility layer without importing PyTorch or initializing a GPU runtime.
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
-try:
-    __version__ = version("curobo-metal")
-except PackageNotFoundError:
-    __version__ = "0.0.0"
+from ._version import __version__
 
 __all__ = [
     "__version__",

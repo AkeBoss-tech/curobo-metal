@@ -2,11 +2,6 @@
 
 
 def get_version() -> str:
-    from importlib.metadata import PackageNotFoundError, version
+    from curobo_metal._version import __version__
 
-    for distribution in ("curobo-metal", "nvidia_curobo"):
-        try:
-            return version(distribution)
-        except PackageNotFoundError:
-            pass
-    return "0.0.0+source"
+    return __version__

@@ -2,4 +2,7 @@
 
 # Pinned cuRobo exposes its version at the package root and does not re-export
 # the classes in ``curobo.types`` here.
-__version__ = "0.0.0"
+from curobo._src.util.version import get_version
+
+__version__ = get_version()
+del get_version

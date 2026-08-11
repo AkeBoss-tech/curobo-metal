@@ -4,19 +4,39 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "curobo-metal"
-version = "0.0.0"
 description = "Portable correctness foundations for cuRobo Metal"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+dynamic = ["version"]
+authors = [{name = "curobo-metal contributors"}]
+keywords = ["robotics", "motion-planning", "apple-silicon", "metal", "pytorch"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+]
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "PyYAML>=6.0", "torch>=2.13"]
+
+[project.urls]
+Homepage = "https://github.com/AkeBoss-tech/curobo-metal"
+Repository = "https://github.com/AkeBoss-tech/curobo-metal"
+Issues = "https://github.com/AkeBoss-tech/curobo-metal/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=7.4", "scipy>=1.10"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "curobo_metal._version.__version__"}
 
 [tool.setuptools.package-data]
 curobo = [

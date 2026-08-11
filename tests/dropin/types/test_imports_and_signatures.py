@@ -10,7 +10,7 @@ def test_public_types_are_a_module_at_the_pinned_layout() -> None:
 
     types = importlib.import_module("curobo.types")
 
-    assert curobo.__version__ == "0.0.0"
+    assert curobo.__version__ == "0.1.0a1"
     assert not hasattr(curobo, "Pose")
     assert types.__file__.endswith("curobo/types.py")
     assert types.__all__ == [
