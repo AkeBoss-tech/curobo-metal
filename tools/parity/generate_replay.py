@@ -263,6 +263,62 @@ def _particle_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.nd
     }
 
 
+def _motion_planner_replay(raw: dict[str, np.ndarray], device: str) -> dict[str, np.ndarray]:
+    """Exercise the real high-level MotionPlanner C-space lifecycle."""
+    from curobo._src.motion.motion_planner import MotionPlanner
+    from curobo._src.motion.motion_planner_cfg import MotionPlannerCfg
+    from curobo._src.state.state_joint import JointState as CompatJointState
+    from curobo._src.types.device_cfg import DeviceCfg as CompatDeviceCfg
+
+    cfg = MotionPlannerCfg.create(
+        "franka.yml",
+        device_cfg=CompatDeviceCfg(device=torch.device(device), dtype=torch.float32),
+        num_ik_seeds=2,
+        num_trajopt_seeds=2,
+        use_cuda_graph=False,
+        self_collision_check=False,
+        max_batch_size=1,
+    )
+    planner = MotionPlanner(cfg)
+    start = _tensor(raw["motion_start"], device)
+    goal = start + _tensor(raw["motion_goal_delta"], device)
+    start_state = CompatJointState.from_position(start[None], planner.joint_names)
+    goal_state = CompatJointState.from_position(goal[None], planner.joint_names)
+    result = planner.plan_cspace(
+        goal_state, start_state, max_attempts=1, enable_graph_attempt=2
+    )
+    if result is None or result.js_solution is None:
+        raise RuntimeError("MotionPlanner did not return a C-space trajectory")
+    active = result.js_solution.position[..., : len(planner.joint_names)]
+    path_length = torch.linalg.vector_norm(torch.diff(active, dim=-2), dim=-1).sum(dim=-1)
+
+    try:
+        invalid_result = planner.plan_cspace(
+            goal_state, start_state, max_attempts=0, enable_graph_attempt=2
+        )
+        invalid_rejected = int(invalid_result is None)
+    except Exception:
+        invalid_rejected = 1
+
+    success = bool(result.success.all().item())
+    finite = bool(torch.isfinite(active).all().item())
+    start_ok = bool(torch.allclose(active[..., 0, :], start, rtol=0.0, atol=1e-5))
+    goal_ok = bool(torch.allclose(active[..., -1, :], goal, rtol=0.0, atol=1e-5))
+    edge = int(success and finite and start_ok and goal_ok)
+    return {
+        "success": result.success.detach().cpu().numpy(),
+        "trajectory": active.detach().cpu().numpy(),
+        "solution_shape": np.asarray(active.shape, np.int64),
+        "path_length": path_length.detach().cpu().numpy(),
+        "status_code": np.asarray([0 if success else 1], np.int8),
+        "start_converged": np.asarray([start_ok], np.int8),
+        "endpoint_converged": np.asarray([goal_ok], np.int8),
+        "solution_finite": np.asarray([finite], np.int8),
+        "invalid_rejected": np.asarray([invalid_rejected], np.int8),
+        "edge_observed": np.asarray([edge], np.int8),
+    }
+
+
 def _invalid_rejected(operation) -> np.ndarray:
     """Normalize an exception or non-finite result into one portable bit."""
     try:
@@ -639,6 +695,8 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
         return _lbfgs_replay(raw, device)
     if case.probe == "particle":
         return _particle_replay(raw, device)
+    if case.probe == "motion_planner":
+        return _motion_planner_replay(raw, device)
     if case.capability == "trajectory.trajectory_optimization":
         from curobo._src.solver.solver_trajopt import TrajOptSolver
         from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
@@ -893,7 +951,8 @@ def generate(
         results = probe(case, raw, device)
         if "invalid_rejected" not in results:
             results["invalid_rejected"] = _required_invalid(case, raw, device)
-        results["edge_observed"] = _required_edge(case, raw, device)
+        if "edge_observed" not in results:
+            results["edge_observed"] = _required_edge(case, raw, device)
         save_npz(output_path, results)
         with np.load(output_path, allow_pickle=False) as observed:
             invalid = observed["invalid_rejected"]

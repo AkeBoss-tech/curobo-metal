@@ -13,6 +13,7 @@
     "ik.inverse_kinematics",
     "kinematics.forward_kinematics",
     "kinematics.geometric_jacobian",
+    "motion_generation.motion_gen",
     "optim.lbfgs",
     "optim.particle_evolution",
     "trajectory.dynamics_aware_bspline",
@@ -289,6 +290,57 @@
           "max_abs": 1.1920928955078125e-07,
           "mean_abs": 1.3704296956499698e-08,
           "passed": true
+        }
+      }
+    },
+    {
+      "atol": 5e-05,
+      "capability": "motion_generation.motion_gen",
+      "operation": "motion_planner_cspace",
+      "passed": true,
+      "rtol": 0.0005,
+      "tensors": {
+        "endpoint_converged": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "path_length": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "solution_finite": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "solution_shape": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "start_converged": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "status_code": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
+        },
+        "success": {
+          "cuda_passed": true,
+          "metal_passed": true,
+          "passed": true,
+          "semantic": true
         }
       }
     },

@@ -88,7 +88,7 @@
     {
       "capability": "motion_generation.motion_gen",
       "manifest": "motion_generation.motion_gen/metal-manifest.json",
-      "manifest_sha256": "4b82f6aa7890e5166a8a936bda36729544f2ac48ab333401d149a31b7f9ae1a9"
+      "manifest_sha256": "6e2ea9c22aa1fe38bf87b7d2abbdf066e6155a0c02902b971384897538bdd56b"
     },
     {
       "capability": "dynamics.inverse_dynamics",

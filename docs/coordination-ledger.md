@@ -44,7 +44,7 @@ Parent integration suite after the upstream-example replay wave: 285 tests passi
 The portable implementation and deterministic MPS replay corpus are complete.
 On 2026-08-10 the self-verifying handoff executed successfully on iLab1 against
 the exact pinned upstream revision using an NVIDIA RTX A4500, CUDA 12.6, and
-PyTorch 2.7.1+cu126. On 2026-08-11, all 18 registered adapters passed the strict
+PyTorch 2.7.1+cu126. On 2026-08-11, all 19 registered adapters passed the strict
 paired comparison; the latest dated aggregate report is checked in under
 `artifacts/parity/cuda-replay/paired-report-2026-08-11.json`.
 The replay runner now has real, asset-independent pinned-upstream CUDA adapters
@@ -67,8 +67,10 @@ outcome replay against the declarative forbidden-box corpus, and the
 EvolutionStrategies adapter passes multi-seed natural-gradient mean-update
 outcomes without requiring identical RNG streams. The L-BFGS adapter passes
 eager batched quadratic outcome checks while explicitly excluding unsupported
-terminal freezing and hard projection; only MotionGen continues to fail closed
-with an explicit constraint. The ready-suite
+terminal freezing and hard projection. The final MotionGen stand-in was
+replaced by a real `MotionPlanner.plan_cspace` adapter that passes packaged-
+Franka trajectory layout, endpoint, path, status, and invalid-attempt outcome
+checks. The ready-suite
 command binds CUDA evidence to the exact committed
 input and Metal output hashes, requires executed invalid-case evidence for every
 ready adapter, records CUDA/GPU runtime provenance, and writes an aggregate

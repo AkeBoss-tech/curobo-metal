@@ -12,6 +12,7 @@ import pytest
 
 from tools.parity.compare_paired import (
     _validate_lbfgs_semantics,
+    _validate_motion_planner_semantics,
     _validate_particle_semantics,
     _validate_prm_semantics,
     _validate_required_evidence,
@@ -210,6 +211,31 @@ def test_particle_semantic_validator_rejects_rng_identical_but_unimproved_result
     assert not report["objective_improved"]["passed"]
 
 
+def test_motion_planner_replay_executes_real_cspace_lifecycle(tmp_path):
+    case = BY_ID["motion_generation.motion_gen"]
+    raw, _ = load_corpus(ARTIFACT / "corpus", case)
+    output = probe(case, raw, "cpu")
+    assert output["success"].all()
+    assert output["trajectory"].shape == (1, 1, 81, 7)
+    for key in (
+        "start_converged",
+        "endpoint_converged",
+        "solution_finite",
+        "invalid_rejected",
+        "edge_observed",
+    ):
+        assert output[key].item() == 1
+
+    inputs_path, output_path = tmp_path / "inputs.npz", tmp_path / "outputs.npz"
+    np.savez(inputs_path, **raw)
+    np.savez(output_path, **output)
+    with np.load(inputs_path, allow_pickle=False) as inputs, np.load(
+        output_path, allow_pickle=False
+    ) as outputs:
+        report = _validate_motion_planner_semantics(outputs, inputs, "cpu-reference")
+    assert report and all(item["passed"] for item in report.values())
+
+
 def test_asset_independent_cuda_adapters_are_explicitly_registered():
     assert set(ADAPTERS) == {
         "collision.mesh_world",
@@ -224,6 +250,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "dynamics.inverse_dynamics",
         "kinematics.forward_kinematics",
         "kinematics.geometric_jacobian",
+        "motion_generation.motion_gen",
         "optim.lbfgs",
         "optim.particle_evolution",
         "types.device_cfg",

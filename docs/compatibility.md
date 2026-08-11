@@ -26,7 +26,7 @@ the same environment because both own `curobo`.
   types, kinematics, collision, cost, IK, trajectory, graph-planning,
   perception, dynamics, and high-level planning slices. Requested MPS execution
   never silently falls back to CPU in release tests.
-- Eighteen of nineteen bounded replay capabilities have checked-in paired
+- All nineteen bounded replay capabilities have checked-in paired
   pinned-CUDA/Metal evidence. Passing a bounded replay is evidence only for its
   serialized operation and schema, not for every method or numerical regime in
   that subsystem.
@@ -46,12 +46,12 @@ eager, batched quadratic solve. The shared claim deliberately excludes hard
 action projection and terminal freezing because the pinned upstream line
 search does not implement those options.
 
-Motion generation is the sole replay label without valid end-to-end CUDA
-parity evidence: the old replay exercised minimum-jerk interpolation, not the
-real MotionPlanner/MotionGen stack.
-
-Motion generation remains evidence-blocked until its probe is replaced and run
-on the pinned CUDA host.
+Motion generation now has fallback-disabled MPS and pinned-CUDA outcome
+evidence for the real high-level `MotionPlanner` C-space lifecycle. The shared
+case covers a single-attempt packaged-Franka solve, public trajectory layout,
+endpoint convergence, path finiteness, status, and zero-attempt failure. It
+does not claim parity for pose IK, graph fallback, world mutation, or every
+MotionGen policy.
 
 The paired EvolutionStrategies contract covers the stable natural-gradient
 mean update with covariance updates disabled. The pinned upstream covariance
@@ -78,8 +78,8 @@ A stable drop-in claim requires all of the following:
 
 1. Classify every strict `_src` export/signature difference and make the
    supported-symbol gate fail closed.
-2. Replace and pass the remaining invalid MotionGen parity probe, then broaden all nineteen
-   capabilities across dtype/device, batch/layout, invalid/infeasible,
+2. Broaden all nineteen capabilities beyond their bounded paired replays across
+   dtype/device, batch/layout, invalid/infeasible,
    mutation/cache, gradient, collision-boundary, and repeatability cases.
 3. Classify the 211 pinned upstream test modules and 14 examples; execute every
    applicable item unchanged against the installed wheel and record exclusions.

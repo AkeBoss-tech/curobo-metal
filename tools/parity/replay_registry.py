@@ -43,7 +43,7 @@ _ROWS = [
     ("trajectory.trajectory_optimization", "trajectory_optimization", 3e-4, 3e-5, "trajectory", "infeasible_limits", "exact_endpoints", "real pinned V2 CUDA TrajOptSolver adapter available for packaged Franka C-space outcome/layout replay; optimizer trajectories are intentionally not compared"),
     ("trajectory.dynamics_aware_bspline", "dynamics_aware_bspline", 3e-4, 3e-5, "bspline", "invalid_horizon", "endpoint_constraints", "real pinned CUDA cubic B-spline boundary-kernel adapter available"),
     ("graph.prm_planner", "prm_planner", 0, 0, "graph", "blocked_endpoints", "zero_length_edge", "real pinned CUDA PRMGraphPlanner adapter available for declarative 2-DoF forbidden-box outcome replay"),
-    ("motion_generation.motion_gen", "motion_gen", 5e-4, 5e-5, "trajectory", "ik_failed", "minimum_jerk_endpoints", "requires caller-provided robot/world assets and compiled upstream CUDA IK/graph/trajopt stack"),
+    ("motion_generation.motion_gen", "motion_planner_cspace", 5e-4, 5e-5, "motion_planner", "zero_attempt_budget", "single_attempt_cspace_lifecycle", "real pinned MotionPlanner CUDA adapter available for packaged Franka C-space outcome/layout replay; planner trajectories are intentionally compared semantically"),
     ("dynamics.inverse_dynamics", "inverse_dynamics", 2e-4, 2e-5, "dynamics", "missing_acceleration", "two_batch_gradients", "real native-CUDA RNEA adapter available for the license-clean serialized inertial robot"),
 ]
 

@@ -1076,12 +1076,72 @@ def _lbfgs(raw: dict[str, np.ndarray]) -> Output:
     }
 
 
+def _motion_planner(raw: dict[str, np.ndarray]) -> Output:
+    """Run pinned high-level MotionPlanner on the shared Franka C-space case."""
+    import torch
+    from curobo._src.motion.motion_planner import MotionPlanner
+    from curobo._src.motion.motion_planner_cfg import MotionPlannerCfg
+    from curobo._src.state.state_joint import JointState
+    from curobo._src.types.device_cfg import DeviceCfg
+
+    cfg = MotionPlannerCfg.create(
+        "franka.yml",
+        device_cfg=DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+        num_ik_seeds=2,
+        num_trajopt_seeds=2,
+        use_cuda_graph=False,
+        self_collision_check=False,
+        max_batch_size=1,
+    )
+    planner = MotionPlanner(cfg)
+    start = torch.as_tensor(raw["motion_start"], device="cuda", dtype=torch.float32)
+    goal = start + torch.as_tensor(
+        raw["motion_goal_delta"], device="cuda", dtype=torch.float32
+    )
+    start_state = JointState.from_position(start[None], planner.joint_names)
+    goal_state = JointState.from_position(goal[None], planner.joint_names)
+    result = planner.plan_cspace(
+        goal_state, start_state, max_attempts=1, enable_graph_attempt=2
+    )
+    if result is None or result.js_solution is None:
+        raise RuntimeError("pinned MotionPlanner did not return a C-space trajectory")
+    active = result.js_solution.position[..., : len(planner.joint_names)]
+    path_length = torch.linalg.vector_norm(torch.diff(active, dim=-2), dim=-1).sum(dim=-1)
+
+    try:
+        invalid_result = planner.plan_cspace(
+            goal_state, start_state, max_attempts=0, enable_graph_attempt=2
+        )
+        invalid_rejected = int(invalid_result is None)
+    except Exception:
+        invalid_rejected = 1
+
+    success = bool(result.success.all().item())
+    finite = bool(torch.isfinite(active).all().item())
+    start_ok = bool(torch.allclose(active[..., 0, :], start, rtol=0.0, atol=1e-5))
+    goal_ok = bool(torch.allclose(active[..., -1, :], goal, rtol=0.0, atol=1e-5))
+    edge = int(success and finite and start_ok and goal_ok)
+    return {
+        "success": result.success.detach().cpu().numpy(),
+        "trajectory": active.detach().cpu().numpy(),
+        "solution_shape": np.asarray(active.shape, np.int64),
+        "path_length": path_length.detach().cpu().numpy(),
+        "status_code": np.asarray([0 if success else 1], np.int8),
+        "start_converged": np.asarray([start_ok], np.int8),
+        "endpoint_converged": np.asarray([goal_ok], np.int8),
+        "solution_finite": np.asarray([finite], np.int8),
+        "invalid_rejected": np.asarray([invalid_rejected], np.int8),
+        "edge_observed": np.asarray([edge], np.int8),
+    }
+
+
 ADAPTERS: dict[str, Callable[[dict[str, np.ndarray]], Output]] = {
     "collision.mesh_world": _mesh_world,
     "collision.robot_scene": _robot_scene_collision,
     "collision.voxel_esdf_query": _voxel_esdf,
     "configuration.robot_config_and_loaders": _robot_config,
     "graph.prm_planner": _prm_planner,
+    "motion_generation.motion_gen": _motion_planner,
     "optim.lbfgs": _lbfgs,
     "optim.particle_evolution": _particle_evolution,
     "cost.pose_and_composable_costs": _pose_cost,

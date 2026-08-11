@@ -57,5 +57,7 @@ the documented JSON representation outside this package. Mesh/BVH, voxel,
 ESDF, depth-camera, continuous-collision, dynamics, Isaac Sim, Omniverse,
 CUDA Graph, grasp geometry beyond link-local spheres, and non-primitive runtime
 worlds are not impersonated. There is no CPU fallback for requested MPS
-execution. The portable MotionGen audit record is evidence-blocked pending
-paired pinned CUDA replay; local test success is not a CUDA-equivalence claim.
+execution. The paired replay now covers the real high-level
+`MotionPlanner.plan_cspace` lifecycle on packaged Franka across fallback-disabled
+MPS and pinned CUDA. That bounded outcome evidence does not extend to the
+unsupported integrations above or to every pose, graph, world, and retry path.

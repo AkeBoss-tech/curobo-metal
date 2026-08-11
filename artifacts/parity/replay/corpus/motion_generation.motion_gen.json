@@ -2,16 +2,29 @@
   "capability": "motion_generation.motion_gen",
   "format": "curobo-metal-replay-corpus",
   "inputs": [
-    "q"
+    "motion_start",
+    "motion_goal_delta"
   ],
   "required_evidence": {
     "edge": {
-      "case": "minimum_jerk_endpoints",
+      "case": "single_attempt_cspace_lifecycle",
       "output": "edge_observed"
     },
     "invalid": {
-      "case": "ik_failed",
+      "case": "zero_attempt_budget",
       "output": "invalid_rejected"
+    }
+  },
+  "tensors": {
+    "motion_start": {
+      "data": [0.0, -1.3, 0.0, -2.5, 0.0, 1.5, 0.8],
+      "dtype": "float32",
+      "shape": [7]
+    },
+    "motion_goal_delta": {
+      "data": [0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "dtype": "float32",
+      "shape": [7]
     }
   },
   "version": 1

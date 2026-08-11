@@ -195,6 +195,73 @@ def _validate_lbfgs_semantics(
     return report
 
 
+def _validate_motion_planner_semantics(
+    outputs: np.lib.npyio.NpzFile, inputs: np.lib.npyio.NpzFile, backend: str
+) -> dict[str, dict[str, Any]]:
+    """Validate high-level planner outcomes without matching solver paths."""
+    report: dict[str, dict[str, Any]] = {}
+
+    def record(key: str, passed: bool) -> None:
+        report[key] = {"passed": bool(passed), "semantic": True, "backend": backend}
+
+    start = inputs["motion_start"]
+    goal = start + inputs["motion_goal_delta"]
+    trajectory = outputs["trajectory"] if "trajectory" in outputs.files else np.array([])
+    expected_shape = (1, 1, 81, start.shape[0])
+    shape_ok = (
+        trajectory.shape == expected_shape
+        and "solution_shape" in outputs.files
+        and np.array_equal(outputs["solution_shape"], np.asarray(expected_shape, np.int64))
+    )
+    record("solution_shape", shape_ok)
+    finite = shape_ok and np.isfinite(trajectory).all()
+    record(
+        "solution_finite",
+        finite
+        and "solution_finite" in outputs.files
+        and outputs["solution_finite"].shape == (1,)
+        and outputs["solution_finite"].dtype == np.int8
+        and int(outputs["solution_finite"][0]) == 1,
+    )
+    success = outputs["success"] if "success" in outputs.files else np.array([])
+    record("success", success.shape == (1, 1) and success.dtype == np.bool_ and success.all())
+    status = outputs["status_code"] if "status_code" in outputs.files else np.array([])
+    record("status_code", status.shape == (1,) and status.dtype == np.int8 and int(status[0]) == 0)
+
+    start_ok = finite and np.allclose(trajectory[..., 0, :], start, rtol=0.0, atol=1e-5)
+    goal_ok = finite and np.allclose(trajectory[..., -1, :], goal, rtol=0.0, atol=1e-5)
+    record(
+        "start_converged",
+        start_ok
+        and "start_converged" in outputs.files
+        and outputs["start_converged"].shape == (1,)
+        and int(outputs["start_converged"][0]) == 1,
+    )
+    record(
+        "endpoint_converged",
+        goal_ok
+        and "endpoint_converged" in outputs.files
+        and outputs["endpoint_converged"].shape == (1,)
+        and int(outputs["endpoint_converged"][0]) == 1,
+    )
+
+    expected_length = (
+        np.linalg.norm(np.diff(trajectory, axis=-2), axis=-1).sum(axis=-1)
+        if finite
+        else np.array([])
+    )
+    observed_length = outputs["path_length"] if "path_length" in outputs.files else np.array([])
+    direct = float(np.linalg.norm(goal - start))
+    record(
+        "path_length",
+        expected_length.shape == (1, 1)
+        and observed_length.shape == (1, 1)
+        and np.allclose(observed_length, expected_length, rtol=5e-4, atol=5e-5)
+        and bool(np.all(observed_length >= direct - 1e-5)),
+    )
+    return report
+
+
 def _validate_particle_semantics(
     outputs: np.lib.npyio.NpzFile, inputs: np.lib.npyio.NpzFile, backend: str
 ) -> dict[str, dict[str, Any]]:
@@ -345,7 +412,12 @@ def compare_capability(
         }
         if declared != actual:
             raise ValueError(f"{capability}: CUDA tensor schema does not match manifest")
-        if capability in {"graph.prm_planner", "optim.lbfgs", "optim.particle_evolution"}:
+        if capability in {
+            "graph.prm_planner",
+            "motion_generation.motion_gen",
+            "optim.lbfgs",
+            "optim.particle_evolution",
+        }:
             # Planner roadmaps and optimizer iteration histories need not be
             # identical across devices. Require both backends to satisfy the
             # capability's observable outcome invariants instead.
@@ -353,6 +425,7 @@ def compare_capability(
             with np.load(input_path, allow_pickle=False) as inputs:
                 validator = {
                     "graph.prm_planner": _validate_prm_semantics,
+                    "motion_generation.motion_gen": _validate_motion_planner_semantics,
                     "optim.lbfgs": _validate_lbfgs_semantics,
                     "optim.particle_evolution": _validate_particle_semantics,
                 }[capability]

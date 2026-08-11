@@ -47,14 +47,14 @@ evidence issue.
 On 2026-08-11, the checked-in handoff ran against the exact upstream revision
 on an NVIDIA RTX A4500 (CUDA 12.6, PyTorch 2.7.1+cu126). The resulting hashed
 [paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-11.json)
-passes all 18 available CUDA adapters: configuration,
+passes all 19 available CUDA adapters: configuration,
 `DeviceCfg`, `Pose`, `JointState`, solver results, forward kinematics,
 geometric Jacobians, robot-scene sphere collision, a bounded unsigned Warp
 mesh query, bounded scene-level voxel/ESDF queries, position pose cost, and
 inverse dynamics, high-level IK and trajectory-optimization outcomes, and the
 compiled cubic B-spline boundary kernel, declarative PRM planning outcomes,
-multi-seed EvolutionStrategies mean-update outcomes, and eager batched L-BFGS
-quadratic outcomes.
+multi-seed EvolutionStrategies mean-update outcomes, eager batched L-BFGS
+quadratic outcomes, and a real high-level MotionPlanner C-space lifecycle.
 The dynamics category
 includes torque plus first-order VJPs for position, velocity, and
 acceleration.
@@ -68,11 +68,9 @@ failure.  This is outcome-equivalence evidence, not identical-solution or
 full solver-trajectory parity.
 
 This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
-serialized probes only. The remaining registry case—MotionGen—still needs a
-genuine upstream adapter and broader
-batch/layout/world/solver coverage, so the
-inventory correctly remains evidence-blocked and this does **not** make a
-full drop-in claim.
+serialized probes only. All registry cases now have genuine upstream adapters,
+but they still need broader batch/layout/world/solver coverage. This does
+**not** make a full drop-in claim.
 
 The collision semantic-equivalence records are deliberately smaller than an
 upstream checker API: discrete sphere/sphere and sphere/oriented-cuboid signed
@@ -108,6 +106,11 @@ now also have pinned CUDA outcome evidence. `optim.lbfgs` likewise has fresh
 fallback-disabled MPS and pinned-CUDA semantic evidence for its eager batched
 quadratic contract. That contract does not claim terminal freezing or hard
 action projection, which the pinned upstream line search rejects or omits.
+`motion_generation.motion_gen` now executes `MotionPlanner.plan_cspace` on the
+packaged Franka model instead of the old minimum-jerk stand-in. Its semantic
+comparison checks the public 81-knot active-joint trajectory, endpoints,
+success/status, finite path length, and zero-attempt behavior without requiring
+identical solver iterates.
 Each case owns an explicit JSON corpus
 specification under `artifacts/parity/replay/corpus/`; its input NPZ contains
 only that capability's declared tensors rather than a shared opaque superset.
