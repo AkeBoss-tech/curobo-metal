@@ -35,3 +35,7 @@ exposes a compatibility-oriented `curobo` namespace.
 Compatibility is pinned to NVIDIA cuRobo commit
 `8e734f3ced1df898990bcd92de40abce475907db`. See `docs/parity-matrix.md` for the
 bounded evidence and explicit exclusions.
+
+Publication remains blocked until the TestPyPI/PyPI Trusted Publisher projects
+and protected GitHub environments described in `docs/releasing.md` are
+configured and the TestPyPI dry run succeeds.
