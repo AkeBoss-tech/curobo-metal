@@ -12,7 +12,7 @@ esac
 venv_flags=
 install_flags=
 if [ "${CUROBO_METAL_SMOKE_USE_SYSTEM_PACKAGES:-0}" = "1" ]; then
-    uv build --wheel --out-dir "$smoke_dir/dist" "$repo_dir"
+    uv build --wheel --sdist --out-dir "$smoke_dir/dist" "$repo_dir"
     mkdir "$smoke_dir/site"
     "$smoke_python" -m zipfile -e "$smoke_dir"/dist/*.whl "$smoke_dir/site"
     cd "$smoke_dir"
@@ -21,8 +21,8 @@ if [ "${CUROBO_METAL_SMOKE_USE_SYSTEM_PACKAGES:-0}" = "1" ]; then
 fi
 "$smoke_python" -m venv $venv_flags "$smoke_dir/venv"
 "$smoke_dir/venv/bin/python" -m pip install --upgrade build pip
-"$smoke_dir/venv/bin/python" -m build --wheel --outdir "$smoke_dir/dist" "$repo_dir"
+"$smoke_dir/venv/bin/python" -m build --wheel --sdist --outdir "$smoke_dir/dist" "$repo_dir"
 "$smoke_dir/venv/bin/python" -m pip install $install_flags "$smoke_dir"/dist/*.whl
 cd "$smoke_dir"
-"$smoke_dir/venv/bin/python" -I -c 'import curobo_metal; from curobo_metal.ops.kinematics import forward_kinematics; print(curobo_metal.__file__)'
+"$smoke_dir/venv/bin/python" "$repo_dir/tools/packaging/wheel_smoke.py"
 "$smoke_dir/venv/bin/python" -m pip check

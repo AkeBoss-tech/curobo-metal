@@ -24,12 +24,19 @@ jobs:
 
   cpu:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync --extra test
+      - run: uv sync --python "${{ matrix.python-version }}" --extra test
       - run: PYTHONPATH=.:src PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
       - name: Test installed wheel namespace and assets
         run: |
@@ -50,6 +57,9 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -72,3 +82,34 @@ jobs:
             "$GITHUB_WORKSPACE/tools/api_compat/runtime_imports.py" \
             --inventory "$GITHUB_WORKSPACE/artifacts/api_compat/upstream-api.json" \
             --require-installed-wheel
+
+  distributions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Build wheel and source distribution
+        run: uv build --wheel --sdist --out-dir dist
+      - name: Validate distribution metadata
+        run: uvx twine check dist/*
+      - name: Install and test wheel in a clean environment
+        run: |
+          uv venv /tmp/curobo-metal-wheel
+          uv pip install --python /tmp/curobo-metal-wheel/bin/python dist/*.whl
+          cd /tmp
+          /tmp/curobo-metal-wheel/bin/python \
+            "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
+          uv pip check --python /tmp/curobo-metal-wheel/bin/python
+      - name: Install and test sdist in a separate clean environment
+        run: |
+          uv venv /tmp/curobo-metal-sdist
+          uv pip install --python /tmp/curobo-metal-sdist/bin/python dist/*.tar.gz
+          cd /tmp
+          /tmp/curobo-metal-sdist/bin/python \
+            "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
+          uv pip check --python /tmp/curobo-metal-sdist/bin/python
