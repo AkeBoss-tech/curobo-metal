@@ -19,6 +19,8 @@ not upload a locally built wheel or sdist.
 1. Start the `publish` workflow manually. It builds one wheel and one sdist,
    runs `twine check`, retains those exact artifacts, and publishes them to
    TestPyPI through OIDC.
+   The build also runs `tools/packaging/check_distribution_contents.py` to
+   require all notices and reject generated/source-tree leakage.
 2. Install the TestPyPI artifact in an empty virtual environment while taking
    dependencies from PyPI:
 

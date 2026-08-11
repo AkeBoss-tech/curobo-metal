@@ -27,7 +27,9 @@ jobs:
       - name: Build once
         run: uv build --wheel --sdist --out-dir dist
       - name: Validate metadata
-        run: uvx twine check dist/*
+        run: |
+          uvx twine check dist/*
+          python tools/packaging/check_distribution_contents.py dist/*
       - uses: actions/upload-artifact@v4
         with:
           name: python-distributions

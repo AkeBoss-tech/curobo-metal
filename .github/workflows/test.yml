@@ -96,7 +96,9 @@ jobs:
       - name: Build wheel and source distribution
         run: uv build --wheel --sdist --out-dir dist
       - name: Validate distribution metadata
-        run: uvx twine check dist/*
+        run: |
+          uvx twine check dist/*
+          python tools/packaging/check_distribution_contents.py dist/*
       - name: Install and test wheel in a clean environment
         run: |
           uv venv /tmp/curobo-metal-wheel

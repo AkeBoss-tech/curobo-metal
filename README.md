@@ -18,9 +18,10 @@ The project currently provides:
 The target distribution is installed as `curobo-metal` and exposes the original
 `curobo` Python namespace, so applications ultimately change only their
 dependency. That namespace and its complete behavioral gates are under active
-implementation; the current release is not yet drop-in complete. See
-[PLAN.md](PLAN.md), [docs/dropin-roadmap.md](docs/dropin-roadmap.md), and
-[docs/compatibility.md](docs/compatibility.md).
+implementation; the current release is not yet drop-in complete. See the
+[project plan](https://github.com/AkeBoss-tech/curobo-metal/blob/main/PLAN.md),
+[drop-in roadmap](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/dropin-roadmap.md),
+and [compatibility boundary](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/compatibility.md).
 
 > **Alpha namespace warning:** NVIDIA cuRobo and `curobo-metal` both install the
 > `curobo` Python package. They must not be co-installed. Use a dedicated virtual
@@ -59,8 +60,9 @@ installation is not required for the current runtime-compiled kernels.
 ## Install and test
 
 The forthcoming `0.1.0a1` is a bounded preview, not a stable drop-in release.
-Its exact included behavior and exclusions are listed in
-[CHANGELOG.md](CHANGELOG.md) and [docs/parity-matrix.md](docs/parity-matrix.md).
+Its exact included behavior and exclusions are listed in the
+[changelog](https://github.com/AkeBoss-tech/curobo-metal/blob/main/CHANGELOG.md)
+and [parity matrix](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/parity-matrix.md).
 
 Install the locked development environment with
 [uv](https://docs.astral.sh/uv/):
@@ -95,8 +97,8 @@ PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python \
 ```
 
 This loads upstream `franka.yml` directly and checks Metal transforms and
-autograd against the independent float64 oracle. See
-[docs/upstream-example-replay.md](docs/upstream-example-replay.md) for the
+autograd against the independent float64 oracle. See the
+[upstream example replay](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/upstream-example-replay.md) for the
 recorded result and the exact boundary around the CUDA-hardcoded original.
 
 ## Architecture
@@ -157,4 +159,7 @@ Every feature progresses through:
 5. synchronized profiling;
 6. a fused Metal implementation only when evidence supports it.
 
-See [PLAN.md](PLAN.md) for the complete gated roadmap.
+See the [project plan](https://github.com/AkeBoss-tech/curobo-metal/blob/main/PLAN.md)
+for the complete gated roadmap. Report bugs through the
+[GitHub issue tracker](https://github.com/AkeBoss-tech/curobo-metal/issues);
+this alpha has no guaranteed response time or production support commitment.
