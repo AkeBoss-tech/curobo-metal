@@ -717,9 +717,10 @@ class _MPPIPortable(PortableOptimizer):
                 dtype=self.device_cfg.dtype,
             )
             self._ensure_distribution(initial, reset_mean=True)
-        self._sample_set = None
-        self._sample_iter = None
-        self._sample_cursor = 0
+            self._sample_set = None
+            self._sample_iter = None
+            self._sample_cursor = 0
+            self.initialize_samples()
 
     def update_init_mean(self, init_mean):
         self.config.init_mean = self.device_cfg.to_device(init_mean).detach().clone()
@@ -727,7 +728,22 @@ class _MPPIPortable(PortableOptimizer):
             self._ensure_distribution(self._dist.mean, reset_mean=True)
 
     def update_seed(self, init_act):
-        self._ensure_distribution(torch.as_tensor(init_act), reset_mean=True)
+        value = torch.as_tensor(
+            init_act, device=self.device_cfg.device, dtype=self.device_cfg.dtype
+        )
+        expected_tail = (self.action_horizon, self.action_dim)
+        if value.ndim == 2:
+            valid = int(self.config.num_problems) == 1 and tuple(value.shape) == expected_tail
+        elif value.ndim == 3:
+            valid = tuple(value.shape) == (int(self.config.num_problems), *expected_tail)
+        else:
+            valid = False
+        if not valid:
+            raise ValueError(
+                "seed action must have shape "
+                "[num_problems, action_horizon, action_dim]"
+            )
+        self._ensure_distribution(value, reset_mean=True)
         return self.mean_action
 
     def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False):
