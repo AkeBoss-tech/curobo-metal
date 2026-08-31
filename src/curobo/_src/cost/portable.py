@@ -231,6 +231,12 @@ class BaseCSpaceCost(BaseCost):
         """Validate the portable joint-state portion of the cost contract."""
         if not isinstance(state_batch, JointState):
             raise TypeError("state_batch must be a JointState")
+        if state_batch.position.ndim != 3:
+            raise ValueError("joint state position must have shape [batch, horizon, dof]")
+        if self._batch_size >= 0 and state_batch.position.shape[0] != self._batch_size:
+            raise ValueError("joint state batch size does not match allocated cost buffers")
+        if self._horizon >= 0 and state_batch.position.shape[1] != self._horizon:
+            raise ValueError("joint state horizon does not match allocated cost buffers")
         if self.config.dof and state_batch.position.shape[-1] != self.config.dof:
             raise ValueError(
                 f"joint state must end in {self.config.dof} values, got "
@@ -280,8 +286,26 @@ def _limit_penalty(value: torch.Tensor, limits: Optional[Any], activation: torch
 
 
 class PositionCSpaceCost(BaseCSpaceCost):
-    def setup_batch_tensors(self, batch_size: int, horizon: int):
-        return super().setup_batch_tensors(batch_size, horizon)
+    def __init__(self, config: CSpaceCostCfg):
+        if config.cost_type is not CSpaceCostType.POSITION:
+            raise ValueError("PositionCSpaceCost requires CSpaceCostType.POSITION")
+        super().__init__(config)
+
+    def setup_batch_tensors(
+        self, batch: Optional[int] = None, horizon: Optional[int] = None, **kwargs
+    ):
+        if batch is None:
+            batch = kwargs.pop("batch_size", None)
+        if kwargs:
+            raise TypeError(f"unexpected setup arguments: {sorted(kwargs)}")
+        if batch is None or horizon is None:
+            raise TypeError("batch and horizon are required")
+        shape = (batch, horizon, self.config.dof)
+        if self._batch_size != batch or self._horizon != horizon:
+            self._out_c_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+            self._out_gp_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+            self._out_gtau_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+        return super().setup_batch_tensors(batch, horizon)
 
     def forward(self, state_batch: JointState, joint_torque=None,
                 target_joint_state: Optional[JointState] = None,
@@ -311,17 +335,39 @@ class PositionCSpaceCost(BaseCSpaceCost):
             prior_velocity = _indexed_goal(current_joint_state.velocity, idxs_current_joint_state, q)
             implied_acceleration = (implied_velocity - prior_velocity) / dt[..., None]
             value = value + 0.5 * self.config.squared_l2_regularization_weight[1].to(q) * implied_acceleration.square()
-        return value.sum(-1, keepdim=True) if self.enabled else value.sum(-1, keepdim=True) * 0
+        return value if self.enabled else value * 0
 
     __call__ = forward
 
 
 class StateCSpaceCost(PositionCSpaceCost):
-    def setup_batch_tensors(self, batch_size: int, horizon: int):
-        return super().setup_batch_tensors(batch_size, horizon)
+    def __init__(self, config: CSpaceCostCfg):
+        if config.cost_type is not CSpaceCostType.STATE:
+            raise ValueError("StateCSpaceCost requires CSpaceCostType.STATE")
+        BaseCSpaceCost.__init__(self, config)
+
+    def setup_batch_tensors(
+        self, batch: Optional[int] = None, horizon: Optional[int] = None, **kwargs
+    ):
+        if batch is None:
+            batch = kwargs.pop("batch_size", None)
+        if kwargs:
+            raise TypeError(f"unexpected setup arguments: {sorted(kwargs)}")
+        if batch is None or horizon is None:
+            raise TypeError("batch and horizon are required")
+        shape = (batch, horizon, self.config.dof)
+        if self._batch_size != batch or self._horizon != horizon:
+            self._out_c_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+            self._out_gp_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+            self._out_gv_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+            self._out_ga_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+            self._out_gj_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+            self._out_gtau_buffer = torch.zeros(shape, **self.device_cfg.as_torch_dict())
+        return BaseCSpaceCost.setup_batch_tensors(self, batch, horizon)
 
     def forward(self, state_batch: JointState, joint_torque=None, **kwargs):
         # State bounds are evaluated for every available state component.
+        self.validate_input(state_batch)
         q = state_batch.position
         value = _limit_penalty(q, getattr(self.config.joint_limits, "position", None),
                                self.config.activation_distance[0], _term_weight(self.config, 0, q))
@@ -338,7 +384,7 @@ class StateCSpaceCost(PositionCSpaceCost):
             value = value + 0.5 * self.config.squared_l2_regularization_weight[3].to(joint_torque) * joint_torque.square()
             if state_batch.velocity is not None:
                 value = value + self.config.squared_l2_regularization_weight[4].to(joint_torque) * (joint_torque * state_batch.velocity * torch.as_tensor(self._dt, device=q.device, dtype=q.dtype)[..., None]).abs()
-        return value.sum(-1, keepdim=True) if self.enabled else value.sum(-1, keepdim=True) * 0
+        return value if self.enabled else value * 0
 
     __call__ = forward
 
@@ -700,13 +746,73 @@ class SceneCollisionCost(BaseCost):
         value = SceneCollisionCost.jit_weight_distance(distance, sum_cost)
         return torch.where(value > 0, value + 1.0, value)
 
+    @staticmethod
+    def _scene_model_is_empty(scene: Any) -> bool:
+        return all(
+            not getattr(scene, name, None)
+            for name in ("cuboid", "mesh", "voxel", "sphere", "capsule", "cylinder")
+        )
+
+    def _query_nonempty_scene_rows(
+        self, checker: Any, spheres: torch.Tensor, idxs_env_query: Optional[torch.Tensor]
+    ) -> Optional[torch.Tensor]:
+        """Avoid dispatching empty environments into tensor collision kernels.
+
+        An empty environment has an exact zero-cost contract.  Querying it
+        through the shared Metal checker currently reaches an all-invalid
+        gradient gather on MPS.  Split those rows before dispatch so valid
+        environments retain the normal checker implementation and empty rows
+        remain differentiable zeros.
+        """
+        models = getattr(checker, "scene_model", None)
+        raw_query = getattr(checker, "get_sphere_distance_raw", None)
+        if (
+            idxs_env_query is None
+            or not isinstance(models, list)
+            or not callable(raw_query)
+            or len(models) == 0
+        ):
+            return None
+        env = idxs_env_query.to(device=spheres.device, dtype=torch.int64)
+        empty_by_env = torch.tensor(
+            [self._scene_model_is_empty(scene) for scene in models],
+            device=spheres.device,
+            dtype=torch.bool,
+        )
+        empty_rows = empty_by_env.index_select(0, env)
+        if not bool(empty_rows.any().item()):
+            return None
+        active_rows = (~empty_rows).nonzero(as_tuple=False).reshape(-1)
+        distance = spheres.new_zeros(spheres.shape[:-1])
+        if active_rows.numel() == 0:
+            return distance
+        active_spheres = spheres.index_select(0, active_rows)
+        active_env = env.index_select(0, active_rows)
+        from curobo._src.geom.collision.buffer_collision import CollisionBuffer
+
+        buffer = CollisionBuffer.from_shape(active_spheres.shape, self.device_cfg)
+        active_distance = raw_query(
+            active_spheres,
+            buffer,
+            self._weight,
+            self.config.activation_distance,
+            env_query_idx=active_env,
+            return_loss=self.use_grad_input,
+        )
+        return distance.index_copy(0, active_rows, active_distance)
+
     def forward(self, state, idxs_env_query=None, trajectory_dt=None):
         spheres = getattr(state, "link_spheres_tensor", getattr(state, "robot_spheres", state))
         self.validate_input(state, idxs_env_query)
         checker = self.config.scene_collision_checker
         if checker is None:
             raise ValueError("scene_collision_checker is required")
-        if self.config.use_sweep and hasattr(checker, "get_swept_sphere_distance"):
+        distance = None
+        if not self.config.use_sweep:
+            distance = self._query_nonempty_scene_rows(checker, spheres, idxs_env_query)
+        if distance is not None:
+            pass
+        elif self.config.use_sweep and hasattr(checker, "get_swept_sphere_distance"):
             if trajectory_dt is None:
                 raise ValueError("trajectory_dt is required when use_sweep=True")
             try:
@@ -732,18 +838,23 @@ class SceneCollisionCost(BaseCost):
         else:
             distance = checker(spheres, idxs_env_query)
         distance = torch.as_tensor(distance, device=spheres.device, dtype=spheres.dtype)
+        checker_returns_cost = callable(getattr(checker, "get_sphere_distance_raw", None))
         # Checkers either return signed clearance or an already-positive loss.
         # A signed-clearance tensor has a sphere dimension matching the query.
         if distance.shape[-1:] == spheres.shape[-2:-1]:
-            activation = self.config.activation_distance.reshape(-1)[0].to(distance)
-            # collision_cost is a trajectory-level helper and reduces its
-            # final dimension.  Keep sphere-resolved values here so this
-            # cuRobo facade can honor sum_distance vs max_distance.
-            result = 0.5 * (activation - distance).clamp_min(0).square()
-            result = self.jit_weight_collision(result, self.config.sum_distance) if self.config.convert_to_binary else self.jit_weight_distance(result, self.config.sum_distance)
+            if checker_returns_cost:
+                # Native SceneCollision queries already apply activation and
+                # weight, matching the pinned checker contract.
+                result = self.jit_weight_collision(distance, self.config.sum_distance) if self.config.convert_to_binary else self.jit_weight_distance(distance, self.config.sum_distance)
+            else:
+                activation = self.config.activation_distance.reshape(-1)[0].to(distance)
+                # Lightweight custom checkers may return signed clearance;
+                # convert that into a differentiable activation-band cost.
+                result = 0.5 * (activation - distance).clamp_min(0).square()
+                result = self.jit_weight_collision(result, self.config.sum_distance) if self.config.convert_to_binary else self.jit_weight_distance(result, self.config.sum_distance)
         else:
             result = distance
-        return self._apply_weight(result)
+        return result if checker_returns_cost else self._apply_weight(result)
 
     __call__ = forward
 

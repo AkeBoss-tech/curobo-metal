@@ -5,7 +5,8 @@ from typing import List, Optional, Type
 
 import torch
 
-from .portable import BaseCostCfg, CostSupportPolygon
+from .portable import BaseCostCfg
+from .cost_support_polygon import CostSupportPolygon
 
 
 @dataclass

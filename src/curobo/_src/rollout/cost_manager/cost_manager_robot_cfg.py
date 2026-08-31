@@ -11,14 +11,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Optional
 
 import torch
+from curobo._src.cost.cost_cspace_cfg import CSpaceCostCfg
+from curobo._src.cost.cost_cspace_dist_cfg import CSpaceDistCostCfg
+from curobo._src.cost.cost_scene_collision_cfg import SceneCollisionCostCfg
 from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg as _PublicSelfCollisionCostCfg
-from curobo._src.cost.portable import (
-    CSpaceCostCfg,
-    CSpaceDistCostCfg,
-    SceneCollisionCostCfg,
-    SelfCollisionCostCfg,
-    ToolPoseCostCfg,
-)
+from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCostCfg
+from curobo._src.cost.portable import SelfCollisionCostCfg
 from curobo._src.types.device_cfg import DeviceCfg
 
 if TYPE_CHECKING:

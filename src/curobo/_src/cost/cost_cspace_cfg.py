@@ -26,7 +26,6 @@ from .portable import (
     CSpaceCostType,
     PositionCSpaceCost,
     StateCSpaceCost,
-    UnsupportedCostFeature,
 )
 
 
@@ -42,17 +41,18 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
     """
 
     def __post_init__(self) -> None:
+        if self.cost_type is None:
+            raise ValueError("specify cost type for bound cost")
+        if isinstance(self.activation_distance, float):
+            raise ValueError(
+                "activation_distance must be a list or tensor for cspace cost"
+            )
         # ``bool`` is an ``int`` in Python and accepting it as a degree of
         # freedom previously produced a confusing one-DOF target buffer.
         if isinstance(self.dof, bool) or not isinstance(self.dof, Integral):
             raise TypeError("dof must be a non-negative integer")
         if self.dof < 0:
             raise ValueError("dof must be non-negative")
-        if self.retime_weights or self.retime_regularization_weights:
-            raise UnsupportedCostFeature(
-                "CSpaceCostCfg retime_weights requires the CUDA/Warp rollout "
-                "kernels and is not available in the portable CPU/MPS backend"
-            )
         super().__post_init__()
         # The upstream public contract represents scalar target controls as
         # one-element vectors.  ``torch.as_tensor(float)`` produces a scalar,

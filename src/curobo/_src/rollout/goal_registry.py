@@ -79,6 +79,9 @@ class GoalRegistry:
         if not isinstance(num_seeds, int) or isinstance(num_seeds, bool) or num_seeds < 1:
             raise ValueError("num_seeds must be positive")
         out = self.clone()
+        # Seed expansion only changes selection buffers.  The upstream
+        # registry deliberately shares multi-link goal payloads across seeds.
+        out.link_goal_poses = self.link_goal_poses
 
         def repeat(value):
             if value is None:
@@ -122,6 +125,11 @@ class GoalRegistry:
         if first_index is not None and kernel_mat.device != first_index.device:
             raise ValueError("kernel_mat and registry indices must be on the same device")
         out = self.clone()
+        # Kernel application remaps indices; goal payloads remain shared.
+        out.goal_js = self.goal_js
+        out.seed_goal_js = self.seed_goal_js
+        out.current_js = self.current_js
+        out.link_goal_poses = self.link_goal_poses
         for name in ("idxs_enable", "idxs_goal_js", "idxs_current_js", "idxs_link_pose", "idxs_env"):
             value = getattr(out, name)
             if value is not None:
@@ -143,12 +151,12 @@ class GoalRegistry:
                 if target is None:
                     if not allow_clone:
                         continue
-                    setattr(self, name, source.clone())
+                    setattr(self, name, source)
                 else:
                     target.copy_(source, allow_clone=allow_clone)
         if goal.link_goal_poses is not None:
             if self.link_goal_poses is None:
-                self.link_goal_poses = goal.link_goal_poses.clone()
+                self.link_goal_poses = goal.link_goal_poses
             else:
                 self.link_goal_poses.copy_(goal.link_goal_poses)
         for name in ("current_state_dt", "seed_enable_implicit_goal_js"):

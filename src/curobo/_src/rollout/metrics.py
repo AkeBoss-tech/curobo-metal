@@ -239,6 +239,10 @@ class CostCollection:
         self.sq_weights.append(sq_weight)
 
     def get_sum(self, sum_horizon: bool = True) -> torch.Tensor:
+        if not self.values:
+            # There is no reference tensor yet, so return the same scalar-zero
+            # value contract as V2 without hard-coding a CUDA-only device.
+            return torch.zeros(1)
         return _sum(self.values, sum_horizon)
 
     def is_empty(self) -> bool:

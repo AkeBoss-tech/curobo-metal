@@ -417,6 +417,10 @@ class RobotCostManager:
         scene = self.get_cost("scene_collision")
         if scene is not None and scene.enabled and spheres is not None:
             idxs_env = None if goal is None or goal.idxs_env is None else goal.idxs_env.reshape(-1)
+            if idxs_env is not None:
+                # Registry indices follow the pinned int32 ABI, while the
+                # portable tensor collision checker consumes PyTorch indices.
+                idxs_env = idxs_env.to(dtype=torch.int64)
             output.add(scene.forward(state, idxs_env, trajectory_dt=joint_state.dt), "scene_collision")
         return output
 
