@@ -398,6 +398,11 @@ class Obstacle:
             mesh.pose = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
         if mesh.texture_uvs is not None and mesh.texture_image is not None:
             mesh.visual = TextureVisuals(mesh.texture_image)
+        # ``trimesh.Trimesh`` exposes NumPy arrays for these public fields.
+        # The portable mesh object implements the same data protocol so
+        # downstream callers can use ``tolist`` and ``reshape`` unchanged.
+        mesh.vertices = torch.as_tensor(mesh.vertices).detach().cpu().numpy()
+        mesh.faces = torch.as_tensor(mesh.faces, dtype=torch.int64).detach().cpu().numpy()
         return mesh
 
     def save_as_mesh(self, file_path: str, transform_with_pose: bool = False):
@@ -762,8 +767,8 @@ class Mesh(Obstacle):
             self.vertices = vertices
         if not bool(torch.isfinite(vertices).all().item()):
             raise ValueError("vertices must be finite values")
-        if faces.ndim == 1 and faces.numel() == 3:
-            faces = faces.reshape(1, 3)
+        if faces.ndim == 1 and faces.numel() % 3 == 0:
+            faces = faces.reshape(-1, 3)
             self.faces = faces
         if faces.ndim != 2 or faces.shape[-1] != 3:
             raise ValueError("portable world collision supports triangulated faces [F, 3]")

@@ -84,6 +84,8 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
 
     def get_kinematics(self, joint_position: torch.Tensor) -> KinematicsState:
         """Compute kinematics through the pinned public one-argument ABI."""
+        if not isinstance(joint_position, torch.Tensor) or joint_position.ndim != 3:
+            raise ValueError("joint_position must have shape [batch,horizon,dof]")
         return self._get_kinematics(joint_position)
 
     def _buffer(self, spheres):
@@ -170,9 +172,9 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         pairs = getattr(getattr(cost, "config", None), "self_collision_kin_config", None)
         pairs = getattr(pairs, "collision_pairs", getattr(cost, "pairs", None))
         if pairs is None:
-            return cost(x_sph).squeeze(-1)
+            return cost(x_sph).reshape(*x_sph.shape[:2], 1)
         if pairs.numel() == 0:
-            return x_sph.new_zeros(x_sph.shape[:2])
+            return x_sph.new_zeros((*x_sph.shape[:2], 1))
         prefix = x_sph.shape[:-2]
         collision_spheres = x_sph
         if bool((x_sph[..., 3] < 0).any().item()):
@@ -183,13 +185,13 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
             pairs.to(device=x_sph.device, dtype=torch.int64),
         )
         activation = getattr(getattr(cost, "config", None), "activation_distance", None)
-        # The portable high-level API exposes collision violation, preserving
-        # the established [batch,horizon] result while the reusable cost keeps
-        # its CUDA-compatible [batch,horizon,1] output internally.
+        # Preserve the singleton aggregate-cost axis exposed by the pinned
+        # CUDA implementation: world distance is sphere-resolved while self
+        # distance has shape [batch, horizon, 1].
         value = (-result.reduced_distance).clamp_min(0)
         if activation is not None:
             value = (value - torch.as_tensor(activation, device=value.device, dtype=value.dtype)).clamp_min(0)
-        return value.reshape(prefix)
+        return value.reshape(*prefix, 1)
 
     def get_self_collision(self, x_sph: torch.Tensor) -> torch.Tensor:
         return self.get_self_collision_distance(x_sph)
@@ -206,6 +208,8 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
     def get_scene_self_collision_distance_from_joints(
         self, q: torch.Tensor, env_query_idx: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        if not isinstance(q, torch.Tensor) or q.ndim != 3:
+            raise ValueError("q must have shape [batch,horizon,dof]")
         state = self._get_kinematics(q, env_query_idx)
         return (
             self.get_collision_distance(state, env_query_idx),
