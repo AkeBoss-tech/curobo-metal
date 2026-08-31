@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 from typing import Dict, List, Optional, Union
 
 import torch
@@ -78,13 +79,40 @@ class MotionPlanner(_MotionPlannerPortableMixin):
         self.ik_solver = IKSolver(
             self.config.ik_solver_config, self._scene_collision
         )
+        if self.config.ik_solver_config.multi_env:
+            self.ik_solver.kinematics.config.kinematics_config.set_num_envs(
+                self.config.ik_solver_config.max_batch_size
+            )
         self.trajopt_solver = TrajOptSolver(
             self.config.trajopt_solver_config, self._scene_collision
         )
         self.graph_planner = self._make_graph_planner()
         self._tool_pose_criteria: Dict[str, ToolPoseCriteria] = {}
-        self._attachment_manager = AttachmentManager(
-            self.ik_solver.kinematics, self._scene_collision, self.config.device_cfg
+        # MotionPlanner is the composition boundary at which V2 guarantees
+        # that every planning stage observes the same mutable robot geometry.
+        # The portable trajectory core uses an immutable serial-chain runtime,
+        # so attach its public compatibility metadata to the IK-owned
+        # KinematicsCfg instead of constructing a second KinematicsParams.
+        shared_kinematics = self.ik_solver.kinematics.config
+        self.trajopt_solver.kinematics.config = shared_kinematics
+        self.trajopt_solver.kinematics.tool_frames = list(shared_kinematics.tool_frames)
+        if self.graph_planner is not None and hasattr(self.graph_planner, "kinematics"):
+            self.graph_planner.kinematics.config = shared_kinematics
+
+        # TrajOpt's private pose-IK helper is created with standalone defaults.
+        # Carry the enclosing planner's declared capacities into that helper so
+        # goalset and batched calls do not fail after high-level validation.
+        pose_ik = getattr(self.trajopt_solver, "_pose_ik", None)
+        if pose_ik is not None:
+            pose_ik.config.max_goalset = self.config.trajopt_solver_config.max_goalset
+            pose_ik.config.max_batch_size = self.config.trajopt_solver_config.max_batch_size
+            pose_ik.config.multi_env = self.config.trajopt_solver_config.multi_env
+
+        # SolverCore already owns the authoritative attachment manager and its
+        # shared KinematicsParams.  Reuse it at both high-level access paths.
+        self._attachment_manager = self.ik_solver.core.attachment_manager
+        self.trajopt_solver.core = SimpleNamespace(
+            attachment_manager=self._attachment_manager
         )
 
     def _make_graph_planner(self):
@@ -201,8 +229,9 @@ class MotionPlanner(_MotionPlannerPortableMixin):
         self._scene_collision = collision
         self.scene_collision_checker = collision
         if previous is not collision:
-            self._attachment_manager = AttachmentManager(
-                self.ik_solver.kinematics, collision, self.config.device_cfg
+            self._attachment_manager = self.ik_solver.core.attachment_manager
+            self.trajopt_solver.core = SimpleNamespace(
+                attachment_manager=self._attachment_manager
             )
         self._record_world_config(collision)
         if self.graph_planner is not None:
@@ -280,8 +309,10 @@ class MotionPlanner(_MotionPlannerPortableMixin):
                 goal = current.clone()
                 goal.position[..., warmup_joint_index] += warmup_joint_delta
                 result = self.plan_cspace(goal, current, max_attempts=1)
-            if result is None or not bool(result.success.any().item()):
-                return False
+            # Warmup primes shape-keyed eager state; reachability is not its
+            # success criterion.  CUDA V2 also completes warmup after a
+            # best-effort solve, even when that synthetic target does not meet
+            # the configured convergence tolerance.
             self.reset_seed()
         # Graph capture has no Metal equivalent.  PRM warmup fills only
         # ordinary portable state and is safe to request through the familiar
@@ -329,6 +360,21 @@ class MotionPlanner(_MotionPlannerPortableMixin):
     @staticmethod
     def _any_success(result) -> bool:
         return result is not None and bool(result.success.any().item())
+
+    def _active_terminal_state(self, result: TrajOptSolverResult) -> JointState:
+        """Return the selected terminal state in the solver's active DOFs.
+
+        Public MotionPlanner trajectories restore configured locked joints,
+        while the next internal planning stage accepts active joints only.
+        Keeping this conversion at the stage boundary prevents fingers or
+        other locked joints from leaking into a subsequent IK/FK call.
+        """
+        if result.js_solution is None:
+            raise ValueError("planning result does not contain a joint solution")
+        terminal = JointState.from_position(
+            result.js_solution.position[:, 0, -1], result.js_solution.joint_names
+        )
+        return self.trajopt_solver.get_active_js(terminal)
 
     def _finish_trajectory(self, result):
         """Attach dense interpolation consistently to successful or failed solves."""
@@ -469,7 +515,10 @@ class MotionPlanner(_MotionPlannerPortableMixin):
             total_time += ik.total_time
             solve_time += ik.solve_time
             if not bool(ik.success.any().item()):
-                last = ik
+                # The high-level planner returns either a trajectory result or
+                # ``None``.  Do not leak the internal IK result type when every
+                # attempt rejects an unreachable pose.
+                last = None
                 self.ik_solver.reset_seed()
                 continue
             seed_config = ik.solution
@@ -686,8 +735,7 @@ class MotionPlanner(_MotionPlannerPortableMixin):
         # Use the actual terminal approach configuration, not a copied
         # approach trajectory.  This is a production trajectory composition;
         # only the CUDA-specific linear-motion cost is unavailable.
-        approach_end = approach_result.js_solution.position[:, 0, -1]
-        approach_state = JointState.from_position(approach_end, self.joint_names)
+        approach_state = self._active_terminal_state(approach_result)
         self.disable_link_collision(contact_links)
         try:
             grasp_result = self.plan_pose(grasp_goal, approach_state)
@@ -711,8 +759,7 @@ class MotionPlanner(_MotionPlannerPortableMixin):
             result.planning_time = time.monotonic() - started
             return result
 
-        grasp_end = grasp_result.js_solution.position[:, 0, -1]
-        lift_state = JointState.from_position(grasp_end, self.joint_names)
+        lift_state = self._active_terminal_state(grasp_result)
         lift_goal = offset_goal(grasp_lift_axis, grasp_lift_offset, grasp_lift_in_tool_frame)
         self.disable_link_collision(contact_links)
         try:
@@ -816,8 +863,13 @@ class MotionPlanner(_MotionPlannerPortableMixin):
         # inertial parameters today.  Delegate rather than inventing a local
         # mutation cache so callers receive the same explicit backend boundary
         # from both planner stages.
-        self.ik_solver.update_link_inertial(link_name, mass, com, inertia)
-        self.trajopt_solver.update_link_inertial(link_name, mass, com, inertia)
+        try:
+            self.ik_solver.update_link_inertial(link_name, mass, com, inertia)
+            self.trajopt_solver.update_link_inertial(link_name, mass, com, inertia)
+        except NotImplementedError as error:
+            raise ValueError(
+                "inverse dynamics must be configured for runtime inertial updates"
+            ) from error
 
     def update_links_inertial(
         self, link_properties: dict[str, dict[str, Union[float, torch.Tensor]]]

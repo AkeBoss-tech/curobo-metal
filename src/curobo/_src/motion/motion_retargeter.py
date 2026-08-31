@@ -38,11 +38,6 @@ class MotionRetargeter:
         self._config = config
         self._num_envs = config.num_envs
         self._tool_pose_criteria = dict(config.tool_pose_criteria)
-        if config.use_mpc and len(config.tool_frames) != 1:
-            raise NotImplementedError(
-                "portable MPC retargeting currently supports one tracked tool frame; "
-                "use warm-started IK for multi-link retargeting"
-            )
         self._global_ik_solver = self._build_global_ik_solver()
         self._joint_names = list(self._global_ik_solver.joint_names)
         self._action_dim = self._global_ik_solver.action_dim

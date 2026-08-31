@@ -481,7 +481,7 @@ class BatchMotionPlanner(MotionPlanner):
             output.success, output.status = approach_ok, "Planning to approach pose completed."
             return output
 
-        approach_end = JointState.from_position(approach_result.js_solution.position[:, 0, -1], self.joint_names)
+        approach_end = self._active_terminal_state(approach_result)
         grasp_goal = GoalToolPose.from_poses(selected, self.tool_frames)
         self._substitute_fallback_goal(grasp_goal, approach_end, ~approach_ok)
         self.disable_link_collision(links)
@@ -502,7 +502,7 @@ class BatchMotionPlanner(MotionPlanner):
             output.success, output.status = grasp_ok, "Planning to grasp pose completed."
             return output
 
-        lift_start = JointState.from_position(grasp_result.js_solution.position[:, 0, -1], self.joint_names)
+        lift_start = self._active_terminal_state(grasp_result)
         lift = {}
         for frame, pose in selected.items():
             offset = self._axis_offset(grasp_lift_axis, grasp_lift_offset, pose)
