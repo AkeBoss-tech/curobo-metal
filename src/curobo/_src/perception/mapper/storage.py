@@ -152,17 +152,44 @@ class BlockDataView:
         return self.rgb_grid[indices, 0].float()
 
     def _feature_node_indices_at_centers(self, centers: torch.Tensor, block_idx_per_voxel: torch.Tensor) -> torch.Tensor:
-        del centers
-        return torch.zeros_like(self._indices(block_idx_per_voxel))
+        pool_idx = self._indices(block_idx_per_voxel)
+        if self.feature_block_grid_size <= 1 or self.block_size <= 1:
+            return torch.zeros_like(pool_idx, dtype=torch.long)
+        coords = self.coords.view(-1, 3)[pool_idx].long()
+        grid_d, grid_h, grid_w = (int(value) for value in self.grid_shape)
+        blocks = torch.tensor(
+            [
+                (grid_w + self.block_size - 1) // self.block_size,
+                (grid_h + self.block_size - 1) // self.block_size,
+                (grid_d + self.block_size - 1) // self.block_size,
+            ],
+            dtype=coords.dtype,
+            device=coords.device,
+        )
+        block_base = (coords + blocks // 2).to(centers.dtype) * float(self.block_size)
+        center_offset = centers.new_tensor([grid_w, grid_h, grid_d]) * 0.5
+        voxel = (
+            centers - self.origin.to(device=centers.device, dtype=centers.dtype)
+        ) / float(self.voxel_size) + center_offset
+        local = voxel - block_base.to(centers.device)
+        grid_max = float(self.feature_block_grid_size - 1)
+        grid = torch.floor(
+            ((local - 0.5) * (grid_max / float(self.block_size - 1))).clamp(
+                min=0.0, max=grid_max
+            )
+            + 0.5
+        ).long()
+        size = self.feature_block_grid_size
+        return grid[:, 2] * size * size + grid[:, 1] * size + grid[:, 0]
 
     def sample_features_at_centers(self, centers: torch.Tensor, block_idx_per_voxel: torch.Tensor,
                                    eps: float = 1e-6) -> torch.Tensor:
-        del eps
         if self.feature_dim == 0 or self.features is None or self.feature_weight is None:
             raise RuntimeError("sample_features_at_centers() requires an enabled CUDA/Warp feature volume")
         indices = self._indices(block_idx_per_voxel)
-        values = self.features[indices, 0].float()
-        return values / self.feature_weight[indices, 0].float().clamp_min(torch.finfo(values.dtype).eps).unsqueeze(-1)
+        nodes = self._feature_node_indices_at_centers(centers, block_idx_per_voxel)
+        values = self.features[indices, nodes].float()
+        return values / self.feature_weight[indices, nodes].float().clamp_min(eps).unsqueeze(-1)
 
     def features_normalized(self, eps: float = 1e-6) -> torch.Tensor:
         if self.feature_dim == 0 or self.features is None or self.feature_weight is None:

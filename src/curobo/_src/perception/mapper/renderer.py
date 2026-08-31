@@ -17,6 +17,17 @@ class BlockSparseTSDFRendererCfg:
     minimum_tsdf_weight: float = 0.2
 
 
+@dataclass(frozen=True)
+class _RenderInputs:
+    """Normalized camera inputs and their output-shape convention."""
+
+    intrinsics: torch.Tensor
+    positions: torch.Tensor
+    quaternions: torch.Tensor
+    camera_count: int
+    single_camera: bool
+
+
 def depth_to_colormap(
     depth: torch.Tensor,
     depth_minimum_distance: float = 0.1,
@@ -46,6 +57,78 @@ class BlockSparseTSDFRenderer:
         integrator,
     ) -> None:
         self.integrator = integrator
+        self.config = BlockSparseTSDFRendererCfg(
+            depth_minimum_distance=integrator.config.depth_minimum_distance,
+            depth_maximum_distance=integrator.config.depth_maximum_distance,
+            minimum_tsdf_weight=integrator.config.minimum_tsdf_weight,
+        )
+        self.device = integrator.device if hasattr(integrator, "device") else integrator._tsdf.device
+        self._buffer_size = 0
+        self._hit_points = None
+        self._hit_normals = None
+        self._hit_colors = None
+        self._hit_depths = None
+        self._hit_mask = None
+
+    def _ensure_buffers(self, n_pixels: int, include_color: bool = False) -> None:
+        """Allocate reusable output buffers without forcing an RGB allocation."""
+        if self._buffer_size < n_pixels:
+            self._hit_points = torch.zeros((n_pixels, 3), dtype=torch.float32, device=self.device)
+            self._hit_normals = torch.zeros((n_pixels, 3), dtype=torch.float32, device=self.device)
+            self._hit_depths = torch.zeros(n_pixels, dtype=torch.float32, device=self.device)
+            self._hit_mask = torch.zeros(n_pixels, dtype=torch.uint8, device=self.device)
+            self._hit_colors = None
+            self._buffer_size = n_pixels
+        if include_color and (
+            self._hit_colors is None or self._hit_colors.shape[0] < n_pixels
+        ):
+            self._hit_colors = torch.zeros((n_pixels, 3), dtype=torch.uint8, device=self.device)
+
+    def _normalize_intrinsics(self, intrinsics: torch.Tensor) -> tuple[torch.Tensor, bool]:
+        """Return ``(N, 3, 3)`` intrinsics and whether input was batched."""
+        was_batched = (
+            (intrinsics.ndim == 2 and intrinsics.shape != (3, 3))
+            or intrinsics.ndim == 3
+        )
+        value = intrinsics.to(self.device, dtype=torch.float32)
+        if value.ndim == 1 and value.shape == (4,):
+            out = torch.zeros((1, 3, 3), dtype=value.dtype, device=value.device)
+            out[0, 0, 0], out[0, 1, 1] = value[0], value[1]
+            out[0, 0, 2], out[0, 1, 2], out[0, 2, 2] = value[2], value[3], 1.0
+            return out, was_batched
+        if value.ndim == 2 and value.shape == (3, 3):
+            return value.unsqueeze(0).contiguous(), was_batched
+        if value.ndim == 2 and value.shape[1:] == (4,):
+            out = torch.zeros((value.shape[0], 3, 3), dtype=value.dtype, device=value.device)
+            out[:, 0, 0], out[:, 1, 1] = value[:, 0], value[:, 1]
+            out[:, 0, 2], out[:, 1, 2], out[:, 2, 2] = value[:, 2], value[:, 3], 1.0
+            return out, was_batched
+        if value.ndim == 3 and value.shape[1:] == (3, 3):
+            return value.contiguous(), was_batched
+        log_and_raise("intrinsics must have shape (3, 3), (4,), (N, 3, 3), or (N, 4).")
+
+    def _normalize_render_inputs(self, intrinsics: torch.Tensor, pose: Pose) -> _RenderInputs:
+        """Normalize camera tensors without silently broadcasting cameras."""
+        if pose.position is None or pose.quaternion is None:
+            log_and_raise("pose must contain position and quaternion tensors.")
+        matrices, was_batched = self._normalize_intrinsics(intrinsics)
+        positions = pose.position.to(self.device, dtype=torch.float32)
+        quaternions = pose.quaternion.to(self.device, dtype=torch.float32)
+        if positions.ndim != 2 or positions.shape[1:] != (3,):
+            log_and_raise(f"pose.position must have shape (N, 3), got {positions.shape}.")
+        if quaternions.ndim != 2 or quaternions.shape[1:] != (4,):
+            log_and_raise(f"pose.quaternion must have shape (N, 4), got {quaternions.shape}.")
+        if positions.shape[0] != quaternions.shape[0]:
+            log_and_raise("pose.position and pose.quaternion must have the same camera count.")
+        camera_count = positions.shape[0]
+        if matrices.shape[0] != camera_count:
+            log_and_raise("intrinsics and pose must have the same camera count.")
+        if camera_count <= 0:
+            log_and_raise("render camera count must be positive.")
+        return _RenderInputs(
+            matrices.contiguous(), positions.contiguous(), quaternions.contiguous(),
+            camera_count, camera_count == 1 and not was_batched,
+        )
 
     def render(
         self,
@@ -89,8 +172,11 @@ class BlockSparseTSDFRenderer:
         ambient: float = 0.3,
         use_color: bool = True,
     ) -> torch.Tensor:
-        if hasattr(self.integrator, "render_shaded"):
-            return self.integrator.render_shaded(intrinsics, pose, image_shape, light_direction, ambient, use_color)
+        integrator = getattr(self, "integrator", None)
+        if integrator is not None and hasattr(integrator, "render_shaded"):
+            return integrator.render_shaded(
+                intrinsics, pose, image_shape, light_direction, ambient, use_color
+            )
         _, normals, valid = self.render(intrinsics, pose, image_shape)
         light = normals.new_tensor(light_direction)
         light = light / torch.linalg.vector_norm(light).clamp_min(torch.finfo(normals.dtype).eps)

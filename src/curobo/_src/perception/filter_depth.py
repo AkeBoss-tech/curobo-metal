@@ -57,12 +57,9 @@ def _portable_device(device: str | torch.device) -> torch.device:
 class FilterDepth:
     """Apply the V2 batched depth-filter contract on CPU or float32 MPS.
 
-    Inputs use the source-shaped ``(B, H, W)`` layout.  For backwards
-    compatibility with the first portable release, a single ``(H, W)`` image
-    is also accepted and returned unbatched; new source-compatible callers
-    should pass an explicit batch dimension.  Matching calls reuse public
-    output buffers, while shape changes allocate temporary outputs just as the
-    source implementation does.
+    Inputs use the source-shaped ``(B, H, W)`` layout. Matching calls reuse
+    public output buffers, while shape changes allocate temporary outputs just
+    as the source implementation does.
     """
 
     def __init__(
@@ -217,23 +214,17 @@ class FilterDepth:
 
         if not isinstance(depth_image, torch.Tensor) or depth_image.dtype != torch.float32:
             raise TypeError("depth_image must be a float32 torch.Tensor")
-        unbatched = depth_image.ndim == 2
-        if depth_image.ndim not in (2, 3):
+        if depth_image.ndim != 3:
             raise ValueError("FilterDepth expects a batched depth tensor of shape (B, H, W)")
-        value = depth_image.unsqueeze(0) if unbatched else depth_image
+        value = depth_image
         batch, height, width = value.shape
         if (height, width) != self.image_shape and (depth_out is not None or valid_mask_out is not None):
             # Dynamic shapes are allowed, but caller buffers must still describe
             # the actual call layout; _acquire_buffers gives the precise error.
             pass
-        if unbatched:
-            if depth_out is not None:
-                self._check_output_buffer(depth_out.unsqueeze(0), "depth_out", (1, height, width), depth_out.device, torch.float32)
-            if valid_mask_out is not None:
-                self._check_output_buffer(valid_mask_out.unsqueeze(0), "valid_mask_out", (1, height, width), valid_mask_out.device, torch.bool)
-            out_depth, out_mask = self._acquire_buffers(1, height, width, None, None)
-        else:
-            out_depth, out_mask = self._acquire_buffers(batch, height, width, depth_out, valid_mask_out)
+        out_depth, out_mask = self._acquire_buffers(
+            batch, height, width, depth_out, valid_mask_out
+        )
         value = value.to(self.device)
         range_valid = torch.isfinite(value) & (value >= self.config.depth_minimum_distance) & (value <= self.config.depth_maximum_distance)
         valid = range_valid & ~self._flying_mask(value, range_valid)
@@ -241,15 +232,6 @@ class FilterDepth:
         filtered = torch.where(valid, filtered, torch.zeros_like(filtered))
         out_depth.copy_(filtered)
         out_mask.copy_(valid)
-        if unbatched:
-            if depth_out is not None:
-                depth_out.copy_(out_depth[0])
-            if valid_mask_out is not None:
-                valid_mask_out.copy_(out_mask[0])
-            return (
-                depth_out if depth_out is not None else out_depth[0],
-                valid_mask_out if valid_mask_out is not None else out_mask[0],
-            )
         return out_depth, out_mask
 
     def update_config(
