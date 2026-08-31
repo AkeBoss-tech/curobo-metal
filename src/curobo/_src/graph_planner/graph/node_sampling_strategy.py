@@ -237,7 +237,9 @@ class NodeSamplingStrategy:
         radius = torch.as_tensor(max_sampling_radius, dtype=x_start.dtype, device=x_start.device)
         scales = torch.zeros_like(x_start)
         scales[0] = radius / 2.0
-        scales[1:] = (radius.square() - min_radius.square()) / 2.0
+        scales[1:] = torch.sqrt(
+            (radius.square() - min_radius.square()).clamp_min(0.0)
+        ) / 2.0
         transformed = ((frame @ torch.diag(scales) @ unit_ball_samples.T).T / distance_weight)
         return torch.clamp(transformed + (x_start + x_goal) / 2.0, low_bounds, high_bounds).contiguous()
 

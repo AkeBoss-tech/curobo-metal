@@ -44,6 +44,12 @@ _BUNDLED_DEFAULTS = frozenset(
 _ELLIPSOID_METHODS = frozenset({"svd", "householder", "approximate"})
 
 
+def _default_device_cfg() -> DeviceCfg:
+    """Use the portable accelerator for cuRobo's accelerator-default factory."""
+    device = torch.device("mps", 0) if torch.backends.mps.is_available() else torch.device("cpu")
+    return DeviceCfg(device=device)
+
+
 def _finite_scalar(value: Any, name: str, *, minimum: float = 0.0, strict: bool = True) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a finite scalar")
@@ -317,7 +323,7 @@ class PRMGraphPlannerCfg(_PRMGraphPlannerCfgPortableMixin):
         scene_model: Optional[Union[str, Dict[str, Any]]] = None,
         collision_cache: Optional[Dict[str, int]] = None,
         self_collision_check: bool = True,
-        device_cfg: DeviceCfg = DeviceCfg(),
+        device_cfg: DeviceCfg = _default_device_cfg(),
         use_cuda_graph_for_rollout: bool = True,
         transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
         cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,

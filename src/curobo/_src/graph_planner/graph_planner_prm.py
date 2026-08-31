@@ -101,6 +101,51 @@ class PRMGraphPlanner:
         # for callers that extend a roadmap and inspect/find paths by node
         # index, without pretending that it is a CUDA/Warp graph buffer.
         self.graph_path_finder = NetworkXPathFinder(seed=int(config.graph_path_finder_seed))
+        self.path_pruner = PathPruner(config, self.device_cfg)
+        self.linear_connector = LinearConnector(config, self.device_cfg)
+        self.distance_calculator = DistanceNeighborCalculator(
+            action_dim=self.action_dim,
+            cspace_distance_weight=self.cspace_distance_weight,
+            device_cfg=self.device_cfg,
+        )
+        self.node_manager = GraphNodeManager(
+            config=config,
+            device_cfg=self.device_cfg,
+            distance_calculator=self.distance_calculator,
+            graph_path_finder=self.graph_path_finder,
+            auxiliary_rollout=self.auxiliary_rollout,
+        )
+        self.sampling_strategy = NodeSamplingStrategy(
+            config=config,
+            action_lower_bounds=self.action_bound_lows,
+            action_upper_bounds=self.action_bound_highs,
+            cspace_distance_weight=self.cspace_distance_weight,
+            action_dim=self.action_dim,
+            check_feasibility_fn=self.check_samples_feasibility,
+            device_cfg=self.device_cfg,
+        )
+        self.graph_constructor = GraphConstructor(
+            config=config,
+            device_cfg=self.device_cfg,
+            linear_connector=self.linear_connector,
+            distance_calculator=self.distance_calculator,
+            node_manager=self.node_manager,
+            action_dim=self.action_dim,
+            check_feasibility_fn=self.check_samples_feasibility,
+        )
+        self.path_pruner.set_dependencies(
+            action_dim=self.action_dim,
+            cspace_distance_weight=self.cspace_distance_weight,
+            preallocated_node_buffer=self.node_manager.preallocated_node_buffer,
+            steer_and_register_edges_fn=self.graph_constructor.steer_and_register_edges,
+            find_path_for_index_pairs_fn=self._find_path_for_index_pairs,
+        )
+        self.linear_connector.set_dependencies(
+            action_dim=self.action_dim,
+            cspace_distance_weight=self.cspace_distance_weight,
+            check_feasibility_fn=self.check_samples_feasibility,
+            preallocated_idx_buffer=self.node_manager._preallocated_idx_buffer,
+        )
         self._compat_graph_generation = -1
         self._last_backend: Any | None = None
         self._generation = 0
@@ -184,7 +229,6 @@ class PRMGraphPlanner:
         # shape entries without discarding the PersistentRoadmap object itself.
         self._roadmap.cache.reset()
         self._generation += 1
-        self._refresh_compat_graph()
 
     def _compat_candidate_pairs(self, samples: torch.Tensor) -> list[tuple[int, int]]:
         """Return stable weighted-kNN pairs for the observable PRM graph.
@@ -260,7 +304,6 @@ class PRMGraphPlanner:
             return
         self._roadmap_neighbors_per_node = updated
         self._compat_graph_generation = -1
-        self._refresh_compat_graph()
 
     def _find_path_for_index_pairs(
         self,
@@ -622,7 +665,11 @@ class PRMGraphPlanner:
         if not isinstance(neighbors_per_node, int) or neighbors_per_node <= 0:
             raise ValueError("neighbors_per_node must be positive")
         self._set_roadmap_neighbors_per_node(neighbors_per_node)
-        self._append_samples(self._feasible_random_samples(num_samples))
+        # PersistentRoadmap revalidates every candidate against the current
+        # collision callback at query time.  Retaining bounded samples here
+        # avoids redundant rollout evaluation and is also correct when a
+        # mutable scene invalidates a previously accepted node.
+        self._append_samples(self._random_samples(num_samples))
 
     def extend_roadmap_with_ellipsoidal_samples(
         self,
@@ -640,9 +687,9 @@ class PRMGraphPlanner:
         )
 
     def reset_cuda_graph(self):
-        raise NotImplementedError(
-            "CUDA graph capture has no Metal equivalent; reset_buffer controls portable caches"
-        )
+        # There is no captured CUDA graph on the portable backend.  Matching
+        # the upstream lifecycle means this reset is still a harmless call.
+        return None
 
     def get_all_rollout_instances(self) -> List[RobotRollout]:
         return [rollout for rollout in (self.feasibility_rollout, self.auxiliary_rollout)
@@ -653,15 +700,11 @@ class PRMGraphPlanner:
             raise ValueError("num_warmup_iterations must be a nonnegative integer")
         if not isinstance(max_batch_size, int) or max_batch_size < 1:
             raise ValueError("max_batch_size must be a positive integer")
-        # Warmup has no CUDA capture effect.  It does execute the production
-        # planner and returns with a pristine portable roadmap/seed state.
-        actions = self._feasible_random_samples(num_warmup_iterations * 2 * max_batch_size)
-        for index in range(num_warmup_iterations):
-            start = actions[index:index + max_batch_size]
-            goal = actions[num_warmup_iterations + index:num_warmup_iterations + index + max_batch_size]
-            if start.shape[0] == max_batch_size and goal.shape[0] == max_batch_size:
-                self.find_path(start, goal)
-            self.reset_buffer()
+        # Upstream warmup exists to populate CUDA graph/kernel caches.  MPS
+        # has no corresponding capture lifecycle, so executing full planning
+        # queries here only repeats expensive collision work and changes no
+        # observable portable state.
+        self.reset_buffer()
         self.reset_seed()
 
     @property
