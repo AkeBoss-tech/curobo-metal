@@ -102,6 +102,10 @@ class PortableOptimizer:
         self._rollout_list = list(rollout_list)
         self.rollout_fn = self._rollout_list[0]
         self._enabled = True
+        # Keep the upstream capability declaration available for callers that
+        # inspect optimizer structure.  MPS executes these methods eagerly;
+        # the declaration does not claim that a CUDA graph was captured.
+        self._graphable_methods = {"_opt_iters"}
         # Keep this state visible because callers use it when deciding whether
         # an optimizer may be re-used.  It deliberately remains false on the
         # portable backend: an ExecutionCache is not a CUDA graph.

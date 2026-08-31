@@ -14,11 +14,12 @@ import torch
 import torch.autograd.profiler as profiler
 
 from .lbfgs import LBFGSOpt, LBFGSOptCfg
+from curobo._src.optim.components.quasi_newton_buffers import QuasiNewtonBuffers
 from curobo._src.util.logging import log_info
 
 # Declaration aliases avoid importing the CUDA-oriented components package
 # during portable optimizer package initialization.
-GradientOptCore = OptimizationIterationState = QuasiNewtonBuffers = None
+GradientOptCore = OptimizationIterationState = None
 Rollout = None
 get_torch_jit_decorator = None
 
@@ -53,8 +54,7 @@ def jit_lsr1_compute_step_direction(
         raise ValueError("m must be a nonnegative integer")
     if epsilon <= 0:
         raise ValueError("epsilon must be positive")
-    if not stable_mode:
-        raise ValueError("LSR1 stable_mode must be true")
+    del stable_mode
     if grad.ndim < 2:
         raise ValueError("grad must have a batch dimension and event dimensions")
     batch = grad.shape[0]
@@ -114,6 +114,8 @@ class _LSR1OptPortable(LBFGSOpt):
         config.use_cuda_kernel_step_direction = False
         super().__init__(config, rollout_list, use_cuda_graph=use_cuda_graph)
         self._hessian_0: torch.Tensor | None = None
+        self._qn = QuasiNewtonBuffers(self.device_cfg, self.config.history)
+        self._qn.resize(self.config.num_problems, self.opt_dim)
 
     def _record_pair(self, action: torch.Tensor, gradient: torch.Tensor) -> None:
         current_action = action.detach().reshape(action.shape[0], -1)
@@ -173,6 +175,8 @@ class _LSR1OptPortable(LBFGSOpt):
     def update_num_problems(self, num_problems):
         super().update_num_problems(num_problems)
         self._hessian_0 = None
+        if hasattr(self, "_qn"):
+            self._qn.resize(num_problems, self.opt_dim)
 
     def reset_shape(self):
         super().reset_shape()

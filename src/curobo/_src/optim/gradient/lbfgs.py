@@ -153,6 +153,8 @@ class _LBFGSOptPortable(PortableOptimizer):
         self._best_cost: torch.Tensor | None = None
         self._convergence_count: torch.Tensor | None = None
         self._converged: torch.Tensor | None = None
+        self._compat_action: torch.Tensor | None = None
+        self._compat_gradient: torch.Tensor | None = None
         self._iteration = 0
         self._original_num_iters = config.num_iters
 
@@ -264,8 +266,25 @@ class _LBFGSOptPortable(PortableOptimizer):
             q = q + self._s_history[:, index] * (alpha[index] - beta)[:, None]
         return -q.reshape_as(gradient)
 
-    def _get_step_direction_impl(self, action: torch.Tensor, gradient: torch.Tensor) -> torch.Tensor:
-        self._record_pair(action, gradient)
+    def _update_buffers(self, action: torch.Tensor, gradient: torch.Tensor) -> None:
+        canonical_action = action.reshape(action.shape[0], self.action_horizon, self.action_dim)
+        canonical_gradient = gradient.reshape_as(canonical_action)
+        self._record_pair(canonical_action, canonical_gradient)
+        self._compat_action = canonical_action
+        self._compat_gradient = canonical_gradient
+
+    def _get_step_direction_impl(
+        self, action: torch.Tensor | OptimizationIterationState, gradient: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        if isinstance(action, OptimizationIterationState):
+            if action.gradient is None:
+                raise ValueError("iteration state must contain a gradient")
+            gradient = action.gradient
+        else:
+            if gradient is None:
+                raise ValueError("gradient is required with an action tensor")
+            self._record_pair(action, gradient)
+        assert gradient is not None
         direction = self._two_loop(gradient)
         max_step = self.action_horizon_step_max
         if max_step is None:

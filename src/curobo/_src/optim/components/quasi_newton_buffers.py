@@ -12,15 +12,27 @@ from curobo._src.types.device_cfg import DeviceCfg
 
 class _QuasiNewtonBuffersPortableMixin:
     def __init__(self, device_cfg=None, n_problems=1, m=7, opt_dim=1, **kwargs):
-        del device_cfg, kwargs
+        del kwargs
+        self.device_cfg = device_cfg or DeviceCfg()
         self.m = m; self.resize(n_problems, opt_dim)
     def resize(self, num_problems, opt_dim):
-        self.x_0 = torch.zeros(num_problems, opt_dim)
+        tensor_args = {
+            "device": self.device_cfg.device,
+            "dtype": self.device_cfg.dtype,
+        }
+        self.x_0 = torch.zeros(num_problems, opt_dim, **tensor_args)
         self.grad_0 = torch.zeros_like(self.x_0)
         self.s_buffer = torch.zeros(num_problems, self.m, opt_dim)
+        self.s_buffer = self.s_buffer.to(**tensor_args)
         self.y_buffer = torch.zeros_like(self.s_buffer)
-        self.rho_buffer = torch.zeros(num_problems, self.m)
+        self.rho_buffer = torch.zeros(num_problems, self.m, **tensor_args)
         return self
+    @property
+    def s(self):
+        return self.s_buffer.permute(1, 0, 2)
+    @property
+    def y(self):
+        return self.y_buffer.permute(1, 0, 2)
     def clear(self, mask=None):
         tensors=(self.x_0,self.grad_0,self.s_buffer,self.y_buffer,self.rho_buffer)
         if mask is None:

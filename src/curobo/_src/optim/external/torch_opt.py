@@ -69,13 +69,16 @@ class _TorchOptPortable(ExternalOptimizerBase):
     def _loss_fn(self, action: torch.Tensor):
         action = self._action_view(action)
         cost, _ = self._rollout_values(action)
-        return cost
+        return cost.reshape(self.config.num_problems, int(self.config.num_particles or 1), 1)
+
+    def _problem_cost(self, cost: torch.Tensor) -> torch.Tensor:
+        return cost.reshape(self.config.num_problems, -1).sum(dim=-1)
 
     def _closure(self):
         self._torch_optimizer.zero_grad(set_to_none=True)
         cost = self._loss_fn(self._optimization_variable)
         cost.sum().backward()
-        self._track_best(cost)
+        self._track_best(self._problem_cost(cost))
         return cost.sum()
 
     def _track_best(self, cost):
@@ -91,12 +94,13 @@ class _TorchOptPortable(ExternalOptimizerBase):
         cls = self.config.torch_optim_class
         if issubclass(cls, torch.optim.LBFGS):
             self._torch_optimizer.step(self._closure)
-            cost = self._loss_fn(self._optimization_variable)
+            cost = self._problem_cost(self._loss_fn(self._optimization_variable))
         else:
             self._torch_optimizer.zero_grad(set_to_none=True)
-            cost = self._loss_fn(self._optimization_variable)
-            cost.sum().backward()
+            loss = self._loss_fn(self._optimization_variable)
+            loss.sum().backward()
             self._torch_optimizer.step()
+            cost = self._problem_cost(loss)
             self._track_best(cost)
         action = self._action_view(self._optimization_variable)
         return self._record(action, cost, self.best_q, self.best_cost)
@@ -114,7 +118,9 @@ class _TorchOptPortable(ExternalOptimizerBase):
             with torch.no_grad():
                 self._optimization_variable.copy_(action)
                 self.best_q.copy_(action)
-                initial_cost = self._loss_fn(self._optimization_variable).detach()
+                initial_cost = self._problem_cost(
+                    self._loss_fn(self._optimization_variable)
+                ).detach()
                 self.best_cost.copy_(initial_cost)
             self._record(action, initial_cost, self.best_q, self.best_cost)
             for _ in range(self.config.num_iters):

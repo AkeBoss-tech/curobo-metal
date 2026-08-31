@@ -78,6 +78,74 @@
     {
       "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestCliqueBackwardNoNaN::test_backward_no_nan",
       "reason": "The pinned upstream case is unconditionally skipped for a documented Inf-gradient numerical-stability issue and therefore defines no executable parity oracle on CUDA or MPS."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.external.test_scipy_opt::tests._src.optim.external.test_scipy_opt.TestScipyOptCudaGraph::test_init_cuda_graph",
+      "reason": "The case inspects CUDA Graph construction, which has no MPS mechanism; eager SciPy initialization and optimization execute in the adjacent portable cases."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.external.test_scipy_opt::tests._src.optim.external.test_scipy_opt.TestScipyOptCudaGraph::test_optimize_with_cuda_graph",
+      "reason": "The case requires CUDA Graph capture around SciPy optimization, which cannot exist on MPS; the same optimizer methods and objectives execute eagerly in the portable SciPy cases."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.external.test_scipy_opt::tests._src.optim.external.test_scipy_opt.TestScipyOptCudaGraph::test_reset_cuda_graph",
+      "reason": "Resetting a captured CUDA Graph is a CUDA runtime lifecycle mechanism with no MPS equivalent; ordinary optimizer reset and reinitialization execute separately."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.gradient.test_lbfgs::tests._src.optim.gradient.test_lbfgs::test_convergence_comparison",
+      "reason": "The assertion path explicitly constructs torch.cuda.Event objects for timing after the portable L-BFGS setup; CUDA events cannot be created on MPS, while convergence executes in the other L-BFGS cases."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg::tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg.TestParticleSamplerCfg::test_tensor_args_device_dtype_consistency",
+      "reason": "The availability adapter makes this CUDA-conditional matrix include MPS and then requests float64 MPS storage, which Metal does not support; CPU float32/float64 and MPS float32 configuration behavior are covered by adjacent cases."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestOptimizerCudaGraph::test_mixin_creates_executors_based_on_graphable_methods",
+      "reason": "The case requires creation and inspection of CUDA Graph executors; the graphable-method declaration remains portable, but CUDA executor objects have no MPS equivalent."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestOptimizerCudaGraph::test_standalone_gd_creates_opt_iters_executor",
+      "reason": "The case asserts CUDA Graph executor construction for gradient descent, a CUDA runtime mechanism that cannot exist on MPS."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestOptimizerCudaGraph::test_mixin_reset_cuda_graph",
+      "reason": "The case records and resets CUDA Graph executors; MPS runs the same optimizer eagerly and has no CUDA graph state to reset."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestOptimizerCudaGraph::test_mixin_can_optimize",
+      "reason": "The distinguishing requirement is execution through a captured CUDA Graph; eager portable gradient-descent optimization is exercised elsewhere on MPS."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestOptimizerCudaGraph::test_particle_optimizer_with_cuda_graph",
+      "reason": "The case requires MPPI execution through CUDA Graph capture, which has no MPS mechanism; eager MPPI behavior is covered by the full particle suites."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestOptimizerCudaGraph::test_lbfgs_with_cuda_graph",
+      "reason": "The case requires CUDA Graph executors for L-BFGS iteration and preparation methods; portable L-BFGS behavior executes eagerly in its dedicated suite."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestFactoryWithCudaGraph::test_factory_creates_cuda_graph_optimizer[lbfgs]",
+      "reason": "The factory case asserts CUDA Graph executor creation for L-BFGS, a CUDA-only runtime mechanism with no MPS object to substitute."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestFactoryWithCudaGraph::test_factory_creates_cuda_graph_optimizer[gradient_descent]",
+      "reason": "The factory case asserts CUDA Graph executor creation for gradient descent, a CUDA-only runtime mechanism with no MPS object to substitute."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestFactoryWithCudaGraph::test_factory_creates_cuda_graph_optimizer[conjugate_gradient]",
+      "reason": "The factory case asserts CUDA Graph executor creation for conjugate gradient, a CUDA-only runtime mechanism with no MPS object to substitute."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestFactoryWithCudaGraph::test_factory_creates_cuda_graph_optimizer[lsr1]",
+      "reason": "The factory case asserts CUDA Graph executor creation for L-SR1, a CUDA-only runtime mechanism with no MPS object to substitute."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestFactoryWithCudaGraph::test_factory_creates_cuda_graph_optimizer[mppi]",
+      "reason": "The factory case asserts CUDA Graph executor creation for MPPI, a CUDA-only runtime mechanism with no MPS object to substitute."
+    },
+    {
+      "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestFactoryWithCudaGraph::test_factory_creates_cuda_graph_optimizer[es]",
+      "reason": "The factory case asserts CUDA Graph executor creation for evolution strategies, a CUDA-only runtime mechanism with no MPS object to substitute."
     }
   ]
 }
