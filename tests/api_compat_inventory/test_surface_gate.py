@@ -60,3 +60,30 @@ def test_public_facade_scope_excludes_private_src(tmp_path: Path) -> None:
     assert scoped["summary"]["modules"] == 1
     assert scoped["summary"]["expected_exports"] == scoped["summary"]["present_exports"] == 1
     assert scoped["method"]["module_contract"] == "runtime_modules_excluding_curobo._src"
+
+
+def test_callable_replaced_by_noncallable_is_a_shape_difference(tmp_path: Path) -> None:
+    local = tmp_path / "src/curobo"
+    local.mkdir(parents=True)
+    (local / "example.py").write_text("calculate = None\n", encoding="utf-8")
+    inventory = _inventory(
+        [
+            {
+                "name": "calculate",
+                "kind": "function",
+                "signature": {
+                    "parameters": [{"name": "value"}],
+                    "returns": None,
+                    "async": False,
+                },
+                "decorators": [],
+            }
+        ]
+    )
+    row = surface_gate.build_report(inventory, tmp_path / "src")["modules"][0]
+    assert row["exports"] == {"expected": 1, "present": 1, "missing": []}
+    assert row["callables"] == {
+        "compared": 1,
+        "matching": 0,
+        "different": ["calculate"],
+    }

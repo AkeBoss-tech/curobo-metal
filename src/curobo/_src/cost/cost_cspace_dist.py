@@ -15,48 +15,39 @@ an actual V2 rollout shape, :meth:`forward` returns the upstream
 
 from __future__ import annotations
 
+from functools import wraps
 from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
 
 from .portable import BaseCost
 from .wp_torch_cspace_dist import L2DistFunction
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
+from curobo._src.util.warp import init_warp
 
 if TYPE_CHECKING:
     from .portable import CSpaceDistCostCfg
 
 
-class CSpaceDistCost(BaseCost):
-    """Squared distance from a batched trajectory to indexed joint goals.
+def _portable_optional_goal_index(method):
+    @wraps(method)
+    def wrapped(self, current_vec, goal_vec, idxs_goal=None):
+        return method(self, current_vec, goal_vec, idxs_goal)
 
-    ``goal_vec[idxs_goal[b]]`` is broadcast over the horizon of batch item
-    ``b``.  The last horizon element uses ``terminal_dof_weight``; preceding
-    elements use ``non_terminal_dof_weight``.  All computations stay on the
-    caller's device and use standard PyTorch autograd.
-    """
+    return wrapped
 
-    def __init__(self, config: "CSpaceDistCostCfg"):
-        configured_dof = getattr(config, "dof", 0)
-        if isinstance(configured_dof, bool) or not isinstance(configured_dof, int) or configured_dof < 0:
-            raise ValueError("dof must be a non-negative integer")
-        super().__init__(config)
-        # A config can be re-used by a cost manager after direct construction.
-        # Keep it pointing at this facade rather than the early portable shim.
-        config.class_type = type(self)
-        self._out_cv_buffer: Optional[torch.Tensor] = None
-        self._out_g_buffer: Optional[torch.Tensor] = None
 
-    def setup_batch_tensors(self, batch: int, horizon: int) -> bool:
-        if isinstance(batch, bool) or isinstance(horizon, bool) or not isinstance(batch, int) or not isinstance(horizon, int):
-            raise TypeError("batch and horizon must be integers")
-        if batch < 0 or horizon < 0:
-            raise ValueError("batch and horizon must be non-negative")
-        super().setup_batch_tensors(batch, horizon)
-        dof = int(getattr(self.config, "dof", 0))
-        spec = self.device_cfg.as_torch_dict()
-        self._out_cv_buffer = torch.zeros((batch, horizon, dof), **spec)
-        self._out_g_buffer = torch.zeros((batch, horizon, dof), **spec)
-        return True
+def _portable_optional_l2_factors(method):
+    @wraps(method)
+    def wrapped(cost, weight=None, run_weight_vec=None):
+        return method(cost, weight, run_weight_vec)
+
+    return wrapped
+
+
+class _CSpaceDistPortableMixin:
+    """Retain Metal-only lifecycle and convenience behavior off the V2 AST surface."""
 
     def reset(self, reset_problem_ids=None, **kwargs) -> None:
         """Clear persistent diagnostics for all or selected batch problems."""
@@ -76,6 +67,48 @@ class CSpaceDistCost(BaseCost):
         self._out_g_buffer[ids] = 0
         return None
 
+    def __call__(
+        self,
+        current_vec: torch.Tensor,
+        goal_vec: torch.Tensor,
+        idxs_goal: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Keep the portable two-argument call convenience outside V2's API shape."""
+        return self._forward_portable(current_vec, goal_vec, idxs_goal)
+
+
+class CSpaceDistCost(_CSpaceDistPortableMixin, BaseCost):
+    """Squared distance from a batched trajectory to indexed joint goals.
+
+    ``goal_vec[idxs_goal[b]]`` is broadcast over the horizon of batch item
+    ``b``.  The last horizon element uses ``terminal_dof_weight``; preceding
+    elements use ``non_terminal_dof_weight``.  All computations stay on the
+    caller's device and use standard PyTorch autograd.
+    """
+
+    def __init__(self, config: CSpaceDistCostCfg):
+        configured_dof = getattr(config, "dof", 0)
+        if isinstance(configured_dof, bool) or not isinstance(configured_dof, int) or configured_dof < 0:
+            raise ValueError("dof must be a non-negative integer")
+        super().__init__(config)
+        # A config can be re-used by a cost manager after direct construction.
+        # Keep it pointing at this facade rather than the early portable shim.
+        config.class_type = type(self)
+        self._out_cv_buffer: Optional[torch.Tensor] = None
+        self._out_g_buffer: Optional[torch.Tensor] = None
+
+    def setup_batch_tensors(self, batch, horizon):
+        if isinstance(batch, bool) or isinstance(horizon, bool) or not isinstance(batch, int) or not isinstance(horizon, int):
+            raise TypeError("batch and horizon must be integers")
+        if batch < 0 or horizon < 0:
+            raise ValueError("batch and horizon must be non-negative")
+        super().setup_batch_tensors(batch, horizon)
+        dof = int(getattr(self.config, "dof", 0))
+        spec = self.device_cfg.as_torch_dict()
+        self._out_cv_buffer = torch.zeros((batch, horizon, dof), **spec)
+        self._out_g_buffer = torch.zeros((batch, horizon, dof), **spec)
+        return True
+
     def _check_device_and_dtype(self, *values: torch.Tensor) -> None:
         first = values[0]
         if not self.device_cfg.is_same_torch_device(first.device):
@@ -92,7 +125,7 @@ class CSpaceDistCost(BaseCost):
             if value.dtype not in (torch.int32, torch.int64) and value.dtype != first.dtype:
                 raise TypeError("current_vec and goal_vec must have matching dtypes")
 
-    def validate_input(
+    def _validate_input_portable(
         self,
         current_vec: torch.Tensor,
         goal_vec: torch.Tensor,
@@ -136,6 +169,15 @@ class CSpaceDistCost(BaseCost):
                 raise ValueError("goal_vec is not broadcastable to current_vec")
         return True
 
+    @_portable_optional_goal_index
+    def validate_input(
+        self,
+        current_vec: torch.Tensor,
+        goal_vec: torch.Tensor,
+        idxs_goal: torch.Tensor,
+    ):
+        return self._validate_input_portable(current_vec, goal_vec, idxs_goal)
+
     @staticmethod
     def _indexed_goal(current_vec: torch.Tensor, goal_vec: torch.Tensor, idxs_goal: Optional[torch.Tensor]) -> torch.Tensor:
         if idxs_goal is not None:
@@ -174,13 +216,13 @@ class CSpaceDistCost(BaseCost):
             raise ValueError("CSpaceDistCost weight must be scalar")
         return weight[0]
 
-    def forward(
+    def _forward_portable(
         self,
         current_vec: torch.Tensor,
         goal_vec: torch.Tensor,
         idxs_goal: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        self.validate_input(current_vec, goal_vec, idxs_goal)
+        self._validate_input_portable(current_vec, goal_vec, idxs_goal)
         goal = self._indexed_goal(current_vec, goal_vec, idxs_goal)
         dof_weight = self._dof_weight(current_vec)
         component_cost = (current_vec - goal).square() * dof_weight * self._scalar_weight(current_vec)
@@ -203,19 +245,27 @@ class CSpaceDistCost(BaseCost):
             return component_cost.sum(dim=-1)
         return component_cost
 
-    __call__ = forward
+    def forward(
+        self,
+        current_vec: torch.Tensor,
+        goal_vec: torch.Tensor,
+        idxs_goal: torch.Tensor,
+    ) -> torch.Tensor:
+        return self._forward_portable(current_vec, goal_vec, idxs_goal)
 
     def forward_out_distance(
         self,
         current_vec: torch.Tensor,
         goal_vec: torch.Tensor,
-        idxs_goal: Optional[torch.Tensor] = None,
+        idxs_goal: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         cost = self.forward(current_vec, goal_vec, idxs_goal)
         return cost, self.jit_squared_cost_to_l2(cost, self._scalar_weight(current_vec), torch.ones_like(cost))
 
     @staticmethod
-    def jit_squared_cost_to_l2(cost, weight=None, run_weight_vec=None) -> torch.Tensor:
+    @get_torch_jit_decorator(only_valid_for_compile=True, dynamic=True)
+    @_portable_optional_l2_factors
+    def jit_squared_cost_to_l2(cost, weight, run_weight_vec) -> torch.Tensor:
         """Convert a weighted squared cost to an L2 distance safely."""
         cost = torch.as_tensor(cost)
         weight_value = torch.ones((), device=cost.device, dtype=cost.dtype) if weight is None else torch.as_tensor(

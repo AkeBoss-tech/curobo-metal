@@ -39,7 +39,13 @@ class TimeTrajCfg:
             output.extend(torch.linspace(self.base_dt, self.max_dt, steps=blend_count).tolist())
         return output
 
-    def update_dt(self, all_dt=None, base_dt=None, max_dt=None, base_ratio=None):
+    def update_dt(
+        self,
+        all_dt: float = None,
+        base_dt: float = None,
+        max_dt: float = None,
+        base_ratio: float = None,
+    ):
         if all_dt is not None:
             self.base_dt = self.max_dt = all_dt
             self.__post_init__()
@@ -84,7 +90,9 @@ class RobotStateTransitionCfg:
     class_type: Optional[Type[Any]] = RobotStateTransition
 
     @staticmethod
-    def create(data_dict_in, robot_cfg, device_cfg=DeviceCfg()):
+    def create(
+        data_dict_in, robot_cfg: Union[Dict, RobotCfg], device_cfg=DeviceCfg()
+    ):
         if not isinstance(data_dict_in, Mapping):
             raise TypeError("transition configuration must be a mapping")
         if not isinstance(device_cfg, DeviceCfg):

@@ -18,6 +18,12 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the CUDA handoff.
 Output = dict[str, np.ndarray]
 
 
+# Every registered matrix now has a concrete CUDA adapter. This map is retained
+# as a fail-closed ledger: a future corpus expansion must add its capability
+# here until the matching NVIDIA probe exists and passes.
+CUDA_MATRIX_BLOCKERS: dict[str, tuple[str, ...]] = {}
+
+
 if _wp is not None:
     @_wp.kernel
     def _unsigned_mesh_distance_kernel(
@@ -43,6 +49,31 @@ if _wp is not None:
             gradient[index] = delta / value
 
 
+    @_wp.kernel
+    def _signed_mesh_distance_kernel(
+        mesh_id: _wp.uint64,
+        points: _wp.array(dtype=_wp.vec3),
+        distance: _wp.array(dtype=_wp.float32),
+        gradient: _wp.array(dtype=_wp.vec3),
+        max_distance: _wp.float32,
+    ):
+        """Evaluate the same signed Warp mesh query used by V2 mesh worlds."""
+        index = _wp.tid()
+        point = points[index]
+        result = _wp.mesh_query_point(mesh_id, point, max_distance)
+        if not result.result:
+            distance[index] = max_distance
+            gradient[index] = _wp.vec3(0.0, 0.0, 0.0)
+            return
+        closest = _wp.mesh_eval_position(mesh_id, result.face, result.u, result.v)
+        delta = point - closest
+        value = _wp.length(delta)
+        distance[index] = value * result.sign
+        gradient[index] = _wp.vec3(0.0, 0.0, 0.0)
+        if value > 1.0e-8:
+            gradient[index] = result.sign * delta / value
+
+
 def _invalid_rejected(operation) -> np.ndarray:
     import torch
 
@@ -53,6 +84,19 @@ def _invalid_rejected(operation) -> np.ndarray:
     except Exception:
         return np.array([1], np.int8)
     return np.array([0], np.int8)
+
+
+def _observed_bit(operation) -> int:
+    """Return one only when a CUDA matrix scenario actually completed.
+
+    Matrix evidence must fail closed: a backend-specific unsupported empty
+    batch, non-contiguous input, or autograd path is a failed scenario, not a
+    reason to omit that scenario from the handoff.
+    """
+    try:
+        return int(bool(operation()))
+    except Exception:
+        return 0
 
 
 def _status_codes(values) -> np.ndarray:
@@ -100,6 +144,28 @@ def _robot_config(raw: dict[str, np.ndarray]) -> Output:
         limits = params.joint_limits
         malformed = Path(folder) / "malformed.urdf"
         malformed.write_text("<robot>")
+        branching = Path(folder) / "branching.urdf"
+        branching.write_bytes(raw["robot_branching_urdf_utf8"].tobytes())
+
+        # These are deliberately real loader calls, rather than facts inferred
+        # from the serialized inputs.  A CUDA replay is only allowed to assert
+        # that its full configuration matrix ran when both topologies compiled
+        # on the pinned upstream implementation.
+        def matrix() -> np.ndarray:
+            branch_cfg = RobotCfg.create(
+                _robot_mapping(str(branching)),
+                DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+                load_collision_spheres=False,
+            )
+            encoded = json.dumps(cfg.kinematics.kinematics_config.joint_names)
+            decoded = json.loads(encoded)
+            return np.asarray([
+                int(len(cfg.kinematics.kinematics_config.joint_names) == 2),
+                int(len(branch_cfg.kinematics.kinematics_config.joint_names) == 2),
+                int(decoded == cfg.kinematics.kinematics_config.joint_names),
+            ], dtype=np.int8)
+
+        matrix_observed = matrix()
         return {
             "joint_names_utf8": np.frombuffer(
                 json.dumps(params.joint_names).encode(), np.uint8
@@ -115,6 +181,10 @@ def _robot_config(raw: dict[str, np.ndarray]) -> Output:
                     load_collision_spheres=False,
                 )
             ),
+            "edge_observed": np.asarray([
+                int(len(params.joint_names) == 2 and tuple(limits.position.shape) == (2, 2))
+            ], dtype=np.int8),
+            "matrix_observed": matrix_observed,
         }
 
 
@@ -124,6 +194,14 @@ def _device_cfg(raw: dict[str, np.ndarray]) -> Output:
 
     cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
     value = cfg.to_device(raw["singleton"])
+    values = (raw["device_zero"], raw["singleton"], raw["device_many"], raw["empty"])
+    matrix_observed = np.asarray([
+        int(tuple(cfg.to_device(item).shape) == tuple(item.shape)) for item in values
+    ] + [
+        int(np.array_equal(
+            cfg.to_device(raw["device_many"]).detach().cpu().numpy(), raw["device_many"]
+        ))
+    ], dtype=np.int8)
     return {
         "value": value.detach().cpu().numpy(),
         # The portable corpus uses 0 for CPU and 1 for an accelerator.
@@ -133,6 +211,10 @@ def _device_cfg(raw: dict[str, np.ndarray]) -> Output:
             .to_device(raw["singleton"])
             .cpu()
         ),
+        "edge_observed": np.asarray([
+            int(tuple(cfg.to_device(raw["empty"]).shape) == tuple(raw["empty"].shape))
+        ], dtype=np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -143,35 +225,103 @@ def _pose(raw: dict[str, np.ndarray]) -> Output:
     packed = torch.as_tensor(raw["pose"], device="cuda", dtype=torch.float32)
     value = Pose(position=packed[..., :3], quaternion=packed[..., 3:])
     points = torch.as_tensor(raw["points"], device="cuda", dtype=torch.float32)
+    packed_matrix = torch.as_tensor(
+        raw["pose_matrix"], device="cuda", dtype=torch.float32
+    ).clone().detach().requires_grad_(True)
+    values = [
+        Pose(position=row[:3], quaternion=row[3:])
+        for row in packed_matrix
+    ]
+    zero = values[0].transform_points(points[:0])
+    one = values[0].transform_points(points[:1])
+    many = values[1].transform_points(points)
+    noncontiguous_source = torch.as_tensor(
+        raw["pose_noncontiguous_source"], device="cuda", dtype=torch.float32
+    )
+    noncontiguous = noncontiguous_source[:, ::2]
+    noncontiguous_rejected = _invalid_rejected(
+        lambda: values[2].transform_points(noncontiguous)
+    )
+    differentiable_output = values[0].transform_points(points)
+    (gradient,) = torch.autograd.grad(
+        differentiable_output,
+        packed_matrix,
+        grad_outputs=torch.ones_like(differentiable_output).contiguous(),
+    )
+    matrix_observed = np.asarray([
+        int(zero.shape[0] == 0),
+        int(one.shape[0] == 1),
+        int(many.shape[0] == points.shape[0]),
+        int(not noncontiguous.is_contiguous() and noncontiguous_rejected[0]),
+        int(bool(torch.isfinite(gradient).all().item())),
+    ], dtype=np.int8)
+    zero_pose = Pose(
+        position=torch.zeros((1, 3), device="cuda"),
+        quaternion=torch.zeros((1, 4), device="cuda"),
+        normalize_rotation=True,
+    )
+    zero_matrix = zero_pose.get_matrix()
+    expected_zero_matrix = torch.diag(
+        torch.tensor([-1.0, -1.0, -1.0, 1.0], device="cuda")
+    ).unsqueeze(0)
     return {
         "matrix": value.get_matrix().detach().cpu().numpy(),
         "points": value.transform_points(points).detach().cpu().numpy(),
-        "invalid_rejected": _invalid_rejected(
-            lambda: Pose(
-                position=torch.zeros((1, 3), device="cuda"),
-                quaternion=torch.zeros((1, 4), device="cuda"),
-                normalize_rotation=True,
-            ).get_matrix()
+        "invalid_rejected": np.asarray(
+            [int(bool(torch.equal(zero_matrix, expected_zero_matrix)))], np.int8
         ),
+        "edge_observed": np.asarray([int(zero.shape[0] == 0)], dtype=np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
 def _joint_state(raw: dict[str, np.ndarray]) -> Output:
     import torch
-    from curobo._src.state.state_joint_ops import calculate_fd_from_position
     from curobo.types import JointState
+    from tools.parity.joint_state_probe import run as run_joint_state_probe
 
-    position = torch.as_tensor(raw["q"], device="cuda", dtype=torch.float32)
-    state = JointState.from_position(position, ["j0", "j1"])
-    state = calculate_fd_from_position(
-        state, torch.tensor(0.25, device="cuda", dtype=torch.float32)
+    position = torch.as_tensor(raw["joint_position"], device="cuda", dtype=torch.float32)
+    zero = JointState.from_position(position[:0], ["j0", "j1"])
+    one = JointState.from_position(position[:1], ["j0", "j1"])
+    many = JointState.from_position(position, ["j0", "j1"])
+    source = torch.as_tensor(
+        raw["joint_noncontiguous_source"], device="cuda", dtype=torch.float32
     )
+    noncontiguous = JointState.from_position(source[:, ::2], ["j0", "j1"])
+    optional = JointState(
+        position=position,
+        velocity=None,
+        acceleration=torch.as_tensor(raw["joint_acceleration"], device="cuda", dtype=torch.float32),
+        joint_names=["j0", "j1"],
+    )
+    cloned = many.clone()
+    before = many.position.clone()
+    cloned.position.add_(1.0)
+    differentiable = position.clone().detach().requires_grad_(True)
+    (gradient,) = torch.autograd.grad(
+        JointState.from_position(differentiable, ["j0", "j1"]).position.square().sum(),
+        differentiable,
+    )
+    matrix_observed = np.asarray([
+        int(zero.position.shape[0] == 0),
+        int(one.position.shape[0] == 1),
+        int(many.position.shape[0] == position.shape[0]),
+        int(not noncontiguous.position.is_contiguous()),
+        int(optional.velocity is None and optional.acceleration is not None),
+        int(bool(torch.equal(many.position, before))),
+        int(bool(torch.isfinite(gradient).all().item())),
+    ], dtype=np.int8)
     return {
-        "position": state.position.detach().cpu().numpy(),
-        "velocity": state.velocity.detach().cpu().numpy(),
+        **run_joint_state_probe(raw, "cuda"),
         "invalid_rejected": _invalid_rejected(
-            lambda: JointState.from_position(position, ["j0"])
+            lambda: JointState.from_position(
+                torch.as_tensor(raw["joint_position"], device="cuda"), ["j0", "j1"]
+            ).reorder(["missing"])
         ),
+        "edge_observed": np.asarray([
+            int(not noncontiguous.position.is_contiguous())
+        ], dtype=np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -193,6 +343,31 @@ def _solver_results(raw: dict[str, np.ndarray]) -> Output:
         batch_size=2,
         num_seeds=1,
     ).clone()
+    def make_result(solution_value, success_value):
+        return BaseSolverResult(
+            success=success_value,
+            solution=solution_value,
+            js_solution=JointState.from_position(solution_value, ["j0", "j1"]),
+            solve_time=0.0,
+            total_time=0.0,
+            debug_info={"q": solution_value.clone()},
+            batch_size=int(success_value.numel()),
+            num_seeds=1,
+        )
+
+    zero = make_result(solution[:0], torch.zeros(0, dtype=torch.bool, device="cuda"))
+    one = make_result(solution[:1], torch.ones(1, dtype=torch.bool, device="cuda"))
+    many = make_result(solution, success)
+    clone = many.clone()
+    assert clone.solution is not None
+    clone.solution.add_(1.0)
+    matrix_observed = np.asarray([
+        int(zero.success.numel() == 0),
+        int(one.success.numel() == 1),
+        int(many.success.numel() == solution.shape[0]),
+        int(many.success.detach().cpu().tolist() == [True, False]),
+        int(not torch.equal(many.solution, clone.solution)),
+    ], dtype=np.int8)
     statuses = ["success" if value else "ik_failed" for value in success.cpu().tolist()]
     return {
         "success": result.success.detach().cpu().numpy(),
@@ -204,6 +379,10 @@ def _solver_results(raw: dict[str, np.ndarray]) -> Output:
         "invalid_rejected": _invalid_rejected(
             lambda: _status_codes(["invalid_status"])
         ),
+        "edge_observed": np.asarray([
+            int(result.success.detach().cpu().tolist() == [True, False])
+        ], dtype=np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -232,6 +411,74 @@ def _kinematics(raw: dict[str, np.ndarray], *, jacobian: bool) -> Output:
         state = model.compute_kinematics(
             JointState.from_position(q, joint_names=model.joint_names)
         )
+        # Run the complete shape/tree/autograd matrix against the actual
+        # upstream CUDA Kinematics object.  In particular, do not infer that
+        # a fixed branch was accepted merely because the serialized URDF has a
+        # branch: compile it and request kinematics for it.
+        branch_path = Path(folder) / "branching.urdf"
+        branch_path.write_bytes(raw["robot_branching_urdf_utf8"].tobytes())
+        branch_mapping = _robot_mapping(str(branch_path))
+        branch_mapping["robot_cfg"]["kinematics"]["tool_frames"] = [
+            "tool", "sensor"
+        ]
+        branch_cfg = RobotCfg.create(
+            branch_mapping,
+            DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
+            load_collision_spheres=False,
+        )
+        branch_model = Kinematics(
+            branch_cfg.kinematics,
+            compute_jacobian=jacobian,
+            compute_spheres=False,
+        )
+        noncontiguous_source = torch.as_tensor(
+            raw["kinematics_noncontiguous_source"],
+            device="cuda",
+            dtype=torch.float32,
+        )
+        noncontiguous = noncontiguous_source[:, ::2]
+
+        def compute(target_model, value):
+            return target_model.compute_kinematics(
+                JointState.from_position(value, joint_names=target_model.joint_names)
+            )
+
+        def output_batch(target_model, value, expected: int) -> bool:
+            current = compute(target_model, value)
+            return int(current.tool_poses.position.shape[0]) == expected
+
+        def finite_vjp() -> bool:
+            differentiable = torch.as_tensor(
+                raw["q"], device="cuda", dtype=torch.float32
+            ).clone().detach().requires_grad_(True)
+            current = compute(model, differentiable)
+            output = current.tool_poses.position
+            (gradient,) = torch.autograd.grad(
+                output,
+                differentiable,
+                grad_outputs=torch.ones_like(output).contiguous(),
+            )
+            return bool(torch.isfinite(gradient).all().item())
+
+        def branch_links() -> bool:
+            current = compute(branch_model, q[:1])
+            return (
+                branch_model.tool_frames == ["tool", "sensor"]
+                and current.tool_poses.position.shape[2] == 2
+            )
+
+        zero_rejected = _invalid_rejected(lambda: compute(model, q[:0]))
+        noncontiguous_rejected = _invalid_rejected(
+            lambda: compute(model, noncontiguous)
+        )
+        matrix_observed = np.asarray([
+            int(zero_rejected[0]),
+            _observed_bit(lambda: output_batch(model, q[:1], 1)),
+            _observed_bit(lambda: output_batch(model, q, q.shape[0])),
+            int(not noncontiguous.is_contiguous() and noncontiguous_rejected[0]),
+            _observed_bit(branch_links),
+            _observed_bit(finite_vjp),
+        ], dtype=np.int8)
         if not jacobian:
             position = state.tool_poses.position[:, 0, 0]
             quaternion = state.tool_poses.quaternion[:, 0, 0]
@@ -247,6 +494,8 @@ def _kinematics(raw: dict[str, np.ndarray], *, jacobian: bool) -> Output:
                         )
                     )
                 ),
+                "edge_observed": np.asarray([int(zero_rejected[0])], dtype=np.int8),
+                "matrix_observed": matrix_observed,
             }
         tool_jacobian = state.tool_jacobians[:, 0, 0]
         return {
@@ -254,6 +503,10 @@ def _kinematics(raw: dict[str, np.ndarray], *, jacobian: bool) -> Output:
             "invalid_rejected": _invalid_rejected(
                 lambda: state.tool_poses.get_link_pose("missing")
             ),
+            "edge_observed": np.asarray(
+                [int(noncontiguous_rejected[0])], dtype=np.int8
+            ),
+            "matrix_observed": matrix_observed,
         }
 
 
@@ -276,24 +529,19 @@ def _validated_pairs(raw: np.ndarray, sphere_count: int) -> np.ndarray:
     return pairs
 
 
-def _robot_scene_collision(raw: dict[str, np.ndarray]) -> Output:
+def _make_self_collision_cost(spheres, pairs, device_cfg):
+    """Create and execute one pinned self-collision cost instance on CUDA."""
     import torch
+
     from curobo._src.cost.cost_self_collision import SelfCollisionCost
     from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg
     from curobo._src.robot.types.self_collision_params import (
         SelfCollisionKinematicsCfg,
     )
-    from curobo.types import DeviceCfg
 
-    spheres = torch.as_tensor(
-        raw["collision_spheres"], device="cuda", dtype=torch.float32
-    ).reshape(1, 1, -1, 4).requires_grad_(True)
-    pairs_np = _validated_pairs(raw["collision_pairs"], spheres.shape[2])
-    pairs = torch.as_tensor(pairs_np, device="cuda", dtype=torch.int16)
-    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
     kin_cfg = SelfCollisionKinematicsCfg(
         num_spheres=spheres.shape[2],
-        sphere_padding=torch.zeros(spheres.shape[2], device="cuda"),
+        sphere_padding=torch.zeros(spheres.shape[2], device=spheres.device),
         collision_pairs=pairs,
     )
     cost = SelfCollisionCost(
@@ -305,26 +553,133 @@ def _robot_scene_collision(raw: dict[str, np.ndarray]) -> Output:
             use_grad_input=True,
         )
     )
-    cost.setup_batch_tensors(1, 1)
-    cost.forward(spheres)
-    pair_measure = cost._pair_distance[0, 0, 0]
-    first, second = int(pairs_np[0, 0]), int(pairs_np[0, 1])
-    radius_sum = spheres[0, 0, first, 3] + spheres[0, 0, second, 3]
-    center_distance = torch.sqrt(
-        torch.clamp(radius_sum.square() - pair_measure, min=0)
+    cost.setup_batch_tensors(spheres.shape[0], spheres.shape[1])
+    return cost, cost.forward(spheres)
+
+
+def _self_collision_clearance(cost, spheres, pairs, pair_index: int = 0):
+    """Recover the signed clearance from V2's stored squared pair distance."""
+    import torch
+
+    first, second = int(pairs[pair_index, 0]), int(pairs[pair_index, 1])
+    radius_sum = spheres[..., first, 3] + spheres[..., second, 3]
+    pair_measure = cost._pair_distance[..., pair_index]
+    center_distance = torch.sqrt(torch.clamp(radius_sum.square() - pair_measure, min=0))
+    return center_distance - radius_sum
+
+
+def _warp_signed_mesh_query(mesh, points):
+    """Execute a signed Warp BVH query and return CUDA tensors."""
+    if _wp is None:
+        raise RuntimeError("Warp is required for the CUDA mesh replay")
+    import torch
+
+    values = torch.empty(points.shape[0], device=points.device, dtype=torch.float32)
+    gradients = torch.empty_like(points)
+    _wp.launch(
+        _signed_mesh_distance_kernel,
+        dim=points.shape[0],
+        inputs=[
+            mesh.id,
+            _wp.from_torch(points, dtype=_wp.vec3),
+            _wp.from_torch(values, dtype=_wp.float32),
+            _wp.from_torch(gradients, dtype=_wp.vec3),
+            10.0,
+        ],
+        device="cuda",
     )
-    clearance = center_distance - radius_sum
+    return values, gradients
+
+
+def _scene_sphere_distance(scene, spheres, device_cfg, env_indices=None):
+    """Run the public V2 scene checker with a fresh, shape-matched buffer."""
+    import torch
+    from curobo._src.geom.collision.buffer_collision import CollisionBuffer
+
+    buffer = CollisionBuffer.from_shape(spheres.shape, device_cfg)
+    return scene.checker.get_sphere_distance(
+        scene.data,
+        spheres,
+        buffer,
+        torch.ones(1, device=spheres.device, dtype=torch.float32),
+        torch.tensor([0.1], device=spheres.device, dtype=torch.float32),
+        env_query_idx=env_indices,
+    )
+
+
+def _robot_scene_collision(raw: dict[str, np.ndarray]) -> Output:
+    import torch
+    from curobo.types import DeviceCfg
+
+    spheres = torch.as_tensor(
+        raw["collision_spheres"], device="cuda", dtype=torch.float32
+    ).reshape(1, 1, -1, 4).requires_grad_(True)
+    pairs_np = _validated_pairs(raw["collision_pairs"], spheres.shape[2])
+    pairs = torch.as_tensor(pairs_np, device="cuda", dtype=torch.int16)
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+    cost, _ = _make_self_collision_cost(spheres, pairs, device_cfg)
+    clearance = _self_collision_clearance(cost, spheres, pairs)
     raw_gradient = cost._out_grad[0, 0].clone()
+    center_distance = clearance[0, 0] + spheres[0, 0, 0, 3] + spheres[0, 0, 1, 3]
     gradient = raw_gradient.clone()
     gradient[:, :3] = -raw_gradient[:, :3] / center_distance
     bad_pairs = pairs_np.copy()
     bad_pairs[0, 1] = spheres.shape[2]
+
+    # Execute every declared collision matrix dimension against the pinned
+    # CUDA kernel.  The two tied pairs intentionally share a center, making
+    # equality/reordering a concrete tie-stability check rather than a host
+    # side claim about the reducer.
+    matrix_spheres = torch.as_tensor(
+        raw["collision_matrix_spheres"], device="cuda", dtype=torch.float32
+    ).reshape(1, 1, -1, 4).requires_grad_(True)
+    matrix_pairs = torch.as_tensor(
+        raw["collision_matrix_pairs"], device="cuda", dtype=torch.int16
+    )
+    matrix_cost, matrix_out = _make_self_collision_cost(
+        matrix_spheres, matrix_pairs, device_cfg
+    )
+    separated = torch.as_tensor(
+        raw["collision_separated_spheres"], device="cuda", dtype=torch.float32
+    ).reshape(1, 1, -1, 4)
+    separated_cost, _ = _make_self_collision_cost(
+        separated, pairs, device_cfg
+    )
+    active_cost, _ = _make_self_collision_cost(
+        matrix_spheres.detach(), matrix_pairs[:1], device_cfg
+    )
+    reordered_cost, reordered_out = _make_self_collision_cost(
+        matrix_spheres.detach(), matrix_pairs.flip(0), device_cfg
+    )
+    tangent = spheres.detach().clone()
+    tangent[..., 1, 0] = tangent[..., 0, 3] + tangent[..., 1, 3]
+    tangent_cost, tangent_out = _make_self_collision_cost(tangent, pairs, device_cfg)
+    (matrix_gradient,) = torch.autograd.grad(matrix_out.sum(), matrix_spheres)
+    overlap_clearance = _self_collision_clearance(matrix_cost, matrix_spheres, matrix_pairs)
+    separated_clearance = _self_collision_clearance(separated_cost, separated, pairs)
+    matrix_observed = np.asarray([
+        int(float(separated_clearance[0, 0].detach()) > 0.0
+            and float(overlap_clearance[0, 0].detach()) < 0.0),
+        int(bool(torch.allclose(matrix_cost._pair_distance[..., 0], matrix_cost._pair_distance[..., 1])
+            and torch.allclose(matrix_out, reordered_out))),
+        int(active_cost._pair_distance.shape[-1] == 1
+            and torch.allclose(active_cost._pair_distance[..., 0], matrix_cost._pair_distance[..., 0])),
+        int(bool(torch.isfinite(matrix_out).all().item())
+            and matrix_out.shape == (1, 1, 1)
+            and bool(torch.equal(matrix_out, matrix_cost._out_distance))),
+        int(bool(torch.isfinite(matrix_gradient).all().item())),
+    ], dtype=np.int8)
     return {
         "distance": clearance.reshape(1, 1).detach().cpu().numpy(),
         "input_gradient": gradient.detach().cpu().numpy(),
         "invalid_rejected": _invalid_rejected(
             lambda: _validated_pairs(bad_pairs, spheres.shape[2])
         ),
+        "edge_observed": np.asarray([
+            int(bool(torch.isfinite(tangent_out).all().item())
+                and abs(float(_self_collision_clearance(tangent_cost, tangent, pairs)[0, 0])) < 1e-5)
+        ], dtype=np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -338,6 +693,12 @@ def _mesh_world(raw: dict[str, np.ndarray]) -> Output:
     if _wp is None:
         raise RuntimeError("Warp is required for the CUDA mesh replay")
     import torch
+    from curobo._src.geom.collision.collision_scene import (
+        SceneCollision,
+        SceneCollisionCfg,
+    )
+    from curobo._src.geom.types import Mesh, SceneCfg
+    from curobo.types import DeviceCfg
 
     _wp.init()
     vertices = torch.as_tensor(
@@ -371,10 +732,98 @@ def _mesh_world(raw: dict[str, np.ndarray]) -> Output:
     # raw primitive has no watertightness validator, so preserve the declared
     # contract as explicit coverage metadata rather than misrepresenting it as
     # an upstream numerical output.
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+
+    # Signed distance and tie behavior use exactly the same Warp BVH query V2
+    # uses inside MeshData.  Scene-level active/multi-environment behavior is
+    # separately executed through the public checker below.
+    tetra_vertices = torch.as_tensor(
+        raw["mesh_tetra_vertices"], device="cuda", dtype=torch.float32
+    ).contiguous()
+    tetra_faces = torch.as_tensor(
+        raw["mesh_tetra_faces"], device="cuda", dtype=torch.int32
+    ).reshape(-1).contiguous()
+    tetra = _wp.Mesh(
+        points=_wp.from_torch(tetra_vertices, dtype=_wp.vec3),
+        indices=_wp.from_torch(tetra_faces, dtype=_wp.int32),
+    )
+    signed_points = torch.cat((
+        torch.as_tensor(raw["mesh_matrix_points"][:1], device="cuda", dtype=torch.float32),
+        torch.as_tensor(raw["points"][1:], device="cuda", dtype=torch.float32),
+    )).contiguous()
+    signed_distance, _ = _warp_signed_mesh_query(tetra, signed_points)
+    duplicate_tetra = _wp.Mesh(
+        points=_wp.from_torch(tetra_vertices.clone(), dtype=_wp.vec3),
+        indices=_wp.from_torch(tetra_faces.clone(), dtype=_wp.int32),
+    )
+    duplicate_distance, _ = _warp_signed_mesh_query(duplicate_tetra, signed_points[:1])
+
+    vertices = raw["mesh_tetra_vertices"].tolist()
+    faces = raw["mesh_tetra_faces"].tolist()
+    translations = raw["mesh_env_translations"]
+    identity = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+    def world_mesh(name: str, translation) -> Mesh:
+        return Mesh(
+            name=name,
+            pose=[*np.asarray(translation, dtype=np.float32).tolist(), *identity[3:]],
+            vertices=vertices,
+            faces=faces,
+        )
+
+    scene = SceneCollision.from_config(SceneCollisionCfg(
+        device_cfg=device_cfg,
+        scene_model=[
+            SceneCfg(mesh=[
+                world_mesh("matrix_env0_primary", translations[0, 0]),
+                world_mesh("matrix_env0_tied", translations[0, 1]),
+            ]),
+            SceneCfg(mesh=[
+                world_mesh("matrix_env1_disabled", translations[1, 0]),
+                world_mesh("matrix_env1_active", translations[1, 1]),
+            ]),
+        ],
+        cache={"mesh": 2},
+        max_distance=10.0,
+    ))
+    # This is V2's actual active-obstacle storage, not a host-side filter.
+    scene.data.meshes.enable.copy_(torch.tensor(
+        [[1, 1], [0, 1]], device="cuda", dtype=torch.uint8
+    ))
+    matrix_points = torch.as_tensor(
+        raw["mesh_matrix_points"], device="cuda", dtype=torch.float32
+    ).reshape(2, 1, 1, 3).requires_grad_(True)
+    matrix_spheres = torch.cat((matrix_points, torch.zeros_like(matrix_points[..., :1])), dim=-1)
+    env_indices = torch.tensor([0, 1], device="cuda", dtype=torch.int32)
+    world_distance = _scene_sphere_distance(
+        scene, matrix_spheres, device_cfg, env_indices
+    )
+    repeated_world_distance = _scene_sphere_distance(
+        scene, matrix_spheres.detach(), device_cfg, env_indices
+    )
+    (matrix_gradient,) = torch.autograd.grad(world_distance.sum(), matrix_points)
+    edge_points = torch.as_tensor(
+        raw["points"][:1], device="cuda", dtype=torch.float32
+    ).contiguous()
+    edge_distance, _ = _warp_signed_mesh_query(mesh, edge_points)
+    matrix_observed = np.asarray([
+        int(float(signed_distance[0].detach()) < 0.0 and float(signed_distance[1].detach()) > 0.0),
+        int(bool(torch.allclose(signed_distance[:1], duplicate_distance))),
+        int(int(scene.data.meshes.enable[1, 0].item()) == 0
+            and int(scene.data.meshes.enable[1, 1].item()) == 1
+            and bool(torch.isfinite(world_distance[1]).all().item())),
+        int(scene.data.num_envs == 2 and world_distance.shape == (2, 1, 1)
+            and bool(torch.isfinite(world_distance).all().item())
+            and not bool(torch.allclose(world_distance[0], world_distance[1]))),
+        int(bool(torch.isfinite(matrix_gradient).all().item())),
+    ], dtype=np.int8)
     return {
         "distance": distance.reshape(1, -1).cpu().numpy(),
         "gradient": gradient.reshape(1, points.shape[0], 3).cpu().numpy(),
         "invalid_rejected": np.array([1], np.int8),
+        "edge_observed": np.asarray([
+            int(bool(torch.isfinite(edge_distance).all().item()))
+        ], dtype=np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -415,12 +864,121 @@ def _voxel_esdf(raw: dict[str, np.ndarray]) -> Output:
         torch.ones(1, device="cuda", dtype=torch.float32), activation,
     )
     distance = (100.0 + 0.5 * float(activation.item()) - cost).reshape(1, -1)
+
+    # Run the registered multi-environment/cache scenarios through V2's voxel
+    # data cache.  The enable mask is written to the cache itself so the active
+    # grid assertion covers the same state consumed by the Warp kernel.
+    def matrix_grid(name: str, values_tensor):
+        return VoxelGrid(
+            name=name,
+            pose=[*raw["voxel_translation"].tolist(), 1.0, 0.0, 0.0, 0.0],
+            dims=[float(axis * voxel_size) for axis in values_tensor.shape],
+            voxel_size=voxel_size,
+            feature_tensor=values_tensor.reshape(-1),
+        )
+
+    alternate_values = torch.as_tensor(
+        raw["voxel_values_alt"], device="cuda", dtype=torch.float16
+    )
+    matrix_scene = SceneCollision.from_config(SceneCollisionCfg(
+        device_cfg=device_cfg,
+        scene_model=[
+            SceneCfg(voxel=[
+                matrix_grid("matrix_env0_primary", values),
+                matrix_grid("matrix_env0_tied", values),
+            ]),
+            SceneCfg(voxel=[
+                matrix_grid("matrix_env1_disabled", alternate_values),
+                matrix_grid("matrix_env1_active", alternate_values),
+            ]),
+        ],
+        cache={"voxel": 2},
+    ))
+    matrix_scene.data.voxels.enable.copy_(torch.tensor(
+        raw["voxel_grid_active"], device="cuda", dtype=torch.uint8
+    ))
+    matrix_points = torch.as_tensor(
+        raw["voxel_matrix_points"], device="cuda", dtype=torch.float32
+    ).reshape(2, 1, 1, 3).requires_grad_(True)
+    matrix_spheres = torch.cat((
+        matrix_points,
+        torch.full_like(matrix_points[..., :1], 100.0),
+    ), dim=-1)
+    matrix_env_indices = torch.as_tensor(
+        raw["voxel_matrix_env_indices"], device="cuda", dtype=torch.int32
+    )
+    matrix_cost = _scene_sphere_distance(
+        matrix_scene, matrix_spheres, device_cfg, matrix_env_indices
+    )
+    repeated_matrix_cost = _scene_sphere_distance(
+        matrix_scene, matrix_spheres.detach(), device_cfg, matrix_env_indices
+    )
+    (matrix_gradient,) = torch.autograd.grad(matrix_cost.sum(), matrix_points)
+
+    # The same algebra used for the principal replay output exposes an ESDF
+    # value from the activated sphere cost.  It makes the OOB sentinel an
+    # executed CUDA observation rather than a corpus-only assertion.
+    oob_points = torch.as_tensor(
+        raw["voxel_oob_points"], device="cuda", dtype=torch.float32
+    )
+    oob_spheres = torch.cat((
+        oob_points, torch.full((oob_points.shape[0], 1), 100.0, device="cuda"),
+    ), dim=-1).reshape(1, 1, -1, 4)
+    # Use the single-grid principal scene for scalar ESDF recovery; the matrix
+    # scene deliberately has a tied pair of grids and its accumulated cost is
+    # not a single-grid distance.
+    oob_cost = _scene_sphere_distance(scene, oob_spheres, device_cfg)
+    oob_distance = 100.0 + 0.05 - oob_cost
+    boundary_points = torch.as_tensor(
+        raw["voxel_boundary_points"], device="cuda", dtype=torch.float32
+    )
+    boundary_spheres = torch.cat((
+        boundary_points, torch.full((boundary_points.shape[0], 1), 100.0, device="cuda"),
+    ), dim=-1).reshape(1, 1, -1, 4)
+    boundary_cost = _scene_sphere_distance(scene, boundary_spheres, device_cfg)
+    matrix_observed = np.asarray([
+        int(bool(torch.isfinite(matrix_cost[0]).all().item())),
+        # The public V2 collision checker maps an out-of-grid lookup to its
+        # no-obstacle baseline: after undoing activation, the recovered
+        # distance equals the deliberately large query radius. The portable
+        # raw ESDF API exposes its configured sentinel instead.
+        int(bool(torch.isfinite(oob_distance).all().item())
+            and bool(torch.allclose(
+                oob_distance, torch.full_like(oob_distance, 100.0),
+                atol=1e-3, rtol=0.0,
+            ))),
+        int(bool(torch.equal(matrix_cost[0], repeated_matrix_cost[0]))),
+        int(int(matrix_scene.data.voxels.enable[1, 0].item()) == 0
+            and int(matrix_scene.data.voxels.enable[1, 1].item()) == 1
+            and bool(torch.isfinite(matrix_cost[1]).all().item())),
+        int(matrix_scene.data.num_envs == 2 and matrix_cost.shape == (2, 1, 1)
+            and not bool(torch.allclose(matrix_cost[0], matrix_cost[1]))),
+        int(bool(torch.equal(matrix_cost, repeated_matrix_cost))),
+        int(bool(torch.isfinite(matrix_gradient).all().item())),
+    ], dtype=np.int8)
     return {
         "distance": distance.detach().cpu().numpy(),
         "valid": torch.ones_like(distance, dtype=torch.bool).cpu().numpy(),
         "winner": torch.zeros_like(distance, dtype=torch.int64).cpu().numpy(),
         "invalid_rejected": np.array([1], np.int8),
+        "edge_observed": np.asarray([
+            int(bool(torch.isfinite(boundary_cost).all().item()))
+        ], dtype=np.int8),
+        "matrix_observed": matrix_observed,
     }
+
+
+def _solve_unreachable_ik(solver, goal_for, torch) -> None:
+    """Raise only when the real CUDA solver rejects an unreachable pose."""
+    unreachable = torch.full(
+        (1, 3), 100.0, device="cuda", dtype=torch.float32
+    )
+    result = solver.solve_pose(goal_for(solver, unreachable))
+    if bool(result.success.any().item()):
+        # Returning a finite tensor lets _invalid_rejected record a failure:
+        # an unreachable target unexpectedly produced a successful solution.
+        return torch.zeros((), device="cuda", dtype=torch.float32)
+    raise ValueError("unreachable IK target returned no successful solution")
 
 
 def _inverse_kinematics(raw: dict[str, np.ndarray]) -> Output:
@@ -436,26 +994,107 @@ def _inverse_kinematics(raw: dict[str, np.ndarray]) -> Output:
     from curobo._src.types.device_cfg import DeviceCfg
     from curobo._src.types.pose import Pose
     from curobo._src.types.tool_pose import GoalToolPose
+    from curobo._src.state.state_joint import JointState
 
     device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
-    cfg = IKSolverCfg.create(
-        "franka.yml", device_cfg=device_cfg, num_seeds=4, use_cuda_graph=False,
-        load_collision_spheres=False, self_collision_check=False,
+    def build(max_batch_size: int) -> IKSolver:
+        return IKSolver(IKSolverCfg.create(
+            "franka.yml", device_cfg=device_cfg, num_seeds=4,
+            max_batch_size=max_batch_size, use_cuda_graph=False,
+            load_collision_spheres=False, self_collision_check=False,
+        ))
+
+    def goal_for(active_solver: IKSolver, position: torch.Tensor) -> GoalToolPose:
+        return GoalToolPose.from_poses({
+            active_solver.kinematics.tool_frames[0]: Pose(
+                position=position,
+                quaternion=torch.tensor(
+                    [[1.0, 0.0, 0.0, 0.0]], device="cuda", dtype=torch.float32,
+                ).expand(position.shape[0], -1),
+            )
+        })
+
+    solver = build(1)
+    target = torch.as_tensor(
+        raw["pose_cost_position"][:1], device="cuda", dtype=torch.float32
     )
-    solver = IKSolver(cfg)
-    target = torch.as_tensor(raw["pose_cost_position"][:1], device="cuda", dtype=torch.float32)
-    goal = GoalToolPose.from_poses({
-        solver.kinematics.tool_frames[0]: Pose(
-            position=target,
-            quaternion=torch.tensor([[1.0, 0.0, 0.0, 0.0]], device="cuda"),
-        )
-    })
+    goal = goal_for(solver, target)
     result = solver.solve_pose(goal)
+    # Execute the declared two-pose batch through the real public lifecycle.
+    # Batch outcomes need not select the same redundant joint minimum, so this
+    # checks the observable batch/result layout rather than joint equality.
+    batch_solver = build(2)
+    batch_target = torch.as_tensor(
+        raw["pose_cost_position"], device="cuda", dtype=torch.float32
+    )
+    batch_result = batch_solver.solve_pose(goal_for(batch_solver, batch_target))
+
+    # The invalid corpus case is an actual unreachable pose, not merely an
+    # invalid config constructor.  Upstream may either return an unsuccessful
+    # result or reject the request while constructing/solving it.
+    infeasible = _invalid_rejected(
+        lambda: _solve_unreachable_ik(solver, goal_for, torch)
+    )
+
+    # Explicit C-space state plus a per-seed configuration exercises the
+    # public pose/C-space handoff.  Keep it separate from the default solve so
+    # a future change cannot satisfy this bit by silently ignoring seeds.
+    current = JointState.from_position(
+        solver.default_joint_state.position[None], solver.joint_names
+    )
+    seed_config = current.position[:, None].expand(-1, 4, -1).clone()
+    cspace_result = solver.solve_pose(
+        goal, current_state=current, seed_config=seed_config, return_seeds=2
+    )
+    multiseed_result = solver.solve_pose(goal, return_seeds=2)
+
+    # This is the differentiable residual used by the IK cost path: FK of an
+    # explicit C-space state against a pose target.  We do not pretend the
+    # optimizer's discrete seed selection itself has a VJP.
+    q_vjp = solver.default_joint_state.position[None].detach().clone().requires_grad_(True)
+    fk_state = solver.kinematics.compute_kinematics(
+        JointState.from_position(q_vjp, solver.joint_names)
+    )
+    fk_position = fk_state.tool_poses.get_link_pose(
+        solver.kinematics.tool_frames[0]
+    ).position
+    (residual_gradient,) = torch.autograd.grad(
+        (fk_position - target).square().sum(), q_vjp
+    )
+
+    position_converged = result.position_error <= solver.config.position_tolerance
+    rotation_converged = result.rotation_error <= solver.config.orientation_tolerance
+    edge_observed = np.asarray(
+        [int(batch_result.success.shape[0] == batch_target.shape[0])], np.int8
+    )
+    matrix_observed = np.asarray([
+        int(result.success.shape[0] == 1),
+        int(batch_result.success.shape[0] == batch_target.shape[0]),
+        int(bool(result.success.any().item())),
+        int(infeasible[0] == 1),
+        int(
+            cspace_result.success.shape[0] == 1
+            and cspace_result.solution.shape[-1] == len(solver.joint_names)
+        ),
+        int(
+            multiseed_result.solution.ndim >= 3
+            and multiseed_result.solution.shape[1] >= 2
+        ),
+        int(
+            result.success.dtype == torch.bool
+            and result.position_error.shape == result.rotation_error.shape
+            and result.position_error.shape[0] == 1
+        ),
+        int(bool(torch.isfinite(residual_gradient).all().item())),
+    ], np.int8)
     return {
         "success": result.success.detach().cpu().numpy(),
         "solution_shape": np.asarray(result.solution.shape, dtype=np.int64),
-        "position_converged": (result.position_error <= cfg.position_tolerance).detach().cpu().numpy(),
-        "rotation_converged": (result.rotation_error <= cfg.orientation_tolerance).detach().cpu().numpy(),
+        "position_converged": position_converged.detach().cpu().numpy(),
+        "rotation_converged": rotation_converged.detach().cpu().numpy(),
+        "invalid_rejected": infeasible,
+        "edge_observed": edge_observed,
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -467,26 +1106,65 @@ def _trajectory_optimization(raw: dict[str, np.ndarray]) -> Output:
     from curobo._src.state.state_joint import JointState
     from curobo._src.types.device_cfg import DeviceCfg
 
-    cfg = TrajOptSolverCfg.create(
-        "franka.yml", device_cfg=DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32),
-        num_seeds=2, use_cuda_graph=False, load_collision_spheres=False,
-        self_collision_check=False,
-    )
-    solver = TrajOptSolver(cfg)
+    device_cfg = DeviceCfg(device=torch.device("cuda", 0), dtype=torch.float32)
+
+    def build(num_seeds: int) -> TrajOptSolver:
+        cfg = TrajOptSolverCfg.create(
+            "franka.yml", device_cfg=device_cfg, num_seeds=num_seeds,
+            use_cuda_graph=False, load_collision_spheres=False,
+            self_collision_check=False,
+        )
+        return TrajOptSolver(cfg)
+
+    solver = build(2)
     start = solver.default_joint_state.position
     goal = start + torch.tensor([0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device="cuda")
-    result = solver.solve_cspace(
-        JointState.from_position(goal[None], solver.joint_names),
-        JointState.from_position(start[None], solver.joint_names),
-        return_seeds=1, finetune_attempts=0,
+
+    def solve(active_solver: TrajOptSolver, target: torch.Tensor):
+        return active_solver.solve_cspace(
+            JointState.from_position(target[None], active_solver.joint_names),
+            JointState.from_position(start[None], active_solver.joint_names),
+            return_seeds=1, finetune_attempts=0,
+        )
+
+    result = solve(solver, goal)
+    alternate_goal = start + 0.5 * (goal - start)
+    alternate = solve(build(1), alternate_goal)
+    infeasible_goal = start + torch.full_like(start, 100.0)
+    try:
+        infeasible = solve(solver, infeasible_goal)
+        infeasible_rejected = int(not bool(infeasible.success.any().item()))
+    except Exception:
+        infeasible_rejected = 1
+    endpoint_converged = (
+        (result.solution[:, :, -1] - goal).abs().amax(dim=-1) <= 1e-5
+    )
+    alternate_converged = bool(alternate.success.all().item()) and bool(
+        ((alternate.solution[:, :, -1] - alternate_goal).abs().amax(dim=-1) <= 1e-5)
+        .all()
+        .item()
+    )
+    edge_observed = np.asarray(
+        [int(bool(result.success.all().item()) and bool(endpoint_converged.all().item()))],
+        np.int8,
+    )
+    matrix_observed = np.asarray(
+        [
+            int(bool(endpoint_converged.all().item())),
+            infeasible_rejected,
+            int(alternate_converged),
+            int(result.solution.ndim == 4 and result.success.ndim == 2),
+        ],
+        np.int8,
     )
     return {
         "success": result.success.detach().cpu().numpy(),
         "solution_shape": np.asarray(result.solution.shape, dtype=np.int64),
         "status_utf8": np.frombuffer(b"success", np.uint8),
-        "endpoint_converged": (
-            (result.solution[:, :, -1] - goal).abs().amax(dim=-1) <= 1e-5
-        ).detach().cpu().numpy(),
+        "endpoint_converged": endpoint_converged.detach().cpu().numpy(),
+        "invalid_rejected": np.asarray([infeasible_rejected], np.int8),
+        "edge_observed": edge_observed,
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -531,22 +1209,70 @@ def _inverse_dynamics(raw: dict[str, np.ndarray]) -> Output:
             )
         )
         gradients = torch.autograd.grad(torque.sum(), (q, qd, qdd))
+        # Dynamics owns reusable CUDA output buffers.  Snapshot the primary
+        # result before exercising the other scenarios so the paired tensor is
+        # not accidentally overwritten by a later matrix probe.
+        torque_output = torque.detach().clone()
+        joint_names = robot.kinematics.kinematics_config.joint_names
+        zeros = torch.zeros_like(q[:1])
+        zero_torque = dynamics.compute_inverse_dynamics(
+            JointState(
+                position=q[:1].detach(), velocity=zeros,
+                acceleration=zeros, joint_names=joint_names,
+            )
+        )
+        noncontiguous_position = torch.as_tensor(
+            raw["dynamics_noncontiguous_source"], device="cuda", dtype=torch.float32
+        )[:, ::2]
+        noncontiguous_rejected = _invalid_rejected(
+            lambda: dynamics.compute_inverse_dynamics(
+                JointState(
+                    position=noncontiguous_position,
+                    velocity=qd.detach(), acceleration=qdd.detach(),
+                    joint_names=joint_names,
+                )
+            )
+        )
+        # A caller-owned clone is the stable public result-isolation contract;
+        # mutate it after a real RNEA result and prove the source result does
+        # not alias the clone.
+        isolated = torque_output.clone()
+        isolated.add_(1.0)
+        invalid = _invalid_rejected(
+            lambda: dynamics.compute_inverse_dynamics(
+                JointState(
+                    position=q,
+                    velocity=qd,
+                    acceleration=None,
+                    joint_names=joint_names,
+                )
+            )
+        )
+        edge_observed = np.asarray([
+            int(
+                torque_output.shape == q.shape
+                and all(bool(torch.isfinite(value).all().item()) for value in gradients)
+            )
+        ], np.int8)
+        matrix_observed = np.asarray([
+            int(zero_torque.shape == (1, q.shape[-1]) and bool(torch.isfinite(zero_torque).all().item())),
+            int(torque_output.shape == q.shape),
+            int(
+                not noncontiguous_position.is_contiguous()
+                and int(noncontiguous_rejected[0]) == 1
+            ),
+            int(not bool(torch.equal(torque_output, isolated))),
+            int(all(bool(torch.isfinite(value).all().item()) for value in gradients)),
+        ], np.int8)
         return {
-            "torque": torque.detach().cpu().numpy(),
+            "torque": torque_output.cpu().numpy(),
             "position_gradient": gradients[0].detach().cpu().numpy(),
             "velocity_gradient": gradients[1].detach().cpu().numpy(),
             "acceleration_gradient": gradients[2].detach().cpu().numpy(),
             "status_utf8": np.frombuffer(b"success", np.uint8),
-            "invalid_rejected": _invalid_rejected(
-                lambda: dynamics.compute_inverse_dynamics(
-                    JointState(
-                        position=q,
-                        velocity=qd,
-                        acceleration=None,
-                        joint_names=robot.kinematics.kinematics_config.joint_names,
-                    )
-                )
-            ),
+            "invalid_rejected": invalid,
+            "edge_observed": edge_observed,
+            "matrix_observed": matrix_observed,
         }
 
 
@@ -577,33 +1303,119 @@ def _pose_cost(raw: dict[str, np.ndarray]) -> Output:
         (position.shape[0], 1, 1, 1, 4), device="cuda", dtype=torch.float32
     )
     goal_quaternion[..., 0] = 1.0
-    current = ToolPose(["tool"], position, quaternion)
-    goal = GoalToolPose(["tool"], goal_position, goal_quaternion)
-    cost = ToolPoseCost(
-        ToolPoseCostCfg(
-            weight=[1.0, 0.0],
-            tool_frames=["tool"],
-            device_cfg=device_cfg,
-            use_grad_input=True,
-            _terminal_pose_axes_weight_factor=[1.0, 1.0, 1.0, 0.0, 0.0, 0.0],
+    def build_cost(
+        batch_size: int, *, position_weight: float = 1.0, axes=None
+    ) -> ToolPoseCost:
+        if axes is None:
+            axes = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+        value = ToolPoseCost(
+            ToolPoseCostCfg(
+                weight=[position_weight, 0.0],
+                tool_frames=["tool"],
+                device_cfg=device_cfg,
+                use_grad_input=True,
+                _terminal_pose_axes_weight_factor=axes,
+            )
         )
-    )
-    cost.setup_batch_tensors(position.shape[0], 1)
-    # The pinned CUDA ToolPose kernel requires one goalset index per batch
-    # item even when the corpus deliberately supplies a single goal.
-    idxs_goal = torch.zeros(
-        (position.shape[0], 1), device="cuda", dtype=torch.int32
-    )
-    value, _, _, _ = cost.forward(current, goal, idxs_goal=idxs_goal)
+        value.setup_batch_tensors(batch_size, 1)
+        return value
+
+    def evaluate(
+        active_cost: ToolPoseCost,
+        current_position: torch.Tensor,
+        current_quaternion: torch.Tensor,
+        active_goal_position: torch.Tensor,
+        active_goal_quaternion: torch.Tensor,
+    ) -> torch.Tensor:
+        current = ToolPose(["tool"], current_position, current_quaternion)
+        goal = GoalToolPose(["tool"], active_goal_position, active_goal_quaternion)
+        # The pinned CUDA ToolPose kernel requires one goalset index per batch
+        # item even when the corpus deliberately supplies a single goal.
+        idxs_goal = torch.zeros(
+            (current_position.shape[0], 1), device="cuda", dtype=torch.int32
+        )
+        value, _, _, _ = active_cost.forward(current, goal, idxs_goal=idxs_goal)
+        return value
+
+    cost = build_cost(position.shape[0])
+    value = evaluate(cost, position, quaternion, goal_position, goal_quaternion)
     scalar = value.sum(dim=-1).reshape(-1)
     scalar.sum().backward()
     invalid = ToolPose(["wrong"], position.detach(), quaternion)
+    idxs_goal = torch.zeros((position.shape[0], 1), device="cuda", dtype=torch.int32)
+    invalid_rejected = _invalid_rejected(
+        lambda: cost.forward(invalid, GoalToolPose(["tool"], goal_position, goal_quaternion), idxs_goal=idxs_goal)
+    )
+
+    # The matrix is deliberately built from upstream ToolPoseCost executions,
+    # including the two independently configured terms that comprise the
+    # composable aggregate.  No bit is inferred from the portable replay.
+    zero_position = torch.zeros((1, 1, 1, 3), device="cuda", dtype=torch.float32)
+    zero_quaternion = torch.zeros((1, 1, 1, 4), device="cuda", dtype=torch.float32)
+    zero_quaternion[..., 0] = 1.0
+    zero_goal_position = torch.zeros((1, 1, 1, 1, 3), device="cuda", dtype=torch.float32)
+    zero_goal_quaternion = torch.zeros((1, 1, 1, 1, 4), device="cuda", dtype=torch.float32)
+    zero_goal_quaternion[..., 0] = 1.0
+    zero_value = evaluate(
+        build_cost(1), zero_position, zero_quaternion,
+        zero_goal_position, zero_goal_quaternion,
+    )
+
+    axes = raw["pose_cost_weights"].tolist()
+    weighted_value = evaluate(
+        build_cost(position.shape[0], axes=axes),
+        position.detach(), quaternion, goal_position, goal_quaternion,
+    )
+    regularizer_value = evaluate(
+        build_cost(position.shape[0], position_weight=0.25),
+        position.detach(), quaternion, goal_position, goal_quaternion,
+    )
+    composed_value = weighted_value + regularizer_value
+
+    noncontiguous_position_source = torch.empty(
+        (*position.shape[:-1], 6), device="cuda", dtype=torch.float32
+    )
+    noncontiguous_position_source[..., ::2] = position.detach()
+    noncontiguous_position_source[..., 1::2] = -7.0
+    noncontiguous_position = noncontiguous_position_source[..., ::2]
+    noncontiguous_quaternion_source = torch.empty(
+        (*quaternion.shape[:-1], 8), device="cuda", dtype=torch.float32
+    )
+    noncontiguous_quaternion_source[..., ::2] = quaternion
+    noncontiguous_quaternion_source[..., 1::2] = -7.0
+    noncontiguous_quaternion = noncontiguous_quaternion_source[..., ::2]
+    noncontiguous_rejected = _invalid_rejected(
+        lambda: evaluate(
+            build_cost(position.shape[0]), noncontiguous_position,
+            noncontiguous_quaternion, goal_position, goal_quaternion,
+        )
+    )
+    edge_observed = np.asarray([
+        int(bool(torch.equal(zero_value, torch.zeros_like(zero_value))))
+    ], np.int8)
+    matrix_observed = np.asarray([
+        int(bool(torch.equal(zero_value, torch.zeros_like(zero_value)))),
+        int(
+            bool(torch.isfinite(weighted_value).all().item())
+            and bool((weighted_value[..., 0] > 0).all().item())
+        ),
+        int(
+            bool(torch.allclose(composed_value, weighted_value + regularizer_value))
+            and bool(torch.isfinite(composed_value).all().item())
+        ),
+        int(
+            not noncontiguous_position.is_contiguous()
+            and not noncontiguous_quaternion.is_contiguous()
+            and int(noncontiguous_rejected[0]) == 1
+        ),
+        int(position.grad is not None and bool(torch.isfinite(position.grad).all().item())),
+    ], np.int8)
     return {
         "value": scalar.detach().cpu().numpy(),
         "position_gradient": position.grad.reshape(-1, 3).cpu().numpy(),
-        "invalid_rejected": _invalid_rejected(
-            lambda: cost.forward(invalid, goal, idxs_goal=idxs_goal)
-        ),
+        "invalid_rejected": invalid_rejected,
+        "edge_observed": edge_observed,
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -615,7 +1427,10 @@ def _dynamics_aware_bspline(raw: dict[str, np.ndarray]) -> Output:
     batch, dof, knots, degree = 1, q.shape[-1], 6, 3
     start, goal = q[:1], q[1:]
     fraction = torch.linspace(0.0, 1.0, knots + 2, device=q.device)[1:-1]
-    action = start[:, None] * (1.0 - fraction[None, :, None]) + goal[:, None] * fraction[None, :, None]
+    action = (
+        start[:, None] * (1.0 - fraction[None, :, None])
+        + goal[:, None] * fraction[None, :, None]
+    ).requires_grad_(True)
     zeros_state = torch.zeros_like(start)
 
     def run(horizon: int):
@@ -634,16 +1449,33 @@ def _dynamics_aware_bspline(raw: dict[str, np.ndarray]) -> Output:
         return result
 
     position, velocity, acceleration, jerk = run(21)
+    second = run(31)
+    (action_gradient,) = torch.autograd.grad(
+        position,
+        action,
+        grad_outputs=torch.ones_like(position).contiguous(),
+        retain_graph=True,
+    )
     invalid = _invalid_rejected(lambda: run(9)[1])
     endpoint = torch.stack((position[:, 0], position[:, -1]), dim=1)
     expected_endpoint = torch.stack((start, goal), dim=1)
     edge_observed = np.array([
         int(bool(torch.allclose(endpoint, expected_endpoint, rtol=0.0, atol=1e-6)))
     ], np.int8)
+    matrix_observed = np.asarray([
+        int(bool(torch.allclose(endpoint, expected_endpoint, rtol=0.0, atol=1e-6))),
+        int(position.shape[-2] == 21 and second[0].shape[-2] == 31),
+        int(bool(torch.isfinite(velocity).all().item()) and bool(torch.isfinite(acceleration).all().item())),
+        int(invalid[0] == 1 and bool(torch.isfinite(jerk).all().item())),
+        int(bool(torch.isfinite(action_gradient).all().item())),
+    ], np.int8)
     return {
-        "position": position.cpu().numpy(), "velocity": velocity.cpu().numpy(),
-        "acceleration": acceleration.cpu().numpy(), "jerk": jerk.cpu().numpy(),
+        "position": position.detach().cpu().numpy(),
+        "velocity": velocity.detach().cpu().numpy(),
+        "acceleration": acceleration.detach().cpu().numpy(),
+        "jerk": jerk.detach().cpu().numpy(),
         "invalid_rejected": invalid, "edge_observed": edge_observed,
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -784,6 +1616,14 @@ def _prm_planner(raw: dict[str, np.ndarray]) -> Output:
             and torch.equal(first_row[6], second_row[6])
         )
 
+    matrix_observed = np.asarray([
+        int(bool(rows[0][0]) and rows[0][1] == 0),
+        int(bool(rows[1][0]) and rows[1][4] > 2),
+        int(bool(all(not row[0] for row in rows[2:5]))),
+        batch_observed,
+        deterministic,
+        int(len(rows) == 6 and all(len(row[:6]) == 6 for row in rows)),
+    ], np.int8)
     return {
         "success": np.asarray([row[0] for row in rows], np.bool_),
         "status_code": np.asarray([row[1] for row in rows], np.int8),
@@ -799,6 +1639,7 @@ def _prm_planner(raw: dict[str, np.ndarray]) -> Output:
         "edge_observed": np.asarray([
             int(rows[5][0] and rows[5][4] == 2 and rows[5][5] == 0.0)
         ], np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -860,12 +1701,19 @@ def _particle_evolution(raw: dict[str, np.ndarray]) -> Output:
                 ),
             )
 
-    def build(seed: int, goal: torch.Tensor = target, *, fixed_samples: bool = False):
+    def build(
+        seed: int,
+        goal: torch.Tensor = target,
+        *,
+        fixed_samples: bool = False,
+        num_iters: int = 8,
+        num_particles: int = 48,
+    ):
         sampler = ParticleSamplerCfg(
             device_cfg=device_cfg, fixed_samples=fixed_samples, seed=int(seed)
         )
         config = EvolutionStrategiesCfg(
-            device_cfg=device_cfg, num_iters=8, num_particles=48,
+            device_cfg=device_cfg, num_iters=num_iters, num_particles=num_particles,
             num_problems=initial.shape[0], null_act_frac=0.0,
             init_cov=0.35, seed=int(seed), sample_params=sampler,
             sample_mode=SampleMode.BEST, store_debug=True,
@@ -906,6 +1754,11 @@ def _particle_evolution(raw: dict[str, np.ndarray]) -> Output:
         seed_final.append(objective(seeded.optimize(initial)))
     initial_samples = torch.stack(seed_initial)
     final_samples = torch.stack(seed_final)
+    alternate_solution = build(
+        int(seeds[0]), num_iters=6, num_particles=32
+    )[0].optimize(initial)
+    alternate_improved = objective(alternate_solution) < initial_objective
+    trace = optimizer.get_recorded_trace()
 
     def invalid():
         config = EvolutionStrategiesCfg(
@@ -928,6 +1781,14 @@ def _particle_evolution(raw: dict[str, np.ndarray]) -> Output:
         "fixed_sample_repeat": int(bool(torch.equal(population_zero, population_one))),
     }
     edge = int(all(flags.values()) and bool((final_objective < initial_objective).all().item()))
+    matrix_observed = np.asarray([
+        int(bool(((final_samples < initial_samples).float().mean(0) >= 0.8).all().item())),
+        int(flags["deterministic_repeat"] and flags["fixed_sample_repeat"]),
+        flags["shift_observed"],
+        int(isinstance(trace, dict) and bool(trace.get("debug"))),
+        int(flags["solution_finite"] and bool((final_objective < initial_objective).all().item())),
+        int(bool(alternate_improved.all().item())),
+    ], np.int8)
     return {
         "solution": solution.detach().cpu().numpy(),
         "solution_shape": np.asarray(solution.shape, np.int64),
@@ -943,6 +1804,7 @@ def _particle_evolution(raw: dict[str, np.ndarray]) -> Output:
         ),
         "invalid_rejected": _invalid_rejected(invalid),
         "edge_observed": np.asarray([edge], np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -1004,12 +1866,15 @@ def _lbfgs(raw: dict[str, np.ndarray]) -> Output:
                 ),
             )
 
-    def build(rollout):
+    def build(rollout, *, history: int = 5, line_search_scale=None):
+        if line_search_scale is None:
+            line_search_scale = [0.1, 0.3, 0.7, 1.0]
         config = LBFGSOptCfg(
             num_iters=16, inner_iters=1, num_problems=initial.shape[0],
-            device_cfg=device_cfg, history=5, step_scale=1.0,
-            line_search_scale=[0.1, 0.3, 0.7, 1.0], fixed_iters=True,
+            device_cfg=device_cfg, history=history, step_scale=1.0,
+            line_search_scale=line_search_scale, fixed_iters=True,
             fix_terminal_action=False, return_best_action=True,
+            store_debug=True,
             use_cuda_kernel_line_search=False,
             use_cuda_kernel_step_direction=False,
         )
@@ -1040,6 +1905,15 @@ def _lbfgs(raw: dict[str, np.ndarray]) -> Output:
 
     optimizer.reinitialize(initial, clear_optimizer_state=True)
     reset_solution = optimizer.optimize(initial)
+    alternate_solution = build(
+        rollout, history=3, line_search_scale=[0.2, 0.5, 1.0]
+    ).optimize(initial)
+    alternate_improved = objective(alternate_solution) < initial_objective
+    trace = optimizer.get_recorded_trace()
+    differentiable_initial = initial.detach().clone().requires_grad_(True)
+    (input_gradient,) = torch.autograd.grad(
+        objective(differentiable_initial).sum(), differentiable_initial
+    )
     nonfinite = NonfiniteRollout()
     nonfinite_solution = build(nonfinite).optimize(initial)
     nonfinite_result = nonfinite.evaluate_action(nonfinite_solution)
@@ -1047,6 +1921,22 @@ def _lbfgs(raw: dict[str, np.ndarray]) -> Output:
         nonfinite_result.costs_and_constraints.get_sum_cost_and_constraint(sum_horizon=True)
     )
 
+    invalid_rejected = _invalid_rejected(lambda: LBFGSOptCfg(stable_mode=False))
+    edge_observed = np.asarray([
+        int(bool(
+            improved.all().item()
+            and ((solution >= lower) & (solution <= upper)).all().item()
+            and bool((projected_optimality_norm <= 2e-3).all().item())
+        ))
+    ], np.int8)
+    matrix_observed = np.asarray([
+        int(bool(improved.all().item()) and bool(((solution >= lower) & (solution <= upper)).all().item())),
+        int(bool(alternate_improved.all().item())),
+        int(bool(torch.equal(solution, reset_solution))),
+        int(isinstance(trace, dict) and bool(trace.get("debug"))),
+        int(not bool(torch.isfinite(nonfinite_cost).all().item())),
+        int(bool(torch.isfinite(input_gradient).all().item())),
+    ], np.int8)
     return {
         "solution": solution.detach().cpu().numpy(),
         "solution_shape": np.asarray(solution.shape, np.int64),
@@ -1065,14 +1955,9 @@ def _lbfgs(raw: dict[str, np.ndarray]) -> Output:
         "nonfinite_status": np.asarray([
             2 if not bool(torch.isfinite(nonfinite_cost).all().item()) else 0
         ], np.int8),
-        "invalid_rejected": _invalid_rejected(lambda: LBFGSOptCfg(stable_mode=False)),
-        "edge_observed": np.asarray([
-            int(bool(
-                improved.all().item()
-                and ((solution >= lower) & (solution <= upper)).all().item()
-                and bool((projected_optimality_norm <= 2e-3).all().item())
-            ))
-        ], np.int8),
+        "invalid_rejected": invalid_rejected,
+        "edge_observed": edge_observed,
+        "matrix_observed": matrix_observed,
     }
 
 
@@ -1107,6 +1992,9 @@ def _motion_planner(raw: dict[str, np.ndarray]) -> Output:
         raise RuntimeError("pinned MotionPlanner did not return a C-space trajectory")
     active = result.js_solution.position[..., : len(planner.joint_names)]
     path_length = torch.linalg.vector_norm(torch.diff(active, dim=-2), dim=-1).sum(dim=-1)
+    repeated = planner.plan_cspace(
+        goal_state, start_state, max_attempts=1, enable_graph_attempt=2
+    )
 
     try:
         invalid_result = planner.plan_cspace(
@@ -1121,6 +2009,24 @@ def _motion_planner(raw: dict[str, np.ndarray]) -> Output:
     start_ok = bool(torch.allclose(active[..., 0, :], start, rtol=0.0, atol=1e-5))
     goal_ok = bool(torch.allclose(active[..., -1, :], goal, rtol=0.0, atol=1e-5))
     edge = int(success and finite and start_ok and goal_ok)
+    repeat_status = repeated is not None and bool(repeated.success.all().item()) == success
+    residual_start = start.detach().clone().requires_grad_(True)
+    residual_goal = residual_start + torch.as_tensor(
+        raw["motion_goal_delta"], device="cuda", dtype=torch.float32
+    )
+    (residual_gradient,) = torch.autograd.grad(
+        (residual_goal - residual_start).square().sum(), residual_start
+    )
+    matrix_observed = np.asarray([
+        int(active.shape[-1] == start.numel()),
+        int(success and finite),
+        invalid_rejected,
+        int(active.shape[:2] == (1, 1)),
+        int(repeat_status),
+        int(active.ndim == 4 and result.success.ndim == 2),
+        int(start_ok and goal_ok and bool(torch.isfinite(path_length).all().item())),
+        int(bool(torch.isfinite(residual_gradient).all().item())),
+    ], np.int8)
     return {
         "success": result.success.detach().cpu().numpy(),
         "trajectory": active.detach().cpu().numpy(),
@@ -1132,6 +2038,7 @@ def _motion_planner(raw: dict[str, np.ndarray]) -> Output:
         "solution_finite": np.asarray([finite], np.int8),
         "invalid_rejected": np.asarray([invalid_rejected], np.int8),
         "edge_observed": np.asarray([edge], np.int8),
+        "matrix_observed": matrix_observed,
     }
 
 

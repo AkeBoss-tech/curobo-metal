@@ -21,6 +21,8 @@ from curobo._src.graph_planner.graph.node_distance import DistanceNeighborCalcul
 from curobo._src.graph_planner.graph.node_manager import GraphNodeManager
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
 from curobo._src.state.state_joint import JointState
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.torch_util import get_profiler_decorator, get_torch_jit_decorator
 
 
 class GraphConstructor:
@@ -113,12 +115,13 @@ class GraphConstructor:
         self._validate_indexed(steered, name="steered nodes")
         return steered
 
+    @get_profiler_decorator("graph_constructor/steer_and_register_edges")
     def steer_and_register_edges(
         self,
         start_nodes: torch.Tensor,
         goal_nodes: torch.Tensor,
-        add_exact_node: bool = False,
-    ) -> None:
+        add_exact_node=False,
+    ):
         """Steer paired rows and atomically register their graph connections."""
         self._validate_indexed(start_nodes, name="start_nodes")
         self._validate_indexed(goal_nodes, name="goal_nodes")
@@ -131,12 +134,13 @@ class GraphConstructor:
             steered, start_nodes, add_exact_node=add_exact_node
         )
 
+    @get_profiler_decorator("graph_constructor/connect_nodes")
     def connect_nodes(
         self,
         new_nodes: torch.Tensor,
-        add_exact_node: bool = False,
-        neighbors_per_node: int = 10,
-    ) -> None:
+        add_exact_node=False,
+        neighbors_per_node=10,
+    ):
         """Connect each candidate to its nearest current roadmap vertices.
 
         The terminal lifecycle initializes an empty graph explicitly.  Calling
@@ -167,9 +171,10 @@ class GraphConstructor:
             add_exact_node=add_exact_node,
         )
 
+    @get_profiler_decorator("graph_constructor/initialize_default_node")
     def initialize_default_node(
         self, default_joint_state: JointState
-    ) -> Tuple[Optional[torch.Tensor], Optional[bool]]:
+    ) -> Tuple[Optional[torch.Tensor], bool]:
         """Cache and optionally install the configured default joint posture."""
         if not bool(getattr(self.config, "use_default_position_heuristic", False)):
             return None, None
@@ -221,6 +226,7 @@ class GraphConstructor:
             )
         return start_steer, goal_steer
 
+    @get_profiler_decorator("graph_constructor/initialize_terminal_graph_connections")
     def initialize_terminal_graph_connections(
         self,
         x_init_batch: torch.Tensor,
@@ -253,7 +259,7 @@ class GraphConstructor:
             )
         return starts, goals
 
-    def reset(self) -> None:
+    def reset(self):
         """Clear per-generation default-node state without resetting the roadmap."""
         self._default_joint_position_feasible = None
         self._default_node_in_roadmap = None

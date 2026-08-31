@@ -1,0 +1,106 @@
+{
+  "backend": "cuda",
+  "capability": "trajectory.trajectory_optimization",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "exact_endpoints",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "infeasible_limits",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "endpoint",
+        "infeasible",
+        "alternate_config",
+        "result_layout"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb",
+  "input_tensor_count": 1,
+  "operation": "trajectory_optimization",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "8afcca9aa223cf5c001d2d81ea23ae89320f5574112f852662cba997a13c7e8e",
+    "tensors": {
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "endpoint_converged": {
+        "dtype": "bool",
+        "shape": [
+          1,
+          1
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          4
+        ]
+      },
+      "solution_shape": {
+        "dtype": "int64",
+        "shape": [
+          4
+        ]
+      },
+      "status_utf8": {
+        "dtype": "uint8",
+        "shape": [
+          7
+        ]
+      },
+      "success": {
+        "dtype": "bool",
+        "shape": [
+          1,
+          1
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 3e-05,
+    "rtol": 0.0003
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

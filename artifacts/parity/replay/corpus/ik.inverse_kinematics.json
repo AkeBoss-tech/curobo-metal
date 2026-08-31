@@ -5,6 +5,7 @@
     "pose_cost_position",
     "q"
   ],
+  "required_matrix": {"cases": ["singleton", "batch", "success", "infeasible", "pose_cspace", "multiseed_selection", "status_layout", "residual_vjp"], "output": "matrix_observed"},
   "required_evidence": {
     "edge": {
       "case": "two_pose_batch",

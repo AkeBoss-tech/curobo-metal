@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 def get_projection_rays(
@@ -17,7 +18,11 @@ def get_projection_rays(
     )
     rx = (x[None] - intrinsics_matrix[:, 0, 2, None, None]) / intrinsics_matrix[:, 0, 0, None, None]
     ry = (y[None] - intrinsics_matrix[:, 1, 2, None, None]) / intrinsics_matrix[:, 1, 1, None, None]
-    return torch.stack((rx.expand_as(ry), ry, torch.ones_like(ry)), -1) * depth_to_meter
+    return (
+        torch.stack((rx.expand_as(ry), ry, torch.ones_like(ry)), -1)
+        .reshape(intrinsics_matrix.shape[0], height * width, 3)
+        * depth_to_meter
+    )
 
 
 def project_depth_using_rays(
@@ -27,17 +32,27 @@ def project_depth_using_rays(
     depth_threshold: float = 0.01,
 ) -> torch.Tensor:
     depth = depth_image.unsqueeze(0) if depth_image.ndim == 2 else depth_image
-    result = depth[..., None] * rays
+    depth = depth.reshape(depth.shape[0], -1, 1).contiguous()
+    result = depth * rays
     if filter_origin:
         result = torch.where(
-            (depth > depth_threshold).unsqueeze(-1), result, torch.zeros_like(result)
+            depth > depth_threshold, result, torch.zeros_like(result)
         )
     return result
 
 
 def project_depth_to_pointcloud(depth_image: torch.Tensor, intrinsics_matrix: torch.Tensor) -> torch.Tensor:
-    rays = get_projection_rays(*depth_image.shape[-2:], intrinsics_matrix)
-    return project_depth_using_rays(depth_image, rays)
+    height, width = depth_image.shape
+    y, x = torch.meshgrid(
+        torch.arange(height, device=depth_image.device, dtype=depth_image.dtype),
+        torch.arange(width, device=depth_image.device, dtype=depth_image.dtype),
+        indexing="ij",
+    )
+    fx, fy = intrinsics_matrix[0, 0], intrinsics_matrix[1, 1]
+    cx, cy = intrinsics_matrix[0, 2], intrinsics_matrix[1, 2]
+    return torch.stack(
+        ((x - cx) * depth_image / fx, (y - cy) * depth_image / fy, depth_image), -1
+    )
 
 
 def extract_depth_from_structured_pointcloud(

@@ -16,6 +16,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
+try:  # Optional visual/mesh packages are not required for primitive spheres.
+    import tqdm as _tqdm
+except ModuleNotFoundError:
+    _tqdm = Any
+try:
+    import trimesh as _trimesh
+except ModuleNotFoundError:
+    _trimesh = Any
+tqdm = _tqdm
+trimesh = _trimesh
+
 from curobo.content import get_assets_path, get_robot_configs_path
 from curobo._src.cost.cost_self_collision import SelfCollisionCost
 from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg
@@ -29,6 +40,7 @@ from curobo._src.robot.parser import UrdfRobotParser
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.content_path import ContentPath
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.types.pose import Pose
 from curobo._src.util.sampling.sample_buffer import SampleBuffer
 from curobo._src.util.viser_visualizer import ViserVisualizer
 from curobo._src.util.xrdf_util import convert_curobo_to_xrdf
@@ -37,14 +49,14 @@ from curobo._src.util.logging import log_and_raise, log_info, log_warn
 from curobo_metal.config.loaders import dump_yaml, load_robot_config
 
 
-class RobotBuilder:
+class _RobotBuilderPortableMixin:
     def __init__(
         self,
         urdf_path: str,
         asset_path: str = "",
         tool_frames: Optional[List[str]] = None,
         device_cfg: Optional[DeviceCfg] = None,
-    ) -> None:
+    ):
         self.device_cfg = DeviceCfg() if device_cfg is None else device_cfg
         self.urdf_path = str(Path(urdf_path).resolve())
         self.asset_path = str(Path(asset_path).resolve()) if asset_path else ""
@@ -220,6 +232,17 @@ class RobotBuilder:
         if self._self_collision_ignore is None:
             log_warn("Building robot configuration without computing collision matrix.")
             self._self_collision_ignore = self._create_neighbor_ignore_matrix()
+        cspace = deepcopy(self._cspace_config)
+        if cspace is None:
+            names = self._parser.get_actuated_joint_names()
+            cspace = {
+                "joint_names": names,
+                "default_joint_position": [0.0] * len(names),
+                "cspace_distance_weight": [1.0] * len(names),
+                "null_space_weight": [1.0] * len(names),
+                "max_acceleration": [10.0] * len(names),
+                "max_jerk": [500.0] * len(names),
+            }
         return KinematicsLoaderCfg(
             base_link=self._base_link,
             device_cfg=self.device_cfg,
@@ -231,7 +254,7 @@ class RobotBuilder:
             self_collision_ignore=deepcopy(self._self_collision_ignore),
             asset_root_path=self.asset_path,
             urdf_path=self.urdf_path,
-            cspace=deepcopy(self._cspace_config),
+            cspace=cspace,
         )
 
     def save(
@@ -245,10 +268,10 @@ class RobotBuilder:
         configuration data rather than silently omitting cspace during a
         builder edit/save/reload workflow.
         """
-        value = {"robot_cfg": {"kinematics": self._config_mapping(
+        value = {"kinematics": self._config_mapping(
             config, include_cspace=include_cspace
-        )}}
-        value["robot_cfg"]["kinematics"]["format_version"] = 2.0
+        )}
+        value["kinematics"]["format_version"] = 2.0
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(dump_yaml(value), encoding="utf-8")
@@ -268,6 +291,7 @@ class RobotBuilder:
         if not geometry_name or not isinstance(geometry_name, str):
             raise ValueError("geometry_name must be a non-empty string")
         kinematics = self._config_mapping(config, include_cspace=True)
+        kinematics.setdefault("lock_joints", {})
         xrdf = convert_curobo_to_xrdf(
             {"robot_cfg": {"kinematics": kinematics}}, geometry_name=geometry_name
         )
@@ -324,48 +348,59 @@ class RobotBuilder:
         compute_metrics: bool = False,
         clip_plane: Optional[tuple] = None,
     ) -> Optional[List[Dict]]:
-        """Return exact URDF sphere primitives for one link.
-
-        ``num_spheres`` only permits the exact primitive count.  Splitting a
-        sphere into an arbitrary count would change collisions, which is worse
-        than an explicit portable boundary.
-        """
-        del sphere_density, surface_radius, fit_type, iterations, coverage_weight, protrusion_weight
+        """Fit portable collision spheres to one link's authored geometry."""
         if link_name not in self._link_names:
             raise ValueError(f"unknown robot link: {link_name}")
-        try:
-            geometry = self._parser.get_link_geometry(link_name, use_collision_mesh)
-        except NotImplementedError as error:
-            raise NotImplementedError(
-                "mesh sphere fitting requires the optional trimesh/sphere-fit backend; "
-                "portable RobotBuilder supports URDF sphere primitives only"
-            ) from error
+        geometry = self._parser.get_link_geometry(link_name, use_collision_mesh)
+        # Lightweight wheels carry collision meshes but may omit large visual
+        # DAE files.  Collision geometry remains the correct conservative
+        # source for a sphere model when the requested visual mesh is absent.
+        if not geometry and not use_collision_mesh:
+            geometry = self._parser.get_link_geometry(link_name, True)
         spheres: List[Dict] = []
-        for value in geometry:
-            if not isinstance(value, Sphere):
-                raise NotImplementedError(
-                    "primitive-to-sphere fitting is only exact for URDF sphere geometry; "
-                    "install the optional mesh sphere-fit backend for other shapes"
-                )
-            center = list(value.position or value.pose[:3])
-            radius = float(value.radius)
-            if clip_plane is not None:
-                normal, offset = clip_plane
-                limit = float(offset) - radius
-                projection = sum(float(a) * float(b) for a, b in zip(normal, center))
-                if projection > limit:
-                    center = [float(c) - (projection - limit) * float(n) for c, n in zip(center, normal)]
-            spheres.append({"center": center, "radius": radius})
-        if num_spheres is not None and int(num_spheres) != len(spheres):
-            raise NotImplementedError(
-                "portable primitive fitting preserves the exact sphere count; "
-                "arbitrary sphere-count optimization requires the mesh sphere-fit backend"
+        for geometry_index, value in enumerate(geometry):
+            if isinstance(value, Sphere) and (num_spheres is None or num_spheres == 1):
+                spheres.append({
+                    "center": list(value.position or value.pose[:3]),
+                    "radius": float(value.radius),
+                })
+                if compute_metrics:
+                    self._link_metrics[link_name] = SphereFitMetrics(
+                        num_spheres=1, coverage=1.0, protrusion=0.0
+                    )
+                continue
+            target = num_spheres
+            if target is not None and len(geometry) > 1:
+                remaining = max(1, int(target) - len(spheres))
+                target = max(1, remaining // (len(geometry) - geometry_index))
+            result = fit_spheres_to_mesh(
+                value.get_mesh(process=False),
+                num_spheres=target,
+                sphere_density=sphere_density,
+                surface_radius=surface_radius,
+                fit_type=fit_type,
+                iterations=iterations,
+                coverage_weight=coverage_weight,
+                protrusion_weight=protrusion_weight,
+                compute_metrics=compute_metrics,
+                clip_plane=clip_plane,
+                device_cfg=self.device_cfg,
             )
-        if compute_metrics and spheres:
-            self._link_metrics[link_name] = SphereFitMetrics(
-                num_spheres=len(spheres), coverage=1.0, surface_gap_mean=0.0,
-                surface_gap_p95=0.0, max_uncovered_gap=0.0,
+            centers = result.centers
+            if value.pose is not None:
+                centers = Pose.from_list(value.pose, self.device_cfg).transform_points(
+                    centers
+                ).reshape(-1, 3)
+            spheres.extend(
+                {"center": center.detach().cpu().tolist(), "radius": float(radius.detach().cpu())}
+                for center, radius in zip(centers, result.radii)
             )
+            if compute_metrics and result.metrics is not None:
+                self._link_metrics[link_name] = result.metrics
+        if num_spheres is not None and len(spheres) > int(num_spheres):
+            spheres = spheres[: int(num_spheres)]
+            if link_name in self._link_metrics:
+                self._link_metrics[link_name].num_spheres = len(spheres)
         return spheres or None
 
     def _create_neighbor_ignore_matrix(self) -> Dict[str, List[str]]:
@@ -409,6 +444,132 @@ class RobotBuilder:
             and item is not None
             and (include_cspace or key != "cspace")
         }
+
+
+class RobotBuilder(_RobotBuilderPortableMixin):
+    """Pinned builder declaration delegating to the portable implementation."""
+
+    def __init__(
+        self,
+        urdf_path: str,
+        asset_path: str = "",
+        tool_frames: Optional[List[str]] = None,
+        device_cfg: Optional[DeviceCfg] = None,
+    ):
+        _RobotBuilderPortableMixin.__init__(self, urdf_path, asset_path, tool_frames, device_cfg)
+
+    @classmethod
+    def from_config(
+        cls, config_path: str, device_cfg: Optional[DeviceCfg] = None
+    ) -> "RobotBuilder":
+        return _RobotBuilderPortableMixin.from_config.__func__(cls, config_path, device_cfg)
+
+    def fit_collision_spheres(
+        self,
+        sphere_density: float = 1.0,
+        surface_radius: float = 0.002,
+        fit_type: SphereFitType = SphereFitType.MORPHIT,
+        use_collision_mesh: bool = False,
+        iterations: int = 200,
+        coverage_weight: Optional[float] = None,
+        protrusion_weight: Optional[float] = None,
+        compute_metrics: bool = False,
+        clip_links: Optional[Dict[str, Tuple[str, float]]] = None,
+    ) -> Dict[str, List[Dict]]:
+        return _RobotBuilderPortableMixin.fit_collision_spheres(
+            self, sphere_density, surface_radius, fit_type, use_collision_mesh,
+            iterations, coverage_weight, protrusion_weight, compute_metrics, clip_links,
+        )
+
+    def refit_link_spheres(
+        self,
+        link_name: str,
+        num_spheres: Optional[int] = None,
+        sphere_density: float = 1.0,
+        surface_radius: float = 0.002,
+        fit_type: SphereFitType = SphereFitType.MORPHIT,
+        use_collision_mesh: bool = False,
+        iterations: int = 200,
+        coverage_weight: Optional[float] = None,
+        protrusion_weight: Optional[float] = None,
+        compute_metrics: bool = False,
+        clip_plane: Optional[tuple] = None,
+    ) -> List[Dict]:
+        return _RobotBuilderPortableMixin.refit_link_spheres(
+            self, link_name, num_spheres, sphere_density, surface_radius, fit_type,
+            use_collision_mesh, iterations, coverage_weight, protrusion_weight,
+            compute_metrics, clip_plane,
+        )
+
+    def compute_collision_matrix(
+        self,
+        prune_collisions: bool = True,
+        num_samples: int = 1000,
+        batch_size: int = 10000,
+        seed: int = 345,
+        custom_ignore: Optional[Dict[str, List[str]]] = None,
+    ) -> Dict[str, List[str]]:
+        return _RobotBuilderPortableMixin.compute_collision_matrix(
+            self, prune_collisions, num_samples, batch_size, seed, custom_ignore
+        )
+
+    def add_collision_ignore(self, link_name: str, ignore_links: List[str]) -> None:
+        return _RobotBuilderPortableMixin.add_collision_ignore(self, link_name, ignore_links)
+
+    def remove_collision_ignore(self, link_name: str, ignore_links: List[str]) -> None:
+        return _RobotBuilderPortableMixin.remove_collision_ignore(self, link_name, ignore_links)
+
+    def build(self) -> KinematicsLoaderCfg:
+        return _RobotBuilderPortableMixin.build(self)
+
+    def save(
+        self, config: KinematicsLoaderCfg, output_path: str, include_cspace: bool = True
+    ) -> None:
+        return _RobotBuilderPortableMixin.save(self, config, output_path, include_cspace)
+
+    def save_xrdf(
+        self,
+        config: KinematicsLoaderCfg,
+        output_path: str,
+        geometry_name: str = "collision_model",
+    ) -> None:
+        return _RobotBuilderPortableMixin.save_xrdf(self, config, output_path, geometry_name)
+
+    def visualize(
+        self,
+        config: Optional[KinematicsLoaderCfg] = None,
+        port: int = 8080,
+        show_meshes: bool = False,
+        show_spheres: bool = True,
+        timeout_sec: int = -1,
+    ) -> ViserVisualizer:
+        return _RobotBuilderPortableMixin.visualize(
+            self, config, port, show_meshes, show_spheres, timeout_sec
+        )
+
+    @property
+    def tool_frames(self) -> List[str]:
+        return _RobotBuilderPortableMixin.tool_frames.fget(self)
+
+    @property
+    def collision_link_names(self) -> List[str]:
+        return _RobotBuilderPortableMixin.collision_link_names.fget(self)
+
+    @property
+    def collision_spheres(self) -> Optional[Dict[str, List[Dict]]]:
+        return _RobotBuilderPortableMixin.collision_spheres.fget(self)
+
+    @property
+    def collision_matrix(self) -> Optional[Dict[str, List[str]]]:
+        return _RobotBuilderPortableMixin.collision_matrix.fget(self)
+
+    @property
+    def num_spheres(self) -> int:
+        return _RobotBuilderPortableMixin.num_spheres.fget(self)
+
+    @property
+    def link_metrics(self) -> Dict[str, SphereFitMetrics]:
+        return _RobotBuilderPortableMixin.link_metrics.fget(self)
 
 
 __all__ = ["RobotBuilder"]

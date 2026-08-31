@@ -51,7 +51,7 @@ def test_tensor_checks_match_keyword_only_curobo_surface():
     parameter = inspect.signature(check_float32_tensors).parameters["tensors"]
     assert parameter.kind is inspect.Parameter.VAR_KEYWORD
     check_float32_tensors(torch.device("cpu"), value=torch.ones(2))
-    with pytest.raises(TypeError, match="torch.Tensor"):
+    with pytest.raises(ValueError, match="expected a tensor"):
         check_float32_tensors(torch.device("cpu"), value=None)
 
 

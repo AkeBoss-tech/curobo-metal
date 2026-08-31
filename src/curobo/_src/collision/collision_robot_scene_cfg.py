@@ -117,8 +117,29 @@ def _clone_sampler(sampler: SampleBuffer, target: DeviceCfg) -> SampleBuffer:
     return result
 
 
+class _RobotSceneCollisionCfgPortableMixin:
+    @property
+    def num_envs(self) -> int:
+        return self._num_envs_value
+
+    def set_scene_collision_checker(self, *args, **kwargs):
+        return self._set_scene_collision_checker(*args, **kwargs)
+
+    def update_scene_model(self, *args, **kwargs):
+        return self._update_scene_model(*args, **kwargs)
+
+    def update_collision_parameters(self, *args, **kwargs):
+        return self._update_collision_parameters(*args, **kwargs)
+
+    def clone(self):
+        return self._clone()
+
+    def to(self, *args, **kwargs):
+        return self._to(*args, **kwargs)
+
+
 @dataclass
-class RobotSceneCollisionCfg:
+class RobotSceneCollisionCfg(_RobotSceneCollisionCfgPortableMixin):
     """Portable ownership record for a robot, its collision costs, and a world.
 
     The upstream record is constructed once around CUDA/Warp launch buffers.
@@ -169,11 +190,11 @@ class RobotSceneCollisionCfg:
             self.set_scene_collision_checker(self.scene_model)
 
     @property
-    def num_envs(self) -> int:
+    def _num_envs_value(self) -> int:
         """Number of scene environments (one for a robot-only configuration)."""
         return 1 if self.scene_model is None else int(getattr(self.scene_model, "num_envs", 1))
 
-    def set_scene_collision_checker(self, scene_collision_checker: Optional[Any]) -> "RobotSceneCollisionCfg":
+    def _set_scene_collision_checker(self, scene_collision_checker: Optional[Any]) -> "RobotSceneCollisionCfg":
         """Attach or remove a collision checker and rewire both scene costs.
 
         A checker must expose the public sphere-query protocol.  Raw Warp
@@ -197,7 +218,7 @@ class RobotSceneCollisionCfg:
                 cost.config.update_num_scene_collision_checkers(count)
         return self
 
-    def update_scene_model(
+    def _update_scene_model(
         self,
         scene_model: Union[None, SceneCollision, SceneCfg, List[SceneCfg], Dict, List[Dict]],
         *,
@@ -260,7 +281,7 @@ class RobotSceneCollisionCfg:
         ))
         return self.set_scene_collision_checker(checker)
 
-    def update_collision_parameters(
+    def _update_collision_parameters(
         self, collision_activation_distance: float, *, contact_distance: Optional[float] = None
     ) -> "RobotSceneCollisionCfg":
         """Update scene-cost activation and contact threshold in place."""
@@ -279,11 +300,11 @@ class RobotSceneCollisionCfg:
         self.contact_distance = float(contact_distance)
         return self
 
-    def clone(self) -> "RobotSceneCollisionCfg":
+    def _clone(self) -> "RobotSceneCollisionCfg":
         """Return an independent copy on the same device."""
         return self.to(self.device_cfg, copy=True)
 
-    def to(
+    def _to(
         self, target: Union[DeviceCfg, torch.device, str], *, copy: bool = False
     ) -> "RobotSceneCollisionCfg":
         """Move portable state to CPU/MPS without reusing CUDA/Warp buffers."""
@@ -355,7 +376,7 @@ class RobotSceneCollisionCfg:
 
     @staticmethod
     def load_from_config(
-        robot_config: Union[Any, str] = "franka.yml",
+        robot_config: Union[RobotCfg, str] = "franka.yml",
         scene_model: Union[None, str, Dict, SceneCfg, List[SceneCfg], List[str]] = None,
         device_cfg: DeviceCfg = DeviceCfg(),
         num_envs: int = 1,

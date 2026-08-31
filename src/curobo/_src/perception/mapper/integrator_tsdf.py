@@ -10,16 +10,38 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import torch
 
+from curobo._src.geom.data.data_scene import SceneData
+from curobo._src.geom.types import Mesh
+from curobo._src.perception.mapper.block_allocation import calculate_tsdf_max_blocks
+from curobo._src.perception.mapper.constants import DEFAULT_HASH_LAYOUT, resolve_feature_integration_kernel, validate_grid_shape_for_hash_layout
+from curobo._src.perception.mapper.kernel.builder.builder_block_sparse_kernel import BlockSparseKernels, make_block_sparse_kernels
+from curobo._src.perception.mapper.kernel.wp_integrate_camera_project import CameraProjectIntegrator
+from curobo._src.perception.mapper.kernel.wp_integrate_lidar_project import LidarProjectIntegrator
+from curobo._src.perception.mapper.kernel.wp_stamp_obstacles import stamp_scene_obstacles
+from curobo._src.perception.mapper.kernel.wp_voxel_extraction import extract_matching_voxels_block_sparse, extract_occupied_voxels_block_sparse, extract_surface_voxels_block_sparse
+from curobo._src.perception.mapper.mesh_extractor import extract_mesh_block_sparse
+from curobo._src.perception.mapper.renderer import BlockSparseTSDFRenderer
+from curobo._src.perception.mapper.storage import BlockSparseTSDF, BlockSparseTSDFCfg, MatchedVoxels
+from curobo._src.types.lidar import LidarObservation
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.torch_util import profile_class_methods
 from .mapper import Mapper
 from .mapper_cfg import MapperCfg
 from .projector_texture import ProjectiveTextureProjector, ProjectiveTextureProjectorCfg
 from .storage import OccupiedVoxels
 from curobo._src.types.camera import CameraObservation
 from curobo_metal.ops.perception.core import dense_esdf
+
+# These symbols name raw Warp launch helpers in upstream.  The portable
+# integrator implements its lifecycle directly and deliberately does not
+# expose a fake kernel implementation.
+clear_static_channel = None
+decay_and_recycle = None
+decay_frustum_aware_multi_sensor = None
 
 
 @dataclass
@@ -141,7 +163,7 @@ class BlockSparseTSDFIntegratorCfg:
 class BlockSparseTSDFIntegrator:
     """cuRobo-shaped TSDF facade with a bounded dense portable implementation."""
 
-    def __init__(self, config: BlockSparseTSDFIntegratorCfg, kernels=None):
+    def __init__(self, config: BlockSparseTSDFIntegratorCfg, kernels: Optional[BlockSparseKernels] = None):
         if kernels is not None:
             raise NotImplementedError("custom Warp block-sparse kernels are unavailable on CPU/MPS")
         self.config = config
@@ -170,11 +192,11 @@ class BlockSparseTSDFIntegrator:
         self._frame_count = 0
 
     @property
-    def tsdf(self):
+    def tsdf(self) -> BlockSparseTSDF:
         return self.mapper.tsdf
 
     @property
-    def voxel_size(self) -> float:
+    def _voxel_size(self) -> float:
         """Metric spacing of the portable dense map.
 
         These source-shaped read-only configuration fields are useful to
@@ -184,12 +206,12 @@ class BlockSparseTSDFIntegrator:
         return self.config.voxel_size
 
     @property
-    def origin(self) -> torch.Tensor:
+    def _origin(self) -> torch.Tensor:
         """World-space lower corner of the bounded dense map."""
         return self.config.origin.to(device=self.mapper.device)
 
     @property
-    def truncation_distance(self) -> float:
+    def _truncation_distance(self) -> float:
         """Metric TSDF truncation distance."""
         return self.config.truncation_distance
 
@@ -197,7 +219,7 @@ class BlockSparseTSDFIntegrator:
         self._frame_count = 0
         return self.mapper.reset()
 
-    def import_blocks(self, blocks):
+    def import_blocks(self, blocks: Dict[str, torch.Tensor]) -> int:
         if isinstance(blocks, (str, bytes)) or hasattr(blocks, "__fspath__"):
             result = self.mapper.import_blocks(blocks)
         elif isinstance(blocks, dict):
@@ -213,7 +235,13 @@ class BlockSparseTSDFIntegrator:
         self._frame_count = int(result > 0)
         return result
 
-    def integrate(self, observation=None, *, camera_observation=None, lidar_observation=None):
+    def integrate(
+        self,
+        observation: Optional[CameraObservation | LidarObservation] = None,
+        *,
+        camera_observation: Optional[CameraObservation] = None,
+        lidar_observation: Optional[LidarObservation] = None,
+    ):
         if observation is not None and (camera_observation is not None or lidar_observation is not None):
             raise ValueError("observation cannot be combined with camera_observation or lidar_observation")
         if observation is None and camera_observation is None and lidar_observation is None:
@@ -388,7 +416,7 @@ class BlockSparseTSDFIntegrator:
         del observation
         raise NotImplementedError("LiDAR TSDF integration requires Warp/CUDA")
 
-    def recycle_empty_blocks(self):
+    def recycle_empty_blocks(self) -> int:
         # Dense storage contains no unallocated pool blocks.  Recycle truly empty
         # observed cells by clearing weights below the configured observation floor.
         state = self.mapper._mapper.state
@@ -408,13 +436,13 @@ class BlockSparseTSDFIntegrator:
             )
         return count
 
-    def clear_region(self, bounds_min, bounds_max):
+    def clear_region(self, bounds_min, bounds_max) -> int:
         return self.mapper.clear_region(bounds_min, bounds_max)
 
-    def clear_blocks(self, pool_indices):
+    def clear_blocks(self, pool_indices) -> int:
         return self.mapper.clear_blocks(pool_indices)
 
-    def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = False, level: float = 0.0):
+    def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = False, level: float = 0.0) -> Mesh:
         if level != 0.0:
             raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
         mesh = self.mapper.extract_mesh(refine_iterations, surface_only)
@@ -428,7 +456,7 @@ class BlockSparseTSDFIntegrator:
         )
         return mesh
 
-    def extract_mesh_tensors(self, level: float = 0.0, surface_only: bool = False, refine_iterations: int = 0):
+    def extract_mesh_tensors(self, level: float = 0.0, surface_only: bool = False, refine_iterations: int = 0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         mesh = self.extract_mesh(refine_iterations=refine_iterations, surface_only=surface_only, level=level)
         vertices = torch.as_tensor(mesh.vertices)
         normals = torch.as_tensor(mesh.vertex_normals, device=vertices.device, dtype=vertices.dtype)
@@ -470,11 +498,11 @@ class BlockSparseTSDFIntegrator:
             ),
         )
 
-    def extract_textured_mesh(self, texture_observations, refine_iterations: int = 0,
+    def extract_textured_mesh(self, texture_observations: CameraObservation | Sequence[CameraObservation], refine_iterations: int = 0,
                               surface_only: bool = True, level: float = 0.0,
                               camera_min_distance: Optional[float] = None,
                               camera_max_distance: Optional[float] = None,
-                              texture_depth_tolerance_m: Optional[float] = None):
+                              texture_depth_tolerance_m: Optional[float] = None) -> Mesh:
         if level != 0.0:
             raise NotImplementedError("portable dense mesh extraction supports only the zero TSDF level")
         vertices, faces, normals, colors = self.extract_mesh_tensors(
@@ -501,7 +529,81 @@ class BlockSparseTSDFIntegrator:
             raise ValueError("max_points must be a positive integer or None")
         return max_points
 
-    def extract_surface_voxels(self, sdf_threshold: float = None):
+    def _limit_voxels_for_point_cap(
+        self,
+        voxels: OccupiedVoxels,
+        *,
+        subvoxel_factor: int,
+        max_points: Optional[int],
+    ) -> OccupiedVoxels:
+        """Downsample source voxels before expansion, retaining full cells."""
+        factor = self._validate_subvoxel_factor(subvoxel_factor)
+        limit = self._validate_max_points(max_points)
+        if limit is None or len(voxels) * factor**3 <= limit:
+            return voxels
+        source_count = limit // factor**3
+        if source_count == 0:
+            selected = torch.empty(0, dtype=torch.long, device=voxels.centers.device)
+        else:
+            selected = torch.linspace(
+                0, len(voxels) - 1, steps=source_count, device=voxels.centers.device
+            ).round().to(torch.long)
+        colors = None if voxels.texture_colors is None else voxels.texture_colors[selected]
+        valid = None if voxels.texture_valid is None else voxels.texture_valid[selected]
+        return OccupiedVoxels(
+            voxels.centers[selected],
+            voxels.block_idx_per_voxel[selected],
+            voxels.block_data,
+            texture_colors=colors,
+            texture_valid=valid,
+            subvoxel_factor=1,
+        )
+
+    def _expand_subvoxels(
+        self, voxels: OccupiedVoxels, *, subvoxel_factor: int
+    ) -> OccupiedVoxels:
+        """Expand voxel centers to an evenly spaced subvoxel lattice."""
+        factor = self._validate_subvoxel_factor(subvoxel_factor)
+        if factor == 1 or len(voxels) == 0:
+            return OccupiedVoxels(
+                voxels.centers,
+                voxels.block_idx_per_voxel,
+                voxels.block_data,
+                texture_colors=voxels.texture_colors,
+                texture_valid=voxels.texture_valid,
+                subvoxel_factor=factor,
+            )
+        axis = (
+            (torch.arange(factor, device=voxels.centers.device, dtype=voxels.centers.dtype) + 0.5)
+            / factor
+            - 0.5
+        ) * float(self.config.voxel_size)
+        offsets = torch.stack(
+            torch.meshgrid(axis, axis, axis, indexing="ij"), -1
+        ).reshape(-1, 3)
+        count = int(offsets.shape[0])
+        centers = (voxels.centers[:, None] + offsets[None]).reshape(-1, 3)
+        indices = voxels.block_idx_per_voxel.repeat_interleave(count)
+        colors = (
+            None
+            if voxels.texture_colors is None
+            else voxels.texture_colors.repeat_interleave(count, dim=0)
+        )
+        valid = (
+            None
+            if voxels.texture_valid is None
+            else voxels.texture_valid.repeat_interleave(count, dim=0)
+        )
+        return OccupiedVoxels(
+            centers,
+            indices,
+            voxels.block_data,
+            texture_colors=colors,
+            texture_valid=valid,
+            subvoxel_factor=factor,
+        )
+
+    def extract_surface_voxels(self, sdf_threshold: float = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return ``(centers, colors, signed_distances_m)`` near the surface.
 
         This differs intentionally from :meth:`extract_occupied_voxels`: it
@@ -527,8 +629,8 @@ class BlockSparseTSDFIntegrator:
 
     def extract_occupied_voxels(self, surface_only: bool = False, sdf_threshold: float = None, *,
                                 subvoxel_factor: int = 1, max_points: Optional[int] = None,
-                                texture_observations=None, camera_min_distance=None,
-                                camera_max_distance=None, texture_depth_tolerance_m=None):
+                                texture_observations: CameraObservation | Sequence[CameraObservation] | None = None, camera_min_distance: Optional[float] = None,
+                                camera_max_distance: Optional[float] = None, texture_depth_tolerance_m: Optional[float] = None) -> OccupiedVoxels:
         subvoxel_factor = self._validate_subvoxel_factor(subvoxel_factor)
         max_points = self._validate_max_points(max_points)
         state = self.mapper._mapper.state
@@ -576,14 +678,25 @@ class BlockSparseTSDFIntegrator:
     def extract_matching_feature_voxels(self, feature_vector: torch.Tensor, top_k: int,
                                         surface_only: bool = False, sdf_threshold: Optional[float] = None,
                                         minimum_score: Optional[float] = None,
-                                        feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None):
+                                        feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None) -> MatchedVoxels:
         return self.mapper.extract_matching_feature_voxels(
             feature_vector, top_k, surface_only, sdf_threshold, minimum_score, feature_projector,
         )
 
-    get_matching_feature_voxels = extract_matching_feature_voxels
+    def get_matching_feature_voxels(
+        self,
+        feature_vector: torch.Tensor,
+        top_k: int,
+        surface_only: bool = False,
+        sdf_threshold: Optional[float] = None,
+        minimum_score: Optional[float] = None,
+        feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+    ) -> MatchedVoxels:
+        return self.extract_matching_feature_voxels(
+            feature_vector, top_k, surface_only, sdf_threshold, minimum_score, feature_projector
+        )
 
-    def get_stats(self, scan_pool: bool = True, scan_hash: bool = False):
+    def get_stats(self, scan_pool: bool = True, scan_hash: bool = False) -> Dict[str, Any]:
         del scan_pool, scan_hash
         stats = self.mapper.get_stats()
         stats.update({
@@ -600,9 +713,18 @@ class BlockSparseTSDFIntegrator:
         stats["last_integration_kernel_timings_ms"] = {}
         return stats
 
-    def memory_usage_mb(self):
+    def memory_usage_mb(self) -> float:
         return self.mapper.memory_usage_mb()
 
-    def update_static_obstacles(self, scene, env_idx: int = 0, debug: bool = False):
+    def update_static_obstacles(self, scene: SceneData, env_idx: int = 0, debug: bool = False) -> None:
         del debug
         return self.mapper.update_static_obstacles(scene, env_idx)
+
+
+# These read-only portable convenience fields are intentionally installed at
+# runtime; the pinned CUDA/ Warp class did not declare them.
+BlockSparseTSDFIntegrator.voxel_size = property(BlockSparseTSDFIntegrator._voxel_size.fget)
+BlockSparseTSDFIntegrator.origin = property(BlockSparseTSDFIntegrator._origin.fget)
+BlockSparseTSDFIntegrator.truncation_distance = property(
+    BlockSparseTSDFIntegrator._truncation_distance.fget
+)

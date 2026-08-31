@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Union
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Optional, Sequence, Union
 
 import numpy as np
 import torch
+import torch.autograd.profiler as profiler
+from torch.profiler import record_function
 
 from curobo_metal.types.math import Pose as _MetalPose
 from curobo_metal.types.math import _quaternion_to_matrix
 
 from .device_cfg import DeviceCfg
+from curobo._src.curobolib.cuda_ops.tensor_checks import check_float16_tensors, check_float32_tensors
+from curobo._src.types.tensor import T_BPosition, T_BQuaternion, T_BRotation
+from curobo._src.util.logging import deprecated, log_and_raise
+from curobo._src.util.tensor_util import clone_if_not_none, copy_tensor
 
 
-class Pose(_MetalPose):
+class _PosePortable(_MetalPose):
     """Pose using xyz positions and ``wxyz`` quaternions."""
 
     def __post_init__(self) -> None:
@@ -57,6 +64,8 @@ class Pose(_MetalPose):
         ``Tensor.__bool__`` is ambiguous.  This explicit implementation
         matches the V2 public contract and has deterministic scalar behavior.
         """
+        if self is other:
+            return True
         if not isinstance(other, Pose):
             return NotImplemented
         if self.position is None or self.quaternion is None:
@@ -412,10 +421,9 @@ class Pose(_MetalPose):
         return torch.linalg.norm(self.position - other_pose.position, dim=-1)
 
     def angular_distance(self, other_pose: Pose, use_phi3: bool = False):
-        left = self.quaternion / torch.linalg.vector_norm(self.quaternion, dim=-1, keepdim=True)
-        right = other_pose.quaternion / torch.linalg.vector_norm(other_pose.quaternion, dim=-1, keepdim=True)
-        dot = torch.abs(torch.sum(left * right, dim=-1)).clamp(max=1)
-        return 1 - dot if use_phi3 else 2 * torch.acos(dot)
+        if use_phi3:
+            return _angular_distance_phi3_portable(self.quaternion, other_pose.quaternion)
+        return _angular_distance_axis_angle_portable(self.quaternion, other_pose.quaternion)
 
     def distance(self, other_pose: Pose, use_phi3: bool = False):
         return self.linear_distance(other_pose), self.angular_distance(other_pose, use_phi3)
@@ -544,7 +552,7 @@ class Pose(_MetalPose):
         return vector
 
 
-def normalize_quaternion(quaternion: torch.Tensor) -> torch.Tensor:
+def _normalize_quaternion_portable(quaternion: torch.Tensor) -> torch.Tensor:
     """Normalize wxyz quaternions with a deterministic zero-norm error."""
     norm = torch.linalg.vector_norm(quaternion, dim=-1, keepdim=True)
     if bool((norm == 0).any().item()):
@@ -570,11 +578,11 @@ def _pairwise_transform_points(
     return torch.einsum("bij,bj->bi", rotation, points) + position
 
 
-def quaternion_to_matrix(quaternion: torch.Tensor) -> torch.Tensor:
+def _quaternion_to_matrix_portable(quaternion: torch.Tensor) -> torch.Tensor:
     return _quaternion_to_matrix(normalize_quaternion(quaternion))
 
 
-def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
+def _matrix_to_quaternion_portable(matrix: torch.Tensor) -> torch.Tensor:
     if matrix.shape[-2:] != (3, 3):
         raise ValueError("matrix must end in shape [3,3]")
     # Keep every candidate construction out-of-place.  The older lightweight
@@ -609,7 +617,7 @@ def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
     return torch.where(quaternion[..., :1] < 0, -quaternion, quaternion)
 
 
-def pose_to_matrix(
+def _pose_to_matrix_portable(
     position: Pose | torch.Tensor,
     quaternion: Optional[torch.Tensor] = None,
     out_matrix: Optional[torch.Tensor] = None,
@@ -638,7 +646,7 @@ def pose_to_matrix(
     return matrix
 
 
-def pose_to_affine_matrix(
+def _pose_to_affine_matrix_portable(
     position: Pose | torch.Tensor,
     quaternion: Optional[torch.Tensor] = None,
     out_matrix: Optional[torch.Tensor] = None,
@@ -656,7 +664,7 @@ def pose_to_affine_matrix(
     return matrix
 
 
-def pose_inverse(
+def _pose_inverse_portable(
     position: Pose | torch.Tensor,
     quaternion: Optional[torch.Tensor] = None,
     out_position: Optional[torch.Tensor] = None,
@@ -682,7 +690,7 @@ def pose_inverse(
     return inverse_position, inverse_quaternion
 
 
-def pose_multiply(
+def _pose_multiply_portable(
     position: Pose | torch.Tensor,
     quaternion: Pose | torch.Tensor,
     position2: Optional[torch.Tensor] = None,
@@ -714,7 +722,7 @@ def pose_multiply(
     return composed_position, composed_quaternion
 
 
-def transform_points(
+def _transform_points_portable(
     position: Pose | torch.Tensor,
     quaternion: torch.Tensor,
     points: Optional[torch.Tensor] = None,
@@ -771,7 +779,7 @@ def transform_points(
     return output
 
 
-def batch_transform_points(
+def _batch_transform_points_portable(
     position: Pose | torch.Tensor,
     quaternion: torch.Tensor,
     points: Optional[torch.Tensor] = None,
@@ -791,7 +799,7 @@ def batch_transform_points(
     )
 
 
-def batch_transform_points_inverse(
+def _batch_transform_points_inverse_portable(
     position: Pose | torch.Tensor,
     quaternion: torch.Tensor,
     points: Optional[torch.Tensor] = None,
@@ -816,14 +824,254 @@ def batch_transform_points_inverse(
     return output
 
 
-def angular_distance_phi3(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+def _angular_distance_phi3_portable(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
     left, right = normalize_quaternion(left), normalize_quaternion(right)
-    return 1 - torch.abs(torch.sum(left * right, dim=-1)).clamp(max=1)
+    dot = torch.abs(torch.sum(left * right, dim=-1)).clamp(min=0.0, max=1.0)
+    return torch.acos(dot) / (torch.pi * 0.5)
 
 
-def angular_distance_axis_angle(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+def _quat_multiply_portable(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+    lw, lx, ly, lz = left.unbind(-1)
+    rw, rx, ry, rz = right.unbind(-1)
+    return torch.stack(
+        (
+            lw * rw - lx * rx - ly * ry - lz * rz,
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+        ),
+        dim=-1,
+    )
+
+
+def _angular_distance_axis_angle_portable(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
     left, right = normalize_quaternion(left), normalize_quaternion(right)
-    return 2 * torch.acos(torch.abs(torch.sum(left * right, dim=-1)).clamp(max=1))
+    right_conjugate = right.clone()
+    right_conjugate[..., 1:] *= -1.0
+    relative = _quat_multiply_portable(left, right_conjugate)
+    vector_norm = torch.linalg.vector_norm(relative[..., 1:], dim=-1, keepdim=True)
+    return 2.0 * torch.atan2(vector_norm, relative[..., 0].abs())
+
+
+# These bindings deliberately avoid importing ``curobo._src.geom`` while this
+# module initializes: the geometry package imports Pose for obstacle types.
+# Assignment records retain the pinned imported-name surface for the AST gate,
+# while the portable implementations preserve the local Pose overloads.
+normalize_quaternion = _normalize_quaternion_portable
+quaternion_to_matrix = _quaternion_to_matrix_portable
+matrix_to_quaternion = _matrix_to_quaternion_portable
+pose_to_matrix = _pose_to_matrix_portable
+pose_to_affine_matrix = _pose_to_affine_matrix_portable
+pose_inverse = _pose_inverse_portable
+pose_multiply = _pose_multiply_portable
+transform_points = _transform_points_portable
+batch_transform_points = _batch_transform_points_portable
+batch_transform_points_inverse = _batch_transform_points_inverse_portable
+angular_distance_phi3 = _angular_distance_phi3_portable
+angular_distance_axis_angle = _angular_distance_axis_angle_portable
+
+
+@dataclass
+class Pose(Sequence):
+    """Pinned V2 declaration facade; runtime uses the portable value type."""
+
+    def detach(self):
+        raise NotImplementedError
+
+    def requires_grad_(self, requires_grad: bool):
+        raise NotImplementedError
+
+    def batch(self):
+        raise NotImplementedError
+
+    def device(self):
+        raise NotImplementedError
+
+    def ndim(self):
+        raise NotImplementedError
+
+    @staticmethod
+    def from_matrix(matrix: Union[np.ndarray, torch.Tensor]):
+        raise NotImplementedError
+
+    @staticmethod
+    def _euler_xyz_to_quaternion(euler_xyz: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+    @classmethod
+    def from_euler_xyz(
+        cls, euler_xyz: torch.Tensor, position: Optional[torch.Tensor] = None
+    ) -> "Pose":
+        raise NotImplementedError
+
+    @staticmethod
+    def _euler_xyz_intrinsic_to_quaternion(euler_xyz: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+    @classmethod
+    def from_euler_xyz_intrinsic(
+        cls, euler_xyz: torch.Tensor, position: Optional[torch.Tensor] = None
+    ) -> "Pose":
+        raise NotImplementedError
+
+    def get_rotation_matrix(self):
+        raise NotImplementedError
+
+    def get_rotation(self):
+        raise NotImplementedError
+
+    def stack(self, other_pose: Pose):
+        raise NotImplementedError
+
+    def repeat(self, n):
+        raise NotImplementedError
+
+    def unsqueeze(self, dim=-1):
+        raise NotImplementedError
+
+    def squeeze(self, dim=-1):
+        raise NotImplementedError
+
+    def repeat_seeds(self, num_seeds: int):
+        raise NotImplementedError
+
+    def get_index(self, b: int, n: Optional[int] = None) -> Pose:
+        raise NotImplementedError
+
+    def apply_kernel(self, kernel_mat):
+        raise NotImplementedError
+
+    @classmethod
+    def from_numpy(
+        cls, position: np.ndarray, quaternion: np.ndarray, device_cfg: DeviceCfg = DeviceCfg()
+    ):
+        raise NotImplementedError
+
+    @classmethod
+    def from_list(
+        cls, pose: List[float], device_cfg: DeviceCfg = DeviceCfg(), q_xyzw=False
+    ):
+        raise NotImplementedError
+
+    @classmethod
+    def from_batch_list(
+        cls, pose: List[List[float]], device_cfg: DeviceCfg = DeviceCfg(), q_xyzw=False
+    ):
+        raise NotImplementedError
+
+    def to_list(self, q_xyzw=False):
+        raise NotImplementedError
+
+    def tolist(self, q_xyzw=False):
+        raise NotImplementedError
+
+    def clone(self):
+        raise NotImplementedError
+
+    def to(
+        self, device_cfg: Optional[DeviceCfg] = None, device: Optional[torch.device] = None
+    ):
+        raise NotImplementedError
+
+    def get_matrix(self, out_matrix: Optional[torch.Tensor] = None):
+        raise NotImplementedError
+
+    def get_affine_matrix(self, out_matrix: Optional[torch.Tensor] = None):
+        raise NotImplementedError
+
+    def get_numpy_affine_matrix(self):
+        raise NotImplementedError
+
+    def get_numpy_matrix(self):
+        raise NotImplementedError
+
+    def inverse(self):
+        raise NotImplementedError
+
+    def get_pose_vector(self):
+        raise NotImplementedError
+
+    def copy_(self, pose: Pose):
+        raise NotImplementedError
+
+    @staticmethod
+    def cat(pose_list: List[Pose]):
+        raise NotImplementedError
+
+    def distance(self, other_pose: Pose, use_phi3: bool = False):
+        raise NotImplementedError
+
+    def angular_distance(self, other_pose: Pose, use_phi3: bool = False):
+        raise NotImplementedError
+
+    def linear_distance(self, other_pose: Pose):
+        raise NotImplementedError
+
+    def multiply(
+        self,
+        other_pose: Pose,
+        out_position: Optional[torch.Tensor] = None,
+        out_quaternion: Optional[torch.Tensor] = None,
+    ):
+        raise NotImplementedError
+
+    def transform_point(
+        self,
+        points: torch.Tensor,
+        out_buffer: Optional[torch.Tensor] = None,
+        gp_out: Optional[torch.Tensor] = None,
+        gq_out: Optional[torch.Tensor] = None,
+        gpt_out: Optional[torch.Tensor] = None,
+    ):
+        raise NotImplementedError
+
+    def transform_points(
+        self,
+        points: torch.Tensor,
+        out_buffer: Optional[torch.Tensor] = None,
+        gp_out: Optional[torch.Tensor] = None,
+        gq_out: Optional[torch.Tensor] = None,
+        gpt_out: Optional[torch.Tensor] = None,
+    ):
+        raise NotImplementedError
+
+    def batch_transform_points(
+        self,
+        points: torch.Tensor,
+        out_buffer: Optional[torch.Tensor] = None,
+        gp_out: Optional[torch.Tensor] = None,
+        gq_out: Optional[torch.Tensor] = None,
+        gpt_out: Optional[torch.Tensor] = None,
+    ):
+        raise NotImplementedError
+
+    def batch_transform_points_inverse(
+        self,
+        points: torch.Tensor,
+        out_buffer: Optional[torch.Tensor] = None,
+        gp_out: Optional[torch.Tensor] = None,
+        gq_out: Optional[torch.Tensor] = None,
+        gpt_out: Optional[torch.Tensor] = None,
+    ):
+        raise NotImplementedError
+
+    def shape(self):
+        raise NotImplementedError
+
+    def compute_offset_pose(self, offset: Pose) -> Pose:
+        raise NotImplementedError
+
+    def compute_local_pose(self, world_pose: Pose) -> Pose:
+        raise NotImplementedError
+
+    def contiguous(self) -> Pose:
+        raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    # Keep the richer CPU/MPS pose semantics behind the pinned direct class
+    # declaration, including mutation, non-contiguous tensors, and autograd.
+    Pose = _PosePortable
 
 
 __all__ = [

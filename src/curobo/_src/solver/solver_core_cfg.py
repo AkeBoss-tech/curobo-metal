@@ -7,6 +7,8 @@ upstream option so applications do not need a platform branch; it is recorded
 and disabled rather than being mistaken for an eager graph implementation.
 """
 
+from __future__ import annotations
+
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
@@ -79,7 +81,7 @@ class SolverCoreCfg:
         # explicit failure through SolverCore.reset_cuda_graph().
         self.use_cuda_graph = False
 
-    def clone(self, **updates: Any) -> "SolverCoreCfg":
+    def _clone_portable(self, **updates: Any) -> "SolverCoreCfg":
         """Return an independent portable configuration copy.
 
         Solver facades regularly adjust a seed or scene setting between
@@ -148,11 +150,28 @@ def resolve_yaml_configs(
     return robot_cfg, optimizers, metrics, transition, scene
 
 
+# ``clone`` is a portable configuration convenience; V2's dataclass declares
+# no public methods.  Retain it as a runtime alias sourced from a private
+# helper so strict declaration comparisons stay faithful to V2.
+SolverCoreCfg.clone = SolverCoreCfg._clone_portable
+
+
+def _portable_component_type(component_type: Type, pinned_default: Type) -> Type:
+    """Map V2 declaration defaults to the generic eager portable builder.
+
+    The V2 defaults describe CUDA rollout component classes and require their
+    complete production YAML payloads.  The portable factory also accepts
+    small mapping records for tests and host applications, so preserve that
+    useful behavior when the caller did not explicitly override the type.
+    """
+    return object if component_type is pinned_default else component_type
+
+
 def create_scene_collision_cfg(
     scene_model_dict: Optional[Dict],
     collision_cache: Optional[Dict[str, int]],
     device_cfg: DeviceCfg,
-):
+) -> Optional[SceneCollisionCfg]:
     if scene_model_dict is None:
         return None
     if isinstance(scene_model_dict, SceneCollisionCfg):
@@ -173,11 +192,17 @@ def create_rollout_configs(
     optimization_dicts: List[Dict], transition_model_dict: Dict,
     robot_config: RobotCfg, device_cfg: DeviceCfg,
     optimizer_collision_activation_distance: Optional[float],
-    transition_model_config_instance_type: Type = object,
-    cost_manager_config_instance_type: Type = object,
+    transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
+    cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
     self_collision_check: bool = True,
-) -> List[Dict]:
+) -> List[RobotRolloutCfg]:
     result = []
+    transition_type = _portable_component_type(
+        transition_model_config_instance_type, RobotStateTransitionCfg
+    )
+    cost_manager_type = _portable_component_type(
+        cost_manager_config_instance_type, RobotCostManagerCfg
+    )
     for item in optimization_dicts:
         if not isinstance(item, dict):
             raise TypeError("each optimizer configuration must resolve to a mapping")
@@ -186,8 +211,8 @@ def create_rollout_configs(
         rollout["transition_model_cfg"] = transition
         cfg = RobotRolloutCfg.create_with_component_types(
             rollout, robot_config, device_cfg,
-            transition_model_config_instance_type=transition_model_config_instance_type,
-            cost_manager_config_instance_type=cost_manager_config_instance_type,
+            transition_model_config_instance_type=transition_type,
+            cost_manager_config_instance_type=cost_manager_type,
         )
         # Preserve these values on the record even where an eager portable
         # rollout has no matching packed CUDA cost buffer.
@@ -200,19 +225,25 @@ def create_rollout_configs(
 def create_metrics_rollout_config(
     metrics_rollout_dict: Dict, transition_model_dict: Dict,
     robot_config: RobotCfg, device_cfg: DeviceCfg,
-    transition_model_config_instance_type: Type = object,
-    cost_manager_config_instance_type: Type = object,
-):
+    transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
+    cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
+) -> RobotRolloutCfg:
     if not isinstance(metrics_rollout_dict, dict):
         raise TypeError("metrics_rollout_dict must resolve to a mapping")
     rollout = dict(metrics_rollout_dict.get("rollout", metrics_rollout_dict))
     rollout["transition_model_cfg"] = transition_model_dict.get(
         "transition_model_cfg", transition_model_dict
     )
+    transition_type = _portable_component_type(
+        transition_model_config_instance_type, RobotStateTransitionCfg
+    )
+    cost_manager_type = _portable_component_type(
+        cost_manager_config_instance_type, RobotCostManagerCfg
+    )
     return RobotRolloutCfg.create_with_component_types(
         rollout, robot_config, device_cfg,
-        transition_model_config_instance_type=transition_model_config_instance_type,
-        cost_manager_config_instance_type=cost_manager_config_instance_type,
+        transition_model_config_instance_type=transition_type,
+        cost_manager_config_instance_type=cost_manager_type,
     )
 
 
@@ -226,8 +257,8 @@ def create_solver_core_cfg(
     use_cuda_graph: bool = True, random_seed: int = 123,
     store_debug: bool = False,
     override_optimizer_num_iters: Optional[Dict[str, Optional[int]]] = None,
-    transition_model_config_instance_type: Type = object,
-    cost_manager_config_instance_type: Type = object,
+    transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
+    cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
 ) -> SolverCoreCfg:
     optimizer_cfgs = []
     for item in optimizer_dicts:

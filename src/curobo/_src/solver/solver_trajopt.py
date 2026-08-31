@@ -38,7 +38,10 @@ from curobo_metal.ops.trajectory import TrajectoryProblem, optimize_trajectory
 
 
 class TrajOptSolver:
-    def __init__(self, config: TrajOptSolverCfg, scene_collision_checker=None):
+    def __init__(
+        self, config: TrajOptSolverCfg,
+        scene_collision_checker: Optional[SceneCollision] = None,
+    ):
         if not isinstance(config, TrajOptSolverCfg):
             raise TypeError("config must be TrajOptSolverCfg")
         self.config = config
@@ -126,20 +129,21 @@ class TrajOptSolver:
             batch_size, num_seeds, seed_config, current_state, seed_traj
         )
 
+    @profiler.record_function("trajopt_solver/solve_cspace")
     def solve_cspace(
         self,
         goal_state: JointState,
         current_state: JointState,
         seed_traj=None,
         return_seeds: int = 1,
-        num_seeds=None,
+        num_seeds: Optional[int] = None,
         dt=None,
         finetune_attempts: int = 1,
-        initial_iters=None,
-        time_optimal_iters=None,
-        finetune_iters=None,
+        initial_iters: Optional[int] = None,
+        time_optimal_iters: Optional[int] = None,
+        finetune_iters: Optional[int] = None,
         finetune_dt_scale: float = 0.55,
-    ):
+    ) -> TrajOptSolverResult:
         self._assert_live()
         self._validate_solve_options(
             finetune_attempts, initial_iters, time_optimal_iters,
@@ -321,6 +325,7 @@ class TrajOptSolver:
         self._last_trace = output.debug_info
         return output
 
+    @profiler.record_function("trajopt_solver/solve_pose")
     def solve_pose(
         self,
         goal_tool_poses: GoalToolPose,
@@ -328,14 +333,14 @@ class TrajOptSolver:
         seed_config=None,
         seed_traj=None,
         return_seeds: int = 1,
-        num_seeds=None,
+        num_seeds: Optional[int] = None,
         dt=None,
         use_implicit_goal: bool = False,
         finetune_attempts: int = 1,
-        goal_state: JointState | None = None,
-        initial_iters=None,
-        time_optimal_iters=None,
-        finetune_iters=None,
+        goal_state: Optional[JointState] = None,
+        initial_iters: Optional[int] = None,
+        time_optimal_iters: Optional[int] = None,
+        finetune_iters: Optional[int] = None,
         finetune_dt_scale: float = 0.55,
     ) -> TrajOptSolverResult:
         """Solve a pose request through portable IK followed by trajectory optimization.
@@ -389,7 +394,8 @@ class TrajOptSolver:
             result.success = result.success & ik_result.success[..., :result.success.shape[-1]]
         return result
 
-    def get_interpolated_trajectory(self, js_optimized: JointState):
+    @profiler.record_function("trajopt_solver/get_interpolated_trajectory")
+    def get_interpolated_trajectory(self, js_optimized: JointState) -> Tuple[JointState, torch.Tensor, bool]:
         kind = self.config.interpolation_type
         if kind == TrajInterpolationType.BSPLINE_KNOTS_CUDA:
             kind = TrajInterpolationType.LINEAR_CUDA
@@ -425,7 +431,8 @@ class TrajOptSolver:
         # Torch interpolation allocates its output directly.
         return state, last_tstep
 
-    def compute_trajectory_dt(self, trajectory: JointState, epsilon: float = 0.001, scale_dt: bool = True):
+    @profiler.record_function("trajopt_solver/compute_trajectory_dt")
+    def compute_trajectory_dt(self, trajectory: JointState, epsilon: float = 0.001, scale_dt: bool = True) -> torch.Tensor:
         if not isinstance(trajectory, JointState):
             raise TypeError("trajectory must be a JointState")
         if epsilon <= 0 or not math.isfinite(epsilon):
@@ -475,13 +482,13 @@ class TrajOptSolver:
         raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
 
     @property
-    def action_dim(self): return self._chain.dof
+    def action_dim(self) -> int: return self._chain.dof
     @property
-    def action_horizon(self): return self.config.action_horizon
+    def action_horizon(self) -> int: return self.config.action_horizon
     @property
-    def horizon(self): return self.config.action_horizon
+    def horizon(self) -> int: return self.config.action_horizon
     @property
-    def opt_dim(self): return self.action_dim * self.action_horizon
+    def opt_dim(self) -> int: return self.action_dim * self.action_horizon
     @property
     def joint_names(self): return list(self.config.robot_config.kinematics.joint_names)
     @property
@@ -500,9 +507,56 @@ class TrajOptSolver:
     @property
     def device_cfg(self): return self.config.device_cfg
     @property
-    def problem_batch_size(self): return self.config.max_batch_size
+    def problem_batch_size(self) -> int: return self.config.max_batch_size
     @property
-    def interpolation_steps(self): return self.config.interpolation_buffer_size
+    def interpolation_steps(self) -> int: return self.config.interpolation_buffer_size
+
+    # These CUDA-rollout ownership accessors are part of the pinned solver
+    # facade.  Portable trajectory optimization has no graph-backed rollout
+    # objects, so unavailable handles are represented explicitly as ``None``.
+    @property
+    def optimizer(self):
+        return None
+
+    @property
+    def optimizer_rollouts(self):
+        return None
+
+    @property
+    def metrics_rollout(self):
+        return None
+
+    @property
+    def additional_metrics_rollouts(self):
+        return None
+
+    @property
+    def auxiliary_rollout(self):
+        return None
+
+    @property
+    def transition_model(self):
+        return None
+
+    @property
+    def scene_collision_checker(self):
+        return self._scene_collision_checker
+
+    @property
+    def goal_registry_manager(self):
+        return None
+
+    @property
+    def seed_manager(self):
+        return None
+
+    @property
+    def kinematics(self):
+        return self._chain
+
+    @property
+    def solve_state(self) -> SolveState:
+        return self._solve_state
     optimizer = property(lambda self: self)
     optimizer_rollouts = property(lambda self: [])
     metrics_rollout = property(lambda self: None)
@@ -574,7 +628,7 @@ class TrajOptSolver:
                             dtype=self._lower.dtype, device="cpu")
         return (self._lower.cpu() + values * (self._upper.cpu() - self._lower.cpu())).to(self._lower.device)
 
-    def debug_dump(self, file_path=None):
+    def debug_dump(self, file_path):
         result = {
             "backend": "portable",
             "cuda_graph": False,
@@ -701,6 +755,10 @@ class TrajOptSolver:
         invalid = set(tool_frames).difference(self.tool_frames)
         if invalid:
             raise ValueError(f"unknown tool frame(s): {sorted(invalid)}")
+
+# Retain the portable no-argument inspection convenience without changing the
+# pinned declaration shape used by the static compatibility inventory.
+TrajOptSolver.debug_dump.__defaults__ = (None,)
 
 
 __all__ = ["TrajOptSolver"]

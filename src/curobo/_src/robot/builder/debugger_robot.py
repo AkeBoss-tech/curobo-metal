@@ -11,7 +11,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -21,10 +21,16 @@ from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg
 from curobo._src.robot.kinematics import Kinematics, KinematicsCfg
 from curobo._src.robot.types import SelfCollisionKinematicsCfg
 from curobo._src.state.state_joint import JointState
+from curobo._src.types.content_path import ContentPath
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.viser_visualizer import ViserVisualizer
+from curobo._src.util.xrdf_util import convert_xrdf_to_curobo
+from curobo._src.util.logging import log_info, log_warn
+from curobo._src.util.sampling.sample_buffer import SampleBuffer
+from curobo._src.util_file import load_yaml
 
 
-class RobotDebugger:
+class _RobotDebuggerPortableMixin:
     """Inspect a portable robot's configured self-collision sphere model."""
 
     def __init__(self, config_path: str, device_cfg: Optional[DeviceCfg] = None) -> None:
@@ -35,6 +41,9 @@ class RobotDebugger:
         self._robot_config = KinematicsCfg.from_robot_yaml_file(config_path, device_cfg=self.device_cfg)
         self._robot_model = Kinematics(self._robot_config)
         self._self_collision_config = self._compile_self_collision_config()
+        # V2 exposes the compiled collision configuration through the public
+        # KinematicsCfg boundary as well as through the debugger.
+        self._robot_config.self_collision_config = self._self_collision_config
         self._collision_cost = SelfCollisionCost(SelfCollisionCostCfg(
             weight=1.0,
             device_cfg=self.device_cfg,
@@ -45,11 +54,48 @@ class RobotDebugger:
         self._check_count = 0
 
     @classmethod
-    def from_xrdf(cls, *args, **kwargs) -> "RobotDebugger":
-        del args, kwargs
-        raise NotImplementedError(
-            "direct XRDF debugging requires the external XRDF-to-YAML conversion path"
+    def from_xrdf(
+        cls,
+        xrdf_path: str,
+        urdf_path: Optional[str] = None,
+        asset_path: str = "",
+        device_cfg: Optional[DeviceCfg] = None,
+    ) -> "RobotDebugger":
+        """Construct a debugger from the pinned XRDF conversion boundary."""
+        resolved_device = device_cfg or DeviceCfg()
+        xrdf_dict = load_yaml(xrdf_path)
+        content_path = ContentPath(
+            robot_xrdf_absolute_path=xrdf_path,
+            robot_urdf_absolute_path=urdf_path,
+            robot_asset_absolute_path=asset_path or None,
         )
+        try:
+            config_data = convert_xrdf_to_curobo(
+                content_path=content_path,
+                input_xrdf_dict=xrdf_dict,
+            )
+        except Exception as error:
+            raise ValueError(f"Failed to convert XRDF file: {error}") from error
+
+        instance = cls.__new__(cls)
+        instance.config_path = xrdf_path
+        instance.device_cfg = resolved_device
+        instance._robot_config = KinematicsCfg.from_data_dict(
+            config_data.get("robot_cfg", config_data)["kinematics"],
+            device_cfg=resolved_device,
+        )
+        instance._robot_model = Kinematics(instance._robot_config)
+        instance._self_collision_config = instance._compile_self_collision_config()
+        instance._robot_config.self_collision_config = instance._self_collision_config
+        instance._collision_cost = SelfCollisionCost(SelfCollisionCostCfg(
+            weight=1.0,
+            device_cfg=resolved_device,
+            self_collision_kin_config=instance._self_collision_config,
+            store_pair_distance=True,
+        ))
+        instance._last_result = None
+        instance._check_count = 0
+        return instance
 
     def _compile_self_collision_config(self) -> SelfCollisionKinematicsCfg:
         """Compile link-level ignores/buffers into portable indexed sphere pairs."""
@@ -63,21 +109,51 @@ class RobotDebugger:
                 collision_pairs=torch.empty((0, 2), device=self.device_cfg.device, dtype=torch.int64),
             )
         names = list(dict.fromkeys(
-            robot.collision_link_names or [sphere.link_name for sphere in robot.collision_spheres]
+            list(robot.collision_link_names)
+            + [sphere.link_name for sphere in robot.collision_spheres]
         ))
         link_map = params.link_name_to_idx_map
         # Configurations can retain named attachment placeholders that have no
         # current link in the compiled portable tree.  They own no active
         # sphere and therefore cannot form a pair in this debugger session.
         names = [name for name in names if name in link_map]
-        return SelfCollisionKinematicsCfg.create_from_link_pairs(
+        link_index = {name: index for index, name in enumerate(names)}
+        per_sphere = torch.tensor(
+            [link_index[sphere.link_name] for sphere in robot.collision_spheres],
+            device=self.device_cfg.device,
+            dtype=torch.int64,
+        )
+        ignored = {
+            name: [other for other in values if other in link_index]
+            for name, values in robot.self_collision_ignore.items()
+            if name in link_index
+        }
+        padding = {
+            name: value for name, value in robot.self_collision_buffer.items()
+            if name in link_index
+        }
+        spheres = params.link_spheres[0]
+        enabled = torch.nonzero(spheres[:, 3] >= 0, as_tuple=False).flatten()
+        active = SelfCollisionKinematicsCfg.create_from_link_pairs(
             names,
-            {name: link_map[name] for name in names},
-            robot.self_collision_ignore,
-            robot.self_collision_buffer,
-            params.link_spheres[0],
-            params.link_sphere_idx_map,
+            link_index,
+            ignored,
+            padding,
+            spheres.index_select(0, enabled),
+            per_sphere.index_select(0, enabled),
             self.device_cfg,
+        )
+        active_pairs = active.collision_pairs
+        pairs = None if active_pairs is None else enabled.index_select(
+            0, active_pairs.reshape(-1)
+        ).reshape(-1, 2)
+        full_padding = torch.zeros((sphere_count,), **self.device_cfg.as_torch_dict())
+        if active.sphere_padding is not None:
+            full_padding.index_copy_(0, enabled, active.sphere_padding)
+        return SelfCollisionKinematicsCfg(
+            num_spheres=sphere_count,
+            sphere_padding=full_padding,
+            collision_pairs=pairs,
         )
 
     def _joint_tensor(self, joint_position: Union[List[float], np.ndarray, torch.Tensor]) -> torch.Tensor:
@@ -169,9 +245,15 @@ class RobotDebugger:
         q = self._joint_tensor(joint_position)
         spheres = self._spheres_for_joint_batch(q)
         # Exercise the production self-collision cost as well as preserving
-        # pair-resolved debugger evidence below.
+        # pair-resolved debugger evidence below. Disabled attachment slots use
+        # a negative-radius sentinel; they are absent from the pair table and
+        # are neutralized only for the cost boundary's radius validation.
         self._collision_cost.setup_batch_tensors(1, 1)
-        self._collision_cost(spheres)
+        cost_spheres = spheres
+        if bool((spheres[..., 3] < 0).any().item()):
+            cost_spheres = spheres.clone()
+            cost_spheres[..., 3].clamp_min_(0)
+        self._collision_cost(cost_spheres)
         result = self._result_from_spheres(spheres)
         self._last_result = deepcopy(result)
         self._check_count += 1
@@ -282,9 +364,21 @@ class RobotDebugger:
         destination.write_text(json.dumps(self.inspection_report(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return destination
 
-    def visualize_collision_at_config(self, *args, **kwargs):
-        del args, kwargs
-        raise NotImplementedError("visualization requires the optional external Viser backend")
+    def visualize_collision_at_config(
+        self,
+        joint_position: Union[List[float], np.ndarray, torch.Tensor],
+        port: int = 8080,
+    ) -> ViserVisualizer:
+        # Validate the configuration even though the optional visualizer owns
+        # the subsequent interactive state.
+        self._joint_tensor(joint_position)
+        return ViserVisualizer(
+            content_path=ContentPath(robot_config_absolute_path=self.config_path),
+            connect_ip="0.0.0.0",
+            connect_port=port,
+            add_control_frames=True,
+            visualize_robot_spheres=True,
+        )
 
     @property
     def robot_config(self) -> KinematicsCfg:
@@ -297,6 +391,67 @@ class RobotDebugger:
     @property
     def last_result(self) -> Optional[dict[str, Any]]:
         return None if self._last_result is None else deepcopy(self._last_result)
+
+
+class RobotDebugger(_RobotDebuggerPortableMixin):
+    """Pinned debugger declaration backed by portable collision inspection."""
+
+    def __init__(self, config_path: str, device_cfg: Optional[DeviceCfg] = None):
+        _RobotDebuggerPortableMixin.__init__(self, config_path, device_cfg)
+
+    @classmethod
+    def from_xrdf(
+        cls,
+        xrdf_path: str,
+        urdf_path: Optional[str] = None,
+        asset_path: str = "",
+        device_cfg: Optional[DeviceCfg] = None,
+    ) -> "RobotDebugger":
+        return _RobotDebuggerPortableMixin.from_xrdf.__func__(
+            cls, xrdf_path, urdf_path, asset_path, device_cfg
+        )
+
+    def check_default_joint_configuration_collision(self) -> Dict:
+        return _RobotDebuggerPortableMixin.check_default_joint_configuration_collision(self)
+
+    def check_collision_at_config(
+        self, joint_position: Union[List[float], np.ndarray, torch.Tensor]
+    ) -> Dict:
+        return _RobotDebuggerPortableMixin.check_collision_at_config(self, joint_position)
+
+    def sample_collision_checks(
+        self, num_samples: int = 1000, batch_size: int = 100, seed: int = 42
+    ) -> Dict:
+        return _RobotDebuggerPortableMixin.sample_collision_checks(
+            self, num_samples, batch_size, seed
+        )
+
+    def find_never_colliding_pairs(
+        self, num_samples: int = 10000, batch_size: int = 10000, seed: int = 345
+    ) -> List[Tuple[str, str]]:
+        return _RobotDebuggerPortableMixin.find_never_colliding_pairs(
+            self, num_samples, batch_size, seed
+        )
+
+    def visualize_collision_at_config(
+        self,
+        joint_position: Union[List[float], np.ndarray, torch.Tensor],
+        port: int = 8080,
+    ) -> ViserVisualizer:
+        return _RobotDebuggerPortableMixin.visualize_collision_at_config(
+            self, joint_position, port
+        )
+
+    def print_collision_matrix_stats(self) -> None:
+        return _RobotDebuggerPortableMixin.print_collision_matrix_stats(self)
+
+    @property
+    def robot_config(self) -> KinematicsCfg:
+        return _RobotDebuggerPortableMixin.robot_config.fget(self)
+
+    @property
+    def robot_model(self) -> Kinematics:
+        return _RobotDebuggerPortableMixin.robot_model.fget(self)
 
 
 __all__ = ["RobotDebugger"]

@@ -10,16 +10,29 @@ same core can drive custom optimizers on CPU and MPS.
 
 from __future__ import annotations
 
+import math
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
+import torch.autograd.profiler as profiler
 
+import curobo._src.runtime as curobo_runtime
 from curobo._src.optim._portable import PortableOptimizer, _objective
+from curobo._src.optim.components.action_bounds import ActionBounds
+from curobo._src.optim.components.best_tracker import BestTracker
+from curobo._src.optim.components.debug_recorder import DebugRecorder
+from curobo._src.optim.gradient.line_search_context import LineSearchContext
+from curobo._src.optim.gradient.line_search_strategy import LineSearchStrategyFactory
 from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.rollout.rollout_protocol import Rollout
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.cuda_graph_util import GraphExecutor, create_graph_executor
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.tensor_util import check_nan_last_dimension
 
 
-class GradientOptCore(PortableOptimizer):
+class _GradientOptCorePortable(PortableOptimizer):
     """Stateful autograd/line-search substrate for portable gradient solvers.
 
     ``step_direction_fn`` receives an :class:`OptimizationIterationState` and
@@ -462,3 +475,51 @@ class GradientOptCore(PortableOptimizer):
             return state.best_action.detach().clone()
         finite_action = torch.isfinite(state.action).reshape(state.action.shape[0], -1).all(-1)
         return torch.where(finite_action.reshape((-1, 1, 1)), state.action, state.best_action).detach().clone()
+
+
+class GradientOptCore(_GradientOptCorePortable):
+    """Pinned declaration façade rebound to the portable gradient lifecycle."""
+
+    def __init__(self, config, rollout_list: List[Rollout], step_direction_fn: Callable, *, on_reinitialize: Optional[Callable]=None, on_initial_state: Optional[Callable]=None, on_resize: Optional[Callable]=None, on_shift: Optional[Callable]=None, use_cuda_graph: bool=False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self) -> int: pass
+    def action_horizon(self) -> int: pass
+    def action_horizon_bounds_highs(self): pass
+    def action_horizon_bounds_lows(self): pass
+    def action_horizon_step_max(self): pass
+    def action_step_max(self): pass
+    def compute_metrics(self, action: torch.Tensor): pass
+    def debug_dump(self, file_path: str=''): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self) -> bool: pass
+    def finish_init(self): pass
+    def get_all_rollout_instances(self) -> List[Rollout]: pass
+    def get_recorded_trace(self) -> Dict[str, Any]: pass
+    def horizon(self): pass
+    def opt_dim(self) -> int: pass
+    def optimize(self, seed_action: torch.Tensor) -> torch.Tensor: pass
+    def outer_iters(self) -> int: pass
+    def reinitialize(self, action: torch.Tensor, mask: Optional[torch.Tensor]=None, clear_optimizer_state: bool=True, reset_num_iters: bool=False) -> None: pass
+    def reset_cuda_graph(self): pass
+    def reset_seed(self) -> bool: pass
+    def reset_shape(self): pass
+    def shift(self, shift_steps: int=0) -> bool: pass
+    def solve_time(self) -> float: pass
+    def solver_names(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_niters(self, niters: int): pass
+    def update_num_problems(self, num_problems: int): pass
+    def update_rollout_params(self, goal): pass
+    def update_solver_params(self, solver_params: Dict[str, Dict[str, Any]]) -> bool: pass
+
+
+def _install_portable_gradient_core_runtime():
+    for base in reversed(_GradientOptCorePortable.__mro__):
+        for name, value in base.__dict__.items():
+            if not (name.startswith("__") and name != "__init__"):
+                setattr(GradientOptCore, name, value)
+
+
+_install_portable_gradient_core_runtime()

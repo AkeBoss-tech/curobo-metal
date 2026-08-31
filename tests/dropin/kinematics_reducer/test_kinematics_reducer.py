@@ -60,8 +60,8 @@ def test_reduce_prunes_collision_only_branch_and_records_locks():
     assert reduced.all_link_names == ["base", "arm", "tool"]
     assert reduced.total_spheres == 1
     assert reduced.cspace.joint_names == ["arm_joint", "tool_joint"]
-    assert reduced.cspace.default_joint_position == [0.1, 0.2]
-    assert reduced.cspace.max_acceleration == [4.0, 5.0]
+    torch.testing.assert_close(reduced.cspace.default_joint_position, torch.tensor([0.1, 0.2]))
+    torch.testing.assert_close(reduced.cspace.max_acceleration, torch.tensor([4.0, 5.0]))
     assert reduced.joint_limits.joint_names == ["arm_joint", "tool_joint"]
     assert reduced.lock_jointstate.joint_names == ["collision_joint"]
     torch.testing.assert_close(reduced.lock_jointstate.position, torch.tensor([0.3]))

@@ -4,6 +4,10 @@
   "inputs": [
     "q"
   ],
+  "required_matrix": {
+    "cases": ["zero", "one", "many", "mixed_status", "clone_mutation"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "mixed_status",

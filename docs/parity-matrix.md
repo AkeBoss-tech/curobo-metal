@@ -1,7 +1,7 @@
 # cuRoboV2 API parity and release boundary
 
-This repository is **not a full cuRoboV2 port**. The authoritative
-machine-readable audit is `artifacts/parity/capabilities.json`. It covers the
+The authoritative machine-readable capability audit is
+`artifacts/parity/capabilities.json`. It covers the
 production capability surface after the complete Wave 9 portable closure and
 cites the immutable upstream revision
 `8e734f3ced1df898990bcd92de40abce475907db`. The generator rejects any other
@@ -29,24 +29,22 @@ The inventory deliberately separates five conclusions:
 
 | Classification | Count | Result |
 |---|---:|---|
-| semantically equivalent | 4 | Scoped collision primitives, whole-body tree math, and the portable perception lifecycle |
+| semantically equivalent | 23 | Every audited portable capability, backed by local tests and its required paired evidence |
 | partial | 0 | No known portable implementation gaps remain in the audited core |
 | intentionally platform-inapplicable | 1 | CUDA graphs and fused CUDA/Warp execution machinery |
 | external-integration-only | 1 | Isaac/ROS/USD/viewer ecosystem integrations |
-| evidence-blocked | 19 | Implemented portable surfaces awaiting paired pinned-upstream replay evidence |
+| evidence-blocked | 0 | No portable capability remains blocked on NVIDIA replay evidence |
 
-Forward kinematics was previously labeled semantically equivalent. Local
-analytic fixtures and fallback-disabled tests establish internal correctness,
-but are not independent evidence from the pinned NVIDIA implementation. It is
-therefore evidence-blocked until a paired runner produces matching replay
-bundles. Production differentiable inverse dynamics has the same remaining
-evidence issue.
+The 19 capabilities that previously awaited NVIDIA evidence are promoted only
+when the inventory generator verifies the committed paired report, pinned
+revision, identical input hashes, and executed invalid, edge, and multi-case
+matrix evidence on both backends.
 
-### First pinned CUDA evidence
+### Full-matrix pinned CUDA evidence
 
-On 2026-08-11, the checked-in handoff ran against the exact upstream revision
-on an NVIDIA RTX A4500 (CUDA 12.6, PyTorch 2.7.1+cu126). The resulting hashed
-[paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-11.json)
+On 2026-08-26, a fresh checked-in handoff ran against the exact upstream
+revision on an NVIDIA RTX 3090. The resulting provenance-bound
+[paired report](../artifacts/parity/cuda-replay/paired-report-2026-08-26-matrix.json)
 passes all 19 available CUDA adapters: configuration,
 `DeviceCfg`, `Pose`, `JointState`, solver results, forward kinematics,
 geometric Jacobians, robot-scene sphere collision, a bounded unsigned Warp
@@ -59,24 +57,23 @@ The dynamics category
 includes torque plus first-order VJPs for position, velocity, and
 acceleration.
 
-The same runner also has a real high-level `IKSolver` CUDA adapter for the
-packaged Franka single-pose corpus.  On 2026-08-07 it matched the portable
-solver's public success flag, `[batch, seed, dof]` solution layout, and
-position/orientation convergence flags.  Franka is redundant, so the replay
-deliberately does not treat distinct valid joint-space minima as a numerical
-failure.  This is outcome-equivalence evidence, not identical-solution or
-full solver-trajectory parity.
+An earlier 2026-08-07 single-pose IK report is retained as historical evidence;
+the 2026-08-26 full matrix supersedes it for release discovery. Franka is
+redundant, so neither report treats distinct valid joint-space minima as a
+numerical failure. This is outcome equivalence, not identical-solution or full
+solver-trajectory identity.
 
-This is real CUDA-versus-fallback-disabled-Metal evidence for the narrowly
-serialized probes only. All registry cases now have genuine upstream adapters,
-but they still need broader batch/layout/world/solver coverage. This does
-**not** make a full drop-in claim.
+This is real CUDA-versus-fallback-disabled-Metal evidence for the declared
+portable contracts. Every registry case includes expanded batch, layout,
+mutation, invalid, edge, and multi-case matrix coverage. It does not claim
+Metal reproduces CUDA-only streams, graphs, fused-kernel ABI, raw RNG samples,
+or identical solver iterates.
 
 The collision semantic-equivalence records are deliberately smaller than an
 upstream checker API: discrete sphere/sphere and sphere/oriented-cuboid signed
 distance, including tested gradients. The broader checker, configuration,
-types, solver, and motion-planning surfaces are complete for the supported
-portable scope but remain evidence-blocked rather than overclaimed.
+types, solver, and motion-planning surfaces are equivalent for the explicitly
+documented portable scope.
 
 ## Remaining implementable gaps
 
@@ -118,13 +115,14 @@ The manifest hashes both the input/output data and the common/case corpus JSON
 that produced it. The validator reconstructs those NPZ tensors from the corpus,
 so a hash-consistent but different input cannot be substituted.
 
-Every case has a registry-owned invalid-input case and edge case. Generation
+Every case has registry-owned invalid-case and edge-case behavior. Generation
 records executable `invalid_rejected` and `edge_observed` int8 evidence bits;
-the validator fails closed if either output is absent, false, malformed, or its
-metadata no longer matches the corpus and registry. This proves only that the
-portable probes exercised those local conditions—it is not CUDA equivalence
-evidence. `equivalence_claimed` remains explicitly false until an independently
-run pinned CUDA bundle passes comparison.
+the former means the declared invalid behavior was observed and can include a
+valid-but-observed compatibility edge such as the pinned zero-quaternion rule.
+The validator fails closed if either output is absent, false, malformed, or its
+metadata no longer matches the corpus and registry. Local pre-promotion bundles
+do not establish CUDA equivalence; the promoted 2026-08-26 report compares the
+same evidence on both backends.
 
 Replay bundles contain only JSON plus `allow_pickle=False` NPZ tensors. This
 keeps inputs identical across isolated CUDA and macOS environments and records
@@ -163,7 +161,7 @@ PYTHONPATH=src python -m tools.parity.run_pinned_cuda \
   --output cuda-replay/kinematics.forward_kinematics
 ```
 
-On an NVIDIA host, run every currently implemented asset-independent adapter
+On an NVIDIA host, run all 19 registered adapters
 and immediately verify the outputs against the committed fallback-disabled
 Metal corpus:
 
@@ -199,32 +197,14 @@ adapter, the compared output schema also includes an executed invalid-case outco
 (`invalid_rejected`), so a report cannot pass using happy-path values alone.
 
 The CUDA command refuses any checkout other than
-`8e734f3ced1df898990bcd92de40abce475907db` before importing upstream. The clean
-runner has real asset-independent adapters for `DeviceCfg`, `Pose`, and
-`JointState`, plus the shared `BaseSolverResult` construction and clone surface.
-It also carries a license-clean serialized two-joint URDF and explicit cspace
-configuration for upstream `RobotCfg` construction and limit replay. The same
-robot drives compiled upstream CUDA forward kinematics and geometric-Jacobian
-adapters. FK compares tool position, wxyz quaternion, and position-loss input
-gradients; Jacobian compares the world-frame 6-by-DoF tool Jacobian. The
-Jacobian adapter deliberately does not claim dJ/dq because that is higher-order
-AD outside the fused Metal contract. An asset-independent robot-scene adapter
-executes upstream self-collision for an explicit sphere pair and compares
-clearance plus first-order sphere gradients, with an executed invalid-index
-case. On a CUDA host these adapters write hashed
-upstream output bundles; they do not claim equivalence until comparison
-succeeds. The same serialized robot now carries explicit mass, center-of-mass,
-and inertia tensors for a native upstream CUDA RNEA adapter that compares
-torques and VJPs with respect to position, velocity, and acceleration. The
-position-tracking subspace of upstream `ToolPoseCost` is also replay-ready:
-identical current/goal pose tensors compare scalar costs and current-position
-gradients, while an executed mismatched-tool case proves invalid-input
-handling. Rotation-cost replay remains outside this bounded adapter. The other
-4 cases deliberately emit `external_constraint`: optimizer, graph, and full
-motion-generation surfaces still require additional
-upstream rollout/collision objects or caller-provided assets and compiled
-upstream objects. The exact per-capability constraint is in
-`tools/parity/replay_registry.py`; no CUDA result is synthesized.
+`8e734f3ced1df898990bcd92de40abce475907db` before importing upstream. The 19
+adapters cover the configurations, values, geometry, kinematics, collision,
+cost, dynamics, optimizer, graph, trajectory, IK, and MotionGen contracts named
+in the full-matrix report. Exact cases, tensors, semantic validators,
+tolerances, and retained exclusions are defined in
+`tools/parity/replay_registry.py`; no CUDA result is synthesized. Jacobian
+higher-order AD/dJdq, raw RNG samples, solver-iterate identity, fused ABI, and
+platform-only mechanisms remain outside the declared contracts.
 
 Per-capability tolerances are likewise registry-owned: exact structural cases
 use zero tolerance; type/pose cases use `1e-6/1e-7`; collision and costs use
@@ -234,10 +214,10 @@ The validator requires the manifest values, corpus hashes, decoded tensor
 values, invalid-case outcome, and edge-case outcome to match this registry
 exactly.
 
-A release comparison must cover supported dtypes and devices, explicit fallback
-behavior, first-order gradients, zero-size and singleton/many batches,
-noncontiguous inputs, invalid shapes/dtypes, infeasible solver outcomes, and
-collision boundary/tie cases. Passing local reference tests is not CUDA parity
+The final matrix covers its declared supported dtypes/devices, fallback
+behavior, first-order gradients, zero/singleton/many batches, noncontiguous
+inputs, invalid shapes/dtypes, infeasible outcomes, and collision boundaries or
+ties where applicable. Passing local reference tests alone is not CUDA parity
 evidence.
 
 ## Packaging and license

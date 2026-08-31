@@ -3,7 +3,7 @@
   "capability": "types.pose",
   "corpus": {
     "case_file": "types.pose.json",
-    "case_sha256": "3da6bec837627e9aabeca31244aea5a99dda70ddcba8353e00ca86d8ba4f3e89",
+    "case_sha256": "7c90c81be86e5cf4dc4bc8802c3b5ac0822021dc7fcfc241b289c4092642cbd1",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,19 +21,31 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "zero_points",
+        "one_point",
+        "many_points",
+        "noncontiguous_points",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "pose",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "18a4eac97e27fc8f80ff7a74e7b87a9a01c5868d7c15d8d15a98ed68cbaf02e0"
+    "sha256": "89e8a5aee6d843e80242bf8dfe00133a91ce6f89a90a1a24cc8ad66d5e889080"
   },
   "operation": "pose",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "23a5067708c51a3fe4a91905261c73a077a6df169bdee371fc9062985d8d7bc7"
+    "sha256": "7f790fdad0274b7ef3e18c005c4d3150fcb064c99e623f613ddffaef50e1b2f3"
   },
   "runtime": {
     "python": "3.13.9",

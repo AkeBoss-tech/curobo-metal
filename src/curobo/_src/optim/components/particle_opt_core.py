@@ -12,10 +12,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 import time
 from typing import Any, Callable, Dict, List, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.optim._portable import PortableOptimizer, _objective
 from curobo._src.optim.components.action_bounds import ActionBounds
@@ -24,6 +26,12 @@ from curobo._src.optim.components.gaussian_distribution import CovType, Gaussian
 from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
 from curobo._src.optim.particle.particle_opt_utils import SquashType, gaussian_entropy, scale_ctrl
 from curobo._src.optim.particle.sample_strategies import ParticleSamplerCfg
+from curobo._src.rollout.metrics import RolloutResult
+from curobo._src.rollout.rollout_protocol import Rollout
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.cuda_graph_util import GraphExecutor, create_graph_executor
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 class SampleMode(Enum):
@@ -60,7 +68,7 @@ class _PortableParticleRollout:
         return _PortableCosts(self.costs)
 
 
-class ParticleOptCore(PortableOptimizer):
+class _ParticleOptCorePortable(PortableOptimizer):
     """Stateful, batched particle optimizer infrastructure for CPU/MPS.
 
     ``update_distribution_fn`` receives a rollout result after every sampled
@@ -586,3 +594,56 @@ __all__ = [
     "ActionBounds", "CovType", "DebugRecorder", "GaussianDistribution", "OptimizationIterationState",
     "ParticleOptCore", "ParticleSamplerCfg", "SampleMode", "SquashType", "gaussian_entropy", "scale_ctrl",
 ]
+
+
+class ParticleOptCore(_ParticleOptCorePortable):
+    """Pinned declaration façade rebound to the portable particle lifecycle."""
+
+    def __init__(self, config, rollout_list: List[Rollout], update_distribution_fn: Callable, use_cuda_graph: bool=False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self) -> int: pass
+    def action_horizon(self) -> int: pass
+    def action_horizon_bounds_highs(self): pass
+    def action_horizon_bounds_lows(self): pass
+    def action_step_max(self): pass
+    def compute_metrics(self, action: torch.Tensor): pass
+    def debug_dump(self, file_path: str=''): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self) -> bool: pass
+    def finish_init(self): pass
+    def get_all_rollout_instances(self) -> List[Rollout]: pass
+    def get_recorded_trace(self) -> Dict[str, Any]: pass
+    def get_rollouts(self): pass
+    def horizon(self): pass
+    def initialize_samples(self): pass
+    def opt_dim(self) -> int: pass
+    def optimize(self, seed_action: torch.Tensor) -> torch.Tensor: pass
+    def outer_iters(self) -> int: pass
+    def reinitialize(self, action: torch.Tensor, mask: Optional[torch.Tensor]=None, clear_optimizer_state: bool=True, reset_num_iters: bool=False) -> None: pass
+    def reset_cuda_graph(self): pass
+    def reset_distribution(self, reset_problem_ids=None): pass
+    def reset_seed(self) -> bool: pass
+    def reset_shape(self): pass
+    def sample_actions(self, init_act): pass
+    def shift(self, shift_steps: int=0) -> bool: pass
+    def solve_time(self) -> float: pass
+    def solver_names(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_niters(self, niters: int): pass
+    def update_num_problems(self, num_problems: int): pass
+    def update_rollout_params(self, goal): pass
+    def update_samples(self): pass
+    def update_seed(self, init_act): pass
+    def update_solver_params(self, solver_params: Dict[str, Dict[str, Any]]) -> bool: pass
+
+
+def _install_portable_particle_core_runtime():
+    for base in reversed(_ParticleOptCorePortable.__mro__):
+        for name, value in base.__dict__.items():
+            if not (name.startswith("__") and name != "__init__"):
+                setattr(ParticleOptCore, name, value)
+
+
+_install_portable_particle_core_runtime()

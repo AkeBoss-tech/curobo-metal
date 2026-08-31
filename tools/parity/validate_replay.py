@@ -34,6 +34,21 @@ def _require_bit(
         raise SystemExit(f"required {label} evidence did not execute: {capability}")
 
 
+def _require_matrix(
+    capability: str, output: np.lib.npyio.NpzFile, cases: list[str]
+) -> None:
+    key = "matrix_observed"
+    if key not in output.files:
+        raise SystemExit(f"required matrix evidence is missing: {capability}")
+    value = output[key]
+    if (
+        value.shape != (len(cases),)
+        or value.dtype != np.int8
+        or not bool(value.all())
+    ):
+        raise SystemExit(f"required matrix evidence did not cover every case: {capability}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", type=Path)
@@ -89,12 +104,21 @@ def main() -> None:
                             "executed": True,
                         },
                     }
+                    matrix = corpus["required_matrix"]
+                    if matrix is not None:
+                        expected_evidence["matrix"] = {
+                            "cases": matrix["cases"],
+                            "output": matrix["output"],
+                            "executed": True,
+                        }
                     if not isinstance(evidence, dict) or any(
                         evidence.get(key) != value for key, value in expected_evidence.items()
                     ):
-                        raise SystemExit(f"required invalid/edge evidence metadata is missing: {row['capability']}")
+                        raise SystemExit(f"required replay evidence metadata is missing: {row['capability']}")
                     _require_bit(row["capability"], data, required["invalid"]["output"], "invalid-case")
                     _require_bit(row["capability"], data, required["edge"]["output"], "edge-case")
+                    if matrix is not None:
+                        _require_matrix(row["capability"], data, matrix["cases"])
         if manifest["tolerance"] != {"rtol": expected.rtol, "atol": expected.atol}:
             raise SystemExit(f"tolerance mismatch: {row['capability']}")
     print(f"validated {len(ids)} deterministic replay cases at pinned upstream {PIN}")

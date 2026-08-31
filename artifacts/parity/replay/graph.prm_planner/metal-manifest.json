@@ -3,7 +3,7 @@
   "capability": "graph.prm_planner",
   "corpus": {
     "case_file": "graph.prm_planner.json",
-    "case_sha256": "f4e256db547f4aa8367e0a7d8e24ca1200941cc26a0f41dc5f310ce66a4c0e46",
+    "case_sha256": "e4c1f371ffa8eb77a63c1949f2dbf70415599813acb3281dc0614eb4565db8ee",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,6 +21,18 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "direct",
+        "detour",
+        "infeasible",
+        "batched",
+        "reset",
+        "debug_layout"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "graph",
     "status": true
   },
@@ -34,7 +46,7 @@
   "operation": "prm_planner",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "0b92a5b6027d282e25fe200118d62db7593bdf390bbbc6e8e5caf674de5d4534"
+    "sha256": "d2e5d5c6cd76b7dc9461be59c790c0854a345ce2823fea7af26290effbce5deb"
   },
   "runtime": {
     "python": "3.13.9",

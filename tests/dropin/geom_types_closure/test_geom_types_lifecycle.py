@@ -46,7 +46,7 @@ def test_tensor_geometry_broadcasts_radii_and_honours_caller_output_buffers():
 def test_cube_helpers_validate_transforms_and_normalize_equivalent_quaternions():
     dims, inverse = tensor_cube([1, 2, 3, 2, 0, 0, 0], [1, 2, 3])
     torch.testing.assert_close(dims, torch.tensor((1.0, 2.0, 3.0)))
-    torch.testing.assert_close(inverse, torch.tensor((-1.0, -2.0, -3.0, 1.0, 0.0, 0.0, 0.0)))
+    torch.testing.assert_close(inverse, torch.tensor([[-1.0, -2.0, -3.0, 1.0, 0.0, 0.0, 0.0]]))
     batch_dims, batch_inverse = batch_tensor_cube(
         [[0, 0, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0, 0]], [[1, 1, 1], [2, 2, 2]],
     )

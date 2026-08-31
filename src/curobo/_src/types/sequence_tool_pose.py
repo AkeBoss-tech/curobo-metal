@@ -12,8 +12,7 @@ from .tool_pose import GoalToolPose, _to_options, _validate_frames, _validate_te
 from ..util.logging import log_and_raise  # pinned public re-export
 
 
-@dataclass
-class SequenceGoalToolPose:
+class _SequenceGoalToolPosePortableMixin:
     """Goal poses arranged as ``[T, B, L, G, 3/4]`` for contiguous frame views.
 
     The type is deliberately a tensor value container.  All movement,
@@ -127,6 +126,39 @@ class SequenceGoalToolPose:
         if position.ndim != 5:
             raise IndexError("SequenceGoalToolPose indexing must select only the frame dimension")
         return type(self)(self.tool_frames.copy(), position, quaternion)
+
+
+@dataclass
+class SequenceGoalToolPose(_SequenceGoalToolPosePortableMixin):
+    tool_frames: List[str]
+    position: torch.Tensor
+    quaternion: torch.Tensor
+
+    @property
+    def num_frames(self) -> int:
+        return _SequenceGoalToolPosePortableMixin.num_frames.__get__(self)
+
+    @property
+    def num_envs(self) -> int:
+        return _SequenceGoalToolPosePortableMixin.num_envs.__get__(self)
+
+    @property
+    def num_links(self) -> int:
+        return _SequenceGoalToolPosePortableMixin.num_links.__get__(self)
+
+    @property
+    def num_goalset(self) -> int:
+        return _SequenceGoalToolPosePortableMixin.num_goalset.__get__(self)
+
+    def get_frame(self, t: int) -> GoalToolPose:
+        return _SequenceGoalToolPosePortableMixin.get_frame(self, t)
+
+    def clone(self) -> SequenceGoalToolPose:
+        return _SequenceGoalToolPosePortableMixin.clone(self)
+
+    @property
+    def device(self) -> torch.device:
+        return _SequenceGoalToolPosePortableMixin.device.__get__(self)
 
 
 __all__ = ["SequenceGoalToolPose"]

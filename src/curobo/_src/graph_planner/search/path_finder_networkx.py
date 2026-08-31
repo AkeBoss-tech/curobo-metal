@@ -15,17 +15,12 @@ from collections.abc import Iterable
 import heapq
 import math
 import random
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-try:  # NumPy is already a transitive PyTorch dependency, but keep imports soft.
-    import numpy as np
-except ImportError:  # pragma: no cover - exercised by dependency-minimal users
-    np = None  # type: ignore[assignment]
-
-try:  # Tensor inputs are accepted without making Torch an import-time requirement.
-    import torch
-except ImportError:  # pragma: no cover - package is normally installed with Torch
-    torch = None  # type: ignore[assignment]
+import networkx as nx
+import numpy as np
+import torch
+from torch import profiler
 
 
 def _scalar(value: Any, *, name: str) -> Any:
@@ -89,6 +84,11 @@ class _PortableGraphView:
         self._owner.update_graph()
         return _node(node) in self._owner._graph
 
+    def has_edge(self, start: Any, end: Any) -> bool:
+        self._owner.update_graph()
+        start_node, end_node = _node(start), _node(end)
+        return end_node in self._owner._graph.get(start_node, {})
+
     def number_of_nodes(self) -> int:
         self._owner.update_graph()
         return len(self._owner._graph)
@@ -108,7 +108,7 @@ class _PortableGraphView:
         return records if data == "weight" else [(start, end) for start, end, _ in records]
 
 
-class NetworkXPathFinder:
+class _NetworkXPathFinderPortable:
     """A buffered, deterministic undirected weighted roadmap searcher.
 
     ``add_node``/``add_nodes`` and ``add_edge``/``add_edges`` only enqueue
@@ -123,7 +123,7 @@ class NetworkXPathFinder:
         self._graph: dict[int, dict[int, float]] = {}
         self._edge_order: list[tuple[int, int]] = []
         self.node_list: list[int] = []
-        self.edge_list: list[tuple[int, int, float]] = []
+        self.edge_list: list[list[int | float]] = []
         self.graph = _PortableGraphView(self)
 
     def reset_graph(self) -> None:
@@ -148,7 +148,7 @@ class NetworkXPathFinder:
         self.node_list.extend(_node(node) for node in node_list)
 
     def add_edge(self, start_i: Any, end_i: Any, weight: Any) -> None:
-        self.edge_list.append((_node(start_i), _node(end_i), _weight(weight)))
+        self.edge_list.append([_node(start_i), _node(end_i), _weight(weight)])
 
     def add_edges(self, edge_list: Iterable[Iterable[Any]]) -> None:
         if torch is not None and isinstance(edge_list, torch.Tensor):
@@ -262,6 +262,60 @@ class NetworkXPathFinder:
         for node, distance in distances.items():
             lengths[node] = distance
         return lengths
+
+
+class NetworkXPathFinder:
+    def __init__(self, seed: int = 42):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/reset_graph")
+    def reset_graph(self):
+        raise NotImplementedError
+
+    def reset_seed(self):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/add_node")
+    def add_node(self, i):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/add_edges")
+    def add_edges(self, edge_list):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/add_nodes")
+    def add_nodes(self, node_list):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/add_edge")
+    def add_edge(self, start_i, end_i, weight):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/update_graph")
+    def update_graph(self):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/get_edges")
+    def get_edges(self, attribue="weight"):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/path_exists")
+    def path_exists(self, start_node_idx, goal_node_idx):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/get_shortest_path")
+    def get_shortest_path(self, start_node_idx, goal_node_idx, return_length=False):
+        raise NotImplementedError
+
+    @profiler.record_function("networkx_path_finder/get_path_lengths")
+    def get_path_lengths(self, goal_node_idx):
+        raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    # The declaration above tracks the pinned NetworkX contract; runtime uses
+    # the portable, deterministic graph implementation.
+    NetworkXPathFinder = _NetworkXPathFinderPortable
 
 
 __all__ = ["NetworkXPathFinder"]

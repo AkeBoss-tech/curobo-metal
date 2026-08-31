@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.cost.cost_tool_pose import ToolPoseCost
 from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCostCfg
@@ -26,6 +27,8 @@ from curobo._src.util.cuda_stream_util import (
     cuda_stream_context,
     synchronize_cuda_streams,
 )
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 @dataclass
@@ -66,7 +69,7 @@ def _quaternion_residual(current: torch.Tensor, target: torch.Tensor) -> torch.T
     return 2.0 * vector
 
 
-class SeedIKErrorCalculator:
+class _SeedIKErrorCalculatorPortable:
     """Evaluate pose, bound, velocity and acceleration LM residuals.
 
     ``idxs_goal`` maps flattened ``[batch, seed]`` rows to their goal batch.
@@ -403,6 +406,127 @@ class SeedIKErrorCalculator:
         if stream_name == "default":
             return nullcontext()
         return cuda_stream_context(stream_name, self._streams, self._events, self.device_cfg.device)
+
+
+class SeedIKErrorCalculator:
+    """Unified calculator for IK error types and jacobians (pose + joint limits)."""
+
+    def __init__(self, robot_model, config, action_min, action_max, device_cfg):
+        raise NotImplementedError
+
+    def setup_batch_tensors(self, batch_size: int, num_seeds: int = 1):
+        raise NotImplementedError
+
+    def _setup_cost_function(self):
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/compute_all_errors")
+    def compute_error_and_jacobian(
+        self,
+        joint_position: torch.Tensor,
+        goal_poses: GoalToolPose,
+        idxs_goal: torch.Tensor,
+        current_position: Optional[torch.Tensor] = None,
+        current_velocity: Optional[torch.Tensor] = None,
+        dt: Optional[torch.Tensor] = None,
+        velocity_clamping_active: bool = False,
+    ) -> ErrorJacobianResult:
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/compute_pose_errors")
+    def _compute_pose_errors(
+        self,
+        joint_position: torch.Tensor,
+        goal_poses: GoalToolPose,
+        idxs_goal: torch.Tensor,
+        batch_size: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/reduce_pose_errors")
+    @get_torch_jit_decorator(only_valid_for_compile=True)
+    def _reduce_pose_errors(
+        self,
+        position_errors: torch.Tensor,
+        orientation_errors: torch.Tensor,
+        cost: torch.Tensor,
+        batch_size: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/compute_analytical_pose_jTerror")
+    @get_torch_jit_decorator(only_valid_for_compile=True, slow_to_compile=True)
+    def _compute_analytical_pose_jTerror(
+        self,
+        current_poses: ToolPose,
+        jacobian: torch.Tensor,
+        batch_size: int,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/add_joint_limit_errors")
+    def _compute_joint_limit_errors(
+        self,
+        joint_position: torch.Tensor,
+        batch_size: int,
+        current_position: Optional[torch.Tensor] = None,
+        dt: Optional[torch.Tensor] = None,
+        velocity_clamping_active: bool = False,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/compute_velocity_errors")
+    @get_torch_jit_decorator(only_valid_for_compile=True)
+    def _compute_velocity_errors(
+        self,
+        joint_position: torch.Tensor,
+        current_position: torch.Tensor,
+        dt: torch.Tensor,
+        batch_size: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/compute_acceleration_errors")
+    @get_torch_jit_decorator(only_valid_for_compile=True)
+    def _compute_acceleration_errors(
+        self,
+        joint_position: torch.Tensor,
+        current_position: torch.Tensor,
+        current_velocity: torch.Tensor,
+        dt: torch.Tensor,
+        batch_size: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        raise NotImplementedError
+
+    @profiler.record_function("seed_ik_error_calculator/combine_errors")
+    @get_torch_jit_decorator(only_valid_for_compile=True, slow_to_compile=True)
+    def _combine_errors(
+        self,
+        pose_jTerror,
+        pose_jacobian,
+        pose_error_norm,
+        joint_limit_jTerror,
+        joint_limit_jacobian,
+        joint_limit_error,
+        vel_jTerror=None,
+        vel_jacobian=None,
+        vel_error_norm=None,
+        accel_jTerror=None,
+        accel_jacobian=None,
+        accel_error_norm=None,
+    ):
+        raise NotImplementedError
+
+    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]):
+        raise NotImplementedError
+
+    def stream_context(self, stream_name: str):
+        raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    # Runtime retains portable CPU/MPS residual evaluation and stream handling.
+    SeedIKErrorCalculator = _SeedIKErrorCalculatorPortable
 
 
 __all__ = ["ErrorJacobianResult", "SeedIKErrorCalculator"]

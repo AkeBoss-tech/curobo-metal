@@ -8,15 +8,20 @@ explicit boundary; callers can use these helpers or :class:`SceneCollision`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence
 
 import torch
 
 from curobo._src.geom.types import SceneCfg, VoxelGrid
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.pose import Pose
+from curobo._src.util.logging import log_and_raise
+
+from .helper_pose import get_obs_idx, load_transform_from_inv_pose
 
 from ._portable import PortableObstacleData, PortableWarpStruct, inverse_pose, raw_warp
+
+wp = None
 
 
 def _as_index(value, *, device: torch.device) -> torch.Tensor:
@@ -50,21 +55,21 @@ def _features_for_grid(grid: VoxelGrid, cfg: DeviceCfg) -> torch.Tensor:
     return values
 
 
-def voxel_idx_to_flat(idx, grid_dims) -> torch.Tensor:
+def _voxel_idx_to_flat_portable(idx, grid_dims) -> torch.Tensor:
     """Convert ``[..., x, y, z]`` indices to C-order flattened indices."""
     device = idx.device if isinstance(idx, torch.Tensor) else (grid_dims.device if isinstance(grid_dims, torch.Tensor) else torch.device("cpu"))
     index, dims = _as_index(idx, device=device), _as_index(grid_dims, device=device)
     return index[..., 0] * dims[..., 1] * dims[..., 2] + index[..., 1] * dims[..., 2] + index[..., 2]
 
 
-def is_voxel_valid(idx, grid_dims) -> torch.Tensor:
+def _is_voxel_valid_portable(idx, grid_dims) -> torch.Tensor:
     """Return whether all index coordinates lie in bounds."""
     device = idx.device if isinstance(idx, torch.Tensor) else (grid_dims.device if isinstance(grid_dims, torch.Tensor) else torch.device("cpu"))
     index, dims = _as_index(idx, device=device), _as_index(grid_dims, device=device)
     return ((index >= 0) & (index < dims)).all(dim=-1)
 
 
-def world_to_voxel_idx(local_pt, grid_dims, voxel_size) -> torch.Tensor:
+def _world_to_voxel_idx_portable(local_pt, grid_dims, voxel_size) -> torch.Tensor:
     """Map local coordinates to the V2 truncation-toward-zero voxel index."""
     point = local_pt if isinstance(local_pt, torch.Tensor) else torch.as_tensor(local_pt, dtype=torch.get_default_dtype())
     if point.shape[-1:] != (3,):
@@ -78,7 +83,7 @@ def world_to_voxel_idx(local_pt, grid_dims, voxel_size) -> torch.Tensor:
     return (point / size + dims * 0.5).to(dtype=torch.long)
 
 
-def sample_voxel_sdf(features, layer_start_idx, idx, grid_dims, default_val) -> torch.Tensor:
+def _sample_voxel_sdf_portable(features, layer_start_idx, idx, grid_dims, default_val) -> torch.Tensor:
     """Nearest ESDF query returning ``[..., sdf, valid]``."""
     values = features if isinstance(features, torch.Tensor) else torch.as_tensor(features)
     if values.ndim != 1 or not values.is_floating_point():
@@ -98,7 +103,7 @@ def sample_voxel_sdf(features, layer_start_idx, idx, grid_dims, default_val) -> 
     return torch.stack((sampled, valid.to(dtype=sampled.dtype)), dim=-1)
 
 
-def sample_voxel_sdf_with_grad(features, layer_start_idx, local_pt, grid_dims, voxel_size, default_val) -> torch.Tensor:
+def _sample_voxel_sdf_with_grad_portable(features, layer_start_idx, local_pt, grid_dims, voxel_size, default_val) -> torch.Tensor:
     """Trilinearly query ESDF values, returning ``[..., sdf, dx, dy, dz]``.
 
     At incomplete border stencils V2's portable contract renormalizes valid
@@ -167,7 +172,7 @@ class VoxelDataWarp(PortableWarpStruct):
 
 
 @dataclass(init=False)
-class VoxelData(PortableObstacleData):
+class _VoxelDataPortable(PortableObstacleData):
     """Mutable flat ESDF cache with strict capacity and reconstruction rules."""
 
     @classmethod
@@ -347,7 +352,48 @@ class VoxelData(PortableObstacleData):
         super().clear(env_idx)
 
 
-is_obs_enabled = load_obstacle_transform = compute_local_sdf = compute_local_sdf_with_grad = raw_warp
+def world_to_voxel_idx(local_pt: wp.vec3, grid_dims: wp.vec3i, voxel_size: wp.float32) -> wp.vec3i: raise NotImplementedError
+def voxel_idx_to_flat(idx: wp.vec3i, grid_dims: wp.vec3i) -> wp.int32: raise NotImplementedError
+def is_voxel_valid(idx: wp.vec3i, grid_dims: wp.vec3i) -> wp.bool: raise NotImplementedError
+def sample_voxel_sdf(features: wp.array(dtype=wp.float16), layer_start_idx: wp.int32, idx: wp.vec3i, grid_dims: wp.vec3i, default_val: wp.float32) -> wp.vec2: raise NotImplementedError
+def sample_voxel_sdf_with_grad(features: wp.array(dtype=wp.float16), layer_start_idx: wp.int32, local_pt: wp.vec3, grid_dims: wp.vec3i, voxel_size: wp.float32, default_val: wp.float32) -> wp.vec4: raise NotImplementedError
+def is_obs_enabled(obs_set: VoxelDataWarp, env_idx: wp.int32, local_idx: wp.int32) -> wp.bool: raise NotImplementedError
+def load_obstacle_transform(obs_set: VoxelDataWarp, env_idx: wp.int32, local_idx: wp.int32) -> wp.transform: raise NotImplementedError
+def compute_local_sdf(obs_set: VoxelDataWarp, env_idx: wp.int32, local_idx: wp.int32, local_pt: wp.vec3) -> wp.float32: raise NotImplementedError
+def compute_local_sdf_with_grad(obs_set: VoxelDataWarp, env_idx: wp.int32, local_idx: wp.int32, local_pt: wp.vec3, query_distance: wp.float32) -> wp.vec4: raise NotImplementedError
+
+
+class VoxelData:
+    @classmethod
+    def create_cache(cls, max_n: int, num_envs: int, device_cfg: DeviceCfg, grid_dims: List[float], voxel_size: float, max_esdf_distance: float = 10000.0) -> VoxelData: raise NotImplementedError
+    @classmethod
+    def create_from_voxel_grids(cls, voxel_grids: List[VoxelGrid], device_cfg: DeviceCfg, env_idx: int = 0, num_envs: int = 1, max_n: Optional[int] = None, max_esdf_distance: float = 1000.0) -> VoxelData: raise NotImplementedError
+    @classmethod
+    def from_scene_cfg(cls, scene_cfg: SceneCfg, device_cfg: DeviceCfg, env_idx: int = 0, num_envs: int = 1, max_n: Optional[int] = None, max_esdf_distance: float = 100.0) -> VoxelData: raise NotImplementedError
+    @classmethod
+    def from_batch_scene_cfg(cls, scene_cfg_list: List[SceneCfg], device_cfg: DeviceCfg, max_n: Optional[int] = None, max_esdf_distance: float = 100.0) -> VoxelData: raise NotImplementedError
+    def load_batch(self, voxel_grids: List[VoxelGrid], env_idx: int) -> None: raise NotImplementedError
+    def update_data(self, voxel_grid: VoxelGrid, env_idx: int = 0, name: Optional[str] = None) -> None: raise NotImplementedError
+    def update_features(self, features: torch.Tensor, name: str, env_idx: int = 0) -> None: raise NotImplementedError
+    def update_pose(self, name: str, w_obj_pose: Optional[Pose] = None, obj_w_pose: Optional[Pose] = None, env_idx: int = 0) -> None: raise NotImplementedError
+    def set_enabled(self, name: str, enabled: bool, env_idx: int = 0) -> None: raise NotImplementedError
+    def has_name(self, name: str, env_idx: int = 0) -> bool: raise NotImplementedError
+    def get_idx(self, name: str, env_idx: int = 0) -> int: raise NotImplementedError
+    def get_active_count(self, env_idx: int = 0) -> int: raise NotImplementedError
+    def get_names(self, env_idx: int = 0) -> List[str]: raise NotImplementedError
+    def get_voxel_grid(self, name: str, env_idx: int = 0) -> VoxelGrid: raise NotImplementedError
+    def get_grid_shape(self, env_idx: int = 0, name: Optional[str] = None, idx: int = 0) -> torch.Size: raise NotImplementedError
+    def clear(self, env_idx: Optional[int] = None) -> None: raise NotImplementedError
+    def to_warp(self) -> VoxelDataWarp: raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    VoxelData = _VoxelDataPortable
+    world_to_voxel_idx = _world_to_voxel_idx_portable
+    voxel_idx_to_flat = _voxel_idx_to_flat_portable
+    is_voxel_valid = _is_voxel_valid_portable
+    sample_voxel_sdf = _sample_voxel_sdf_portable
+    sample_voxel_sdf_with_grad = _sample_voxel_sdf_with_grad_portable
 
 __all__ = [
     "VoxelData", "VoxelDataWarp", "is_voxel_valid", "sample_voxel_sdf",

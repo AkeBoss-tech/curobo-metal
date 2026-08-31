@@ -3,8 +3,14 @@
   "format": "curobo-metal-replay-corpus",
   "inputs": [
     "robot_urdf_utf8",
-    "q"
+    "robot_branching_urdf_utf8",
+    "q",
+    "kinematics_noncontiguous_source"
   ],
+  "required_matrix": {
+    "cases": ["zero", "one", "many", "noncontiguous", "tree_links", "vjp"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "empty_batch",
@@ -14,6 +20,13 @@
       "case": "wrong_dof",
       "output": "invalid_rejected"
     }
+  },
+  "tensors": {
+    "robot_branching_urdf_utf8": {
+      "encoding": "utf8",
+      "value": "<robot name=\"paired_branch\"><link name=\"base\"/><link name=\"link1\"/><link name=\"tool\"/><link name=\"sensor\"/><joint name=\"j0\" type=\"revolute\"><parent link=\"base\"/><child link=\"link1\"/><origin xyz=\"1 0 0\"/><axis xyz=\"0 0 1\"/><limit lower=\"-1\" upper=\"1\" velocity=\"1\" effort=\"1\"/></joint><joint name=\"j1\" type=\"revolute\"><parent link=\"link1\"/><child link=\"tool\"/><origin xyz=\"1 0 0\"/><axis xyz=\"0 1 0\"/><limit lower=\"-1\" upper=\"1\" velocity=\"1\" effort=\"1\"/></joint><joint name=\"sensor_mount\" type=\"fixed\"><parent link=\"link1\"/><child link=\"sensor\"/><origin xyz=\"0 1 0\"/></joint></robot>"
+    },
+    "kinematics_noncontiguous_source": {"dtype": "float32", "shape": [2, 4], "data": [[0.0, 99.0, 0.25, 99.0], [-0.5, 99.0, 0.75, 99.0]]}
   },
   "version": 1
 }

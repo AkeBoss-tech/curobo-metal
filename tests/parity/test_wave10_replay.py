@@ -21,7 +21,7 @@ from tools.parity.compare_paired import (
 )
 from tools.parity.build_cuda_handoff import build as build_cuda_handoff
 from tools.parity.replay_registry import BY_ID, PIN
-from tools.parity.cuda_adapters import ADAPTERS
+from tools.parity.cuda_adapters import ADAPTERS, CUDA_MATRIX_BLOCKERS
 from tools.parity import cuda_runtime
 from tools.parity.replay_corpus import load as load_corpus
 from tools.parity.generate_replay import probe
@@ -29,7 +29,7 @@ from tools.parity.generate_replay import probe
 
 ROOT = Path(__file__).parents[2]
 ARTIFACT = ROOT / "artifacts/parity/replay"
-LATEST_CUDA_REPORT = ROOT / "artifacts/parity/cuda-replay/paired-report-2026-08-11.json"
+LATEST_CUDA_REPORT = ROOT / "artifacts/parity/cuda-replay/paired-report-2026-08-26-matrix.json"
 
 
 def run(module, *args, env=None):
@@ -112,19 +112,25 @@ def test_prm_semantic_comparison_allows_distinct_valid_roadmaps(tmp_path):
 
 def test_prm_cuda_evidence_is_required(tmp_path):
     output = tmp_path / "output.npz"
-    np.savez(output, invalid_rejected=np.array([1], np.int8), edge_observed=np.array([1], np.int8))
     case = BY_ID["graph.prm_planner"]
+    np.savez(
+        output,
+        invalid_rejected=np.array([1], np.int8),
+        edge_observed=np.array([1], np.int8),
+        matrix_observed=np.ones(len(case.matrix_cases), np.int8),
+    )
     manifest = {
         "evidence": {
             "invalid": {"case": case.invalid_case, "output": "invalid_rejected", "executed": True},
             "edge": {"case": case.edge_case, "output": "edge_observed", "executed": True},
+            "matrix": {"cases": list(case.matrix_cases), "output": "matrix_observed", "executed": True},
         }
     }
     with np.load(output, allow_pickle=False) as values:
         _validate_required_evidence(manifest, values, case.capability)
         broken = {"evidence": dict(manifest["evidence"])}
         broken["evidence"].pop("edge")
-        with pytest.raises(ValueError, match="required invalid/edge evidence"):
+        with pytest.raises(ValueError, match="required replay evidence"):
             _validate_required_evidence(broken, values, case.capability)
 
 
@@ -248,6 +254,16 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "trajectory.trajectory_optimization",
         "trajectory.dynamics_aware_bspline",
         "dynamics.inverse_dynamics",
+        "optim.particle_evolution",
+        "optim.lbfgs",
+        "graph.prm_planner",
+        "trajectory.trajectory_optimization",
+        "trajectory.dynamics_aware_bspline",
+        "optim.particle_evolution",
+        "optim.lbfgs",
+        "graph.prm_planner",
+        "trajectory.trajectory_optimization",
+        "trajectory.dynamics_aware_bspline",
         "kinematics.forward_kinematics",
         "kinematics.geometric_jacobian",
         "motion_generation.motion_gen",
@@ -258,6 +274,7 @@ def test_asset_independent_cuda_adapters_are_explicitly_registered():
         "types.joint_state",
         "types.solver_results",
     }
+    assert CUDA_MATRIX_BLOCKERS == {}
     assert set(ADAPTERS) <= set(BY_ID)
 
 
@@ -417,6 +434,12 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
         assert manifest["evidence"]["edge"] == {
             "case": case.edge_case, "output": "edge_observed", "executed": True,
         }
+        if case.matrix_cases:
+            assert manifest["evidence"]["matrix"] == {
+                "cases": list(case.matrix_cases),
+                "output": "matrix_observed",
+                "executed": True,
+            }
         with np.load(
             ARTIFACT / capability / manifest["output"]["file"],
             allow_pickle=False,
@@ -425,10 +448,47 @@ def test_manifests_record_device_fallback_gradient_status_and_invalid_evidence()
             assert output["invalid_rejected"].item() == 1
             assert output["edge_observed"].shape == (1,)
             assert output["edge_observed"].item() == 1
+            if case.matrix_cases:
+                assert output["matrix_observed"].shape == (len(case.matrix_cases),)
+                assert output["matrix_observed"].dtype == np.int8
+                assert output["matrix_observed"].all()
         gradients += bool(manifest["evidence"]["gradient"])
         statuses += bool(manifest["evidence"]["status"])
     assert gradients >= 4
     assert statuses >= 5
+
+
+def test_foundation_kinematics_and_semantic_corpus_declares_a_matrix():
+    expected = {
+        "configuration.robot_config_and_loaders",
+        "types.device_cfg",
+        "types.pose",
+        "types.joint_state",
+        "types.solver_results",
+        "kinematics.forward_kinematics",
+        "kinematics.geometric_jacobian",
+        "collision.robot_scene",
+        "collision.mesh_world",
+        "collision.voxel_esdf_query",
+        "cost.pose_and_composable_costs",
+        "dynamics.inverse_dynamics",
+        "optim.particle_evolution",
+        "optim.lbfgs",
+        "graph.prm_planner",
+        "trajectory.trajectory_optimization",
+        "trajectory.dynamics_aware_bspline",
+        "ik.inverse_kinematics",
+        "motion_generation.motion_gen",
+    }
+    declared = {capability for capability, case in BY_ID.items() if case.matrix_cases}
+    assert declared == expected
+    for capability in sorted(expected):
+        case = BY_ID[capability]
+        raw, provenance = load_corpus(ARTIFACT / "corpus", case)
+        assert raw
+        assert provenance["required_matrix"] == {
+            "cases": list(case.matrix_cases), "output": "matrix_observed",
+        }
 
 
 def test_cuda_runner_strictly_refuses_wrong_sha(tmp_path):
@@ -510,3 +570,14 @@ def test_validator_fails_closed_when_invalid_or_edge_evidence_is_absent(tmp_path
     result = run("tools.parity.validate_replay", replay)
     assert result.returncode != 0
     assert "required edge-case evidence did not execute" in result.stderr
+
+    replay = tmp_path / "replay-matrix"
+    shutil.copytree(ARTIFACT, replay)
+    output = replay / capability / "metal-outputs.npz"
+    with np.load(output, allow_pickle=False) as data:
+        values = {key: data[key].copy() for key in data.files}
+    values.pop("matrix_observed")
+    _rewrite_case(replay, capability, values)
+    result = run("tools.parity.validate_replay", replay)
+    assert result.returncode != 0
+    assert "required matrix evidence is missing" in result.stderr

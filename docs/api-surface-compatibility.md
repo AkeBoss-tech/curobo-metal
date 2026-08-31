@@ -31,5 +31,6 @@ waypoints, graph-only planning, partial IK and finetune modes raise
 `TimeoutError`. CUDA graphs, mesh/voxel/ESDF worlds, attachments and runtime
 world mutation retain the production facade's explicit rejection behavior.
 
-The canonical machine-readable classification is
-`artifacts/correctness/api_surface.json`.
+This is a historical Wave 7C record. Current release evidence is
+`artifacts/parity/capabilities.json` plus the strict API inventory and surface
+report described in `docs/api-inventory.md`.

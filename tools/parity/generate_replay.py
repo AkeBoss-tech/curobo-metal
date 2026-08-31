@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from curobo_metal.ops.costs import pose_cost
+from curobo_metal.ops.costs import CostManager, CostTerm, pose_cost
 from curobo_metal.ops.kinematics import (
     KinematicChain,
     forward_kinematics,
@@ -31,7 +31,9 @@ from curobo_metal.ops.graph_planning import (
 )
 from curobo._src.state.state_joint import JointState as ReplayJointState
 from curobo._src.util.trajectory import _cubic_boundary_spline
-from curobo_metal.ops.world_collision import Mesh, VoxelGrid, mesh_distance, query_esdf
+from curobo_metal.ops.world_collision import (
+    Mesh, VoxelGrid, mesh_distance, query_esdf, sample_voxel_sdf,
+)
 from curobo_metal.optim import LBFGSConfig, lbfgs_optimize
 from curobo_metal.reference import SerialRobot
 from curobo_metal.types import DeviceCfg, JointState, MotionGenStatus, PlanningResult, Pose
@@ -41,6 +43,7 @@ from curobo_metal.config import RobotCfg
 
 from .replay_corpus import load as load_corpus
 from .replay_registry import BY_ID, CASES, PIN, Case
+from .joint_state_probe import run as run_joint_state_probe
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = ROOT / "artifacts/parity/replay"
@@ -339,6 +342,361 @@ def _edge_observed(operation) -> np.ndarray:
     return np.array([1], np.int8)
 
 
+def _matrix_observed(case: Case, raw: dict[str, np.ndarray], device: str) -> np.ndarray:
+    """Execute the declared foundation/kinematics shape-and-lifecycle matrix.
+
+    This is local evidence only: every bit says that a concrete portable
+    scenario executed, not that CUDA produced an equivalent result.  The same
+    inputs are shipped to the pinned CUDA adapters for future paired runs.
+    """
+    if not case.matrix_cases:
+        return np.empty((0,), dtype=np.int8)
+    if case.probe == "device":
+        cfg = DeviceCfg(device, torch.float32)
+        values = (raw["device_zero"], raw["singleton"], raw["device_many"], raw["empty"])
+        bits = [int(tuple(cfg.to_device(value).shape) == tuple(value.shape)) for value in values]
+        roundtrip = cfg.to_device(raw["device_many"]).detach().cpu().numpy()
+        bits.append(int(np.array_equal(roundtrip, raw["device_many"])))
+        return np.asarray(bits, dtype=np.int8)
+    if case.probe == "pose":
+        packed = _tensor(raw["pose_matrix"], device).requires_grad_(True)
+        # Keep the VJP path tensor-native: ``tolist`` is fine for the ordinary
+        # construction checks below, but would detach an MPS tensor from its
+        # gradient source.
+        values = [
+            Pose.from_list(row.detach().cpu().tolist(), DeviceCfg(device, torch.float32))
+            for row in packed
+        ]
+        zero = values[0].transform_points(_tensor(raw["points"], device)[:0])
+        one = values[0].transform_points(_tensor(raw["points"], device)[:1])
+        many = values[1].transform_points(_tensor(raw["points"], device))
+        source = _tensor(raw["pose_noncontiguous_source"], device)
+        noncontiguous = source[:, ::2]
+        transformed = values[2].transform_points(noncontiguous)
+        differentiable = Pose(packed[:1, :3], packed[:1, 3:])
+        loss = differentiable.transform_points(_tensor(raw["points"], device)).sum()
+        (gradient,) = torch.autograd.grad(loss, packed)
+        return np.asarray([
+            int(zero.shape[0] == 0), int(one.shape[0] == 1),
+            int(many.shape[0] == raw["points"].shape[0]), int(not noncontiguous.is_contiguous() and transformed.shape == noncontiguous.shape),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "joint_state":
+        zero = JointState.from_position(_tensor(raw["joint_position"], device)[:0], ["j0", "j1"])
+        one = JointState.from_position(_tensor(raw["joint_position"], device)[:1], ["j0", "j1"])
+        many = JointState.from_position(_tensor(raw["joint_position"], device), ["j0", "j1"])
+        source = _tensor(raw["joint_noncontiguous_source"], device)
+        noncontiguous = JointState.from_position(source[:, ::2], ["j0", "j1"])
+        optional = JointState(
+            position=_tensor(raw["joint_position"], device), velocity=None,
+            acceleration=_tensor(raw["joint_acceleration"], device), joint_names=["j0", "j1"],
+        )
+        cloned = many.clone()
+        before = many.position.clone()
+        cloned.position.add_(1)
+        position = _tensor(raw["joint_position"], device).requires_grad_(True)
+        (gradient,) = torch.autograd.grad(
+            JointState.from_position(position, ["j0", "j1"]).position.square().sum(), position
+        )
+        return np.asarray([
+            int(zero.position.shape[0] == 0), int(one.position.shape[0] == 1), int(many.position.shape[0] == 2),
+            int(not noncontiguous.position.is_contiguous()), int(optional.velocity is None and optional.acceleration is not None),
+            int(bool(torch.equal(many.position, before))), int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "result":
+        q = _tensor(raw["q"], device)
+        statuses = (MotionGenStatus.SUCCESS, MotionGenStatus.IK_FAILED)
+        values = [
+            PlanningResult(torch.zeros(0, dtype=torch.bool, device=device), (), JointState.from_position(q[:0], ["j0", "j1"]), 0.0, {}),
+            PlanningResult(torch.ones(1, dtype=torch.bool, device=device), (statuses[0],), JointState.from_position(q[:1], ["j0", "j1"]), 0.0, {}),
+            PlanningResult(torch.tensor([True, False], device=device), statuses, JointState.from_position(q, ["j0", "j1"]), 0.0, {"q": q.clone()}),
+        ]
+        cloned = PlanningResult(
+            values[2].success.clone(), values[2].status,
+            values[2].solution.clone(), values[2].solve_time,
+            dict(values[2].debug_info),
+        )
+        assert cloned.solution is not None
+        cloned.solution.position.add_(1.0)
+        return np.asarray([
+            int(values[0].success.numel() == 0), int(values[1].success.numel() == 1), int(values[2].success.numel() == 2),
+            int(values[2].success.tolist() == [True, False]), int(not torch.equal(values[2].solution.position, cloned.solution.position)),
+        ], dtype=np.int8)
+    if case.probe == "serialization":
+        with tempfile.TemporaryDirectory() as folder:
+            first = Path(folder) / "chain.urdf"; first.write_bytes(raw["robot_urdf_utf8"].tobytes())
+            branch = Path(folder) / "branch.urdf"; branch.write_bytes(raw["robot_branching_urdf_utf8"].tobytes())
+            first_cfg = RobotCfg.create(_robot_mapping(str(first)), DeviceCfg(device, torch.float32), load_collision_spheres=False)
+            branch_cfg = RobotCfg.create(_robot_mapping(str(branch)), DeviceCfg(device, torch.float32), load_collision_spheres=False)
+            encoded = json.dumps(first_cfg.joint_names)
+            return np.asarray([
+                int(len(first_cfg.joint_names) == 2), int(len(branch_cfg.joint_names) == 2), int(json.loads(encoded) == first_cfg.joint_names),
+            ], dtype=np.int8)
+    if case.probe == "fk":
+        robot = SerialRobot.from_dict({"name": "two_link", "joints": [
+            {"name": "j0", "type": "revolute", "axis": [0, 0, 1], "origin": {"xyz": [1, 0, 0]}},
+            {"name": "j1", "type": "revolute", "axis": [0, 1, 0], "origin": {"xyz": [1, 0, 0]}},
+            {"name": "tool_mount", "type": "fixed", "axis": [0, 0, 1], "origin": {"xyz": [0.2, 0, 0]}},
+        ]})
+        chain = KinematicChain(robot, device=device)
+        q = _tensor(raw["q"], device).requires_grad_(True)
+        zero = forward_kinematics(chain, q[:0])
+        one = forward_kinematics(chain, q[:1])
+        many = forward_kinematics(chain, q)
+        noncontiguous_source = _tensor(raw["kinematics_noncontiguous_source"], device)
+        noncontiguous = noncontiguous_source[:, ::2]
+        nc_out = forward_kinematics(chain, noncontiguous)
+        # The compact analytic geometric-Jacobian tensor is intentionally
+        # value-only today; exercise a first-order VJP through the linked
+        # forward transform for both FK surfaces rather than claiming a
+        # higher-order Jacobian derivative that the portable API does not
+        # expose.
+        loss = many.transforms[:, -1, :3, 3].sum()
+        (gradient,) = torch.autograd.grad(loss, q)
+        links = many.transforms.shape[1]
+        return np.asarray([
+            int(zero.transforms.shape[0] == 0), int(one.transforms.shape[0] == 1), int(many.transforms.shape[0] == 2),
+            int(not noncontiguous.is_contiguous() and nc_out.transforms.shape[0] == 2), int(links >= 3),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "sphere":
+        spheres = _tensor(raw["collision_matrix_spheres"], device).requires_grad_(True)
+        pairs = _tensor(raw["collision_matrix_pairs"], device)
+        full = sphere_sphere_signed_distance(spheres, pairs)
+        separated = sphere_sphere_signed_distance(
+            _tensor(raw["collision_separated_spheres"], device),
+            _tensor(raw["collision_pairs"], device),
+        )
+        active = sphere_sphere_signed_distance(
+            spheres, pairs, pair_active=_tensor(raw["collision_pair_active"], device)
+        )
+        (gradient,) = torch.autograd.grad(full.reduced_distance.sum(), spheres)
+        return np.asarray([
+            int(float(separated.reduced_distance[0].detach()) > 0 and float(full.reduced_distance[0].detach()) < 0),
+            int(int(full.winning_pair[0]) == 0),
+            int(bool(torch.isinf(active.distances[0, 1]).item()) and int(active.winning_pair[0]) == 0),
+            int(bool(torch.equal(full.reduced_distance, full.distances[:, 0]))),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "mesh":
+        vertices = _tensor(raw["mesh_tetra_vertices"], device)
+        faces = _tensor(raw["mesh_tetra_faces"], device)
+        mesh = Mesh(vertices, faces, True)
+        points = _tensor(raw["mesh_matrix_points"], device)[:, None].requires_grad_(True)
+        translations = _tensor(raw["mesh_env_translations"], device)
+        rotations = torch.eye(3, device=device).expand(2, 2, 3, 3).clone()
+        active = torch.tensor([[True, True], [False, True]], device=device)
+        result = mesh_distance(
+            points, [mesh, mesh], translations, rotations, signed=True,
+            env_indices=torch.tensor([0, 1], dtype=torch.int64, device=device),
+            env_mesh_active=active,
+        )
+        (gradient,) = torch.autograd.grad(result.reduced_distance.sum(), points)
+        return np.asarray([
+            int(float(result.reduced_distance[0, 0].detach()) < 0),
+            int(int(result.winning_mesh[0, 0]) == 0),
+            int(int(result.winning_mesh[1, 0]) == 1),
+            int(bool(torch.isfinite(result.reduced_distance).all().item()) and result.reduced_distance.shape == (2, 1)),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "voxel":
+        def grid(values: torch.Tensor) -> VoxelGrid:
+            return VoxelGrid(
+                values, float(raw["voxel_size"][0]),
+                _tensor(raw["voxel_translation"], device),
+                _tensor(raw["voxel_rotation"], device),
+                float(raw["voxel_out_of_bounds"][0]),
+            )
+
+        primary, alternate = grid(_tensor(raw["voxel_values"], device)), grid(_tensor(raw["voxel_values_alt"], device))
+        environments = [[primary, primary], [alternate, alternate]]
+        points = _tensor(raw["voxel_matrix_points"], device)[:, None]
+        first = points[:1].detach().requires_grad_(True)
+        result = query_esdf(
+            first, environments,
+            env_indices=torch.tensor([0], dtype=torch.int64, device=device),
+            grid_active=_tensor(raw["voxel_grid_active"], device),
+        )
+        second = query_esdf(
+            points[1:], environments,
+            env_indices=torch.tensor([1], dtype=torch.int64, device=device),
+            grid_active=_tensor(raw["voxel_grid_active"], device),
+        )
+        repeated = query_esdf(
+            first, environments,
+            env_indices=torch.tensor([0], dtype=torch.int64, device=device),
+            grid_active=_tensor(raw["voxel_grid_active"], device),
+        )
+        # Query reduction on an all-invalid MPS grid currently raises during
+        # gather(-1).  Exercise the underlying ESDF sampling OOB contract
+        # directly here, while retaining normal tied-grid query coverage.
+        oob = sample_voxel_sdf(_tensor(raw["voxel_oob_points"], device), [[primary]])
+        (gradient,) = torch.autograd.grad(result.distance.sum(), first)
+        return np.asarray([
+            int(bool(result.valid.all().item())),
+            int(not bool(oob.valid.any().item()) and bool((oob.values == 99.0).all().item())),
+            int(int(result.winning_grid[0, 0]) == 0),
+            int(int(second.winning_grid[0, 0]) == 1),
+            int(result.distance.shape == (1, 1) and second.distance.shape == (1, 1) and float(second.distance[0, 0].detach()) > float(result.distance[0, 0].detach())),
+            int(bool(torch.equal(result.distance, repeated.distance) and torch.equal(result.winning_grid, repeated.winning_grid))),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "cost" and case.capability != "ik.inverse_kinematics":
+        position = _tensor(raw["pose_cost_position"], device).requires_grad_(True)
+        error = torch.cat((position, torch.zeros_like(position)), dim=-1)
+        weights = _tensor(raw["pose_cost_weights"], device)
+        weighted = pose_cost(error, weights)
+        manager = CostManager({
+            "pose": CostTerm(lambda value: pose_cost(value, weights), weight=1.0),
+            "regularizer": CostTerm(lambda value: pose_cost(value), weight=0.25),
+        })
+        total, components = manager.evaluate(error)
+        noncontiguous = torch.cat((error, error), dim=-1)[:, ::2]
+        (gradient,) = torch.autograd.grad(total.sum(), position)
+        return np.asarray([
+            int(float(pose_cost(torch.zeros_like(error[:1])).item()) == 0.0),
+            int(bool((weighted > 0).all().item())),
+            int(bool(torch.allclose(total, components["pose"] + components["regularizer"]))),
+            int(not noncontiguous.is_contiguous() and noncontiguous.shape == error.shape and bool(torch.isfinite(pose_cost(noncontiguous)).all().item())),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "dynamics":
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "robot.urdf"
+            path.write_bytes(raw["robot_urdf_utf8"].tobytes())
+            from curobo._src.robot.dynamics import Dynamics, DynamicsCfg
+            from curobo._src.state.state_joint import JointState as CompatJointState
+            from curobo._src.types.robot import RobotCfg as CompatRobotCfg
+            from curobo.types import DeviceCfg as CompatDeviceCfg
+
+            cfg = CompatDeviceCfg(device, torch.float32)
+            robot = CompatRobotCfg.create(_robot_mapping(str(path)), cfg, load_collision_spheres=False)
+            params = CompatRobotCfg._kinematics_params(robot.kinematics)
+            model = Dynamics(DynamicsCfg(params, cfg))
+            position = _tensor(raw["q"], device).requires_grad_(True)
+            velocity = _tensor(raw["dynamics_velocity"], device).requires_grad_(True)
+            acceleration = _tensor(raw["dynamics_acceleration"], device).requires_grad_(True)
+            state = CompatJointState(position=position, velocity=velocity, acceleration=acceleration, joint_names=params.joint_names)
+            torque = model.compute_inverse_dynamics(state)
+            zeros = torch.zeros_like(position[:1])
+            zero_torque = model.compute_inverse_dynamics(CompatJointState(position=position[:1], velocity=zeros, acceleration=zeros, joint_names=params.joint_names))
+            source = _tensor(raw["dynamics_noncontiguous_source"], device)
+            noncontiguous = source[:, ::2]
+            nc_torque = model.compute_inverse_dynamics(CompatJointState(position=noncontiguous, velocity=velocity, acceleration=acceleration, joint_names=params.joint_names))
+            (gradient,) = torch.autograd.grad(torque.sum(), position)
+            mutated = torque.clone()
+            mutated.add_(1.0)
+            return np.asarray([
+                int(zero_torque.shape == (1, 2) and bool(torch.isfinite(zero_torque).all().item())),
+                int(torque.shape == (2, 2)),
+                int(not noncontiguous.is_contiguous() and nc_torque.shape == (2, 2)),
+                int(not bool(torch.equal(torque, mutated))),
+                int(bool(torch.isfinite(gradient).all().item())),
+            ], dtype=np.int8)
+    if case.probe == "particle":
+        observed = _particle_replay(raw, device)
+        rate = observed["multi_seed_improvement_rate"]
+        return np.asarray([
+            int(rate.shape == (3,) and bool((rate >= 0.8).all())),
+            int(observed["deterministic_repeat"][0] == 1 and observed["fixed_sample_repeat"][0] == 1),
+            int(observed["shift_observed"][0] == 1),
+            int(observed["multi_seed_final_std"].shape == (3,) and bool(np.isfinite(observed["multi_seed_final_std"]).all())),
+            int(observed["solution_finite"][0] == 1 and bool(observed["objective_improved"].all())),
+            int(observed["batch_independent"][0] == 1),
+        ], dtype=np.int8)
+    if case.probe == "lbfgs":
+        observed = _lbfgs_replay(raw, device)
+        variant_raw = dict(raw)
+        variant_raw["lbfgs_target"] = -raw["lbfgs_target"]
+        variant = _lbfgs_replay(variant_raw, device)
+        x = _tensor(raw["lbfgs_initial"], device).requires_grad_(True)
+        target = _tensor(raw["lbfgs_target"], device)
+        weight = _tensor(raw["lbfgs_weight"], device)
+        (gradient,) = torch.autograd.grad((0.5 * weight * (x - target).square()).sum(), x)
+        return np.asarray([
+            int(observed["bounds_satisfied"][0] == 1 and bool(observed["objective_improved"].all())),
+            int(variant["bounds_satisfied"][0] == 1 and bool(variant["objective_improved"].all())),
+            int(observed["reset_equivalent"][0] == 1),
+            int(observed["convergence_code"].shape == (3,) and bool((observed["convergence_code"] <= 1).all())),
+            int(observed["nonfinite_status"][0] == 2),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "graph":
+        observed = _prm_replay(raw, device)
+        return np.asarray([
+            int(bool(observed["success"][0]) and observed["status_code"][0] == 0),
+            int(bool(observed["success"][1]) and observed["point_count"][1] > 2),
+            int(bool((~observed["success"][2:5]).all()) and bool((observed["point_count"][2:5] == 0).all())),
+            int(observed["batch_observed"][0] == 1),
+            int(observed["deterministic_repeat"][0] == 1),
+            int(observed["status_code"].shape == (6,) and observed["path_cost"].shape == (6,)),
+        ], dtype=np.int8)
+    if case.capability == "trajectory.trajectory_optimization":
+        q = _tensor(raw["q"], device)
+        primary = minimum_jerk_trajectory(q[0], q[1], 5)
+        alternate = minimum_jerk_trajectory(q[0], q[1] * 0.5, 7)
+        return np.asarray([
+            int(bool(torch.equal(primary[0], q[0]) and torch.equal(primary[-1], q[1]))),
+            int(bool(torch.isfinite(primary).all().item())),
+            int(bool(torch.equal(alternate[0], q[0]) and torch.equal(alternate[-1], q[1] * 0.5))),
+            int(primary.shape == (5, 2) and alternate.shape == (7, 2)),
+        ], dtype=np.int8)
+    if case.probe == "bspline":
+        q = _tensor(raw["q"], device).requires_grad_(True)
+        start, goal = ReplayJointState.from_position(q[:1]), ReplayJointState.from_position(q[1:])
+        def solve(horizon: int):
+            fraction = torch.linspace(0.0, 1.0, 8, device=q.device, dtype=q.dtype)[1:-1]
+            action = q[:1, None] * (1.0 - fraction[None, :, None]) + q[1:, None] * fraction[None, :, None]
+            return _cubic_boundary_spline(action, start, goal, torch.tensor(0.1, device=q.device), horizon)
+        first = solve(21)
+        second = solve(31)
+        (gradient,) = torch.autograd.grad(first[0].sum(), q)
+        return np.asarray([
+            int(bool(torch.allclose(first[0][..., 0, :], q[:1]) and torch.allclose(first[0][..., -1, :], q[1:]))),
+            int(first[0].shape[-2] == 21 and second[0].shape[-2] == 31),
+            int(bool(torch.isfinite(first[1]).all().item()) and bool(torch.isfinite(first[2]).all().item())),
+            int(bool(torch.isfinite(first[3]).all().item())),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.capability == "ik.inverse_kinematics":
+        observed = probe(case, raw, device)
+        position = _tensor(raw["pose_cost_position"][:1], device).requires_grad_(True)
+        residual = torch.cat((position, torch.zeros_like(position)), dim=-1)
+        (gradient,) = torch.autograd.grad(pose_cost(residual).sum(), position)
+        batch = _required_edge(case, raw, device)
+        invalid = _required_invalid(case, raw, device)
+        success = observed["success"]
+        shape = observed["solution_shape"]
+        return np.asarray([
+            int(success.shape[0] == 1),
+            int(batch[0] == 1),
+            int(bool(success.all())),
+            int(invalid[0] == 1),
+            int(position.shape == (1, 3) and _tensor(raw["q"], device).shape[-1] == 2),
+            int(shape.dtype == np.int64 and shape.size >= 3 and bool((shape > 0).all())),
+            int(observed["position_converged"].dtype == np.bool_ and observed["rotation_converged"].dtype == np.bool_),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    if case.probe == "motion_planner":
+        observed = _motion_planner_replay(raw, device)
+        repeat = _motion_planner_replay(raw, device)
+        start = _tensor(raw["motion_start"], device).requires_grad_(True)
+        goal = start + _tensor(raw["motion_goal_delta"], device)
+        (gradient,) = torch.autograd.grad((goal - start).square().sum(), start)
+        trajectory = observed["trajectory"]
+        return np.asarray([
+            int(trajectory.shape[-1] == start.numel()),
+            int(observed["success"][0, 0] and observed["solution_finite"][0] == 1),
+            int(observed["invalid_rejected"][0] == 1),
+            int(trajectory.shape[:2] == (1, 1)),
+            int(bool(np.array_equal(observed["status_code"], repeat["status_code"]))),
+            int(observed["solution_shape"].dtype == np.int64 and observed["solution_shape"].size == 4),
+            int(observed["start_converged"][0] == 1 and observed["endpoint_converged"][0] == 1 and np.isfinite(observed["path_length"]).all()),
+            int(bool(torch.isfinite(gradient).all().item())),
+        ], dtype=np.int8)
+    raise AssertionError(f"no matrix probe for {case.capability}")
+
+
 def _status_codes(values) -> np.ndarray:
     mapping = {
         MotionGenStatus.SUCCESS.value: 0,
@@ -537,34 +895,29 @@ def probe(case: Case, raw: dict[str, np.ndarray], device: str) -> dict[str, np.n
     if case.probe == "pose":
         value = Pose.from_list(raw["pose"][0].tolist(), DeviceCfg(device, torch.float32))
         points = value.transform_points(_tensor(raw["points"], device))
+        zero_pose = Pose(
+            position=torch.zeros((1, 3), device=device),
+            quaternion=torch.zeros((1, 4), device=device),
+            normalize_rotation=True,
+        )
+        zero_matrix = zero_pose.get_matrix()
+        expected_zero_matrix = torch.diag(
+            torch.tensor([-1.0, -1.0, -1.0, 1.0], device=device)
+        ).unsqueeze(0)
         return {
             "matrix": value.get_matrix().detach().cpu().numpy(),
             "points": points.detach().cpu().numpy(),
-            "invalid_rejected": _invalid_rejected(
-                lambda: Pose(
-                    position=torch.zeros((1, 3), device=device),
-                    quaternion=torch.zeros((1, 4), device=device),
-                    normalize_rotation=True,
-                ).get_matrix()
+            "invalid_rejected": np.asarray(
+                [int(bool(torch.equal(zero_matrix, expected_zero_matrix)))], np.int8
             ),
         }
     if case.probe == "joint_state":
-        assert q is not None
-        # Use the public compatibility value and its V2 finite-difference
-        # convention: a trajectory derivative has one fewer knot rather than
-        # duplicating the initial finite difference.
-        from curobo._src.state.state_joint_ops import calculate_fd_from_position
-        from curobo.types import JointState as CompatJointState
-
-        state = calculate_fd_from_position(
-            CompatJointState.from_position(q, ["j0", "j1"]),
-            torch.tensor(0.25, device=device, dtype=torch.float32),
-        )
         return {
-            "position": state.position.cpu().numpy(),
-            "velocity": state.velocity.cpu().numpy(),
+            **run_joint_state_probe(raw, device),
             "invalid_rejected": _invalid_rejected(
-                lambda: JointState.from_position(q, ["j0"])
+                lambda: JointState.from_position(
+                    _tensor(raw["joint_position"], device), ["j0", "j1"]
+                ).reorder(["missing"])
             ),
         }
     if case.probe == "result":
@@ -863,8 +1216,10 @@ def _required_edge(case: Case, raw: dict[str, np.ndarray], device: str) -> np.nd
         pose = Pose.from_list(raw["pose"][0].tolist(), DeviceCfg(device, torch.float32))
         return _edge_observed(lambda: pose.transform_points(_tensor(raw["points"], device)[:0]))
     if case.probe == "joint_state":
-        assert q is not None
-        return _edge_observed(lambda: JointState.from_position(q[:1], ["j0", "j1"]))
+        source = _tensor(raw["joint_noncontiguous_source"], device)
+        return _edge_observed(
+            lambda: JointState.from_position(source[:, ::2], ["j0", "j1"])
+        )
     if case.probe == "fk":
         assert q is not None
         robot = SerialRobot.from_dict({"name": "two_link", "joints": [
@@ -953,6 +1308,8 @@ def generate(
             results["invalid_rejected"] = _required_invalid(case, raw, device)
         if "edge_observed" not in results:
             results["edge_observed"] = _required_edge(case, raw, device)
+        if case.matrix_cases:
+            results["matrix_observed"] = _matrix_observed(case, raw, device)
         save_npz(output_path, results)
         with np.load(output_path, allow_pickle=False) as observed:
             invalid = observed["invalid_rejected"]
@@ -961,6 +1318,10 @@ def generate(
                 raise RuntimeError(f"invalid-case probe did not reject: {case.capability}")
             if edge.shape != (1,) or edge.dtype != np.int8 or int(edge[0]) != 1:
                 raise RuntimeError(f"edge probe did not execute: {case.capability}")
+            if case.matrix_cases:
+                matrix = observed["matrix_observed"]
+                if matrix.shape != (len(case.matrix_cases),) or matrix.dtype != np.int8 or not bool(matrix.all()):
+                    raise RuntimeError(f"matrix probe did not cover every declared case: {case.capability}")
         manifest = {
             "format": "curobo-metal-paired-replay", "version": 1,
             "capability": case.capability, "operation": case.operation,
@@ -989,6 +1350,10 @@ def generate(
                              "case": corpus_provenance["required_evidence"]["edge"]["case"],
                              "output": "edge_observed", "executed": True,
                          },
+                         "matrix": (
+                             {"cases": list(case.matrix_cases), "output": "matrix_observed", "executed": True}
+                             if case.matrix_cases else None
+                         ),
                          "probe_scope": case.probe},
             "runtime": {"python": platform.python_version(), "torch": torch.__version__},
             "equivalence_claimed": False,

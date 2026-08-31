@@ -1,15 +1,34 @@
 from __future__ import annotations
 
+import gc
 from pathlib import Path
+from typing import Callable, Optional, Tuple, Union
+
 import torch
+
+import curobo._src.runtime as curobo_runtime
+from curobo import runtime as curobo_runtime
+from curobo._src.util.logging import log_info, log_warn
 
 
 class GraphExecutor:
     """Shape-stable direct executor used in place of CUDA graph capture."""
 
-    def __init__(self, capture_fn, device, use_cuda_graph=None, clone_outputs=True, **capture_fn_kwargs):
+    def __init__(
+        self,
+        capture_fn: Callable,
+        device: torch.device,
+        use_cuda_graph: Optional[bool] = None,
+        clone_outputs: bool = True,
+        **capture_fn_kwargs,
+    ):
         self._capture_fn = capture_fn
         self._device = torch.device(device)
+        if use_cuda_graph is None:
+            use_cuda_graph = curobo_runtime.cuda_graphs
+        if not curobo_runtime.cuda_graphs:
+            use_cuda_graph = False
+            log_warn("CUDA Graph is disabled by config")
         self._use_cuda_graph = bool(use_cuda_graph)
         self._clone_outputs = clone_outputs
         self._capture_fn_kwargs = capture_fn_kwargs
@@ -35,7 +54,12 @@ class GraphExecutor:
         return output[0] if len(output) == 1 else output
 
     def warmup(self, *sample_inputs):
-        if self._graph_input is None: self._initialize(sample_inputs)
+        if self._graph_input is None:
+            log_info(
+                "Warming up GraphExecutor for "
+                f"{self._capture_fn.__name__ if hasattr(self._capture_fn, '__name__') else 'function'}"
+            )
+            self._initialize(sample_inputs)
         return self
 
     def _initialize(self, inputs): self._initialize_direct(inputs)
@@ -49,11 +73,17 @@ class GraphExecutor:
         return value if isinstance(value, tuple) else (value,)
     def reset(self):
         self._graph_input = self._graph_output = self._graph = None
-    def debug_dump(self, file_path):
+    def debug_dump(self, file_path: str):
         Path(file_path).write_text("Portable GraphExecutor: no CUDA graph exists.\\n")
     @property
-    def is_initialized(self): return self._graph_input is not None
+    def is_initialized(self) -> bool: return self._graph_input is not None
 
 
-def create_graph_executor(capture_fn, device, use_cuda_graph=None, clone_outputs=False, **capture_fn_kwargs):
+def create_graph_executor(
+    capture_fn: Callable,
+    device: torch.device,
+    use_cuda_graph: Optional[bool] = None,
+    clone_outputs: bool = False,
+    **capture_fn_kwargs,
+) -> GraphExecutor:
     return GraphExecutor(capture_fn, device, use_cuda_graph, clone_outputs, **capture_fn_kwargs)

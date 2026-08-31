@@ -53,7 +53,8 @@ def test_urdf_export_reflects_mutations_and_sphere_activation(tmp_path):
     assert link.find("inertial/mass").attrib["value"] == "2.5"
     assert link.find("inertial/origin").attrib["xyz"] == "0.10000000149011612 0.20000000298023224 0.30000001192092896"
     assert link.find("inertial/inertia").attrib["izz"] == "3"
-    assert sum(len(item.findall("collision")) for item in root.findall("link")) == params.num_spheres
+    active_spheres = int((params.link_spheres[0, :, 3] >= 0).sum().item())
+    assert sum(len(item.findall("collision")) for item in root.findall("link")) == active_spheres
 
     params.disable_link_spheres(link_name)
     disabled = params.get_link_spheres(link_name)

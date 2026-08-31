@@ -37,13 +37,13 @@ class LinkParams:
     mimic_joint_name: Optional[str] = None
     joint_effort_limit: List[float] = field(default_factory=lambda: [10000.0])
     link_mass: float = 0.01
-    link_com: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    link_com: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 0.0]))
     link_inertia: np.ndarray = field(
         default_factory=lambda: np.array([1e-4, 1e-4, 1e-4, 0.0, 0.0, 0.0])
     )
 
     @staticmethod
-    def create(dict_data: Dict[str, Any]) -> "LinkParams":
+    def create(dict_data: Dict[str, Any]) -> LinkParams:
         """Create a link record from the pinned YAML-style representation.
 
         Upstream configurations encode ``fixed_transform`` as a seven-value

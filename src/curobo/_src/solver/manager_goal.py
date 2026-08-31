@@ -9,17 +9,19 @@ ABIs.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 
 from curobo._src.rollout.goal_registry import GoalRegistry
+from curobo._src.solver.solve_state import SolveState
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.util.logging import log_and_raise
 
 
-class GoalManager:
+class _GoalManagerPortableMixin:
     """Create, cache, select, and update seed-expanded solver goals.
 
     A returned ``reference_updated`` flag means that callers must refresh any
@@ -50,7 +52,7 @@ class GoalManager:
     def _num_seeds(solve_state) -> int:
         """Use V2's single-candidate default for a sparse generic SolveState."""
         seeds = getattr(solve_state, "num_seeds", None)
-        return 1 if seeds is None else GoalManager._require_positive_int(seeds, "solve_state.num_seeds")
+        return 1 if seeds is None else _GoalManagerPortableMixin._require_positive_int(seeds, "solve_state.num_seeds")
 
     def _validate_device(self, value, name: str) -> None:
         """Reject hidden cross-device copies at the portable solver boundary.
@@ -414,6 +416,80 @@ class GoalManager:
             padded.position[:, :, :, new_count:, :].copy_(links_goal_pose.position[:, :, :, :1, :])
             padded.quaternion[:, :, :, new_count:, :].copy_(links_goal_pose.quaternion[:, :, :, :1, :])
         return padded
+
+
+class GoalManager(_GoalManagerPortableMixin):
+    """Pinned goal-manager declaration backed by portable buffer ownership."""
+
+    def __init__(self, device_cfg: DeviceCfg):
+        _GoalManagerPortableMixin.__init__(self, device_cfg)
+
+    def create_goal_buffer(
+        self,
+        solve_state: SolveState,
+        goal_tool_poses: Optional[GoalToolPose] = None,
+        goal_js: Optional[JointState] = None,
+        current_js: Optional[JointState] = None,
+        seed_goal_js: Optional[JointState] = None,
+        current_state_dt: Optional[torch.Tensor] = None,
+    ) -> GoalRegistry:
+        return _GoalManagerPortableMixin.create_goal_buffer(
+            self, solve_state, goal_tool_poses, goal_js, current_js,
+            seed_goal_js, current_state_dt,
+        )
+
+    def update_goal_buffer(
+        self,
+        solve_state: SolveState,
+        goal_tool_poses: Optional[GoalToolPose] = None,
+        current_js: Optional[JointState] = None,
+        seed_goal_js: Optional[JointState] = None,
+        goal_js: Optional[JointState] = None,
+        use_implicit_goal: bool = False,
+        current_state_dt: Optional[torch.Tensor] = None,
+    ) -> Tuple[GoalRegistry, bool]:
+        return _GoalManagerPortableMixin.update_goal_buffer(
+            self, solve_state, goal_tool_poses, current_js, seed_goal_js,
+            goal_js, use_implicit_goal, current_state_dt,
+        )
+
+    def update_from_goal_registry(
+        self, solve_state: SolveState, goal: GoalRegistry
+    ) -> Tuple[GoalRegistry, bool]:
+        return _GoalManagerPortableMixin.update_from_goal_registry(self, solve_state, goal)
+
+    def update_batch_helper(self, batch_size: int) -> torch.Tensor:
+        return _GoalManagerPortableMixin.update_batch_helper(self, batch_size)
+
+    def update_goal_tool_poses(self, goal_tool_poses: GoalToolPose) -> GoalRegistry:
+        return _GoalManagerPortableMixin.update_goal_tool_poses(self, goal_tool_poses)
+
+    def update_current_state(self, current_state: JointState) -> GoalRegistry:
+        return _GoalManagerPortableMixin.update_current_state(self, current_state)
+
+    def update_goal_state(self, goal_state: JointState) -> GoalRegistry:
+        return _GoalManagerPortableMixin.update_goal_state(self, goal_state)
+
+    @property
+    def goal_buffer(self) -> GoalRegistry:
+        return _GoalManagerPortableMixin.goal_buffer.fget(self)
+
+    @property
+    def solve_state(self) -> SolveState:
+        return _GoalManagerPortableMixin.solve_state.fget(self)
+
+    @property
+    def batch_helper(self) -> torch.Tensor:
+        return _GoalManagerPortableMixin.batch_helper.fget(self)
+
+    def get_batch_size(self) -> int:
+        return _GoalManagerPortableMixin.get_batch_size(self)
+
+    def get_ik_batch_size(self) -> int:
+        return _GoalManagerPortableMixin.get_ik_batch_size(self)
+
+    def get_trajopt_batch_size(self) -> int:
+        return _GoalManagerPortableMixin.get_trajopt_batch_size(self)
 
 
 __all__ = ["GoalManager"]

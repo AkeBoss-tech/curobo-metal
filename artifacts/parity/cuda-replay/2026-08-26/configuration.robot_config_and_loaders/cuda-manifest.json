@@ -1,0 +1,110 @@
+{
+  "backend": "cuda",
+  "capability": "configuration.robot_config_and_loaders",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "two_joint_urdf",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "malformed_urdf",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "single_tree",
+        "branched_tree",
+        "serialization_roundtrip"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "ee570779a77e62a627d491570a97ba672e8d8b6eae0b899c8b4654f849530a84",
+  "input_tensor_count": 2,
+  "operation": "robot_config",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "b62cccd8c81ecab95178efe47f90123b2679ac29874008ef83c8c1ba2ed35356",
+    "tensors": {
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "effort_limits": {
+        "dtype": "float32",
+        "shape": [
+          2
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "joint_names_utf8": {
+        "dtype": "uint8",
+        "shape": [
+          12
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          3
+        ]
+      },
+      "position_limits": {
+        "dtype": "float32",
+        "shape": [
+          2,
+          2
+        ]
+      },
+      "retract_config": {
+        "dtype": "float32",
+        "shape": [
+          2
+        ]
+      },
+      "velocity_limits": {
+        "dtype": "float32",
+        "shape": [
+          2
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 0,
+    "rtol": 0
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

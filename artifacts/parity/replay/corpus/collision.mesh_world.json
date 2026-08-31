@@ -4,8 +4,16 @@
   "inputs": [
     "points",
     "mesh_vertices",
-    "mesh_faces"
+    "mesh_faces",
+    "mesh_tetra_vertices",
+    "mesh_tetra_faces",
+    "mesh_matrix_points",
+    "mesh_env_translations"
   ],
+  "required_matrix": {
+    "cases": ["signed_distance", "tie_winner", "active_mesh", "multi_environment", "vjp"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "triangle_face",
@@ -15,6 +23,12 @@
       "case": "non_watertight_signed",
       "output": "invalid_rejected"
     }
+  },
+  "tensors": {
+    "mesh_tetra_vertices": {"dtype": "float32", "shape": [4, 3], "data": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]},
+    "mesh_tetra_faces": {"dtype": "int64", "shape": [4, 3], "data": [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]},
+    "mesh_matrix_points": {"dtype": "float32", "shape": [2, 3], "data": [[0.1, 0.1, 0.1], [0.2, 0.2, 0.2]]},
+    "mesh_env_translations": {"dtype": "float32", "shape": [2, 2, 3], "data": [[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], [[9.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]}
   },
   "version": 1
 }

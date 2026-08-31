@@ -33,7 +33,23 @@ from .cost_manager.cost_manager_robot import RobotCostManager
 from .rollout_robot_cfg import RobotRolloutCfg
 
 
-class RobotRollout:
+class _CudaGraphUnavailableFlag:
+    """False-like value that also retains the legacy callable query form."""
+
+    def __bool__(self):
+        return False
+
+    def __call__(self):
+        return False
+
+    def __repr__(self):
+        return "False"
+
+
+_CUDA_GRAPH_UNAVAILABLE = _CudaGraphUnavailableFlag()
+
+
+class _RobotRolloutPortableMixin:
     """Forward-simulate candidate actions and score robot trajectory terms.
 
     ``use_cuda_graph=True`` is accepted so upstream configurations can load,
@@ -555,6 +571,163 @@ class RobotRollout:
                 return torch.zeros((self.batch_size or 1, self.action_horizon, self.action_dim))
             return torch.zeros((self.batch_size or 1, self.action_horizon, self.action_dim), **self.device_cfg.as_torch_dict())
         return self.sample_random_actions(self.batch_size or 1) if use_random else None
+
+
+class RobotRollout(_RobotRolloutPortableMixin):
+    """Pinned cuRobo rollout declaration backed by portable eager execution.
+
+    The direct methods deliberately mirror the pinned callable surface.  The
+    CPU/MPS implementation, validation, and legacy convenience behavior live
+    in the private base so they do not alter this runtime contract.
+    """
+
+    @profiler.record_function("robot_rollout/init")
+    def __init__(
+        self,
+        config: Optional[RobotRolloutCfg] = None,
+        scene_collision_checker: Optional[SceneCollision] = None,
+        use_cuda_graph: bool = False,
+    ):
+        _RobotRolloutPortableMixin.__init__(self, config, scene_collision_checker, use_cuda_graph)
+
+    @property
+    def action_dim(self) -> int:
+        return _RobotRolloutPortableMixin.action_dim.fget(self)
+
+    @property
+    def action_horizon(self) -> int:
+        return _RobotRolloutPortableMixin.action_horizon.fget(self)
+
+    @property
+    def horizon(self) -> int:
+        return _RobotRolloutPortableMixin.horizon.fget(self)
+
+    @property
+    def action_bound_lows(self) -> torch.Tensor:
+        return _RobotRolloutPortableMixin.action_bound_lows.fget(self)
+
+    @property
+    def action_bound_highs(self) -> torch.Tensor:
+        return _RobotRolloutPortableMixin.action_bound_highs.fget(self)
+
+    @property
+    def action_bounds(self) -> torch.Tensor:
+        return _RobotRolloutPortableMixin.action_bounds.fget(self)
+
+    @property
+    def state_bounds(self):
+        return _RobotRolloutPortableMixin.state_bounds.fget(self)
+
+    @property
+    def dt(self) -> float:
+        return _RobotRolloutPortableMixin.dt.fget(self)
+
+    @property
+    def batch_size(self) -> Optional[int]:
+        return _RobotRolloutPortableMixin.batch_size.fget(self)
+
+    @batch_size.setter
+    def batch_size(self, batch_size: int):
+        return _RobotRolloutPortableMixin.batch_size.fset(self, batch_size)
+
+    @property
+    def default_joint_state(self) -> torch.Tensor:
+        return _RobotRolloutPortableMixin.default_joint_state.fget(self)
+
+    @property
+    def default_joint_position(self) -> torch.Tensor:
+        return _RobotRolloutPortableMixin.default_joint_position.fget(self)
+
+    @property
+    def valid_compute_metrics_from_state_cuda_graph(self) -> bool:
+        return _CUDA_GRAPH_UNAVAILABLE
+
+    @property
+    def valid_compute_metrics_from_action_cuda_graph(self) -> bool:
+        return _CUDA_GRAPH_UNAVAILABLE
+
+    def evaluate_action(self, act_seq: torch.Tensor, **kwargs) -> RolloutResult:
+        return _RobotRolloutPortableMixin.evaluate_action(self, act_seq, **kwargs)
+
+    @profiler.record_function("robot_rollout/compute_metrics_from_state")
+    def compute_metrics_from_state(self, state: JointState, **kwargs) -> RolloutMetrics:
+        return _RobotRolloutPortableMixin.compute_metrics_from_state(self, state, **kwargs)
+
+    @profiler.record_function("robot_rollout/compute_metrics_from_action")
+    def compute_metrics_from_action(self, act_seq: torch.Tensor, **kwargs) -> RolloutMetrics:
+        return _RobotRolloutPortableMixin.compute_metrics_from_action(self, act_seq, **kwargs)
+
+    @profiler.record_function("robot_rollout/compute_state_from_action")
+    def compute_state_from_action(self, act_seq: torch.Tensor, **kwargs) -> JointState:
+        return _RobotRolloutPortableMixin.compute_state_from_action(self, act_seq, **kwargs)
+
+    def compute_state_from_action_metrics(self, act_seq: torch.Tensor, **kwargs) -> JointState:
+        return _RobotRolloutPortableMixin.compute_state_from_action_metrics(self, act_seq, **kwargs)
+
+    @profiler.record_function("robot_rollout/update_params")
+    def update_params(self, goal: GoalRegistry, num_particles: int = None) -> bool:
+        return _RobotRolloutPortableMixin.update_params(self, goal, num_particles)
+
+    def update_goal_dt(self, goal: GoalRegistry) -> bool:
+        return _RobotRolloutPortableMixin.update_goal_dt(self, goal)
+
+    def update_batch_size(self, batch_size: int) -> None:
+        return _RobotRolloutPortableMixin.update_batch_size(self, batch_size)
+
+    def update_dt(self, dt: float) -> None:
+        return _RobotRolloutPortableMixin.update_dt(self, dt)
+
+    def reset(self, reset_problem_ids: Optional[torch.Tensor] = None, **kwargs) -> None:
+        return _RobotRolloutPortableMixin.reset(self, reset_problem_ids, **kwargs)
+
+    def reset_shape(self):
+        return _RobotRolloutPortableMixin.reset_shape(self)
+
+    def reset_cuda_graph(self) -> bool:
+        return _RobotRolloutPortableMixin.reset_cuda_graph(self)
+
+    def reset_seed(self) -> None:
+        return _RobotRolloutPortableMixin.reset_seed(self)
+
+    def filter_robot_state(self, current_state: JointState) -> JointState:
+        return _RobotRolloutPortableMixin.filter_robot_state(self, current_state)
+
+    def get_robot_command(
+        self,
+        current_state,
+        act_seq,
+        shift_steps: int = 1,
+        state_idx: Optional[torch.Tensor] = None,
+    ):
+        return _RobotRolloutPortableMixin.get_robot_command(
+            self, current_state, act_seq, shift_steps, state_idx=state_idx
+        )
+
+    def sample_random_actions(self, n: int = 0, bounded: bool = True) -> torch.Tensor:
+        return _RobotRolloutPortableMixin.sample_random_actions(self, n, bounded)
+
+    def get_initial_action(
+        self, use_random: bool = True, use_zero: bool = False, **kwargs
+    ) -> torch.Tensor:
+        return _RobotRolloutPortableMixin.get_initial_action(self, use_random, use_zero, **kwargs)
+
+    def update_params_cost_managers(self, **kwargs) -> None:
+        return _RobotRolloutPortableMixin.update_params_cost_managers(self, **kwargs)
+
+    def enable_cost_component(self, name: str) -> None:
+        return _RobotRolloutPortableMixin.enable_cost_component(self, name)
+
+    def disable_cost_component(self, name: str) -> None:
+        return _RobotRolloutPortableMixin.disable_cost_component(self, name)
+
+    def get_cost_component_names(self) -> List[str]:
+        return _RobotRolloutPortableMixin.get_cost_component_names(self)
+
+    def get_all_cost_components(self) -> Dict[str, BaseCost]:
+        return _RobotRolloutPortableMixin.get_all_cost_components(self)
+
+    def get_cost_component_by_name(self, name: str) -> List[BaseCost]:
+        return _RobotRolloutPortableMixin.get_cost_component_by_name(self, name)
 
 
 __all__ = [

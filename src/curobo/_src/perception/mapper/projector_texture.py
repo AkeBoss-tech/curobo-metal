@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
 
@@ -23,6 +23,8 @@ from curobo._src.perception.mapper.renderer import BlockSparseTSDFRenderer
 from curobo._src.perception.mapper.storage import BlockSparseTSDF, OccupiedVoxels
 from curobo._src.types.camera import CameraObservation
 from curobo._src.types.pose import Pose
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.warp import get_warp_device_stream, wp
 
 
 _PROJECTIVE_TEXTURE_ATLAS_MAX_WIDTH_PX = 16_384
@@ -85,7 +87,7 @@ class _PreparedMeshTextureProjection:
     depth_tolerance: float
 
 
-class ProjectiveTextureProjector:
+class _ProjectiveTextureProjectorPortable:
     """Project RGB/RGB-D observations onto mesh vertices or occupied voxels.
 
     CUDA/Warp texture-object construction and raw kernel entry points are not
@@ -99,7 +101,10 @@ class ProjectiveTextureProjector:
 
     @property
     def device(self) -> torch.device:
-        return self._tsdf.state.tsdf.device
+        state = getattr(self._tsdf, "state", None)
+        if state is not None and hasattr(state, "tsdf"):
+            return state.tsdf.device
+        return torch.device(getattr(self._tsdf, "device"))
 
     def prepare_mesh_projection(self, texture_observations: CameraObservation | Sequence[CameraObservation], *,
                                 texture_depth_tolerance_m: Optional[float]) -> _PreparedMeshTextureProjection:
@@ -160,13 +165,30 @@ class ProjectiveTextureProjector:
             raise ValueError("every texture observation needs rgb_image, intrinsics, and pose")
         rgb = torch.stack([o.rgb_image for o in observations])
         depths = [o.depth_image for o in observations]
+        for depth in depths:
+            if depth is not None and (
+                tuple(depth.shape) != (self.config.image_height, self.config.image_width)
+                or not depth.is_floating_point()
+            ):
+                raise ValueError(
+                    "depth_image must be floating with shape "
+                    f"({self.config.image_height}, {self.config.image_width})"
+                )
         depth = torch.stack(depths) if all(v is not None for v in depths) else None
         position = torch.cat([o.pose.position.reshape(1, 3) for o in observations])
         quaternion = torch.cat([o.pose.quaternion.reshape(1, 4) for o in observations])
-        return self._normalize_projective_texture_batch(CameraObservation(
+        result = self._normalize_projective_texture_batch(CameraObservation(
             rgb_image=rgb, depth_image=depth, intrinsics=torch.stack([o.intrinsics for o in observations]),
             pose=Pose(position, quaternion), depth_to_meter=1.0,
         ))
+        if depth is None and any(value is not None for value in depths):
+            rgb_batch, rendered, intrinsics, position, quaternion = result
+            rendered = rendered.clone()
+            for index, value in enumerate(depths):
+                if value is not None:
+                    rendered[index] = value.to(rendered.device, dtype=rendered.dtype)
+            result = rgb_batch, rendered, intrinsics, position, quaternion
+        return result
 
     def _normalize_projective_texture_observations(self, observations: CameraObservation | Sequence[CameraObservation]) -> list[TextureBatch]:
         values = [observations] if isinstance(observations, CameraObservation) else list(observations)
@@ -316,6 +338,57 @@ class ProjectiveTextureProjector:
         return Mesh(name="block_sparse_tsdf_textured_mesh", vertices=vertices, faces=triangles,
                     vertex_colors=result_colors.float() / 255.0, vertex_normals=normals,
                     texture_uvs=uvs, texture_image=projection.texture_atlas)
+
+
+class ProjectiveTextureProjector:
+    """Pinned cuRoboV2 declaration surface for portable texturing."""
+
+    def __init__(
+        self,
+        tsdf: BlockSparseTSDF,
+        renderer: BlockSparseTSDFRenderer,
+        config: ProjectiveTextureProjectorCfg,
+    ) -> None:
+        raise NotImplementedError
+
+    def prepare_mesh_projection(
+        self,
+        texture_observations: CameraObservation | Sequence[CameraObservation],
+        *,
+        texture_depth_tolerance_m: Optional[float],
+    ) -> _PreparedMeshTextureProjection:
+        raise NotImplementedError
+
+    def project_mesh(
+        self,
+        vertices: torch.Tensor,
+        triangles: torch.Tensor,
+        normals: torch.Tensor,
+        colors: torch.Tensor,
+        projection: _PreparedMeshTextureProjection,
+        *,
+        camera_min_distance: Optional[float],
+        camera_max_distance: Optional[float],
+    ) -> Mesh:
+        raise NotImplementedError
+
+    def texture_occupied_voxels(
+        self,
+        voxels: OccupiedVoxels,
+        texture_observations: CameraObservation | Sequence[CameraObservation],
+        *,
+        camera_min_distance: Optional[float],
+        camera_max_distance: Optional[float],
+        texture_depth_tolerance_m: Optional[float],
+    ) -> OccupiedVoxels:
+        raise NotImplementedError
+
+
+# Select the full portable PyTorch implementation at runtime.  Its additional
+# inspection helpers (such as ``device``) are deliberately not part of the
+# pinned static declaration contract.
+if not TYPE_CHECKING:
+    ProjectiveTextureProjector = _ProjectiveTextureProjectorPortable
 
 
 __all__ = [

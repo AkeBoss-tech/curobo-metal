@@ -160,8 +160,17 @@ def _validate_collision_cache(cache: Optional[Dict[str, int]]) -> Optional[Dict[
     return result
 
 
+class _PRMGraphPlannerCfgPortableMixin:
+    @property
+    def action_dim(self) -> Optional[int]:
+        return self._action_dim_value
+
+    def clone(self, **updates: Any) -> "PRMGraphPlannerCfg":
+        return self._clone(**updates)
+
+
 @dataclass
-class PRMGraphPlannerCfg:
+class PRMGraphPlannerCfg(_PRMGraphPlannerCfgPortableMixin):
     # These defaults match the prior portable factory and make the record
     # convenient to use directly in Python, unlike upstream's YAML-only form.
     max_nodes: int = 2048
@@ -282,11 +291,11 @@ class PRMGraphPlannerCfg:
         self.action_lower_bounds, self.action_upper_bounds = lower, upper
 
     @property
-    def action_dim(self) -> Optional[int]:
+    def _action_dim_value(self) -> Optional[int]:
         """The compiled c-space dimension, or ``None`` before robot/bounds input."""
         return None if self.action_lower_bounds is None else int(self.action_lower_bounds.numel())
 
-    def clone(self, **updates: Any) -> "PRMGraphPlannerCfg":
+    def _clone(self, **updates: Any) -> "PRMGraphPlannerCfg":
         """Return a validated copy suitable for independent persistent planners."""
         values = {
             name: copy.copy(getattr(self, name))

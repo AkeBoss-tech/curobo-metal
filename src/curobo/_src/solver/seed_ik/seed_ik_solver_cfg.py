@@ -8,9 +8,12 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, Mapping, Union
 
+from curobo.content import get_robot_configs_path
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.robot import RobotCfg
+from curobo._src.util.config_io import join_path, load_yaml
+from curobo._src.util.logging import log_and_raise
 
 
 @dataclass
@@ -47,9 +50,9 @@ class SeedIKSolverCfg:
 
     @staticmethod
     def create(
-        robot: Union[str, PathLike[str], Mapping[str, Any], RobotCfg],
+        robot: Union[str, Dict, RobotCfg],
         device_cfg: DeviceCfg = DeviceCfg(), **kwargs,
-    ) -> "SeedIKSolverCfg":
+    ) -> SeedIKSolverCfg:
         """Create a solver configuration from any portable robot source.
 
         Mappings and externally-addressable paths use ``RobotCfg.create``.

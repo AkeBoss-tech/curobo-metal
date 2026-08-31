@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import os
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +12,8 @@ from typing import Any, Dict, List, Optional, Union
 from curobo._src.robot.types import CSpaceParams, LinkParams
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo.content import get_assets_path, get_robot_configs_path
+from curobo._src.util.logging import log_and_raise, log_warn
+from curobo._src.util_file import join_path
 from curobo.util_file import load_yaml
 
 

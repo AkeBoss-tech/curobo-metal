@@ -7,14 +7,24 @@ use the production differentiable triangle-distance operator instead.
 from __future__ import annotations
 
 import torch
+import numpy as np
+
+from curobo._src.util.warp import get_warp_device_stream, init_warp
+
+wp = None
+trimesh = None
 
 from curobo_metal.ops.world_collision import Mesh as TorchMesh, mesh_distance
 
 
 class WarpMeshQuery:
-    def __init__(self, mesh, device):
-        self.device = torch.device(device)
-        vertices = torch.as_tensor(mesh.vertices, dtype=torch.float32, device=self.device)
+    def __init__(self, mesh: trimesh.Trimesh, device: torch.device):
+        requested_device = torch.device(device)
+        vertices = torch.as_tensor(mesh.vertices, dtype=torch.float32, device=requested_device)
+        # MPS tensors canonicalize ``mps`` to ``mps:0``.  Retain that concrete
+        # device so otherwise-identical query tensors are not rejected solely
+        # because the request omitted an explicit index.
+        self.device = vertices.device
         faces = torch.as_tensor(mesh.faces, dtype=torch.int64, device=self.device)
         if vertices.ndim != 2 or vertices.shape[-1] != 3:
             raise ValueError("mesh.vertices must have shape [vertices, 3]")

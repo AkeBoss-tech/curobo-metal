@@ -1,6 +1,15 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
+
 import torch
+
+from curobo._src.curobolib.cuda_ops.tensor_checks import check_float32_tensors
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.warp import get_warp_device_stream, warp_kernel
+
+wp = None
+
+
 @dataclass
 class LevenbergMarquardtState:
     jacobian: torch.Tensor; jTerror: torch.Tensor; lambda_damping: torch.Tensor
@@ -13,8 +22,8 @@ class LevenbergMarquardtState:
     @property
     def n_residuals(self): return self._n_residuals or self.jacobian.shape[-2]
 class LevenbergMarquardtStep:
-    def __init__(self,action_dim,n_residuals,tile_threads=128,**kwargs):
-        del kwargs;self._action_dim=action_dim;self._n_residuals=n_residuals;self._tile_threads=tile_threads
+    def __init__(self, action_dim: int, n_residuals: int, tile_threads: int = 64):
+        self._action_dim=action_dim;self._n_residuals=n_residuals;self._tile_threads=tile_threads
     @property
     def action_dim(self):return self._action_dim
     @property
@@ -22,7 +31,7 @@ class LevenbergMarquardtStep:
     @property
     def tile_threads(self):return self._tile_threads
     @staticmethod
-    def create_lm_warp_kernel(dof,n_res): raise NotImplementedError("Warp LM kernels are unavailable; call the portable torch step")
+    def create_lm_warp_kernel(dof: int, n_res: int): raise NotImplementedError("Warp LM kernels are unavailable; call the portable torch step")
     def __call__(self,state):
         j=state.jacobian; eye=torch.eye(self.action_dim,device=j.device,dtype=j.dtype)
         lhs=j.transpose(-1,-2)@j+state.lambda_damping.reshape(-1,1,1)*eye

@@ -16,9 +16,11 @@ The project currently provides:
 - reproducible correctness, profiling, and benchmark artifacts.
 
 The target distribution is installed as `curobo-metal` and exposes the original
-`curobo` Python namespace, so applications ultimately change only their
-dependency. That namespace and its complete behavioral gates are under active
-implementation; the current release is not yet drop-in complete. See the
+`curobo` Python namespace, so portable applications change only their
+dependency. Against the pinned revision, all 361 runtime modules have exact
+static exports and callable shapes, and all 23 audited portable capabilities
+are evidence-backed. CUDA/Warp ABI mechanisms and external integrations remain
+explicit substitutions or exclusions. See the
 [project plan](https://github.com/AkeBoss-tech/curobo-metal/blob/main/PLAN.md),
 [drop-in roadmap](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/dropin-roadmap.md),
 and [compatibility boundary](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/compatibility.md).

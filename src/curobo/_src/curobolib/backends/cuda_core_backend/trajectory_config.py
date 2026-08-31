@@ -1,3 +1,6 @@
+from pathlib import Path
+from typing import List
+
 from ._launch import LaunchConfig
 from .kernel_config import CudaCoreKernelCfg
 from .util import ceil_div
@@ -5,7 +8,7 @@ from .util import ceil_div
 
 class TrajectoryKernelCfg(CudaCoreKernelCfg):
     def __init__(self): super().__init__("trajectory")
-    def get_kernel_files(self, kernel_type: str):
+    def get_kernel_files(self, kernel_type: str) -> List[str]:
         return {
             "bspline_forward": ["bspline/bspline_kernel.cuh"],
             "bspline_backward": ["bspline/bspline_kernel.cuh"],
@@ -14,7 +17,13 @@ class TrajectoryKernelCfg(CudaCoreKernelCfg):
             "differentiation_backward": ["legacy/differentiation_position_kernel.cuh"],
             "integration": ["legacy/integration_acceleration_kernel.cuh"],
         }.get(kernel_type, [])
-    def get_include_dirs(self): return self.get_base_include_dirs() + [self.kernel_dir]
+    def get_include_dirs(self) -> List[Path]:
+        return self.get_base_include_dirs() + [
+            self.kernel_dir,
+            self.kernel_dir / "bspline",
+            self.kernel_dir / "bspline" / "basis",
+            self.kernel_dir / "legacy",
+        ]
 
 
 class BSplineBackwardLayout:
@@ -24,11 +33,13 @@ class BSplineBackwardLayout:
         self.padded_n_knots = self.horizon = self.dof = 0
 
 
-def get_spline_support_size(degree): return degree + 1
-def get_total_knots(n_knots, degree): return n_knots + get_spline_support_size(degree)
+def get_spline_support_size(degree: int) -> int: return degree + 1
+def get_total_knots(n_knots: int, degree: int) -> int: return n_knots + get_spline_support_size(degree)
 
 
-def compute_bspline_backward_layout(horizon, dof, n_knots, bspline_degree):
+def compute_bspline_backward_layout(
+    horizon: int, dof: int, n_knots: int, bspline_degree: int
+) -> BSplineBackwardLayout:
     layout = BSplineBackwardLayout()
     layout.padded_n_knots = get_total_knots(n_knots, bspline_degree)
     layout.interpolation_steps = horizon // layout.padded_n_knots
@@ -50,19 +61,25 @@ class BSplineLaunchCfg:
         threads = min(size, limit)
         return LaunchConfig(ceil_div(size, threads), threads, 0)
     @staticmethod
-    def calculate_forward_config(batch_size, dof, horizon): return BSplineLaunchCfg._linear(batch_size*dof*horizon, 128)
+    def calculate_forward_config(batch_size: int, dof: int, horizon: int) -> LaunchConfig: return BSplineLaunchCfg._linear(batch_size*dof*horizon, 128)
     @staticmethod
-    def calculate_backward_config(batch_size, dof, n_knots, horizon, bspline_degree):
+    def calculate_backward_config(
+        batch_size: int, dof: int, n_knots: int, horizon: int, bspline_degree: int
+    ) -> LaunchConfig:
         layout = compute_bspline_backward_layout(horizon, dof, n_knots, bspline_degree)
         return BSplineLaunchCfg._linear(batch_size*dof*layout.threads_for_n_knots, 128)
     @staticmethod
-    def calculate_single_dt_config(batch_size, dof, max_out_tsteps): return BSplineLaunchCfg._linear(batch_size*dof*max_out_tsteps, 256)
+    def calculate_single_dt_config(batch_size: int, dof: int, max_out_tsteps: int) -> LaunchConfig: return BSplineLaunchCfg._linear(batch_size*dof*max_out_tsteps, 256)
 
 
 class LegacyTrajectoryLaunchCfg:
     @staticmethod
-    def calculate_differentiation_forward_config(batch_size, dof, horizon): return BSplineLaunchCfg._linear(batch_size*dof*horizon, 128)
+    def calculate_differentiation_forward_config(
+        batch_size: int, dof: int, horizon: int
+    ) -> LaunchConfig: return BSplineLaunchCfg._linear(batch_size*dof*horizon, 128)
     @staticmethod
-    def calculate_differentiation_backward_config(batch_size, dof, horizon): return BSplineLaunchCfg._linear(batch_size*dof*(horizon-4), 128)
+    def calculate_differentiation_backward_config(
+        batch_size: int, dof: int, horizon: int
+    ) -> LaunchConfig: return BSplineLaunchCfg._linear(batch_size*dof*(horizon-4), 128)
     @staticmethod
-    def calculate_integration_config(batch_size, dof): return BSplineLaunchCfg._linear(batch_size*dof, 512)
+    def calculate_integration_config(batch_size: int, dof: int) -> LaunchConfig: return BSplineLaunchCfg._linear(batch_size*dof, 512)

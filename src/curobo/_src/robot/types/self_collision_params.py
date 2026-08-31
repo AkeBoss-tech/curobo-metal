@@ -12,12 +12,14 @@ operators.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple, Union
 import math
 
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise, log_debug
 
 
 _INTEGER_DTYPES = {torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8}
@@ -41,7 +43,7 @@ def _copy_or_clone_tensor(
 
 
 @dataclass
-class SelfCollisionKinematicsCfg:
+class _SelfCollisionKinematicsCfgPortable:
     """Validated sphere-pair configuration for portable self collision.
 
     ``collision_pairs`` is an ordered, unique ``[P, 2]`` tensor with each
@@ -427,6 +429,73 @@ class SelfCollisionKinematicsCfg:
             )
         )
         return SelfCollisionKinematicsCfg.create_from_sphere_pair_distances(distances, padding)
+
+
+@dataclass
+class SelfCollisionKinematicsCfg:
+    """Dataclass that stores self collision attributes to pass to cuda kernel."""
+
+    num_spheres: int = 0
+    sphere_padding: Optional[torch.Tensor] = None
+    collision_pairs: Optional[torch.Tensor] = None
+    _num_checks_per_thread_large_collision_pairs: int = 256
+    _max_threads_per_block_large_collision_pairs: int = 512
+    _max_threads_per_block_small_collision_pairs: int = 64
+    _num_checks_per_thread_small_collision_pairs: int = 32
+
+    @property
+    def num_checks_per_thread(self):
+        raise NotImplementedError
+
+    @property
+    def max_threads_per_block(self):
+        raise NotImplementedError
+
+    @property
+    def num_blocks_per_batch(self):
+        raise NotImplementedError
+
+    @profiler.record_function("SelfCollisionKinematicsCfg.create_from_sphere_pair_distances")
+    @staticmethod
+    def create_from_sphere_pair_distances(
+        sphere_pair_distances: torch.Tensor,
+        sphere_padding: torch.Tensor,
+    ) -> SelfCollisionKinematicsCfg:
+        raise NotImplementedError
+
+    @profiler.record_function(
+        "SelfCollisionKinematicsCfg.compute_sphere_pair_distance_with_link_pair_ignores"
+    )
+    @staticmethod
+    def compute_sphere_pair_distance_with_link_pair_ignores(
+        collision_link_names: List[str],
+        link_name_to_sphere_index: Dict[str, int],
+        self_collision_link_pair_ignores: Dict[str, List[str]],
+        self_collision_link_padding: Dict[str, float],
+        all_link_spheres: torch.Tensor,
+        link_index_to_sphere_index: torch.Tensor,
+        device_cfg: DeviceCfg,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    @profiler.record_function("SelfCollisionKinematicsCfg.create_from_link_pairs")
+    @staticmethod
+    def create_from_link_pairs(
+        collision_link_names: List[str],
+        link_name_to_sphere_index: Dict[str, int],
+        self_collision_link_pair_ignores: Dict[str, List[str]],
+        self_collision_link_padding: Dict[str, float],
+        all_link_spheres: torch.Tensor,
+        link_index_to_sphere_index: torch.Tensor,
+        device_cfg: DeviceCfg,
+    ) -> SelfCollisionKinematicsCfg:
+        raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    # Keep the CPU/MPS validation and tensor-management extensions available
+    # at runtime while the direct declaration above remains pinned-V2 exact.
+    SelfCollisionKinematicsCfg = _SelfCollisionKinematicsCfgPortable
 
 
 __all__ = ["SelfCollisionKinematicsCfg"]

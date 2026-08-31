@@ -99,12 +99,10 @@ class CSpaceParams:
         self._validate_values()
 
     def _validate_joint_names(self) -> None:
-        if not self.joint_names:
-            raise ValueError("joint_names must not be empty")
         if any(not isinstance(name, str) or not name for name in self.joint_names):
             raise TypeError("joint_names must contain non-empty strings")
         if len(set(self.joint_names)) != len(self.joint_names):
-            raise ValueError("joint_names must be unique")
+            raise ValueError("duplicate joint names; joint_names must be unique")
 
     def _per_dof_tensor(
         self, name: str, value: object, dof: int, *, scalar: bool = False
@@ -155,7 +153,7 @@ class CSpaceParams:
         if invalid:
             raise ValueError("position_limit_clip must be non-negative")
 
-    def inplace_reindex(self, joint_names: List[str]) -> None:
+    def inplace_reindex(self, joint_names: List[str]):
         """Select and reorder per-DOF parameters by joint name.
 
         ``joint_names`` may be a strict subset (used by reduced kinematic
@@ -183,7 +181,7 @@ class CSpaceParams:
             self.position_limit_clip = self.position_limit_clip.index_select(0, index).clone()
         self.joint_names = requested
 
-    def copy_(self, new_config: "CSpaceParams") -> "CSpaceParams":
+    def copy_(self, new_config: CSpaceParams) -> CSpaceParams:
         """Copy values while retaining compatible caller-held tensor buffers."""
         if not isinstance(new_config, CSpaceParams):
             raise TypeError("new_config must be a CSpaceParams")
@@ -202,7 +200,7 @@ class CSpaceParams:
             self.position_limit_clip = source_clip
         return self
 
-    def clone(self) -> "CSpaceParams":
+    def clone(self) -> CSpaceParams:
         """Return an independent configuration with the same device policy."""
         return CSpaceParams(
             joint_names=self.joint_names.copy(),
@@ -248,7 +246,7 @@ class CSpaceParams:
         joint_position_lower: torch.Tensor,
         joint_names: List[str],
         device_cfg: DeviceCfg = DeviceCfg(),
-    ) -> "CSpaceParams":
+    ) -> CSpaceParams:
         """Create unit-weight C-space parameters centered in valid position limits."""
         names = list(joint_names)
         dof = len(names)

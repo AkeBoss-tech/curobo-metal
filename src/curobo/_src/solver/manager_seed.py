@@ -17,6 +17,7 @@ from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.util.sampling.sample_buffer import SampleBuffer
 from curobo._src.util.trajectory_seed_generator import TrajectorySeedGenerator
+from curobo._src.util.logging import log_and_raise, log_warn
 
 
 TensorOrState = Union[torch.Tensor, JointState]
@@ -38,7 +39,7 @@ class SeedManager:
         action_bound_highs: torch.Tensor,
         random_seed: int = 123,
         action_horizon: int = 1,
-    ) -> None:
+    ):
         if isinstance(action_dim, bool) or not isinstance(action_dim, int) or action_dim < 1:
             raise ValueError("action_dim must be a positive integer")
         if isinstance(action_horizon, bool) or not isinstance(action_horizon, int) or action_horizon < 1:
@@ -178,9 +179,9 @@ class SeedManager:
         self,
         batch_size: int,
         num_seeds: int,
-        seed_config: Optional[TensorOrState] = None,
+        seed_config: Optional[torch.Tensor] = None,
         current_state: Optional[JointState] = None,
-        seed_traj: Optional[TensorOrState] = None,
+        seed_traj: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Return action seeds in optimizer layout ``[B * N, 1, dof]``.
 
@@ -215,8 +216,8 @@ class SeedManager:
         batch_size: int,
         num_seeds: int,
         current_state: JointState,
-        seed_config: Optional[TensorOrState] = None,
-        seed_traj: Optional[TensorOrState] = None,
+        seed_config: Optional[torch.Tensor] = None,
+        seed_traj: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Return full trajectory seeds in optimizer layout ``[B * N, H, dof]``."""
         self._positive_count(batch_size, "batch_size")

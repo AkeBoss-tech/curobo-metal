@@ -8,20 +8,26 @@ CPU/MPS tensors and are consumed by the portable scene-collision backend.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
 import torch
 
 from curobo._src.geom.data.data_cuboid import CuboidData
 from curobo._src.geom.data.data_mesh import MeshData
 from curobo._src.geom.data.data_voxel import VoxelData
+from curobo._src.geom.data.data_cuboid import CuboidDataWarp
+from curobo._src.geom.data.data_mesh import MeshDataWarp
+from curobo._src.geom.data.data_voxel import VoxelDataWarp
 from curobo._src.geom.types import Cuboid, Mesh, Obstacle, SceneCfg, VoxelGrid
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.pose import Pose
+from curobo._src.util.logging import log_and_raise
+
+wp = None
 
 
 @dataclass
-class SceneData:
+class _SceneDataPortable:
     """Mutable, per-environment portable geometry storage."""
 
     cuboids: CuboidData | None = None
@@ -205,9 +211,40 @@ class SceneData:
         )
 
 
-class SceneDataWarp:
+class _SceneDataWarpPortable:
     def __init__(self, *args, **kwargs):
         raise NotImplementedError("Warp scene data is unavailable on the portable backend")
+
+
+class SceneData:
+    def get_valid_data(self) -> List[Union[CuboidData, MeshData, VoxelData]]: raise NotImplementedError
+    @classmethod
+    def create_cache(cls, num_envs: int, device_cfg: DeviceCfg, cuboid_cache: Optional[int] = None, mesh_cache: Optional[int] = None, mesh_max_dist: float = 0.1, voxel_cache: Optional[dict] = None) -> SceneData: raise NotImplementedError
+    @classmethod
+    def from_scene_cfg(cls, scene_cfg: SceneCfg, device_cfg: DeviceCfg, num_envs: int = 1, env_idx: int = 0, cuboid_cache: Optional[int] = None, mesh_cache: Optional[int] = None, mesh_max_dist: float = 0.1, voxel_cache: Optional[dict] = None) -> SceneData: raise NotImplementedError
+    @classmethod
+    def from_batch_scene_cfg(cls, scene_cfg_list: List[SceneCfg], device_cfg: DeviceCfg, cuboid_cache: Optional[int] = None, mesh_cache: Optional[int] = None, mesh_max_dist: float = 0.1, voxel_cache: Optional[dict] = None) -> SceneData: raise NotImplementedError
+    def add_obstacle(self, obstacle: Obstacle, env_idx: int = 0) -> int: raise NotImplementedError
+    def update_obstacle_pose(self, name: str, pose: Pose, env_idx: int = 0) -> None: raise NotImplementedError
+    def enable_obstacle(self, name: str, enabled: bool = True, env_idx: int = 0) -> None: raise NotImplementedError
+    def get_obstacle_names(self, env_idx: int = 0) -> List[str]: raise NotImplementedError
+    def check_obstacle_exists(self, name: str, env_idx: int = 0) -> bool: raise NotImplementedError
+    def clear(self, env_idx: Optional[int] = None) -> None: raise NotImplementedError
+    def load_from_scene_cfg(self, scene_cfg: SceneCfg, env_idx: int = 0, store_reference: bool = True) -> None: raise NotImplementedError
+    def has_cuboids(self) -> bool: raise NotImplementedError
+    def has_meshes(self) -> bool: raise NotImplementedError
+    def has_voxels(self) -> bool: raise NotImplementedError
+    def get_active_types(self) -> dict: raise NotImplementedError
+    def to_warp(self, mesh_max_dist: Optional[float] = None) -> SceneDataWarp: raise NotImplementedError
+
+
+class SceneDataWarp:
+    pass
+
+
+if not TYPE_CHECKING:
+    SceneData = _SceneDataPortable
+    SceneDataWarp = _SceneDataWarpPortable
 
 
 __all__ = ["SceneData", "SceneDataWarp"]

@@ -8,6 +8,7 @@
     "particle_upper",
     "particle_seeds"
   ],
+  "required_matrix": {"cases": ["five_seed_band", "fixed_seed_repeat", "shift_lifecycle", "debug_trace", "termination", "alternate_config"], "output": "matrix_observed"},
   "required_evidence": {
     "edge": {
       "case": "facade_lifecycle",

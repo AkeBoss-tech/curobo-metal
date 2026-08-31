@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import torch
 
 from curobo._src.geom.collision.buffer_collision import CollisionBuffer
+from curobo._src.geom.collision.checker_collision import CollisionChecker
+from curobo._src.geom.data.data_scene import SceneData
 from curobo._src.geom.types import Capsule, Cuboid, Cylinder, Mesh, SceneCfg, Sphere, VoxelGrid
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.pose import Pose
@@ -16,6 +18,9 @@ from curobo_metal.collision_checker import (
 )
 from curobo_metal.ops.world_collision import Mesh as BackendMesh
 from curobo_metal.ops.world_collision import VoxelGrid as BackendVoxelGrid
+
+if TYPE_CHECKING:
+    from curobo._src.robot.kinematics.kinematics_state import KinematicsState
 
 
 def _rotation(pose: list[float], device_cfg: DeviceCfg) -> torch.Tensor:
@@ -46,7 +51,33 @@ class SceneCollisionCfg:
             raise ValueError("max_distance must be positive")
 
 
-class SceneCollision:
+class _ObstacleCacheView:
+    """Read-only V2 cache metadata backed by the portable collision cache."""
+
+    def __init__(self, scene: "SceneCollision", kind: str, cache: object) -> None:
+        self._scene = scene
+        self._kind = kind
+        self._cache = cache
+
+    def get_idx(self, name: str, env_idx: int = 0) -> int:
+        kind, slot = self._scene._names[env_idx][name]
+        if kind != self._kind:
+            raise KeyError(f"{name!r} is not a {self._kind} obstacle")
+        return slot
+
+    @property
+    def enable(self) -> torch.Tensor:
+        return self._cache.active
+
+
+class _SceneCollisionDataView:
+    def __init__(self, scene: "SceneCollision") -> None:
+        self.cuboids = _ObstacleCacheView(scene, "primitive", scene._world.primitive_cache)
+        self.meshes = _ObstacleCacheView(scene, "mesh", scene._world.mesh_cache)
+        self.voxels = _ObstacleCacheView(scene, "voxel", scene._world.voxel_cache)
+
+
+class _SceneCollisionPortable:
     def __init__(self, config: SceneCollisionCfg) -> None:
         self.device_cfg = config.device_cfg
         self.scene_model = config.scene_model
@@ -82,6 +113,7 @@ class SceneCollision:
         for index, scene in enumerate(scenes):
             self.load_collision_model(scene, index)
         self.scene_model = config.scene_model
+        self.data = _SceneCollisionDataView(self)
 
     @classmethod
     def from_config(cls, config: SceneCollisionCfg) -> "SceneCollision":
@@ -285,6 +317,11 @@ class SceneCollision:
         activation = float(activation_distance.item())
         if activation < 0:
             raise ValueError("activation_distance must be nonnegative")
+        disabled_spheres = query_spheres[..., 3] < 0
+        collision_spheres = query_spheres
+        if bool(disabled_spheres.any().item()):
+            collision_spheres = query_spheres.clone()
+            collision_spheres[..., 3].clamp_min_(0)
         old = self._world.config
         self._world.config = replace(
             old, activation_distance=activation,
@@ -300,15 +337,15 @@ class SceneCollision:
                 )
             )
             if not has_backend:
-                distance = torch.full_like(query_spheres[..., 0], torch.inf)
-                gradient = torch.zeros_like(query_spheres[..., :3])
+                distance = torch.full_like(collision_spheres[..., 0], torch.inf)
+                gradient = torch.zeros_like(collision_spheres[..., :3])
             elif swept:
-                if query_spheres.shape[1] < 2:
+                if collision_spheres.shape[1] < 2:
                     raise ValueError("swept query requires at least two trajectory knots")
                 segments, gradients = [], []
-                for knot in range(query_spheres.shape[1] - 1):
+                for knot in range(collision_spheres.shape[1] - 1):
                     result = self._world.get_swept_sphere_distance(
-                        query_spheres[:, knot], query_spheres[:, knot + 1],
+                        collision_spheres[:, knot], collision_spheres[:, knot + 1],
                         env_indices=env_query_idx,
                     )
                     segments.append(result.distance)
@@ -318,13 +355,15 @@ class SceneCollision:
                 distance = torch.cat((segment_distance, segment_distance[:, -1:]), dim=1)
                 gradient = torch.cat((segment_gradient, segment_gradient[:, -1:]), dim=1)
             else:
-                batch, horizon, count, _ = query_spheres.shape
+                batch, horizon, count, _ = collision_spheres.shape
                 env = None if env_query_idx is None else env_query_idx[:, None].expand(batch, horizon).reshape(-1)
-                result = self._world.get_sphere_distance(query_spheres.reshape(-1, count, 4), env_indices=env)
+                result = self._world.get_sphere_distance(
+                    collision_spheres.reshape(-1, count, 4), env_indices=env
+                )
                 distance = result.distance.reshape(batch, horizon, count)
                 gradient = result.gradient.reshape(batch, horizon, count, 3)
             analytic_distance, analytic_gradient = self._analytic_distance(
-                query_spheres, env_query_idx
+                collision_spheres, env_query_idx
             )
             analytic_distance = analytic_distance.reshape_as(distance)
             analytic_gradient = analytic_gradient.reshape_as(gradient)
@@ -332,6 +371,12 @@ class SceneCollision:
             distance = torch.minimum(distance, analytic_distance)
             gradient = torch.where(
                 choose_analytic[..., None], analytic_gradient, gradient
+            )
+            distance = torch.where(
+                disabled_spheres, torch.zeros_like(distance), distance
+            )
+            gradient = torch.where(
+                disabled_spheres[..., None], torch.zeros_like(gradient), gradient
             )
         finally:
             self._world.config = old
@@ -484,6 +529,135 @@ class SceneCollision:
             return None
         dims = [float(x * value.voxel_size) for x in value.values.shape]
         return Cuboid(name=f"voxel_grid_{env_idx}", pose=[*value.translation.tolist(), 1, 0, 0, 0], dims=dims)
+
+
+@dataclass
+class SceneCollision:
+    """Pinned cuRoboV2 declaration surface for portable scene collision."""
+
+    checker: CollisionChecker
+    data: SceneData
+    device_cfg: DeviceCfg
+    scene_model: Optional[Union[SceneCfg, List[SceneCfg]]] = None
+
+    @classmethod
+    def from_config(cls, config: SceneCollisionCfg) -> "SceneCollision":
+        raise NotImplementedError
+
+    @property
+    def collision_types(self) -> Dict[str, bool]:
+        raise NotImplementedError
+
+    @property
+    def num_envs(self) -> int:
+        raise NotImplementedError
+
+    def get_sphere_distance(
+        self,
+        state: "KinematicsState",
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_sphere_collision(
+        self,
+        state: "KinematicsState",
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_swept_sphere_distance(
+        self,
+        state: "KinematicsState",
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        trajectory_dt: torch.Tensor,
+        enable_speed_metric: bool = False,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_swept_sphere_collision(
+        self,
+        state: "KinematicsState",
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        trajectory_dt: torch.Tensor,
+        enable_speed_metric: bool = False,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_sphere_distance_raw(
+        self,
+        query_spheres: torch.Tensor,
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_swept_sphere_distance_raw(
+        self,
+        query_spheres: torch.Tensor,
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        trajectory_dt: torch.Tensor,
+        enable_speed_metric: bool = False,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def load_collision_model(self, scene_model: SceneCfg, env_idx: int = 0):
+        raise NotImplementedError
+
+    def update_obstacle_pose(self, name: str, w_obj_pose: Pose, env_idx: int = 0):
+        raise NotImplementedError
+
+    def enable_obstacle(self, name: str, enable: bool = True, env_idx: int = 0):
+        raise NotImplementedError
+
+    def get_obstacle_names(self, env_idx: int = 0) -> List[str]:
+        raise NotImplementedError
+
+    def check_obstacle_exists(self, name: str, env_idx: int = 0) -> bool:
+        raise NotImplementedError
+
+    def clear_cache(self, env_idx: Optional[int] = None):
+        raise NotImplementedError
+
+    def get_num_scene_collision_checkers(self) -> int:
+        raise NotImplementedError
+
+    def update_voxel_data(
+        self, voxel_coords: torch.Tensor, features: torch.Tensor, env_idx: int = 0
+    ):
+        raise NotImplementedError
+
+    def get_voxel_grid(self, env_idx: int = 0) -> Optional[Cuboid]:
+        raise NotImplementedError
+
+
+# Retain the high-level CPU/MPS scene implementation at runtime.  It accepts
+# portable scene models and leaves raw CUDA/Warp tensor descriptors explicit.
+if not TYPE_CHECKING:
+    SceneCollision = _SceneCollisionPortable
 
 
 def create_scene_collision(config: SceneCollisionCfg) -> SceneCollision:

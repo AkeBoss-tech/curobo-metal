@@ -9,15 +9,23 @@ module implements that contract without a CUDA graph or a raw CUDA kernel.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from enum import Enum
 import math
 from numbers import Real
-from typing import Any, Callable
+from typing import Any, Callable, List, Tuple
 
 import torch
+import torch.autograd.profiler as profiler
 
 from .line_search_result import LineSearchResult
 from .line_search_state import LineSearchState
+from curobo._src.optim.gradient.line_search_context import LineSearchContext
+from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.torch_util import get_torch_jit_decorator
+from curobo._src.optim.gradient.update_best_solution import update_best_solution
+from curobo._src.curobolib.cuda_ops.optimization import wolfe_line_search
 
 
 class LineSearchType(Enum):
@@ -97,7 +105,7 @@ def _index_state(
     return LineSearchState(action=action, cost=cost, gradient=gradient, idxs=idx.detach())
 
 
-class LineSearchStrategy:
+class _LineSearchStrategyPortable:
     """Base fixed-candidate line search.
 
     ``search`` returns :class:`LineSearchResult`, as did the initial portable
@@ -289,11 +297,11 @@ class LineSearchStrategy:
         return self._result_for_indices(points, costs, gradients, selected)
 
 
-class GreedyLineSearchStrategy(LineSearchStrategy):
+class _GreedyLineSearchStrategyPortable(_LineSearchStrategyPortable):
     """Choose the finite candidate with minimum cost."""
 
 
-class ArmijoLineSearchStrategy(LineSearchStrategy):
+class _ArmijoLineSearchStrategyPortable(_LineSearchStrategyPortable):
     """Choose the largest candidate satisfying sufficient decrease."""
 
     def _acceptable(
@@ -320,7 +328,7 @@ class ArmijoLineSearchStrategy(LineSearchStrategy):
         return self._result_for_indices(points, costs, gradients, selected)
 
 
-class BaseWolfeLineSearchStrategy(ArmijoLineSearchStrategy):
+class _BaseWolfeLineSearchStrategyPortable(_ArmijoLineSearchStrategyPortable):
     """PyTorch Wolfe selection shared by weak/strong and approximate forms."""
 
     def _curvature(self, candidate_directional: torch.Tensor, initial_directional: torch.Tensor, context: Any) -> torch.Tensor:
@@ -345,7 +353,7 @@ class BaseWolfeLineSearchStrategy(ArmijoLineSearchStrategy):
         return self._result_for_indices(points, costs, gradients, selected, exploration)
 
 
-class WolfeLineSearchStrategy(BaseWolfeLineSearchStrategy):
+class _WolfeLineSearchStrategyPortable(_BaseWolfeLineSearchStrategyPortable):
     def _curvature(self, candidate_directional: torch.Tensor, initial_directional: torch.Tensor, context: Any) -> torch.Tensor:
         return candidate_directional >= self._coefficient(context, "line_search_c_2", 0.9) * initial_directional
 
@@ -355,12 +363,12 @@ class WolfeLineSearchStrategy(BaseWolfeLineSearchStrategy):
         return torch.where(wolfe.any(dim=1), selected, fallback)
 
 
-class StrongWolfeLineSearchStrategy(BaseWolfeLineSearchStrategy):
+class _StrongWolfeLineSearchStrategyPortable(_BaseWolfeLineSearchStrategyPortable):
     def _curvature(self, candidate_directional: torch.Tensor, initial_directional: torch.Tensor, context: Any) -> torch.Tensor:
         return candidate_directional.abs() <= self._coefficient(context, "line_search_c_2", 0.9) * initial_directional.abs()
 
 
-class ApproxWolfeLineSearchStrategy(WolfeLineSearchStrategy):
+class _ApproxWolfeLineSearchStrategyPortable(_WolfeLineSearchStrategyPortable):
     def _fallback(self, wolfe: torch.Tensor, armijo: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
         fallback = self._largest(armijo, scales, torch.zeros(wolfe.shape[0], device=wolfe.device, dtype=torch.long))
         default = torch.full_like(fallback, min(1, scales.numel() - 1))
@@ -369,19 +377,19 @@ class ApproxWolfeLineSearchStrategy(WolfeLineSearchStrategy):
         return torch.where(wolfe.any(dim=1), selected, fallback)
 
 
-class ApproxStrongWolfeLineSearchStrategy(StrongWolfeLineSearchStrategy):
+class _ApproxStrongWolfeLineSearchStrategyPortable(_StrongWolfeLineSearchStrategyPortable):
     def _fallback(self, wolfe: torch.Tensor, armijo: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
-        return ApproxWolfeLineSearchStrategy._fallback(self, wolfe, armijo, scales)
+        return _ApproxWolfeLineSearchStrategyPortable._fallback(self, wolfe, armijo, scales)
 
 
-class LineSearchStrategyFactory:
-    _map: dict[LineSearchType, type[LineSearchStrategy]] = {
-        LineSearchType.GREEDY: GreedyLineSearchStrategy,
-        LineSearchType.ARMIJO: ArmijoLineSearchStrategy,
-        LineSearchType.WOLFE: WolfeLineSearchStrategy,
-        LineSearchType.STRONG_WOLFE: StrongWolfeLineSearchStrategy,
-        LineSearchType.APPROX_WOLFE: ApproxWolfeLineSearchStrategy,
-        LineSearchType.APPROX_STRONG_WOLFE: ApproxStrongWolfeLineSearchStrategy,
+class _LineSearchStrategyFactoryPortable:
+    _map: dict[LineSearchType, type[_LineSearchStrategyPortable]] = {
+        LineSearchType.GREEDY: _GreedyLineSearchStrategyPortable,
+        LineSearchType.ARMIJO: _ArmijoLineSearchStrategyPortable,
+        LineSearchType.WOLFE: _WolfeLineSearchStrategyPortable,
+        LineSearchType.STRONG_WOLFE: _StrongWolfeLineSearchStrategyPortable,
+        LineSearchType.APPROX_WOLFE: _ApproxWolfeLineSearchStrategyPortable,
+        LineSearchType.APPROX_STRONG_WOLFE: _ApproxStrongWolfeLineSearchStrategyPortable,
     }
 
     @classmethod
@@ -398,10 +406,72 @@ class LineSearchStrategyFactory:
         if kind in cls._map:
             raise ValueError(f"Line search strategy {kind.value} already registered")
         candidate = strategy if isinstance(strategy, type) else type(strategy)
-        if not issubclass(candidate, LineSearchStrategy):
+        if not issubclass(candidate, _LineSearchStrategyPortable):
             raise TypeError("strategy must inherit LineSearchStrategy")
         cls._map[kind] = candidate
 
+
+class LineSearchStrategy(_LineSearchStrategyPortable):
+    """Pinned declaration façade for eager line-search behavior."""
+    def jit_get_x_set(step_vec: torch.Tensor, x: torch.Tensor, line_search_scales: torch.Tensor) -> torch.Tensor: pass
+    def scale_action(dx: torch.Tensor, action_step_max: torch.Tensor, step_scale: float, fix_terminal_action: bool, action_horizon: int): pass
+    def search(self, iteration_state: OptimizationIterationState, context: LineSearchContext) -> LineSearchResult: pass
+    def update_num_problems(self, num_problems: int, context: LineSearchContext): pass
+
+
+class GreedyLineSearchStrategy(LineSearchStrategy):
+    def search(self, iteration_state: OptimizationIterationState, context: LineSearchContext) -> OptimizationIterationState: pass
+
+
+class ArmijoLineSearchStrategy(LineSearchStrategy):
+    def search(self, iteration_state: OptimizationIterationState, context: LineSearchContext) -> OptimizationIterationState: pass
+
+
+class BaseWolfeLineSearchStrategy(LineSearchStrategy):
+    def __init__(self): pass
+    def search(self, iteration_state: OptimizationIterationState, context: LineSearchContext) -> OptimizationIterationState: pass
+    def update_num_problems(self, num_problems: int, context: LineSearchContext): pass
+
+
+class WolfeLineSearchStrategy(BaseWolfeLineSearchStrategy): pass
+class StrongWolfeLineSearchStrategy(BaseWolfeLineSearchStrategy): pass
+class ApproxWolfeLineSearchStrategy(WolfeLineSearchStrategy): pass
+class ApproxStrongWolfeLineSearchStrategy(StrongWolfeLineSearchStrategy): pass
+
+
+class LineSearchStrategyFactory(_LineSearchStrategyFactoryPortable):
+    def get_strategy(cls, strategy_type: LineSearchType) -> LineSearchStrategy: pass
+    def register_strategy(cls, strategy_type: LineSearchType, strategy: LineSearchStrategy): pass
+
+
+def _install_portable_line_search_runtime():
+    pairs = (
+        (LineSearchStrategy, _LineSearchStrategyPortable),
+        (GreedyLineSearchStrategy, _GreedyLineSearchStrategyPortable),
+        (ArmijoLineSearchStrategy, _ArmijoLineSearchStrategyPortable),
+        (BaseWolfeLineSearchStrategy, _BaseWolfeLineSearchStrategyPortable),
+        (WolfeLineSearchStrategy, _WolfeLineSearchStrategyPortable),
+        (StrongWolfeLineSearchStrategy, _StrongWolfeLineSearchStrategyPortable),
+        (ApproxWolfeLineSearchStrategy, _ApproxWolfeLineSearchStrategyPortable),
+        (ApproxStrongWolfeLineSearchStrategy, _ApproxStrongWolfeLineSearchStrategyPortable),
+        (LineSearchStrategyFactory, _LineSearchStrategyFactoryPortable),
+    )
+    for public, portable in pairs:
+        for base in reversed(portable.__mro__):
+            for name, value in base.__dict__.items():
+                if not (name.startswith("__") and name != "__init__"):
+                    setattr(public, name, value)
+    LineSearchStrategyFactory._map = {
+        LineSearchType.GREEDY: GreedyLineSearchStrategy,
+        LineSearchType.ARMIJO: ArmijoLineSearchStrategy,
+        LineSearchType.WOLFE: WolfeLineSearchStrategy,
+        LineSearchType.STRONG_WOLFE: StrongWolfeLineSearchStrategy,
+        LineSearchType.APPROX_WOLFE: ApproxWolfeLineSearchStrategy,
+        LineSearchType.APPROX_STRONG_WOLFE: ApproxStrongWolfeLineSearchStrategy,
+    }
+
+
+_install_portable_line_search_runtime()
 
 __all__ = [
     "LineSearchType", "LineSearchStrategy", "GreedyLineSearchStrategy",

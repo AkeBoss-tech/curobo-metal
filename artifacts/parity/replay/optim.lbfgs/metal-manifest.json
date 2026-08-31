@@ -3,7 +3,7 @@
   "capability": "optim.lbfgs",
   "corpus": {
     "case_file": "optim.lbfgs.json",
-    "case_sha256": "18380fb03dbe1284fbba28268185a99264d80c252cedce794ad9b67fd5a60160",
+    "case_sha256": "72fd0725025c7c7e90b9964a0fbd39c6a01862f3f7e9b361ea03ab099b1ceb74",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,6 +21,18 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "bounded_config",
+        "alternate_config",
+        "reset_lifecycle",
+        "debug_trace",
+        "nonfinite_termination",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "lbfgs",
     "status": false
   },
@@ -34,7 +46,7 @@
   "operation": "lbfgs",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "5983e85ce3c3d974b84b7ce918953c336c5c26f284468955956f1573d4f82fa8"
+    "sha256": "b7c5aee46d3bd3c2e1cb0172fbc4fb9e1eaf1310a5a8041077aa2808baa83eae"
   },
   "runtime": {
     "python": "3.13.9",

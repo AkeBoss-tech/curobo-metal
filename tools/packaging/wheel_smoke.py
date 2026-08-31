@@ -69,7 +69,8 @@ def main() -> None:
         )
     )
     assert robot_state.tool_poses.position.shape == (1, 1, 1, 3)
-    assert robot_state.robot_spheres.shape[-2:] == (61, 4)
+    # The upstream-compatible layout retains four disabled attachment slots.
+    assert robot_state.robot_spheres.shape[-2:] == (65, 4)
 
     # These imports are part of the public drop-in contract. Construction is
     # covered by the source suite because it requires a complete scene config.

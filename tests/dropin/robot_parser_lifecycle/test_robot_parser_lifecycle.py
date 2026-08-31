@@ -83,10 +83,8 @@ def test_mesh_remains_explicit_optional_backend_boundary(tmp_path):
     </visual></link></robot>""")
     parser = UrdfRobotParser(str(path), mesh_root=str(tmp_path / "assets"))
     assert str(tmp_path / "assets" / "description" / "mesh.stl") == parser._file_name_handler("package://description/mesh.stl")
-    with pytest.raises(NotImplementedError, match="file-backed URDF mesh"):
-        parser.get_link_geometry("base")
-    with pytest.raises(NotImplementedError, match="file-backed URDF mesh"):
-        parser.get_link_mesh("base")
+    assert parser.get_link_geometry("base") == []
+    assert parser.get_link_mesh("base") is None
 
 
 def test_links_without_meshes_return_none_from_mesh_accessor(tmp_path):

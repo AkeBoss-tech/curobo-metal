@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import torch
+import torch.autograd.profiler as profiler
 
 from .seed_ik_state import SeedIKState
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 class SeedIterationStateManager:
@@ -19,9 +21,16 @@ class SeedIterationStateManager:
     EPSILON_DIVISION_SAFETY = 1e-8
 
     def __init__(
-        self, action_min, action_max, rho_min, lambda_factor, lambda_min,
-        lambda_max, convergence_position_tolerance,
-        convergence_orientation_tolerance, convergence_joint_limit_weight,
+        self,
+        action_min: torch.Tensor,
+        action_max: torch.Tensor,
+        rho_min: float,
+        lambda_factor: float,
+        lambda_min: float,
+        lambda_max: float,
+        convergence_position_tolerance: float,
+        convergence_orientation_tolerance: float,
+        convergence_joint_limit_weight: float,
     ):
         if not isinstance(action_min, torch.Tensor) or not isinstance(action_max, torch.Tensor):
             raise TypeError("action_min and action_max must be torch.Tensor values")
@@ -94,7 +103,7 @@ class SeedIterationStateManager:
     def update_iteration_state(
         self, current_state: SeedIKState, candidate_state: SeedIKState,
         predicted_reduction: torch.Tensor, batch_size: int,
-    ):
+    ) -> SeedIKState:
         batch_size = self._require_batch(batch_size)
         self._validate_state(current_state, "current_state", batch_size)
         self._validate_state(candidate_state, "candidate_state", batch_size)

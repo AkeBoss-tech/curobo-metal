@@ -17,6 +17,8 @@ import torch
 
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 class LinearConnector:
@@ -65,9 +67,9 @@ class LinearConnector:
         self,
         action_dim: int,
         cspace_distance_weight: torch.Tensor,
-        check_feasibility_fn: Callable[[torch.Tensor], torch.Tensor],
+        check_feasibility_fn,
         preallocated_idx_buffer: torch.Tensor,
-    ) -> None:
+    ):
         """Install the rollout/collision callback and C-space metric.
 
         No data is copied: all dependencies must already be on this

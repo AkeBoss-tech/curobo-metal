@@ -350,6 +350,17 @@ class _PortableResultMixin:
             setattr(output, name, _select_value(value, index, self.batch_size))
         return output
 
+    def stage_success(self, stage: str) -> Optional[torch.Tensor]:
+        if stage not in {"approach", "grasp", "lift"}:
+            raise ValueError("stage must be 'approach', 'grasp', or 'lift'")
+        return getattr(self, f"{stage}_success")
+
+    def stage_trajectory(self, stage: str, *, interpolated: bool = False) -> Optional[JointState]:
+        if stage not in {"approach", "grasp", "lift"}:
+            raise ValueError("stage must be 'approach', 'grasp', or 'lift'")
+        name = f"{stage}_{'interpolated_' if interpolated else ''}trajectory"
+        return getattr(self, name)
+
 
 @dataclass
 class MotionPlannerResult(_PortableResultMixin):
@@ -381,19 +392,5 @@ class GraspPlanResult(_PortableResultMixin):
     status: Optional[str] = None
     planning_time: float = 0.0
     goalset_index: Optional[torch.Tensor] = None
-
-    def stage_success(self, stage: str) -> Optional[torch.Tensor]:
-        """Return the requested ``approach``, ``grasp``, or ``lift`` status."""
-        if stage not in {"approach", "grasp", "lift"}:
-            raise ValueError("stage must be 'approach', 'grasp', or 'lift'")
-        return getattr(self, f"{stage}_success")
-
-    def stage_trajectory(self, stage: str, *, interpolated: bool = False) -> Optional[JointState]:
-        """Return a stage trajectory without forcing CUDA interpolation buffers."""
-        if stage not in {"approach", "grasp", "lift"}:
-            raise ValueError("stage must be 'approach', 'grasp', or 'lift'")
-        name = f"{stage}_{'interpolated_' if interpolated else ''}trajectory"
-        return getattr(self, name)
-
 
 __all__ = ["MotionPlannerResult", "GraspPlanResult"]

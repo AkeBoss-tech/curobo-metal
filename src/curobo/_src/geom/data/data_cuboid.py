@@ -8,14 +8,20 @@ not manufacture a Warp struct or kernel entry points.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable, List, Optional
 
 import torch
 
-from curobo._src.geom.types import Cuboid, SceneCfg
+from curobo._src.geom.types import Cuboid, SceneCfg, batch_tensor_cube
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.types.pose import Pose
+from curobo._src.util.logging import log_and_raise
+
+from .helper_pose import get_obs_idx, load_transform_from_inv_pose
 
 from ._portable import PortableObstacleData, PortableWarpStruct, inverse_pose, raw_warp
+
+wp = None
 
 
 class CuboidDataWarp(PortableWarpStruct):
@@ -41,7 +47,7 @@ def _dims(value, cfg: DeviceCfg) -> torch.Tensor:
 
 
 @dataclass(init=False)
-class CuboidData(PortableObstacleData):
+class _CuboidDataPortable(PortableObstacleData):
     """Per-environment OBB cache with deterministic mutable-name semantics."""
 
     @classmethod
@@ -137,7 +143,35 @@ class CuboidData(PortableObstacleData):
         self.dims[env_idx, self.get_idx(name, env_idx), :3].copy_(_dims(dims, self.device_cfg))
 
 
-is_obs_enabled = load_obstacle_transform = compute_local_sdf = compute_local_sdf_with_grad = raw_warp
+def is_obs_enabled(obs_set: CuboidDataWarp, env_idx: wp.int32, local_idx: wp.int32) -> wp.bool: raise NotImplementedError
+def load_obstacle_transform(obs_set: CuboidDataWarp, env_idx: wp.int32, local_idx: wp.int32) -> wp.transform: raise NotImplementedError
+def compute_local_sdf(obs_set: CuboidDataWarp, env_idx: wp.int32, local_idx: wp.int32, local_pt: wp.vec3) -> wp.float32: raise NotImplementedError
+def compute_local_sdf_with_grad(obs_set: CuboidDataWarp, env_idx: wp.int32, local_idx: wp.int32, local_pt: wp.vec3, query_distance: wp.float32) -> wp.vec4: raise NotImplementedError
+
+
+class CuboidData:
+    @classmethod
+    def create_cache(cls, max_n: int, num_envs: int, device_cfg: DeviceCfg) -> "CuboidData": raise NotImplementedError
+    @classmethod
+    def from_scene_cfg(cls, scene_cfg: SceneCfg, device_cfg: DeviceCfg, env_idx: int = 0, num_envs: int = 1, max_n: Optional[int] = None) -> "CuboidData": raise NotImplementedError
+    @classmethod
+    def from_batch_scene_cfg(cls, scene_cfg_list: List[SceneCfg], device_cfg: DeviceCfg, max_n: Optional[int] = None) -> "CuboidData": raise NotImplementedError
+    def load_batch(self, cuboids: List[Cuboid], env_idx: int) -> None: raise NotImplementedError
+    def add(self, cuboid: Cuboid, env_idx: int = 0) -> int: raise NotImplementedError
+    def add_from_raw(self, name: str, dims: torch.Tensor, env_idx: int, w_obj_pose: Optional[Pose] = None, obj_w_pose: Optional[Pose] = None) -> int: raise NotImplementedError
+    def update_pose(self, name: str, w_obj_pose: Optional[Pose] = None, obj_w_pose: Optional[Pose] = None, env_idx: int = 0) -> None: raise NotImplementedError
+    def update_dims(self, name: str, dims: torch.Tensor, env_idx: int = 0) -> None: raise NotImplementedError
+    def set_enabled(self, name: str, enabled: bool, env_idx: int = 0) -> None: raise NotImplementedError
+    def has_name(self, name: str, env_idx: int = 0) -> bool: raise NotImplementedError
+    def get_idx(self, name: str, env_idx: int = 0) -> int: raise NotImplementedError
+    def get_active_count(self, env_idx: int = 0) -> int: raise NotImplementedError
+    def get_names(self, env_idx: int = 0) -> List[str]: raise NotImplementedError
+    def clear(self, env_idx: Optional[int] = None) -> None: raise NotImplementedError
+    def to_warp(self) -> CuboidDataWarp: raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    CuboidData = _CuboidDataPortable
 
 __all__ = [
     "CuboidData", "CuboidDataWarp", "is_obs_enabled", "load_obstacle_transform",

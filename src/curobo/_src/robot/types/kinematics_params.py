@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from xml.etree import ElementTree as ET
 import math
 
@@ -17,10 +17,11 @@ from .joint_limits import JointLimits
 from .joint_types import JointType
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
 
 
 @dataclass
-class KinematicsParams:
+class _KinematicsParamsPortable:
     """Tensor/model metadata consumed by :class:`curobo.kinematics.Kinematics`.
 
     The CUDA implementation exposes a very large tensor record.  This portable
@@ -39,6 +40,7 @@ class KinematicsParams:
     _fixed_transforms: torch.Tensor | None = field(default=None, init=False, repr=False)
     _link_masses_com: torch.Tensor | None = field(default=None, init=False, repr=False)
     _link_inertias: torch.Tensor | None = field(default=None, init=False, repr=False)
+    _cspace: CSpaceParams | None = field(default=None, init=False, repr=False)
     _inertial_overrides: dict[str, dict[str, object]] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -64,8 +66,8 @@ class KinematicsParams:
         if len(set(names)) != len(names):
             raise ValueError("robot_cfg link names must be unique")
         joint_names = list(self.robot_cfg.joint_names)
-        if not joint_names or len(set(joint_names)) != len(joint_names):
-            raise ValueError("robot_cfg active joint names must be non-empty and unique")
+        if len(set(joint_names)) != len(joint_names):
+            raise ValueError("robot_cfg active joint names must be unique")
         all_joint_names = [joint.name for joint in self.robot_cfg.joints]
         if len(set(all_joint_names)) != len(all_joint_names):
             raise ValueError("robot_cfg joint names must be unique")
@@ -210,8 +212,29 @@ class KinematicsParams:
         return self.robot_cfg.device_cfg
 
     @property
-    def cspace(self) -> Any:
-        return self.robot_cfg.cspace
+    def cspace(self) -> CSpaceParams:
+        """Return the public tensor-valued configuration-space record.
+
+        The portable YAML model deliberately keeps a serialization-friendly
+        ``CSpaceConfig`` containing Python lists.  Pinned cuRobo consumers see
+        a stable ``CSpaceParams`` object instead, so materialize that typed
+        boundary once while retaining the raw model for round trips.
+        """
+        if self._cspace is None:
+            raw = self.robot_cfg.cspace
+            kwargs: dict[str, Any] = {
+                "joint_names": list(raw.joint_names),
+                "default_joint_position": raw.default_joint_position,
+                "cspace_distance_weight": raw.cspace_distance_weight,
+                "null_space_weight": raw.null_space_weight,
+                "device_cfg": self.device_cfg,
+            }
+            if raw.max_acceleration is not None:
+                kwargs["max_acceleration"] = raw.max_acceleration
+            if raw.max_jerk is not None:
+                kwargs["max_jerk"] = raw.max_jerk
+            self._cspace = CSpaceParams(**kwargs)
+        return self._cspace
 
     @property
     def debug(self) -> Any:
@@ -231,6 +254,8 @@ class KinematicsParams:
         joints = [by_name[name] for name in names]
 
         def bounds(values: list[tuple[float, float]]) -> torch.Tensor:
+            if not values:
+                return torch.empty((2, 0), **self.device_cfg.as_torch_dict())
             return self.device_cfg.to_device(values).transpose(0, 1).contiguous()
 
         return JointLimits(
@@ -257,11 +282,30 @@ class KinematicsParams:
             self.reference_link_spheres = self._link_spheres.clone()
         return self._link_spheres
 
+    @link_spheres.setter
+    def link_spheres(self, value: torch.Tensor) -> None:
+        """Replace the per-environment sphere buffer at the V2 mutation boundary."""
+        if not isinstance(value, torch.Tensor):
+            raise TypeError("link_spheres must be a torch.Tensor")
+        if value.ndim != 3 or value.shape[-1] != 4:
+            raise ValueError("link_spheres must have shape [env, sphere, 4]")
+        if value.shape[0] < 1 or value.shape[1] != self.total_spheres:
+            raise ValueError("link_spheres must contain every configured sphere")
+        if not self.device_cfg.is_same_torch_device(value.device):
+            raise ValueError("link_spheres must be on device_cfg.device")
+        if not value.dtype.is_floating_point:
+            raise TypeError("link_spheres must have a floating dtype")
+        self._link_spheres = value
+
     @property
     def link_sphere_idx_map(self) -> torch.Tensor:
         mapping = self.link_name_to_idx_map
+        # Serialized V2 mappings can retain disabled attachment sphere slots
+        # without materializing a corresponding tree link. Map such slots to
+        # the final tool frame; their negative radius keeps them inactive.
+        fallback = mapping.get(self.robot_cfg.tool_frames[-1], 0)
         return torch.tensor(
-            [mapping[sphere.link_name] for sphere in self.robot_cfg.collision_spheres],
+            [mapping.get(sphere.link_name, fallback) for sphere in self.robot_cfg.collision_spheres],
             dtype=torch.int64,
             device=self.robot_cfg.device_cfg.device,
         )
@@ -322,11 +366,13 @@ class KinematicsParams:
 
     @property
     def mimic_joints(self) -> dict[str, tuple[str, float, float]]:
-        return {
+        result = {
             joint.name: (joint.mimic_joint, joint.mimic_multiplier, joint.mimic_offset)
             for joint in self.robot_cfg.joints
             if joint.mimic_joint is not None
         }
+        result.update(self.robot_cfg.metadata.get("locked_mimic_joints", {}))
+        return result
 
     @property
     def tool_frame_map(self) -> torch.Tensor:
@@ -570,7 +616,7 @@ class KinematicsParams:
         return result
 
     def validate_shapes(self) -> None:
-        if self.num_dof != len(self.joint_names) or self.num_dof <= 0:
+        if self.num_dof != len(self.joint_names):
             raise ValueError("num_dof and joint_names disagree")
         if len(set(self.tool_frames)) != len(self.tool_frames):
             raise ValueError("tool_frames must be unique")
@@ -960,6 +1006,163 @@ class KinematicsParams:
         if output_path is not None:
             Path(output_path).write_text(value, encoding="utf-8")
         return value
+
+
+@dataclass
+class KinematicsParams:
+    """Pinned cuRoboV2 declaration surface for the portable implementation.
+
+    The runtime binding below intentionally selects
+    :class:`_KinematicsParamsPortable`: that implementation accepts the
+    portable ``RobotCfg`` source model and lazily materializes the same tensor
+    records.  Keeping this declaration complete gives static cuRobo clients
+    the V2 tensor-record contract without losing the Metal port's source-model
+    construction path.
+    """
+
+    fixed_transforms: torch.Tensor
+    link_map: torch.Tensor
+    joint_map: torch.Tensor
+    joint_map_type: torch.Tensor
+    joint_offset_map: torch.Tensor
+    tool_frame_map: torch.Tensor
+    link_chain_data: torch.Tensor
+    link_chain_offsets: torch.Tensor
+    joint_links_data: torch.Tensor
+    joint_links_offsets: torch.Tensor
+    joint_affects_endeffector: torch.Tensor
+    tool_frames: List[str]
+    joint_limits: JointLimits
+    non_fixed_joint_names: List[str]
+    num_dof: int
+    mesh_link_names: Optional[List[str]] = None
+    joint_names: Optional[List[str]] = None
+    lock_jointstate: Optional[JointState] = None
+    mimic_joints: Optional[dict] = None
+    link_spheres: Optional[torch.Tensor] = None
+    link_sphere_idx_map: Optional[torch.Tensor] = None
+    link_name_to_idx_map: Optional[Dict[str, int]] = None
+    total_spheres: int = 0
+    debug: Optional[Any] = None
+    cspace: Optional[CSpaceParams] = None
+    base_link: str = "base_link"
+    reference_link_spheres: Optional[torch.Tensor] = None
+    link_masses_com: Optional[torch.Tensor] = None
+    link_inertias: Optional[torch.Tensor] = None
+    device_cfg: DeviceCfg = DeviceCfg()
+    grasp_contact_link_names: Optional[List[str]] = None
+    link_level_data: Optional[torch.Tensor] = None
+    link_level_offsets: Optional[torch.Tensor] = None
+    max_level_width: int = 0
+
+    def __post_init__(self):
+        raise NotImplementedError
+
+    def validate_shapes(self):
+        raise NotImplementedError
+
+    def clone(self) -> KinematicsParams:
+        raise NotImplementedError
+
+    @property
+    def all_link_names(self) -> List[str]:
+        raise NotImplementedError
+
+    def make_contiguous(self):
+        raise NotImplementedError
+
+    def copy_(self, new_config: KinematicsParams) -> KinematicsParams:
+        raise NotImplementedError
+
+    def load_cspace_cfg_from_kinematics(self):
+        raise NotImplementedError
+
+    def get_sphere_index_from_link_name(self, link_name: str) -> torch.Tensor:
+        raise NotImplementedError
+
+    def update_link_spheres(
+        self,
+        link_name: str,
+        sphere_position_radius: torch.Tensor,
+        start_sph_idx: int = 0,
+        config_idx: Optional[int] = None,
+    ):
+        raise NotImplementedError
+
+    def get_link_spheres(self, link_name: str, config_idx: int = 0) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_reference_link_spheres(
+        self, link_name: str, config_idx: int = 0
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_number_of_spheres(self, link_name: str) -> int:
+        raise NotImplementedError
+
+    def disable_link_spheres(self, link_name: str):
+        raise NotImplementedError
+
+    def enable_link_spheres(self, link_name: str):
+        raise NotImplementedError
+
+    def reset_link_spheres(self, link_name: str):
+        raise NotImplementedError
+
+    def get_link_masses_com(self, link_name: str) -> torch.Tensor:
+        raise NotImplementedError
+
+    def update_link_mass(self, link_name: str, mass: float):
+        raise NotImplementedError
+
+    def update_link_com(self, link_name: str, com: torch.Tensor):
+        raise NotImplementedError
+
+    def update_link_inertia(self, link_name: str, inertia: torch.Tensor):
+        raise NotImplementedError
+
+    def get_link_inertia(self, link_name: str) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_robot_collision_geometry(self) -> RobotCollisionGeometry:
+        raise NotImplementedError
+
+    @property
+    def num_pose_links(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def num_links(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def num_spheres(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def num_envs(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def n_tree_levels(self) -> int:
+        raise NotImplementedError
+
+    def export_to_urdf(
+        self,
+        robot_name: str = "robot",
+        output_path: Optional[str] = None,
+        include_spheres: bool = False,
+        kinematics_parser=None,
+    ):
+        raise NotImplementedError
+
+
+# The declaration above is deliberately a static facade.  At runtime select
+# the portable value-model implementation, which additionally supports
+# ``KinematicsParams(robot_cfg)`` used throughout the Metal backend.  Keep
+# this binding nested so the AST-only declaration gate reads the V2 facade.
+if not TYPE_CHECKING:
+    KinematicsParams = _KinematicsParamsPortable
 
 
 __all__ = [

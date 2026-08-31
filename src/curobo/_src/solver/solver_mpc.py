@@ -2,22 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import torch
 
 from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
 from curobo._src.geom.collision.collision_scene import SceneCollision, SceneCollisionCfg
 from curobo._src.geom.types import SceneCfg
+from curobo._src.rollout.goal_registry import GoalRegistry
+from curobo._src.rollout.metrics import RolloutMetrics
 from curobo._src.solver.manager_goal import GoalManager
 from curobo._src.solver.solve_mode import SolveMode
 from curobo._src.solver.solve_state import SolveState
+from curobo._src.solver.solver_core import SolverCore
 from curobo._src.solver.solver_ik import IKSolver
 from curobo._src.solver.solver_ik_cfg import IKSolverCfg
 from curobo._src.solver.solver_trajopt import TrajOptSolver
 from curobo._src.solver.solver_trajopt_cfg import TrajOptSolverCfg
 from curobo._src.state.state_joint import JointState
-from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.types.control_space import ControlSpace
+from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.logging import log_and_raise, log_info
 from curobo._src.util.trajectory_execution_manager import TrajectoryExecutionManager
 
 from .solver_mpc_cfg import MPCSolverCfg
@@ -25,7 +31,11 @@ from .solver_mpc_result import MPCSolverResult
 
 
 class MPCSolver:
-    def __init__(self, config: MPCSolverCfg, scene_collision_checker=None):
+    def __init__(
+        self,
+        config: MPCSolverCfg,
+        scene_collision_checker: Optional[SceneCollision] = None,
+    ) -> None:
         if not isinstance(config, MPCSolverCfg):
             raise TypeError("config must be MPCSolverCfg")
         self.config = config
@@ -86,31 +96,92 @@ class MPCSolver:
         self._warm_start_available = False
         self._tool_pose_tracking = True
         self._joint_position_tracking = False
+        # ``update_world`` was an early portable extension, not part of the
+        # pinned MPCSolver declaration.  Retain it as an instance-level
+        # compatibility hook while keeping the declared V2 surface exact.
+        self.update_world = self._update_world
+        # Preserve the early portable no-argument diagnostics convenience on
+        # constructed instances; the class declaration itself retains V2's
+        # required ``file_path`` callable contract for static consumers.
+        self.debug_dump = self._debug_dump_compat
 
-    optimizer = property(lambda self: self._trajopt)
-    metrics_rollout = property(lambda self: None)
-    auxiliary_rollout = property(lambda self: None)
-    additional_metrics_rollouts = property(lambda self: [])
-    kinematics = property(lambda self: self._ik.kinematics)
-    transition_model = property(lambda self: None)
-    action_dim = property(lambda self: self._ik.action_dim)
-    action_horizon = property(lambda self: self._trajopt.action_horizon)
-    joint_names = property(lambda self: self._ik.joint_names)
-    tool_frames = property(lambda self: self._ik.tool_frames)
-    default_joint_position = property(lambda self: self._ik.default_joint_position)
-    default_joint_state = property(lambda self: self._ik.default_joint_state)
-    device_cfg = property(lambda self: self.config.device_cfg)
-    scene_collision_checker = property(lambda self: self._scene_collision_checker)
-    goal_registry_manager = property(lambda self: self._goal_manager)
+    @property
+    def optimizer(self):
+        return self._trajopt
+
+    @property
+    def metrics_rollout(self):
+        return None
+
+    @property
+    def auxiliary_rollout(self):
+        return None
+
+    @property
+    def additional_metrics_rollouts(self):
+        return []
+
+    @property
+    def kinematics(self):
+        return self._ik.kinematics
+
+    @property
+    def transition_model(self):
+        return None
+
+    @property
+    def action_dim(self) -> int:
+        return self._ik.action_dim
+
+    @property
+    def action_horizon(self) -> int:
+        return self._trajopt.action_horizon
+
+    @property
+    def joint_names(self):
+        return self._ik.joint_names
+
+    @property
+    def tool_frames(self):
+        return self._ik.tool_frames
+
+    @property
+    def default_joint_position(self):
+        return self._ik.default_joint_position
+
+    @property
+    def default_joint_state(self):
+        return self._ik.default_joint_state
+
+    @property
+    def device_cfg(self):
+        return self.config.device_cfg
+
+    @property
+    def scene_collision_checker(self):
+        return self._scene_collision_checker
+
+    @property
+    def goal_registry_manager(self):
+        return self._goal_manager
     # The V2 spelling is useful to integrations which introspect MPC to reuse
     # its pose solver.  Keep the old private name as the implementation detail.
     ik_solver = property(lambda self: self._ik)
-    solve_state = property(lambda self: self._solve_state)
-    seed_manager = property(lambda self: self._trajopt.seed_manager)
-    problem_batch_size = property(
-        lambda self: 0 if self._current_state is None else self._current_state.position.shape[0]
-        if self._current_state.position.ndim > 1 else 1
-    )
+
+    @property
+    def solve_state(self) -> SolveState:
+        return self._solve_state
+
+    @property
+    def seed_manager(self):
+        return self._trajopt.seed_manager
+
+    @property
+    def problem_batch_size(self) -> int:
+        return (
+            0 if self._current_state is None else self._current_state.position.shape[0]
+            if self._current_state.position.ndim > 1 else 1
+        )
 
     def get_all_rollout_instances(self, **kwargs):
         del kwargs
@@ -130,7 +201,12 @@ class MPCSolver:
             batch_size, num_seeds, current_state, seed_config, seed_traj
         )
 
-    def setup(self, current_state: JointState, tool_frames: Optional[List[str]] = None, dt=None):
+    def setup(
+        self,
+        current_state: JointState,
+        tool_frames: Optional[List[str]] = None,
+        dt: Optional[torch.Tensor] = None,
+    ) -> None:
         """Initialise a fixed-shape portable MPC problem.
 
         The implementation retains normal PyTorch allocations instead of CUDA
@@ -179,7 +255,7 @@ class MPCSolver:
             batch_size, max(self.config.num_seeds, 1), current_state
         )
         self._action_buffer = None
-        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
+        self._clear_execution_buffers(clear_robot_state=True)
         self._action_cursor = 0
         self._solve_count = 0
         self._setup_complete = True
@@ -187,9 +263,13 @@ class MPCSolver:
         return True
 
     def update_goal_tool_poses(
-        self, goal_tool_poses: GoalToolPose, robot_ids=None, run_ik=True,
-        use_ik_goal=True, use_best_effort_ik=False,
-    ):
+        self,
+        goal_tool_poses: GoalToolPose,
+        robot_ids: Optional[torch.Tensor] = None,
+        run_ik: bool = True,
+        use_ik_goal: bool = True,
+        use_best_effort_ik: bool = False,
+    ) -> bool:
         if not self._setup_complete:
             raise RuntimeError("MPC problem not setup, call setup first")
         goal_tool_poses = self._normalise_goal_pose(goal_tool_poses)
@@ -223,7 +303,9 @@ class MPCSolver:
             self._joint_position_tracking = True
         return True
 
-    def update_goal_state(self, goal_state: JointState, robot_ids=None):
+    def update_goal_state(
+        self, goal_state: JointState, robot_ids: Optional[torch.Tensor] = None
+    ):
         if not self._setup_complete:
             raise RuntimeError("MPC problem not setup, call setup first")
         goal_state = self._normalise_state(goal_state, "goal_state")
@@ -248,7 +330,7 @@ class MPCSolver:
         if self._setup_complete:
             self._goal_manager.update_current_state(current_state)
 
-    def update_seed_trajectory(self, seed_trajectory):
+    def update_seed_trajectory(self, seed_trajectory: torch.Tensor):
         if not self._setup_complete:
             raise RuntimeError("MPC problem not setup, call setup first")
         values = seed_trajectory.position if isinstance(seed_trajectory, JointState) else seed_trajectory
@@ -271,11 +353,15 @@ class MPCSolver:
         self._require_solver_tensor(values, "seed_trajectory")
         self._seed_trajectory = values.clone()
         self._action_buffer = values[:, 0].clone() if values.ndim == 4 else values.clone()
-        self.trajectory_execution_manager.update_action_buffer(self._action_buffer)
+        self.trajectory_execution_manager.update_state_action_buffers(
+            JointState.from_position(self._action_buffer.clone(), self.joint_names),
+            self._action_buffer,
+        )
+        self._last_result = None
         self._action_cursor = 0
         self._warm_start_available = True
 
-    def update_seed_trajectory_from_goal_state(self, goal_joint_state):
+    def update_seed_trajectory_from_goal_state(self, goal_joint_state: JointState) -> None:
         self.update_goal_state(goal_joint_state)
         self._seed_trajectory = self.prepare_trajectory_seeds(
             self.problem_batch_size, max(self.config.num_seeds, 1), self._current_state,
@@ -360,31 +446,37 @@ class MPCSolver:
         self._warm_start_available = True
         return mpc_result
 
-    def optimize_next_action(self, current_state):
+    def optimize_next_action(self, current_state: JointState) -> MPCSolverResult:
         if not self._setup_complete:
             raise RuntimeError("MPC problem not setup, call setup first")
         self.update_current_state(current_state)
         # A cold plan initializes the portable buffer.  Subsequent calls
         # consume it exactly once per command; re-plan only after the final
         # command has been consumed, matching the upstream execution manager.
-        if self._action_buffer is None or not self.trajectory_execution_manager.has_valid_next_command():
+        if (
+            self._action_buffer is None
+            or self._last_result is None
+            or not self.trajectory_execution_manager.has_valid_next_command()
+        ):
             if not self._warm_start_available:
                 self.cold_start_solve(current_state)
             else:
                 self.warm_start_solve(current_state)
         return self._result_from_action_buffer()
-    def optimize_action_sequence(self, current_state):
+    def optimize_action_sequence(self, current_state: JointState) -> MPCSolverResult:
         if not self._setup_complete:
             raise RuntimeError("MPC problem not setup, call setup first")
         return self.warm_start_solve(current_state)
-    def cold_start_solve(self, current_state):
+    def cold_start_solve(self, current_state: JointState):
         return self._solve_impl(current_state, self.config.cold_start_optimization_num_iters)
-    def warm_start_solve(self, current_state):
+    def warm_start_solve(self, current_state: JointState):
         return self._solve_impl(current_state, self.config.warm_start_optimization_num_iters)
 
-    def set_default_goal_from_current_state(self, current_state, robot_ids=None):
+    def set_default_goal_from_current_state(
+        self, current_state: JointState, robot_ids: Optional[torch.Tensor] = None
+    ) -> None:
         self.update_goal_state(current_state, robot_ids)
-    def reset_robot(self, current_state):
+    def reset_robot(self, current_state: JointState) -> None:
         self.update_current_state(current_state)
         self._goal_state = self._current_state.clone()
         self._goal_manager.update_goal_state(self._goal_state)
@@ -393,9 +485,9 @@ class MPCSolver:
         )
         self._warm_start_available = False
         self._action_buffer = None
-        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
+        self._clear_execution_buffers(clear_robot_state=True)
         self._action_cursor = 0
-    def reset_robot_id(self, current_state, robot_ids):
+    def reset_robot_id(self, current_state: JointState, robot_ids: torch.Tensor) -> None:
         self.update_current_state(current_state)
         ids = self._normalise_robot_ids(robot_ids)
         goal = self._goal_state.clone()
@@ -423,7 +515,7 @@ class MPCSolver:
         self._current_state = None
         self._seed_trajectory = None
         self._action_buffer = None
-        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
+        self._clear_execution_buffers(clear_robot_state=True)
         self._action_cursor = 0
         self._solve_count = 0
         self._setup_complete = False
@@ -432,7 +524,7 @@ class MPCSolver:
     def reset_seed(self):
         self._warm_start_available = False
         self._action_buffer = None
-        self.trajectory_execution_manager.clear_buffers(clear_robot_state=True)
+        self._clear_execution_buffers(clear_robot_state=True)
         self._action_cursor = 0
         return self._trajopt.reset_seed()
     def reset_cuda_graph(self):
@@ -449,7 +541,7 @@ class MPCSolver:
         self._tool_pose_tracking = False
     def enable_joint_position_tracking(self): self._joint_position_tracking = True
     def disable_joint_position_tracking(self): self._joint_position_tracking = False
-    def update_tool_pose_criteria(self, tool_pose_criteria):
+    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]):
         self._tool_pose_criteria = dict(tool_pose_criteria)
         self._ik.update_tool_pose_criteria(tool_pose_criteria)
         self._trajopt.update_tool_pose_criteria(tool_pose_criteria)
@@ -459,7 +551,7 @@ class MPCSolver:
         for name, values in link_properties.items():
             self.update_link_inertial(name, **values)
 
-    def update_world(self, scene_cfg) -> None:
+    def _update_world(self, scene_cfg) -> None:
         """Replace or mutate the portable :class:`SceneCollision` world.
 
         Supported values are ``SceneCfg``, a list of ``SceneCfg`` for the
@@ -474,7 +566,10 @@ class MPCSolver:
         self._trajopt._pose_ik._scene_collision_checker = scene
         self.config.core_cfg.scene_collision_cfg = scene_cfg
 
-    def debug_dump(self, file_path=None):
+    def debug_dump(self, file_path):
+        return self._debug_dump_compat(file_path)
+
+    def _debug_dump_compat(self, file_path=None):
         del file_path
         return {
             "backend": "portable",
@@ -528,7 +623,7 @@ class MPCSolver:
         # interpolation window, prompting a warm-start replan before stale
         # commands leak past that window.  Its command tensor preserves all
         # state derivative channels where the optimizer produced them.
-        index = self.trajectory_execution_manager.command_index
+        index = self._execution_command_index()
         next_action_state = self.trajectory_execution_manager.get_next_command()
         next_action = next_action_state.position
         result = self._last_result.clone()
@@ -543,8 +638,31 @@ class MPCSolver:
             "reoptimized": False,
             "solve_count": self._solve_count,
         })
-        self._action_cursor = self.trajectory_execution_manager.command_index
+        self._action_cursor = self._execution_command_index()
         return result
+
+    def _execution_command_index(self) -> int:
+        """Return the execution helper's consumed-command cursor."""
+        index = getattr(self.trajectory_execution_manager, "command_index", None)
+        if index is None:
+            index = getattr(self.trajectory_execution_manager, "_current_command_idx", None)
+        if not isinstance(index, int) or index < 0:
+            raise RuntimeError("trajectory execution manager has no valid command cursor")
+        return index
+
+    def _clear_execution_buffers(self, *, clear_robot_state: bool) -> None:
+        """Reset materialized execution buffers without requiring extension APIs."""
+        manager = self.trajectory_execution_manager
+        clear = getattr(manager, "clear_buffers", None)
+        if callable(clear):
+            clear(clear_robot_state=clear_robot_state)
+            return
+        manager._current_joint_state_trajectory = None
+        manager._current_action_trajectory = None
+        manager._current_metrics = None
+        manager._current_command_idx = 0
+        if clear_robot_state:
+            manager._current_robot_state_trajectory = None
 
     def prepare_safe_deceleration_trajectory(
         self,

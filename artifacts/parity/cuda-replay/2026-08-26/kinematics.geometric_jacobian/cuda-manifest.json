@@ -1,0 +1,90 @@
+{
+  "backend": "cuda",
+  "capability": "kinematics.geometric_jacobian",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "noncontiguous_batch",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "invalid_link",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "zero",
+        "one",
+        "many",
+        "noncontiguous",
+        "tree_links",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "0cfdc3958d76c8ebd933a070ca165b1e946dfabe7c8d24ccf0d98c6ba1233760",
+  "input_tensor_count": 4,
+  "operation": "geometric_jacobian",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "1b2b47cf87c96db3dc901eab6d9aef0e451a2780c472bd13c5c2c4bbc29996d6",
+    "tensors": {
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          6
+        ]
+      },
+      "tool_jacobian": {
+        "dtype": "float32",
+        "shape": [
+          2,
+          6,
+          2
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 1e-05,
+    "rtol": 0.0001
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

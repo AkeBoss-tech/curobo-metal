@@ -37,9 +37,15 @@ class Pose(Sequence["Pose"]):
             raise ValueError("position and quaternion must share device and dtype")
         if self.normalize_rotation:
             norm = torch.linalg.vector_norm(self.quaternion, dim=-1, keepdim=True)
-            if bool((norm == 0).any().item()):
-                raise ValueError("quaternion must be nonzero")
+            # Match pinned cuRobo: a zero quaternion is retained instead of
+            # raising, while nonzero values are normalized and canonicalized
+            # to a non-negative scalar component.
+            norm = torch.where(norm > 1e-7, norm, torch.ones_like(norm))
             self.quaternion = self.quaternion / norm
+            sign = torch.sign(self.quaternion[..., :1])
+            self.quaternion = self.quaternion * torch.where(
+                sign == 0, torch.ones_like(sign), sign
+            )
         self.batch_size = self.position.shape[0]
 
     @classmethod
@@ -195,13 +201,18 @@ class Pose(Sequence["Pose"]):
 
 
 def _quaternion_to_matrix(q: torch.Tensor) -> torch.Tensor:
-    q = q / torch.linalg.vector_norm(q, dim=-1, keepdim=True)
     w, x, y, z = q.unbind(-1)
-    return torch.stack((
+    matrix = torch.stack((
         1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y),
         2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x),
         2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y),
     ), dim=-1).reshape(*q.shape[:-1], 3, 3)
+    # Warp's pinned zero-quaternion edge case yields -I.  Preserve that
+    # observable contract without sacrificing the numerically stabler
+    # normalized-quaternion formula for valid rotations.
+    zero = (q * q).sum(dim=-1, keepdim=True) == 0
+    negative_identity = -torch.eye(3, dtype=q.dtype, device=q.device).expand_as(matrix)
+    return torch.where(zero.unsqueeze(-1), negative_identity, matrix)
 
 
 def _quaternion_multiply(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:

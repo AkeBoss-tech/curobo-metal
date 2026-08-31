@@ -9,7 +9,16 @@ raw kernel name remains an explicit CUDA/Warp boundary.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import torch
+
+from curobo._src.cost.warp_bound_util import aggregate_bound_cost, shrink_bounds_with_activation_distance
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.warp import get_warp_device_stream, wp as _raw_wp
+
+class _WarpCompat: pass
+wp = _raw_wp if _raw_wp is not None else _WarpCompat()
 
 
 def _require_shape(name: str, value: torch.Tensor, shape: tuple[int, ...]) -> None:
@@ -38,7 +47,7 @@ class PositionCSpaceFunction(torch.autograd.Function):
     """
 
     @classmethod
-    def apply(cls, *args, **kwargs):
+    def _apply_portable(cls, *args, **kwargs):
         # Keep the prior explicit portable boundary for a legacy/raw call
         # while allowing the complete pinned tensor signature below.
         if len(args) != 20 or kwargs:
@@ -71,7 +80,7 @@ class PositionCSpaceFunction(torch.autograd.Function):
         out_gp: torch.Tensor,
         out_gtau: torch.Tensor,
         use_grad_input: bool,
-    ) -> torch.Tensor:
+    ):
         if pos.ndim != 3:
             raise ValueError("pos must have shape [batch, horizon, dof]")
         batch, horizon, dof = pos.shape
@@ -171,7 +180,7 @@ class PositionCSpaceFunction(torch.autograd.Function):
 
     @staticmethod
     @torch.autograd.function.once_differentiable
-    def backward(ctx, grad_out_cost: torch.Tensor | None):
+    def backward(ctx, grad_out_cost: Optional[torch.Tensor]):
         grad_position, grad_torque = ctx.saved_tensors
         if grad_out_cost is not None and ctx.use_grad_input:
             grad_position = grad_position * grad_out_cost
@@ -179,13 +188,18 @@ class PositionCSpaceFunction(torch.autograd.Function):
         return grad_position, grad_torque, *(None for _ in range(18))
 
 
-def forward_cspace_position_warp(*args, **kwargs):
+def forward_cspace_position_warp(pos: wp.array(dtype=wp.float32), effort: wp.array(dtype=wp.float32), cspace_target: wp.array(dtype=wp.float32), cspace_target_idx: wp.array(dtype=wp.int32), p_b: wp.array(dtype=wp.float32), effort_b: wp.array(dtype=wp.float32), weight: wp.array(dtype=wp.float32), activation_distance: wp.array(dtype=wp.float32), cspace_target_weight: wp.array(dtype=wp.float32), cspace_target_dof_weight: wp.array(dtype=wp.float32), squared_l2_reg_weight: wp.array(dtype=wp.float32), current_position: wp.array(dtype=wp.float32), current_velocity: wp.array(dtype=wp.float32), idxs_current_state: wp.array(dtype=wp.int32), v_b: wp.array(dtype=wp.float32), state_dt: wp.array(dtype=wp.float32), out_cost: wp.array(dtype=wp.float32), out_grad_p: wp.array(dtype=wp.float32), out_grad_tau: wp.array(dtype=wp.float32), write_grad: wp.uint8, batch_size: wp.int32, horizon: wp.int32, dof: wp.int32):
     """Raw Warp kernel ABI, intentionally unavailable on CPU/MPS."""
-    del args, kwargs
+    del pos, effort, cspace_target, cspace_target_idx, p_b, effort_b, weight, activation_distance, cspace_target_weight, cspace_target_dof_weight, squared_l2_reg_weight, current_position, current_velocity, idxs_current_state, v_b, state_dt, out_cost, out_grad_p, out_grad_tau, write_grad, batch_size, horizon, dof
     raise NotImplementedError(
         "forward_cspace_position_warp requires cuRobo's CUDA/Warp kernel ABI; "
         "use PositionCSpaceFunction or PositionCSpaceCost on CPU/MPS"
     )
 
+
+PositionCSpaceFunction.apply = PositionCSpaceFunction._apply_portable
+# Preserve the historic no-argument boundary probe without changing the
+# pinned declaration signature inspected statically.
+forward_cspace_position_warp.__defaults__ = (None,) * 23
 
 __all__ = ["PositionCSpaceFunction", "forward_cspace_position_warp"]

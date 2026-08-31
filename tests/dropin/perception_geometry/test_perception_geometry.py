@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+
+import pytest
 import torch
 
 from curobo._src.geom.cv import get_projection_rays, project_depth_using_rays
@@ -11,6 +14,11 @@ from curobo.perception import FilterDepth, Mapper, MapperCfg
 from curobo.scene import Capsule, Cuboid, Cylinder, Scene
 from curobo.sphere_fit import SphereFitType, fit_spheres_to_mesh
 from curobo.types import CameraObservation, Pose
+from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.perception.pose_estimation.geometry import (
+    ArticulatedRobotGeometry,
+    RigidObjectGeometry,
+)
 
 
 def test_public_scene_and_sphere_fit():
@@ -50,8 +58,13 @@ def test_transform_quaternion_and_camera_helpers_are_differentiable():
 
     intrinsics = torch.tensor([[10.,0,1.5],[0,10.,1.5],[0,0,1.]])
     rays = get_projection_rays(4, 4, intrinsics)
-    assert project_depth_using_rays(torch.ones(4,4), rays).shape == (1,4,4,3)
-    assert triangulate_mesh_faces(torch.tensor([[0,1,2,3]])).shape == (2,3)
+    assert project_depth_using_rays(torch.ones(4,4), rays).shape == (1,16,3)
+    assert triangulate_mesh_faces(
+        [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
+        [0, 1, 2, 3],
+        [4],
+        DeviceCfg().cpu(),
+    ) == [[1, 3, 0], [1, 2, 3]]
 
 
 def test_depth_filter_and_mapper_lifecycle(tmp_path):
@@ -88,3 +101,53 @@ def test_mps_fallback_disabled_when_available(monkeypatch):
     pose = Pose.from_list([0,0,-.2,1,0,0,0]).to(device=torch.device("mps"))
     mapper.integrate(CameraObservation(depth_image=depth, intrinsics=intrinsics, pose=pose, depth_to_meter=1.))
     assert mapper._mapper.state.tsdf.device.type == "mps"
+
+
+def test_rigid_geometry_samples_triangle_surfaces_instead_of_face_centroids():
+    mesh = SimpleNamespace(
+        vertices=torch.tensor([[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+        faces=torch.tensor([[0, 1, 2]]),
+    )
+    torch.manual_seed(7)
+    points, normals = RigidObjectGeometry(mesh).sample_surface_points(32)
+    assert points.shape == normals.shape == (32, 3)
+    torch.testing.assert_close(points[:, 0], torch.zeros(32))
+    assert torch.all(points[:, 1:] >= 0)
+    assert torch.all(points[:, 1:].sum(dim=-1) <= 1)
+    torch.testing.assert_close(normals, torch.tensor([[1.0, 0.0, 0.0]]).expand_as(normals))
+
+
+def test_articulated_geometry_caches_local_meshes_and_applies_fk_with_gradients():
+    mesh = SimpleNamespace(
+        vertices=torch.tensor([[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+        faces=torch.tensor([[0, 1, 2]]),
+        pose=[1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+    )
+
+    class Robot:
+        joint_names = ["slide"]
+        mesh_link_names = ["tool"]
+
+        @staticmethod
+        def get_robot_link_meshes():
+            return [mesh]
+
+        @staticmethod
+        def compute_kinematics(joint_state):
+            x = joint_state.position[:, :1]
+            position = torch.cat((x, torch.zeros_like(x), torch.zeros_like(x)), dim=-1)
+            return SimpleNamespace(
+                tool_poses={"tool": Pose(position, torch.tensor([[1.0, 0.0, 0.0, 0.0]]))}
+            )
+
+    geometry = ArticulatedRobotGeometry(Robot(), min_points_per_link=4, max_points_per_link=4)
+    with pytest.raises(ValueError, match="Must call update"):
+        geometry.sample_surface_points(2)
+    q = torch.tensor([0.25], requires_grad=True)
+    geometry.update(q)
+    points, normals = geometry.sample_surface_points(4)
+    assert points.shape == normals.shape == (4, 3)
+    torch.testing.assert_close(points[:, 0], torch.full((4,), 1.25))
+    torch.testing.assert_close(normals, torch.tensor([[1.0, 0.0, 0.0]]).expand_as(normals))
+    points.sum().backward()
+    assert q.grad is not None and q.grad.item() == 4.0

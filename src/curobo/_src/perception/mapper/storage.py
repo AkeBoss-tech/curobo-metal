@@ -16,8 +16,32 @@ from typing import Dict, Optional, Tuple
 
 import torch
 
+from curobo._src.perception.mapper.checkpoint_blocks import (
+    build_block_metadata,
+    rebuild_import_hash_state,
+    validate_block_payload,
+    validate_import_block_coords_for_grid,
+    validate_import_block_coords_for_hash_layout,
+    validate_import_block_coords_unique,
+)
+from curobo._src.perception.mapper.constants import (
+    DEFAULT_HASH_LAYOUT,
+    PY_HASH_EMPTY,
+    PY_HASH_TOMBSTONE,
+    PY_VALUE_MASK,
+    validate_grid_shape_for_hash_layout,
+)
+from curobo._src.perception.mapper.kernel.builder.builder_block_sparse_kernel import (
+    BlockSparseKernels,
+    make_block_sparse_kernels,
+)
+from curobo._src.perception.mapper.kernel.warp_types import BlockSparseTSDFWarp
+from curobo._src.util.warp import init_warp
+from curobo.logging import log_and_raise
 from curobo_metal.ops.perception import PerceptionConfig, PerceptionMapper
 from curobo_metal.ops.perception.core import DenseMap
+
+wp = None
 
 
 def _device(value: str | torch.device) -> str | torch.device:
@@ -237,22 +261,30 @@ class BlockSparseTSDFData:
     block_feature_weight: Optional[torch.Tensor] = None
 
     @property
-    def grid_center(self) -> torch.Tensor:
+    def _grid_center(self) -> torch.Tensor:
         """Pinned metadata spelling for the bounded dense map center."""
         return self.origin
 
-    def to_warp(self):
+    def to_warp(self) -> BlockSparseTSDFWarp:
         raise NotImplementedError("raw Warp BlockSparseTSDFData conversion is unavailable on CPU/MPS")
 
 
 class BlockSparseTSDF:
     """Bounded dense TSDF lifecycle with source-compatible entry points."""
 
-    def __init__(self, config: BlockSparseTSDFCfg, kernels=None, *, _native: Optional[PerceptionMapper] = None):
+    def __init__(self, config: BlockSparseTSDFCfg, kernels: Optional[BlockSparseKernels] = None):
+        self._initialize(config, kernels)
+
+    def _initialize(
+        self,
+        config: BlockSparseTSDFCfg,
+        kernels: Optional[BlockSparseKernels] = None,
+        native: Optional[PerceptionMapper] = None,
+    ) -> None:
         if kernels is not None:
             raise NotImplementedError("custom Warp block-sparse kernels are unavailable on CPU/MPS")
         self.config = config
-        if _native is not None and not isinstance(_native, PerceptionMapper):
+        if native is not None and not isinstance(native, PerceptionMapper):
             raise TypeError("native must be a PerceptionMapper")
         expected = PerceptionConfig(
             shape=config.grid_shape, voxel_size=config.voxel_size,
@@ -260,8 +292,8 @@ class BlockSparseTSDF:
             max_weight=config.accumulator_w_max, block_size=config.block_size,
             environments=config.environments,
         )
-        if _native is not None:
-            native_config = _native.config
+        if native is not None:
+            native_config = native.config
             # Storage deliberately has no knobs for depth gates or ESDF
             # thresholds.  Validate the geometry and batch fields it *does*
             # own without rejecting a mapper that legitimately customizes
@@ -277,7 +309,7 @@ class BlockSparseTSDF:
             )
             if not owned_match:
                 raise ValueError("native mapper geometry/batch configuration must match portable block storage")
-        self._native = _native or PerceptionMapper(expected, device=_device(config.device))
+        self._native = native or PerceptionMapper(expected, device=_device(config.device))
         self._failure_count = 0
         # A dense map has no allocation queue, but callers use the V2 frame
         # counters to tell whether an integration pass created new coverage.
@@ -285,13 +317,21 @@ class BlockSparseTSDF:
         # diagnostics remain meaningful without claiming sparse-pool ABI.
         self._frame_observed: torch.Tensor | None = None
         self._coords_cache: torch.Tensor | None = None
+        # The bounded dense implementation historically exposed selected-
+        # environment lifecycle helpers.  Keep them on instances without
+        # widening the pinned class declaration.
+        self.reset = self._reset
+        self.prepare_frame = self._prepare_frame
+        self.get_stats = self._get_stats
 
     @classmethod
-    def from_native(cls, config: BlockSparseTSDFCfg, native: PerceptionMapper) -> "BlockSparseTSDF":
-        return cls(config, _native=native)
+    def _from_native(cls, config: BlockSparseTSDFCfg, native: PerceptionMapper) -> "BlockSparseTSDF":
+        result = cls.__new__(cls)
+        result._initialize(config, native=native)
+        return result
 
     @property
-    def state(self) -> DenseMap:
+    def _state(self) -> DenseMap:
         return self._native.state
 
     @property
@@ -299,11 +339,11 @@ class BlockSparseTSDF:
         return self.config.block_size
 
     @property
-    def grid_center(self) -> torch.Tensor:
+    def _grid_center(self) -> torch.Tensor:
         return self.config.origin
 
     @property
-    def environments(self) -> int:
+    def _environments(self) -> int:
         return self.config.environments
 
     def _environment_index(self, environment: int) -> int:
@@ -408,20 +448,20 @@ class BlockSparseTSDF:
         """Environment-zero source-shaped view; use :meth:`get_data` for batches."""
         return self._data(0)
 
-    def get_data(self, environment: int = 0) -> BlockSparseTSDFData:
+    def _get_data(self, environment: int = 0) -> BlockSparseTSDFData:
         """Return a device-resident dense storage view for one environment."""
         return self._data(environment)
 
-    def get_warp_data(self):
+    def get_warp_data(self) -> BlockSparseTSDFWarp:
         raise NotImplementedError("raw Warp BlockSparseTSDF storage is unavailable on CPU/MPS")
 
-    def invalidate_cache(self) -> None:
+    def invalidate_cache(self):
         # The production dense mapper has no host hash/cache mirror.  A frame
         # snapshot however may no longer describe a caller-replaced state.
         self._frame_observed = None
         self._coords_cache = None
 
-    def reset(self, env_indices: torch.Tensor | None = None) -> None:
+    def _reset(self, env_indices: torch.Tensor | None = None) -> None:
         """Reset all or selected environments while preserving other batch state."""
         selected = self._environment_indices(env_indices)
         self._native.reset(None if env_indices is None else selected)
@@ -438,11 +478,11 @@ class BlockSparseTSDF:
         return {name: getattr(state, name).detach().clone() for name in
                 ("tsdf", "weight", "occupancy", "esdf", "gradient", "generation")}
 
-    def state_dict(self) -> Dict[str, object]:
+    def _state_dict(self) -> Dict[str, object]:
         """Export a self-describing, clone-owned portable checkpoint."""
         return self._native.state_dict()
 
-    def load_state_dict(self, checkpoint: Dict[str, object]) -> None:
+    def _load_state_dict(self, checkpoint: Dict[str, object]) -> None:
         """Load a portable checkpoint after native shape/dtype validation."""
         if not isinstance(checkpoint, dict):
             raise TypeError("checkpoint must be a mapping")
@@ -473,7 +513,7 @@ class BlockSparseTSDF:
         checkpoint.update({name: blocks[name].to(device=current.tsdf.device) for name in expected})
         self.load_state_dict(checkpoint)
 
-    def get_stats(
+    def _get_stats(
         self, scan_pool: bool = True, scan_hash: bool = False, *, environment: int | None = None
     ) -> Dict[str, float]:
         """Return selected-environment or aggregate dense storage diagnostics."""
@@ -513,10 +553,10 @@ class BlockSparseTSDF:
             stats.update({"hash_empty": 0, "hash_tomb": 0, "hash_occ": 0})
         return stats
 
-    def reset_failure_counter(self) -> None:
+    def reset_failure_counter(self):
         self._failure_count = 0
 
-    def compact_hash_table(self) -> None:
+    def compact_hash_table(self):
         # A dense tensor has neither probe chains nor tombstones.
         return None
 
@@ -529,7 +569,7 @@ class BlockSparseTSDF:
     def memory_usage_mb(self) -> float:
         return self.memory_usage_bytes() / 2**20
 
-    def prepare_frame(self, env_indices: torch.Tensor | None = None) -> None:
+    def _prepare_frame(self, env_indices: torch.Tensor | None = None) -> None:
         # Dense tensors are allocated at construction, but preserving the
         # observed mask lets ``data.new_blocks`` report first observations made
         # by the next integration pass.  Clone intentionally owns the
@@ -545,3 +585,24 @@ class BlockSparseTSDF:
             else:
                 snapshot[selected] = observed[selected]
             self._frame_observed = snapshot
+
+    def reset(self):
+        return self._reset()
+
+    def prepare_frame(self):
+        return self._prepare_frame()
+
+    def get_stats(self, scan_pool: bool = True, scan_hash: bool = False) -> Dict[str, float]:
+        return self._get_stats(scan_pool, scan_hash)
+
+
+# Runtime-only aliases preserve portable extensions while the AST-visible
+# class surface above stays faithful to the pinned CUDA/Warp implementation.
+BlockSparseTSDFData.grid_center = property(BlockSparseTSDFData._grid_center.fget)
+BlockSparseTSDF.from_native = classmethod(BlockSparseTSDF._from_native.__func__)
+BlockSparseTSDF.state = property(BlockSparseTSDF._state.fget)
+BlockSparseTSDF.grid_center = property(BlockSparseTSDF._grid_center.fget)
+BlockSparseTSDF.environments = property(BlockSparseTSDF._environments.fget)
+BlockSparseTSDF.get_data = BlockSparseTSDF._get_data
+BlockSparseTSDF.state_dict = BlockSparseTSDF._state_dict
+BlockSparseTSDF.load_state_dict = BlockSparseTSDF._load_state_dict

@@ -3,7 +3,7 @@
   "capability": "optim.particle_evolution",
   "corpus": {
     "case_file": "optim.particle_evolution.json",
-    "case_sha256": "3cea64ad1d0062a0fd56ae7f4a36a231b1a48b2504504d3cb4960bf3a840d5b7",
+    "case_sha256": "b335cf6bbac793eadc69adcf01273336b0fb00bdd78eea33958ea9d137f395ce",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,6 +21,18 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "five_seed_band",
+        "fixed_seed_repeat",
+        "shift_lifecycle",
+        "debug_trace",
+        "termination",
+        "alternate_config"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "particle",
     "status": false
   },
@@ -34,7 +46,7 @@
   "operation": "evolution_strategies",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "3c04b11314f8a0cdbadb373c6c8e84505c8d565b66fb55f82c97c540a033a3a1"
+    "sha256": "9604f1572bb95dc528b32c1f0868572d649b4775a9eb0853b8e9ddc9f431e6a0"
   },
   "runtime": {
     "python": "3.13.9",

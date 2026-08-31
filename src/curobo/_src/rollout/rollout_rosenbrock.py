@@ -73,15 +73,45 @@ class RosenbrockRollout:
             seed=self.sampler_seed,
             device_cfg=self.device_cfg,
         )
-    action_dim = property(lambda self: self.dimensions)
-    action_bound_lows = property(lambda self: self._action_bound_lows)
-    action_bound_highs = property(lambda self: self._action_bound_highs)
-    action_bounds = property(lambda self: torch.stack((self._action_bound_lows, self._action_bound_highs)))
-    horizon = property(lambda self: self.time_horizon)
-    action_horizon = property(lambda self: self.time_action_horizon)
-    state_bounds = property(lambda self: {"position": [-2.048, 2.048]})
-    batch_size = property(lambda self: self._batch_size, lambda self, v: setattr(self, "_batch_size", v))
-    dt = property(lambda self: 1.0)
+    @property
+    def action_dim(self) -> int:
+        return self.dimensions
+
+    @property
+    def action_bound_lows(self) -> torch.Tensor:
+        return self._action_bound_lows
+
+    @property
+    def action_bound_highs(self) -> torch.Tensor:
+        return self._action_bound_highs
+
+    @property
+    def action_bounds(self) -> torch.Tensor:
+        return torch.stack((self._action_bound_lows, self._action_bound_highs))
+
+    @property
+    def horizon(self) -> int:
+        return self.time_horizon
+
+    @property
+    def action_horizon(self) -> int:
+        return self.time_action_horizon
+
+    @property
+    def state_bounds(self) -> Dict[str, List[float]]:
+        return {"position": [-2.048, 2.048]}
+
+    @property
+    def batch_size(self) -> int:
+        return self._batch_size
+
+    @batch_size.setter
+    def batch_size(self, batch_size: int):
+        self._batch_size = batch_size
+
+    @property
+    def dt(self) -> float:
+        return 1.0
     def _validate_actions(self, act_seq: torch.Tensor) -> None:
         if not isinstance(act_seq, torch.Tensor):
             raise TypeError("act_seq must be a torch.Tensor")
@@ -119,7 +149,7 @@ class RosenbrockRollout:
     def _compute_costs_and_constraints_metrics_impl(self, state, **kwargs):
         return self._compute_costs_and_constraints_impl(state, **kwargs)
 
-    def evaluate_action(self, act_seq, **kwargs):
+    def evaluate_action(self, act_seq: torch.Tensor, **kwargs) -> RolloutResult:
         self._validate_actions(act_seq)
         self.update_batch_size(act_seq.shape[0])
         state = self._compute_state_from_action_impl(act_seq)
@@ -133,7 +163,7 @@ class RosenbrockRollout:
             feasible=cc.get_feasible(), convergence=convergence,
         )
 
-    def compute_metrics_from_state(self, state, **kwargs):
+    def compute_metrics_from_state(self, state: JointState, **kwargs) -> RolloutMetrics:
         if self._use_cuda_graph:
             if self._compute_metrics_from_state_executor is None:
                 self._compute_metrics_from_state_executor = create_graph_executor(
@@ -149,7 +179,7 @@ class RosenbrockRollout:
         result.actions = act_seq
         return result
 
-    def compute_metrics_from_action(self, act_seq, **kwargs):
+    def compute_metrics_from_action(self, act_seq: torch.Tensor, **kwargs) -> RolloutMetrics:
         self._validate_actions(act_seq)
         self.update_batch_size(act_seq.shape[0])
         if self._use_cuda_graph:
@@ -160,33 +190,41 @@ class RosenbrockRollout:
                 )
             return self._compute_metrics_from_action_executor(act_seq)
         return self._compute_metrics_from_action_impl(act_seq, **kwargs)
-    def update_params(self, a=None, b=None, **kwargs):
+    def update_params(self, a: float = None, b: float = None, **kwargs) -> bool:
         if a is not None: self.a = a
         if b is not None: self.b = b
         return True
-    def update_batch_size(self, batch_size):
+    def update_batch_size(self, batch_size: int) -> None:
         if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size < 0:
             raise ValueError("batch_size must be a non-negative integer")
         self._batch_size = batch_size
-    def update_dt(self, dt, **kwargs): return True
-    def reset(self, reset_problem_ids=None, **kwargs): return True
-    def reset_shape(self): return True
-    def reset_cuda_graph(self):
+    def update_dt(self, dt, **kwargs) -> bool:
+        return True
+
+    def reset(self, reset_problem_ids=None, **kwargs) -> bool:
+        return True
+
+    def reset_shape(self) -> bool:
+        return True
+
+    def reset_cuda_graph(self) -> bool:
         if self._compute_metrics_from_state_executor is not None:
             self._compute_metrics_from_state_executor.reset()
         if self._compute_metrics_from_action_executor is not None:
             self._compute_metrics_from_action_executor.reset()
         return self.reset_shape()
 
-    def reset_seed(self):
+    def reset_seed(self) -> None:
         self.act_sample_gen.reset()
 
-    def sample_random_actions(self, n=0, bounded=True):
+    def sample_random_actions(self, n: int = 0, bounded: bool = True) -> torch.Tensor:
         if not isinstance(n, int) or isinstance(n, bool) or n < 0:
             raise ValueError("n must be a non-negative integer")
         return self.act_sample_gen.get_samples(n, bounded=bounded)
 
-    def get_initial_action(self, use_random=True, use_zero=False, **kwargs):
+    def get_initial_action(
+        self, use_random: bool = True, use_zero: bool = False, **kwargs
+    ) -> torch.Tensor:
         if use_random:
             return self.sample_random_actions(
                 self.batch_size * self.action_horizon, bounded=True

@@ -1,7 +1,10 @@
 """Differentiable wxyz quaternion helpers implemented with PyTorch."""
 
+from __future__ import annotations
+
 from typing import Optional
 import torch
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 def normalize_quaternion(in_quaternion: torch.Tensor) -> torch.Tensor:
@@ -30,14 +33,18 @@ def quat_multiply(
 def angular_distance_phi3(goal_quat: torch.Tensor, current_quat: torch.Tensor) -> torch.Tensor:
     goal = normalize_quaternion(goal_quat)
     current = normalize_quaternion(current_quat)
-    return 1.0 - (goal * current).sum(-1).abs()
+    dot = (goal * current).sum(-1).abs().clamp(min=0.0, max=1.0)
+    return torch.acos(dot) / (torch.pi * 0.5)
 
 
 def angular_distance_axis_angle(goal_quat: torch.Tensor, current_quat: torch.Tensor) -> torch.Tensor:
     goal = normalize_quaternion(goal_quat)
     current = normalize_quaternion(current_quat)
-    dot = (goal * current).sum(-1).abs().clamp(max=1.0)
-    return 2.0 * torch.acos(dot)
+    current_conjugate = current.clone()
+    current_conjugate[..., 1:] *= -1.0
+    relative = quat_multiply(goal, current_conjugate)
+    vector_norm = torch.linalg.vector_norm(relative[..., 1:], dim=-1, keepdim=True)
+    return 2.0 * torch.atan2(vector_norm, relative[..., 0].abs())
 
 
 __all__ = [

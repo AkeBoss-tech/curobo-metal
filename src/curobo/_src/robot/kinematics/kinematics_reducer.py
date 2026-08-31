@@ -22,6 +22,7 @@ import torch
 from curobo._src.robot.types import CSpaceParams, JointLimits, KinematicsParams
 from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_joint_ops import append_joints_to_state
+from curobo._src.util.logging import log_info, log_warn
 
 
 class KinematicsReducer:

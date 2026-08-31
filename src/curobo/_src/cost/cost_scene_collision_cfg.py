@@ -10,11 +10,12 @@ an optimization loop starts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Type
+from typing import Any, Optional, Type, Union
 
 import torch
 
 from curobo._src.geom.collision.collision_scene import SceneCollision
+from curobo._src.util.logging import log_and_raise
 
 from .cost_scene_collision import SceneCollisionCost
 from .portable import BaseCostCfg, SceneCollisionCostCfg as _PortableSceneCollisionCostCfg
@@ -103,7 +104,7 @@ class SceneCollisionCostCfg(_PortableSceneCollisionCostCfg):
         return self._scene_collision_checker
 
     @scene_collision_checker.setter
-    def scene_collision_checker(self, scene_collision_checker: Any) -> None:
+    def scene_collision_checker(self, scene_collision_checker: SceneCollision):
         if scene_collision_checker is None:
             self._scene_collision_checker = None
             self.update_num_scene_collision_checkers(0)
@@ -113,14 +114,14 @@ class SceneCollisionCostCfg(_PortableSceneCollisionCostCfg):
         count = getattr(scene_collision_checker, "get_num_scene_collision_checkers", None)
         self.update_num_scene_collision_checkers(count() if callable(count) else 1)
 
-    def update_num_spheres(self, num_spheres: int) -> None:
+    def update_num_spheres(self, num_spheres: int):
         if isinstance(num_spheres, bool) or not isinstance(num_spheres, int):
             raise TypeError("num_spheres must be an integer")
         if num_spheres < 0:
             raise ValueError("num_spheres must be non-negative")
         self.num_spheres = num_spheres
 
-    def update_num_scene_collision_checkers(self, num_scene_collision_checkers: int) -> None:
+    def update_num_scene_collision_checkers(self, num_scene_collision_checkers: int):
         if isinstance(num_scene_collision_checkers, bool) or not isinstance(
             num_scene_collision_checkers, int
         ):

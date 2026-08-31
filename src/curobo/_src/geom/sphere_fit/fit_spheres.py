@@ -14,15 +14,18 @@ import time
 from typing import Any, Optional
 
 import numpy as np
+import numpy
 import torch
 
 from curobo._src.types.device_cfg import DeviceCfg
 
 from .fit_morphit import MorphItLossWeights, morphit_sphere_fit
-from .fit_voxel import voxel_fit_mesh
+from .fit_voxel import sample_even_fit_mesh, voxel_fit_mesh
 from .metrics import populate_metrics
 from .sphere_count import _vertices, estimate_sphere_count
 from .types import SphereFitMetrics, SphereFitResult, SphereFitType
+from . import _trimesh_compat as trimesh
+from curobo._src.util.logging import log_info, log_warn
 
 
 class _TopologyMesh:
@@ -147,7 +150,7 @@ def _vertex_surface_metrics(vertices: torch.Tensor, result: SphereFitResult) -> 
 
 
 def fit_spheres_to_mesh(
-    mesh: Any,
+    mesh: trimesh.Trimesh,
     num_spheres: Optional[int] = None,
     sphere_density: float = 1.0,
     surface_radius: float = 0.005,

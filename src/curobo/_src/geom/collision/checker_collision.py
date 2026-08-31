@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 
 from curobo._src.geom.collision.buffer_collision import CollisionBuffer
+from curobo._src.geom.collision.wp_autograd import (
+    SphereObstacleCollision,
+    SweptSphereObstacleCollision,
+)
 from curobo._src.types.device_cfg import DeviceCfg
+
+if TYPE_CHECKING:
+    from curobo._src.geom.data.data_scene import SceneData
 
 
 @dataclass
-class CollisionChecker:
+class _CollisionCheckerPortable:
     device_cfg: DeviceCfg
     max_distance: Union[float, torch.Tensor] = 1.0
     _max_distance_t: Optional[torch.Tensor] = field(default=None, repr=False)
@@ -78,6 +85,76 @@ class CollisionChecker:
             scene, query_sphere, collision_buffer, weight, activation_distance,
             trajectory_dt, enable_speed_metric, env_query_idx, return_loss,
         )
+
+
+@dataclass
+class CollisionChecker:
+    """Pinned cuRoboV2 declaration surface for portable scene collision."""
+
+    device_cfg: DeviceCfg
+    max_distance: Union[float, torch.Tensor] = 1.0
+    _max_distance_t: Optional[torch.Tensor] = field(default=None, repr=False)
+
+    def __post_init__(self):
+        raise NotImplementedError
+
+    def get_sphere_distance(
+        self,
+        scene: "SceneData",
+        query_sphere: torch.Tensor,
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_swept_sphere_distance(
+        self,
+        scene: "SceneData",
+        query_sphere: torch.Tensor,
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        trajectory_dt: torch.Tensor,
+        enable_speed_metric: bool = False,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_sphere_collision(
+        self,
+        scene: "SceneData",
+        query_sphere: torch.Tensor,
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_swept_sphere_collision(
+        self,
+        scene: "SceneData",
+        query_sphere: torch.Tensor,
+        collision_buffer: CollisionBuffer,
+        weight: torch.Tensor,
+        activation_distance: torch.Tensor,
+        trajectory_dt: torch.Tensor,
+        enable_speed_metric: bool = False,
+        env_query_idx: Optional[torch.Tensor] = None,
+        return_loss: bool = False,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+
+# Runtime remains the high-level SceneCollision-backed portable checker.  Raw
+# Warp scene tensor descriptors stay explicit unsupported boundaries there.
+if not TYPE_CHECKING:
+    CollisionChecker = _CollisionCheckerPortable
 
 
 __all__ = ["CollisionChecker"]

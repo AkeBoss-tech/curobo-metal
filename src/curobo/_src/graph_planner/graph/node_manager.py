@@ -12,9 +12,14 @@ neighbour kernels, or analytic continuous-collision detection.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
 import torch
+import torch.autograd.profiler as profiler
+
+from curobo._src.state.state_robot import RobotState
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 def _same_device(left: torch.device, right: torch.device) -> bool:
@@ -23,7 +28,7 @@ def _same_device(left: torch.device, right: torch.device) -> bool:
 
 
 @dataclass
-class ConnectedGraph:
+class _ConnectedGraphPortable:
     """A materialized PRM graph suitable for portable inspection/debugging."""
 
     nodes: torch.Tensor
@@ -93,8 +98,8 @@ def jit_add_nodes_to_buffer(
 
 
 def jit_add_all_nodes_to_buffer(
-    all_nodes: torch.Tensor,
-    preallocated_node_buffer: torch.Tensor,
+    all_nodes,
+    preallocated_node_buffer,
     used_node_count: int,
     action_dim: int,
 ) -> Tuple[torch.Tensor, torch.Tensor, int]:
@@ -110,7 +115,7 @@ def jit_add_all_nodes_to_buffer(
     return buffer, buffer[used_node_count:end], end
 
 
-class GraphNodeManager:
+class _GraphNodeManagerPortable:
     """Maintain a bounded, deterministic PRM node set on CPU or MPS."""
 
     def __init__(
@@ -337,6 +342,92 @@ class GraphNodeManager:
     @property
     def valid_node_buffer(self) -> torch.Tensor:
         return self._preallocated_node_buffer[:self.n_nodes]
+
+
+@dataclass
+class ConnectedGraph:
+    """Pinned cuRoboV2 declaration surface for the portable graph record."""
+
+    nodes: torch.Tensor
+    edges: torch.Tensor
+    connectivity: torch.Tensor
+    robot_state_nodes: Optional[RobotState] = None
+    shortest_path_lengths: Optional[torch.Tensor] = None
+
+    def set_shortest_path_lengths(self, shortest_path_lengths: torch.Tensor):
+        raise NotImplementedError
+
+    def get_node_distance(self):
+        raise NotImplementedError
+
+
+class GraphNodeManager:
+    """Pinned cuRoboV2 declaration surface for portable roadmap storage."""
+
+    def __init__(
+        self,
+        config,
+        distance_calculator=None,
+        graph_path_finder=None,
+        auxiliary_rollout=None,
+        device_cfg=None,
+    ):
+        raise NotImplementedError
+
+    def get_connected_graph(self):
+        raise NotImplementedError
+
+    def add_nodes_to_buffer(self, new_nodes):
+        raise NotImplementedError
+
+    def register_nodes_and_connections(
+        self, node_set: torch.Tensor, start_nodes: torch.Tensor, add_exact_node=False
+    ):
+        raise NotImplementedError
+
+    def add_nodes_to_roadmap(
+        self, nodes: torch.Tensor, add_exact_node: bool = False
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def add_initial_exact_nodes_to_roadmap(self, nodes: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+    def get_nodes_in_path(self, path_list: List[Union[List[int], None]]):
+        raise NotImplementedError
+
+    def reset_buffer(self):
+        raise NotImplementedError
+
+    def reset_graph_path_finder(self):
+        raise NotImplementedError
+
+    @property
+    def action_dim(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def n_nodes(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def node_idx_padding_buffer(self):
+        raise NotImplementedError
+
+    @property
+    def preallocated_node_buffer(self):
+        raise NotImplementedError
+
+    @property
+    def valid_node_buffer(self):
+        raise NotImplementedError
+
+
+# Keep the full CPU/MPS implementation at runtime.  The static declarations
+# deliberately omit portable-only inspection aliases and wider path inputs.
+if not TYPE_CHECKING:
+    ConnectedGraph = _ConnectedGraphPortable
+    GraphNodeManager = _GraphNodeManagerPortable
 
 
 __all__ = [

@@ -66,6 +66,14 @@ def test_camera_projection_validation_lifecycle_and_serialization(tmp_path):
     assert torch.equal(restored.pose.position, camera.pose.position)
 
 
+def test_camera_mutation_methods_keep_upstream_non_fluent_contracts():
+    camera = _camera()
+    assert camera.filter_depth(1.5) is None
+    torch.testing.assert_close(camera.depth_image, torch.tensor(((0.0, 2.0), (3.0, 4.0))))
+    assert camera.update_projection_rays() is None
+    assert camera.projection_rays is not None
+
+
 def test_camera_observation_rejects_incompatible_geometry_and_stack():
     camera = _camera()
     camera.projection_rays = torch.zeros((1, 3, 2, 3))

@@ -75,7 +75,9 @@ def test_pose_function_reexports_are_differentiable_and_wxyz_consistent() -> Non
     recovered = matrix_to_quaternion(rotation)
     torch.testing.assert_close(recovered.abs(), left.quaternion)
     torch.testing.assert_close(angular_distance_phi3(left.quaternion, recovered), torch.zeros(1))
-    torch.testing.assert_close(angular_distance_axis_angle(left.quaternion, recovered), torch.zeros(1))
+    torch.testing.assert_close(
+        angular_distance_axis_angle(left.quaternion, recovered), torch.zeros(1, 1)
+    )
 
     local = torch.tensor([[[1.0, 0.0, 0.0]]])
     world = left.batch_transform_points(local)

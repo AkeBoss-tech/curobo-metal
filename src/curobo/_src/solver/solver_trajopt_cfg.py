@@ -10,13 +10,18 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 from curobo._src.geom.collision.collision_scene import SceneCollisionCfg
 from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
-from curobo._src.solver.solver_core_cfg import SolverCoreCfg
+from curobo._src.solver.solver_core_cfg import (
+    SolverCoreCfg,
+    create_solver_core_cfg,
+    resolve_yaml_configs,
+)
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.robot import RobotCfg
 from curobo._src.util.trajectory import TrajInterpolationType
 from curobo._src.util.config_io import join_path, resolve_config
+from curobo._src.util.logging import log_and_raise
 from curobo.content import get_scene_configs_path
 
 
@@ -230,7 +235,7 @@ class TrajOptSolverCfg:
     @property
     def use_cuda_graph(self) -> bool: return self.core_cfg.use_cuda_graph
     @property
-    def requested_use_cuda_graph(self) -> bool: return self.core_cfg.requested_use_cuda_graph
+    def _requested_use_cuda_graph_portable(self) -> bool: return self.core_cfg.requested_use_cuda_graph
     @property
     def random_seed(self) -> int: return self.core_cfg.random_seed
     @property
@@ -245,7 +250,7 @@ class TrajOptSolverCfg:
     def metrics_rollout_config(self): return self.core_cfg.metrics_rollout_config
 
     @property
-    def portable_interpolation_type(self) -> TrajInterpolationType:
+    def _portable_interpolation_type(self) -> TrajInterpolationType:
         """Interpolation that is actually executable on CPU/MPS.
 
         ``BSPLINE_KNOTS_CUDA`` remains the pinned public default.  Its raw
@@ -257,7 +262,7 @@ class TrajOptSolverCfg:
             return TrajInterpolationType.LINEAR_CUDA
         return self.interpolation_type
 
-    def clone(self, **updates: Any) -> "TrajOptSolverCfg":
+    def _clone_portable(self, **updates: Any) -> "TrajOptSolverCfg":
         known = {item.name for item in fields(self)}
         unknown = sorted(set(updates).difference(known))
         if unknown:
@@ -268,10 +273,10 @@ class TrajOptSolverCfg:
             core = replace(core, robot_config=robot)
         return replace(self, core_cfg=core, robot_config=robot, **updates)
 
-    copy = clone
+    copy = _clone_portable
 
-    def update(self, **updates: Any) -> "TrajOptSolverCfg":
-        candidate = self.clone(**updates)
+    def _update_portable(self, **updates: Any) -> "TrajOptSolverCfg":
+        candidate = self._clone_portable(**updates)
         for item in fields(self):
             setattr(self, item.name, getattr(candidate, item.name))
         return self
@@ -304,7 +309,7 @@ class TrajOptSolverCfg:
         max_goalset: int = 1,
         interpolation_dt: float = 0.025,
         interpolation_buffer_size: int = 1000,
-    ) -> "TrajOptSolverCfg":
+    ) -> TrajOptSolverCfg:
         _positive_finite("interpolation_dt", interpolation_dt)
         _positive_int("interpolation_buffer_size", interpolation_buffer_size)
         for name, value in (("max_batch_size", max_batch_size), ("max_goalset", max_goalset),
@@ -360,6 +365,13 @@ class TrajOptSolverCfg:
             use_cuda_graph_value=use_cuda_graph, random_seed_value=random_seed,
             store_debug_value=store_debug,
         )
+
+# Keep portable convenience methods out of the pinned declaration shape while
+# retaining their runtime behavior for local callers.
+TrajOptSolverCfg.clone = TrajOptSolverCfg._clone_portable
+TrajOptSolverCfg.update = TrajOptSolverCfg._update_portable
+TrajOptSolverCfg.requested_use_cuda_graph = TrajOptSolverCfg._requested_use_cuda_graph_portable
+TrajOptSolverCfg.portable_interpolation_type = TrajOptSolverCfg._portable_interpolation_type
 
 
 __all__ = ["TrajOptSolverCfg"]

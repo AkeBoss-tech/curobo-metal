@@ -9,18 +9,26 @@ one-shot call to a generic particle optimiser.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from copy import deepcopy
+from dataclasses import dataclass, field, fields
 from enum import Enum
 import math
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.optim._portable import PortableOptCfg, PortableOptimizer, _objective
 from curobo._src.optim.components.gaussian_distribution import CovType, GaussianDistribution
-from curobo._src.optim.components.particle_opt_core import SampleMode
-from curobo._src.optim.particle.particle_opt_utils import SquashType, gaussian_entropy
+from curobo._src.optim.components.particle_opt_core import ParticleOptCore, SampleMode
+from curobo._src.optim.particle.particle_opt_utils import SquashType, gaussian_entropy, scale_ctrl
 from curobo._src.optim.particle.sample_strategies import ParticleSamplerCfg
+from curobo._src.rollout.metrics import RolloutResult
+from curobo._src.rollout.rollout_protocol import Rollout
+from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.tensor_util import stable_topk
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 class BaseActionType(Enum):
@@ -32,7 +40,7 @@ class BaseActionType(Enum):
 
 
 @dataclass
-class MPPICfg(PortableOptCfg):
+class _MPPICfgPortable(PortableOptCfg):
     solver_type: str = "mppi"
     solver_name: str = "mppi"
     gamma: float = 1.0
@@ -123,7 +131,7 @@ class MPPICfg(PortableOptCfg):
         return {key: value for key, value in values.items() if key in allowed}
 
 
-class MPPI(PortableOptimizer):
+class _MPPIPortable(PortableOptimizer):
     """Stateful Model Predictive Path Integral optimisation on CPU/MPS.
 
     Raw CUDA graph capture, Warp samplers, and the packed CUDA rollout ABI are
@@ -147,6 +155,20 @@ class MPPI(PortableOptimizer):
         self._sample_cursor = 0
         self._num_steps = 0
         self._og_num_iters = config.num_iters
+        initial = config.init_mean
+        if initial is None:
+            initial = torch.zeros(
+                (config.num_problems, self.action_horizon, self.action_dim),
+                device=config.device_cfg.device,
+                dtype=config.device_cfg.dtype,
+            )
+        else:
+            initial = torch.as_tensor(
+                initial, device=config.device_cfg.device, dtype=config.device_cfg.dtype
+            )
+            if initial.ndim == 2:
+                initial = initial.unsqueeze(0)
+        self._ensure_distribution(initial, reset_mean=True)
 
     # -- Persistent distribution -------------------------------------------------
 
@@ -526,6 +548,53 @@ class MPPI(PortableOptimizer):
             self._dist.cov, self._dist.scale_tril = covariance, scale
             self._dist.inv_cov = covariance.reciprocal()
 
+    def _compute_total_cost(self, costs: torch.Tensor) -> torch.Tensor:
+        gamma = self.gamma_seq.to(device=costs.device, dtype=costs.dtype)
+        if gamma.numel() != costs.shape[-1]:
+            gamma = torch.pow(
+                torch.as_tensor(self.config.gamma, device=costs.device, dtype=costs.dtype),
+                torch.arange(costs.shape[-1], device=costs.device, dtype=costs.dtype),
+            )
+        return jit_compute_total_cost(gamma, costs)
+
+    def _exp_util(self, total_costs: torch.Tensor) -> torch.Tensor:
+        return jit_calculate_exp_util(self.config.beta, total_costs)
+
+    def _exp_util_from_costs(self, costs: torch.Tensor) -> torch.Tensor:
+        return self._exp_util(self._compute_total_cost(costs))
+
+    def _compute_mean(self, weights: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
+        while weights.ndim < actions.ndim:
+            weights = weights.unsqueeze(-1)
+        return (weights * actions).sum(dim=1)
+
+    def _compute_covariance(self, weights: torch.Tensor, actions: torch.Tensor):
+        if not self.config.update_cov:
+            return None
+        assert self._dist is not None
+        while weights.ndim < actions.ndim:
+            weights = weights.unsqueeze(-1)
+        delta = actions - self._dist.mean.unsqueeze(1)
+        covariance = (weights * delta.square()).sum(dim=1).mean(dim=-2, keepdim=True)
+        if self.config.cov_type == CovType.SIGMA_I:
+            covariance = covariance.mean(dim=-1, keepdim=True)
+        return covariance
+
+    def _compute_mean_covariance(self, costs: torch.Tensor, actions: torch.Tensor):
+        weights = self._exp_util_from_costs(costs)
+        mean = self._compute_mean(weights, actions)
+        return mean, self._compute_covariance(weights, actions)
+
+    def _update_cov_scale(self, covariance):
+        if not self.config.update_cov:
+            return None
+        assert self._dist is not None
+        if covariance is not None:
+            self._dist.cov = covariance
+        self._dist.scale_tril = self._dist.cov.sqrt()
+        self._dist.inv_cov = self._dist.cov.reciprocal()
+        return self._dist.scale_tril
+
     def optimize(self, seed_action: torch.Tensor) -> torch.Tensor:
         # EvolutionStrategies intentionally retains its existing CEM bridge.
         if self.strategy != "mppi":
@@ -638,9 +707,16 @@ class MPPI(PortableOptimizer):
     # -- Optimizer lifecycle ------------------------------------------------------
 
     def update_num_problems(self, num_problems: int):
+        changed = int(num_problems) != int(self.config.num_problems)
         super().update_num_problems(num_problems)
-        if self._dist is not None:
+        if changed:
             self._dist = None
+            initial = torch.zeros(
+                (num_problems, self.action_horizon, self.action_dim),
+                device=self.device_cfg.device,
+                dtype=self.device_cfg.dtype,
+            )
+            self._ensure_distribution(initial, reset_mean=True)
         self._sample_set = None
         self._sample_iter = None
         self._sample_cursor = 0
@@ -845,16 +921,16 @@ class MPPI(PortableOptimizer):
 
 # -- Pinned tensor helpers -------------------------------------------------------
 
-def jit_blend_cov(cov_action, cov_update, step_size_cov, kappa):
+def jit_blend_cov(cov_action, cov_update, step_size_cov: float, kappa: float):
     """Exponential covariance blend with the V2 additive covariance floor."""
     return (1.0 - step_size_cov) * cov_action + step_size_cov * cov_update + kappa
 
 
-def jit_blend_mean(mean_action, new_mean, step_size_mean):
+def jit_blend_mean(mean_action, new_mean, step_size_mean: float):
     return (1.0 - step_size_mean) * mean_action + step_size_mean * new_mean
 
 
-def jit_calculate_exp_util(beta, total_costs):
+def jit_calculate_exp_util(beta: float, total_costs):
     beta_tensor = torch.as_tensor(beta, device=total_costs.device, dtype=total_costs.dtype)
     if bool((beta_tensor <= 0).any()):
         raise ValueError("beta must be positive")
@@ -876,7 +952,7 @@ def jit_compute_total_cost(gamma_seq, costs):
     return result / first
 
 
-def jit_calculate_exp_util_from_costs(costs, gamma_seq, beta):
+def jit_calculate_exp_util_from_costs(costs, gamma_seq, beta: float):
     return jit_calculate_exp_util(beta, jit_compute_total_cost(gamma_seq, costs))
 
 
@@ -889,7 +965,15 @@ def jit_diag_a_cov_update(w, actions, mean_action):
 
 
 def jit_mean_cov_diag_a(
-    costs, actions, gamma_seq, mean_action, cov_action, step_size_mean, step_size_cov, kappa, beta
+    costs,
+    actions,
+    gamma_seq,
+    mean_action,
+    cov_action,
+    step_size_mean: float,
+    step_size_cov: float,
+    kappa: float,
+    beta: float,
 ):
     weights = jit_calculate_exp_util_from_costs(costs, gamma_seq, beta)
     expanded = weights
@@ -907,3 +991,96 @@ __all__ = [
     "jit_calculate_exp_util", "jit_calculate_exp_util_from_costs", "jit_compute_total_cost",
     "jit_diag_a_cov_update", "jit_mean_cov_diag_a",
 ]
+
+
+class MPPICfg(_MPPICfgPortable):
+    """Pinned declaration façade for the portable MPPI configuration."""
+    def create_data_dict(cls, data_dict, device_cfg=DeviceCfg(), child_dict=None): pass
+    def num_rollout_instances(self): pass
+    def outer_iters(self): pass
+    def update_niters(self, niters: int): pass
+
+
+class MPPI(_MPPIPortable):
+    """Pinned declaration façade for portable MPPI behavior."""
+    def __init__(self, config: MPPICfg, rollout_list: List[Rollout], use_cuda_graph: bool=False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self): pass
+    def action_horizon(self): pass
+    def action_horizon_bounds_highs(self): pass
+    def action_horizon_bounds_lows(self): pass
+    def action_step_max(self): pass
+    def best_traj(self): pass
+    def best_traj(self, value): pass
+    def compute_metrics(self, action): pass
+    def config(self): pass
+    def cov_action(self): pass
+    def cov_action(self, value): pass
+    def debug_dump(self, file_path=''): pass
+    def device_cfg(self): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self): pass
+    def entropy(self): pass
+    def full_inv_cov(self): pass
+    def full_scale_tril(self): pass
+    def gamma_seq(self): pass
+    def generate_noise(self, shape, base_seed=None): pass
+    def get_all_rollout_instances(self): pass
+    def get_recorded_trace(self): pass
+    def get_rollouts(self): pass
+    def horizon(self): pass
+    def initialize_samples(self): pass
+    def inv_cov_action(self): pass
+    def mean_action(self): pass
+    def mean_action(self, value): pass
+    def neg_per_problem(self): pass
+    def null_act_seqs(self): pass
+    def null_per_problem(self): pass
+    def opt_dim(self): pass
+    def opt_dt(self): pass
+    def opt_dt(self, value): pass
+    def optimize(self, seed_action): pass
+    def outer_iters(self): pass
+    def particles_per_problem(self): pass
+    def problem_col(self): pass
+    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False): pass
+    def reset_covariance(self, reset_problem_ids=None): pass
+    def reset_cuda_graph(self): pass
+    def reset_distribution(self, reset_problem_ids=None): pass
+    def reset_mean(self, reset_problem_ids=None): pass
+    def reset_seed(self): pass
+    def reset_shape(self): pass
+    def rollout_fn(self): pass
+    def sample_actions(self, init_act): pass
+    def sample_lib(self): pass
+    def sampled_particles_per_problem(self): pass
+    def scale_tril(self): pass
+    def scale_tril(self, value): pass
+    def shift(self, shift_steps=0): pass
+    def solve_time(self): pass
+    def solver_names(self): pass
+    def squashed_mean(self): pass
+    def top_trajs(self): pass
+    def total_num_particles(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_init_mean(self, init_mean): pass
+    def update_niters(self, niters): pass
+    def update_num_problems(self, num_problems): pass
+    def update_rollout_params(self, goal): pass
+    def update_samples(self): pass
+    def update_seed(self, init_act): pass
+    def update_solver_params(self, solver_params): pass
+    def use_cuda_graph(self): pass
+
+
+def _install_portable_mppi_runtime():
+    for public, portable in ((MPPICfg, _MPPICfgPortable), (MPPI, _MPPIPortable)):
+        for base in reversed(portable.__mro__):
+            for name, value in base.__dict__.items():
+                if not (name.startswith("__") and name != "__init__"):
+                    setattr(public, name, value)
+
+
+_install_portable_mppi_runtime()

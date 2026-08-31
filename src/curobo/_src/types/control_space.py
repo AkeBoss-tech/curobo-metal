@@ -1,4 +1,4 @@
-"""Control-space enum used by joint state values."""
+from __future__ import annotations
 
 from enum import Enum
 
@@ -12,32 +12,37 @@ class ControlSpace(Enum):
     BSPLINE_5 = 5
 
     @staticmethod
-    def bspline_types() -> list["ControlSpace"]:
+    def bspline_types():
         return [ControlSpace.BSPLINE_3, ControlSpace.BSPLINE_4, ControlSpace.BSPLINE_5]
 
     @staticmethod
-    def position_types() -> list["ControlSpace"]:
-        return [ControlSpace.POSITION, *ControlSpace.bspline_types()]
+    def position_types():
+        return [ControlSpace.POSITION] + ControlSpace.bspline_types()
 
     @staticmethod
-    def spline_degree(control_space: "ControlSpace") -> int:
-        return {
-            ControlSpace.BSPLINE_3: 3,
-            ControlSpace.BSPLINE_4: 4,
-            ControlSpace.BSPLINE_5: 5,
-        }.get(control_space, 0)
+    def spline_degree(control_space: ControlSpace):
+        if control_space in ControlSpace.bspline_types():
+            if control_space == ControlSpace.BSPLINE_3:
+                return 3
+            if control_space == ControlSpace.BSPLINE_4:
+                return 4
+            if control_space == ControlSpace.BSPLINE_5:
+                return 5
+        return 0
 
     @staticmethod
-    def spline_total_knots(control_space: "ControlSpace", action_knots: int) -> int:
+    def spline_total_knots(control_space: ControlSpace, action_knots: int) -> int:
         if control_space not in ControlSpace.bspline_types():
             return action_knots
         return action_knots + ControlSpace.spline_degree(control_space) + 1
 
     @staticmethod
     def spline_total_interpolation_steps(
-        control_space: "ControlSpace", action_knots: int, interpolation_steps: int
+        control_space: ControlSpace, action_knots: int, interpolation_steps: int
     ) -> int:
-        return ControlSpace.spline_total_knots(control_space, action_knots) * interpolation_steps + 1
+        return (
+            ControlSpace.spline_total_knots(control_space, action_knots) * interpolation_steps + 1
+        )
 
 
 __all__ = ["ControlSpace"]

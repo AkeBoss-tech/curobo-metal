@@ -9,17 +9,31 @@ does not emulate CUDA graph capture, Warp steering kernels, or analytic CCD.
 
 from __future__ import annotations
 
+import math
+import random
 import time
 from typing import Any, List, Optional
 
+import numpy as np
 import torch
+import torch.autograd.profiler as profiler
 
+from curobo._src.geom.collision.collision_scene import SceneCollision, create_scene_collision
+from curobo._src.graph_planner.graph.connector_linear import LinearConnector
+from curobo._src.graph_planner.graph.constructor import GraphConstructor
+from curobo._src.graph_planner.graph.node_distance import DistanceNeighborCalculator
+from curobo._src.graph_planner.graph.node_manager import GraphNodeManager
+from curobo._src.graph_planner.graph.node_sampling_strategy import NodeSamplingStrategy
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
 from curobo._src.graph_planner.result import GraphPlannerResult
 from curobo._src.graph_planner.search.path_finder_networkx import NetworkXPathFinder
-from curobo._src.geom.collision.collision_scene import create_scene_collision
+from curobo._src.graph_planner.search.path_pruner import PathPruner
 from curobo._src.rollout.rollout_robot import RobotRollout
+from curobo._src.robot.kinematics.kinematics import Kinematics, KinematicsState
 from curobo._src.state.state_joint import JointState
+from curobo._src.transition.robot_state_transition import RobotStateTransition
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.logging import log_and_raise, log_warn
 from curobo._src.util.trajectory import TrajInterpolationType, linear_smooth
 from curobo_metal.ops.graph_planning import (
     GraphPlanningProblem,
@@ -39,7 +53,7 @@ class PRMGraphPlanner:
     """
 
     def __init__(
-        self, config: PRMGraphPlannerCfg, scene_collision_checker: Optional[Any] = None
+        self, config: PRMGraphPlannerCfg, scene_collision_checker: Optional[SceneCollision] = None
     ):
         if not isinstance(config, PRMGraphPlannerCfg):
             raise TypeError("config must be PRMGraphPlannerCfg")
@@ -110,12 +124,14 @@ class PRMGraphPlanner:
         if not bool(torch.isfinite(action_samples).all().item()):
             raise ValueError(f"{name} must contain finite values")
 
-    def check_samples_feasibility(self, action_samples: torch.Tensor) -> torch.Tensor:
+    def check_samples_feasibility(self, action_samples):
         """Return a device-resident boolean feasibility mask of shape ``[N]``."""
         self._validate_actions(action_samples)
         feasible = torch.ones(
             action_samples.shape[0], dtype=torch.bool, device=action_samples.device
         )
+        if action_samples.shape[0] == 0:
+            return feasible
         if self.feasibility_rollout is not None and self.feasibility_rollout.action_dim:
             # Metrics are intentionally evaluated at a horizon of one, just
             # like V2's graph feasibility rollout.  Reduction handles both
@@ -575,16 +591,16 @@ class PRMGraphPlanner:
         return path_result
 
     def get_interpolated_trajectory(
-        self, paths: List[torch.Tensor | None], success: torch.Tensor,
+        self, paths: List[torch.Tensor], success: torch.Tensor,
         interpolation_steps: int, interpolation_type: TrajInterpolationType,
-    ) -> torch.Tensor:
+    ):
         if not isinstance(success, torch.Tensor) or success.dtype != torch.bool or success.ndim != 1:
             raise ValueError("success must be a one-dimensional bool tensor")
         if len(paths) != success.shape[0]:
             raise ValueError("paths and success must have matching batch size")
         return self._interpolate_paths(paths, success, interpolation_steps, interpolation_type)
 
-    def reset_buffer(self) -> None:
+    def reset_buffer(self):
         self._roadmap.reset()
         self._roadmap_samples = None
         self._roadmap_neighbors_per_node = int(self.config.neighbors_per_node)
@@ -593,7 +609,7 @@ class PRMGraphPlanner:
         self.graph_path_finder.reset_graph()
         self._compat_graph_generation = self._generation
 
-    def reset_seed(self) -> None:
+    def reset_seed(self):
         """Reset sampling streams while preserving the explicitly built roadmap."""
         self._reset_sampler()
         self.graph_path_finder.reset_seed()
@@ -602,7 +618,7 @@ class PRMGraphPlanner:
 
     def extend_roadmap_with_random_samples(
         self, num_samples: int, neighbors_per_node: int = 10
-    ) -> None:
+    ):
         if not isinstance(neighbors_per_node, int) or neighbors_per_node <= 0:
             raise ValueError("neighbors_per_node must be positive")
         self._set_roadmap_neighbors_per_node(neighbors_per_node)
@@ -615,7 +631,7 @@ class PRMGraphPlanner:
         max_sampling_radius: torch.Tensor,
         num_samples: int,
         neighbors_per_node: int = 5,
-    ) -> None:
+    ):
         if not isinstance(neighbors_per_node, int) or neighbors_per_node <= 0:
             raise ValueError("neighbors_per_node must be positive")
         self._set_roadmap_neighbors_per_node(neighbors_per_node)
@@ -623,16 +639,16 @@ class PRMGraphPlanner:
             self._ellipsoidal_samples(x_start, x_goal, max_sampling_radius, num_samples)
         )
 
-    def reset_cuda_graph(self) -> None:
+    def reset_cuda_graph(self):
         raise NotImplementedError(
             "CUDA graph capture has no Metal equivalent; reset_buffer controls portable caches"
         )
 
-    def get_all_rollout_instances(self) -> List[Any]:
+    def get_all_rollout_instances(self) -> List[RobotRollout]:
         return [rollout for rollout in (self.feasibility_rollout, self.auxiliary_rollout)
                 if rollout is not None]
 
-    def warmup(self, num_warmup_iterations: int = 10, max_batch_size: int = 4) -> None:
+    def warmup(self, num_warmup_iterations: int = 10, max_batch_size: int = 4):
         if not isinstance(num_warmup_iterations, int) or num_warmup_iterations < 0:
             raise ValueError("num_warmup_iterations must be a nonnegative integer")
         if not isinstance(max_batch_size, int) or max_batch_size < 1:
@@ -692,7 +708,7 @@ class PRMGraphPlanner:
         return JointState.from_position(position, self.joint_names)
 
     @property
-    def kinematics(self) -> Any:
+    def kinematics(self) -> Kinematics:
         if self.auxiliary_rollout is not None and self.auxiliary_rollout.transition_model is not None:
             return self.auxiliary_rollout.transition_model.robot_model
         if self.config.robot_config is None:
@@ -702,14 +718,14 @@ class PRMGraphPlanner:
         return Kinematics(self.config.robot_config.kinematics, self.device_cfg)
 
     @property
-    def transition_model(self) -> Any:
+    def transition_model(self) -> RobotStateTransition:
         if self.auxiliary_rollout is not None and self.auxiliary_rollout.transition_model is not None:
             return self.auxiliary_rollout.transition_model
         raise NotImplementedError(
             "PRM transition_model requires a compiled portable rollout transition config"
         )
 
-    def compute_kinematics(self, state: JointState) -> Any:
+    def compute_kinematics(self, state: JointState) -> KinematicsState:
         return self.kinematics.compute_kinematics(state)
 
 

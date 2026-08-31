@@ -3,8 +3,13 @@
   "format": "curobo-metal-replay-corpus",
   "inputs": [
     "pose_cost_position",
-    "q"
+    "q",
+    "pose_cost_weights"
   ],
+  "required_matrix": {
+    "cases": ["zero_error", "weighted_pose", "composed_aggregation", "noncontiguous_error", "vjp"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "zero_pose_error",
@@ -14,6 +19,9 @@
       "case": "invalid_pose_cost_input",
       "output": "invalid_rejected"
     }
+  },
+  "tensors": {
+    "pose_cost_weights": {"dtype": "float32", "shape": [6], "data": [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]}
   },
   "version": 1
 }

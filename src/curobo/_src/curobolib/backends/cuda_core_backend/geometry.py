@@ -1,12 +1,36 @@
 import torch
 from curobo_metal.ops.collision import sphere_sphere_signed_distance
+from curobo._src.context import get_runtime
+from curobo._src.curobolib.backends.cuda_core_backend._launch import LaunchConfig
+from curobo._src.curobolib.backends.cuda_core_backend.launch_helper import launch_kernel
+from curobo._src.curobolib.backends.cuda_core_backend.util import ceil_div
+from curobo._src.util.logging import log_and_raise
 from .geometry_config import GeometryKernelCfg
 
 COLLISION_PAIR_SIZE = 8
 STATIC_SMEM_OVERHEAD = COLLISION_PAIR_SIZE * 33
 
 
-def self_collision_distance(out_distance, out_vec, pair_distance, sparse_index, robot_spheres, sphere_padding, weight, pair_locations, block_batch_max_value, block_batch_max_index, num_blocks_per_batch, max_threads_per_block, batch_size, horizon, nspheres, num_collision_pairs, store_pair_distance, compute_grad):
+def self_collision_distance(
+    out_distance: torch.Tensor,
+    out_vec: torch.Tensor,
+    pair_distance: torch.Tensor,
+    sparse_index: torch.Tensor,
+    robot_spheres: torch.Tensor,
+    sphere_padding: torch.Tensor,
+    weight: torch.Tensor,
+    pair_locations: torch.Tensor,
+    block_batch_max_value: torch.Tensor,
+    block_batch_max_index: torch.Tensor,
+    num_blocks_per_batch: int,
+    max_threads_per_block: int,
+    batch_size: int,
+    horizon: int,
+    nspheres: int,
+    num_collision_pairs: int,
+    store_pair_distance: bool,
+    compute_grad: bool,
+):
     pairs = pair_locations.reshape(-1, 2).to(dtype=torch.int64)
     spheres = robot_spheres.reshape(batch_size * horizon, nspheres, 4)
     padding = float(sphere_padding.max().item()) if sphere_padding.numel() else 0.0

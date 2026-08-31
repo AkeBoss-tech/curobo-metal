@@ -49,7 +49,17 @@ def _axis_string_to_vector(axis: str) -> List[float]:
         raise ValueError("axis must be 'x', 'y', or 'z'") from error
 
 
-class MotionPlanner:
+class _MotionPlannerPortableMixin:
+    @property
+    def is_destroyed(self) -> bool:
+        return self._destroyed
+
+    @property
+    def world_generation(self) -> int:
+        return self._world_generation
+
+
+class MotionPlanner(_MotionPlannerPortableMixin):
     def __init__(self, config: MotionPlannerCfg):
         if not isinstance(config, MotionPlannerCfg):
             raise TypeError("config must be MotionPlannerCfg")
@@ -124,22 +134,6 @@ class MotionPlanner:
     def _assert_live(self) -> None:
         if self._destroyed:
             raise RuntimeError("MotionPlanner has been destroyed")
-
-    @property
-    def is_destroyed(self) -> bool:
-        """Whether this planner has released its reusable solver state."""
-        return self._destroyed
-
-    @property
-    def world_generation(self) -> int:
-        """Monotonic generation of successful world/cache mutations.
-
-        CUDA cuRobo invalidates captured graphs after a world mutation.  The
-        portable backend has no captured graph, but a generation lets callers
-        invalidate their own cached queries with the same useful lifecycle
-        signal.
-        """
-        return self._world_generation
 
     def _expected_world_environments(self) -> int:
         return (
@@ -245,24 +239,24 @@ class MotionPlanner:
     @property
     def attachment_manager(self) -> AttachmentManager: return self._attachment_manager
     @property
-    def joint_names(self): return self.ik_solver.joint_names
+    def joint_names(self) -> List[str]: return self.ik_solver.joint_names
     @property
-    def action_dim(self): return self.ik_solver.action_dim
+    def action_dim(self) -> int: return self.ik_solver.action_dim
     @property
-    def tool_frames(self): return self.ik_solver.tool_frames
+    def tool_frames(self) -> List[str]: return self.ik_solver.tool_frames
     @property
-    def default_joint_state(self): return self.ik_solver.default_joint_state
+    def default_joint_state(self) -> JointState: return self.ik_solver.default_joint_state
     @property
-    def kinematics(self): return self.ik_solver.kinematics
+    def kinematics(self) -> Kinematics: return self.ik_solver.kinematics
 
-    def compute_kinematics(self, state: JointState):
+    def compute_kinematics(self, state: JointState) -> KinematicsState:
         self._assert_live()
         return self.ik_solver.compute_kinematics(state)
 
     def warmup(
         self, enable_graph: bool = True, warmup_joint_index: int = 0,
         warmup_joint_delta: float = 0.2, num_warmup_iterations: int = 10,
-    ):
+    ) -> bool:
         self._assert_live()
         if not 0 <= warmup_joint_index < self.action_dim:
             raise ValueError(
@@ -443,7 +437,7 @@ class MotionPlanner:
         self, goal_tool_poses: GoalToolPose, current_state: JointState,
         use_implicit_goal: bool = True, max_attempts: int = 5,
         enable_graph_attempt: int = 1,
-    ):
+    ) -> Optional[TrajOptSolverResult]:
         self._assert_live()
         self._validate_state(current_state, "current_state")
         if not isinstance(goal_tool_poses, GoalToolPose):
@@ -540,7 +534,7 @@ class MotionPlanner:
     def plan_cspace(
         self, goal_state: JointState, current_state: JointState,
         max_attempts: int = 5, enable_graph_attempt: int = 1,
-    ):
+    ) -> Optional[TrajOptSolverResult]:
         self._assert_live()
         self._validate_state(goal_state, "goal_state")
         self._validate_state(current_state, "current_state")
@@ -608,7 +602,7 @@ class MotionPlanner:
         grasp_lift_in_tool_frame: bool = True,
         plan_approach_to_grasp: bool = True, plan_grasp_to_lift: bool = True,
         disable_collision_links: List[str] = None,
-    ):
+    ) -> GraspPlanResult:
         self._assert_live()
         started = time.monotonic()
         self._validate_state(current_state, "current_state")
@@ -760,7 +754,7 @@ class MotionPlanner:
         for link_name in disable_collision_links:
             self.kinematics.config.kinematics_config.disable_link_spheres(link_name)
 
-    def update_world(self, scene_cfg):
+    def update_world(self, scene_cfg: SceneCfg):
         """Update the collision world without leaving planner stages stale.
 
         A ``SceneCfg`` (or complete per-environment list) mutates the existing
@@ -816,7 +810,7 @@ class MotionPlanner:
     def update_link_inertial(
         self, link_name: str, mass: Optional[float] = None,
         com: Optional[torch.Tensor] = None, inertia: Optional[torch.Tensor] = None,
-    ):
+    ) -> None:
         self._assert_live()
         # The production whole-body backend deliberately exposes immutable
         # inertial parameters today.  Delegate rather than inventing a local
@@ -825,7 +819,9 @@ class MotionPlanner:
         self.ik_solver.update_link_inertial(link_name, mass, com, inertia)
         self.trajopt_solver.update_link_inertial(link_name, mass, com, inertia)
 
-    def update_links_inertial(self, link_properties):
+    def update_links_inertial(
+        self, link_properties: dict[str, dict[str, Union[float, torch.Tensor]]]
+    ) -> None:
         self._assert_live()
         if not isinstance(link_properties, dict):
             raise TypeError("link_properties must map link names to property mappings")
@@ -836,7 +832,7 @@ class MotionPlanner:
 
     def update_tool_pose_criteria(
         self, tool_pose_criteria: Dict[str, ToolPoseCriteria]
-    ) -> None:
+    ):
         """Forward portable criteria to both planner stages.
 
         Criteria records are accepted and retained for public lifecycle

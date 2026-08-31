@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Union,List,Callable
 import torch
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
 @dataclass
 class LineSearchContext:
     device_cfg: DeviceCfg; line_search_scale: Union[List[float],torch.Tensor]; line_search_c_1: float; line_search_c_2: float

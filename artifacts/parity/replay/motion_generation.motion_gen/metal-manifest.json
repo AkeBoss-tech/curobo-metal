@@ -3,7 +3,7 @@
   "capability": "motion_generation.motion_gen",
   "corpus": {
     "case_file": "motion_generation.motion_gen.json",
-    "case_sha256": "3f6468edf1ed7c7ce372be4aed1fb0217b674cebbd063aa218ba68f556fdb8b9",
+    "case_sha256": "1affe3c526d165941eee71f279d971f79a9744b717e843a5ce0fe0da94d50bc1",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,6 +21,20 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "cspace",
+        "success",
+        "infeasible",
+        "multiseed",
+        "retry_schedule",
+        "result_layout",
+        "endpoints_metrics",
+        "residual_vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "motion_planner",
     "status": true
   },
@@ -34,7 +48,7 @@
   "operation": "motion_planner_cspace",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "b7bfacc7b54a3aa74e2797ad653facf5837ee3ed58b8dc8ed633a1089c8c79de"
+    "sha256": "38031a7eb829c1944b9720cd3d77eb6530f2c0cc2c75bbce744583c76bbf5e24"
   },
   "runtime": {
     "python": "3.13.9",

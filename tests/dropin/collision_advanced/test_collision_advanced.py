@@ -64,7 +64,12 @@ def test_speed_metric_and_raw_warp_boundary():
     gradient = torch.ones(1, 4, 1, 4)
     out, out_gradient = apply_speed_metric(distance, gradient, spheres, torch.tensor(1.0))
     torch.testing.assert_close(out[0, 1:3, 0], torch.tensor([1.5, 2.5]))
-    torch.testing.assert_close(out_gradient[0, 1:3, 0, 0], torch.tensor([1.5, 2.5]))
+    # The pinned kernel projects the gradient orthogonally to velocity before
+    # scaling.  Motion is along x here, so x is removed while y/z scale with
+    # speed and the unused fourth gradient component remains unchanged.
+    torch.testing.assert_close(out_gradient[0, 1:3, 0, 0], torch.zeros(2))
+    torch.testing.assert_close(out_gradient[0, 1:3, 0, 1:3], torch.tensor([[1.5, 1.5], [2.5, 2.5]]))
+    torch.testing.assert_close(out_gradient[0, 1:3, 0, 3], torch.ones(2))
     from curobo._src.geom.collision.wp_autograd import SphereObstacleCollision
     with pytest.raises(NotImplementedError, match="Warp"):
         SphereObstacleCollision.apply()

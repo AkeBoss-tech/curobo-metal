@@ -1,0 +1,174 @@
+{
+  "backend": "cuda",
+  "capability": "optim.particle_evolution",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "facade_lifecycle",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "zero_problem_count",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "five_seed_band",
+        "fixed_seed_repeat",
+        "shift_lifecycle",
+        "debug_trace",
+        "termination",
+        "alternate_config"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "a3996bffeaaedff5e89d64c5f7fcff8f1b48f9bf40f3ac6ddab594e797a553f0",
+  "input_tensor_count": 5,
+  "operation": "evolution_strategies",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "0ad593b7f50c9c7b153f35a6a103b6acbedd340318b5a0197507c450a7966936",
+    "tensors": {
+      "batch_independent": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "bounds_satisfied": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "deterministic_repeat": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "final_objective": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "fixed_sample_repeat": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "initial_objective": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          6
+        ]
+      },
+      "multi_seed_final_mean": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "multi_seed_final_std": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "multi_seed_improvement_rate": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "multi_seed_initial_mean": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "objective_improved": {
+        "dtype": "bool",
+        "shape": [
+          3
+        ]
+      },
+      "shift_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "solution": {
+        "dtype": "float32",
+        "shape": [
+          3,
+          3,
+          2
+        ]
+      },
+      "solution_finite": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "solution_shape": {
+        "dtype": "int64",
+        "shape": [
+          3
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 0,
+    "rtol": 0
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

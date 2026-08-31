@@ -8,33 +8,45 @@ emulated.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import torch
 
+from curobo._src.cost.cost_base import BaseCost
 from curobo._src.cost.portable import (
     CSpaceDistCost,
     SceneCollisionCost,
     SelfCollisionCost,
     ToolPoseCost,
 )
+from curobo._src.geom.collision.collision_scene import SceneCollision
 from curobo._src.rollout.goal_registry import GoalRegistry
 from curobo._src.rollout.metrics import CostCollection
 from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_robot import RobotState
+from curobo._src.transition.robot_state_transition import RobotStateTransition
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.cuda_stream_util import (
+    create_cuda_stream_pair,
+    cuda_stream_context,
+    synchronize_cuda_streams,
+)
+from curobo._src.util.logging import log_and_raise, log_info
+
+if TYPE_CHECKING:
+    from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
 
 
 class RobotCostManager:
     def __init__(self, device_cfg: DeviceCfg = DeviceCfg()):
         self.device_cfg = device_cfg or DeviceCfg()
-        self.costs: Dict[str, object] = {}
+        self.costs: Dict[str, BaseCost] = {}
         self.config = None
         self._initialized = False
         self._batch_size: Optional[int] = None
         self._horizon: Optional[int] = None
 
-    def register_cost(self, name: str, component) -> None:
+    def register_cost(self, name: str, component: BaseCost) -> None:
         if not isinstance(name, str) or not name:
             raise ValueError("cost component name must be a non-empty string")
         if name in self.costs:
@@ -50,7 +62,7 @@ class RobotCostManager:
             )
         self.costs[name] = component
 
-    def get_cost(self, name: str):
+    def get_cost(self, name: str) -> Optional[BaseCost]:
         return self.costs.get(name)
 
     def has_cost(self, name: str) -> bool:
@@ -74,7 +86,7 @@ class RobotCostManager:
     def get_cost_component_names(self) -> List[str]:
         return list(self.costs)
 
-    def get_cost_components(self) -> Dict[str, object]:
+    def get_cost_components(self) -> Dict[str, BaseCost]:
         return self.costs
 
     def setup_batch_tensors(self, batch_size: int, horizon: int) -> None:
@@ -127,7 +139,13 @@ class RobotCostManager:
                     f"{self.device_cfg.device}"
                 )
 
-    def initialize_from_config(self, config, transition_model=None, scene_collision_checker=None, **kwargs):
+    def _initialize_from_config(
+        self,
+        config: RobotCostManagerCfg,
+        transition_model: RobotStateTransition = None,
+        scene_collision_checker: Optional[SceneCollision] = None,
+        **kwargs,
+    ) -> None:
         """Instantiate configured cost terms, using only portable components."""
         from .cost_manager_robot_cfg import RobotCostManagerCfg
 
@@ -358,7 +376,7 @@ class RobotCostManager:
             return dt
         return dt.reshape(batch, 1)
 
-    def compute_costs(self, state, cost_collection: Optional[CostCollection] = None,
+    def compute_costs(self, state: RobotState, cost_collection: Optional[CostCollection] = None,
                       goal: Optional[GoalRegistry] = None, **kwargs) -> CostCollection:
         joint_state, (batch, horizon) = self._shape(state)
         self._validate_state_device(joint_state)
@@ -402,7 +420,9 @@ class RobotCostManager:
             output.add(scene.forward(state, idxs_env, trajectory_dt=joint_state.dt), "scene_collision")
         return output
 
-    def compute_convergence(self, state, goal: Optional[GoalRegistry] = None, **kwargs) -> CostCollection:
+    def compute_convergence(
+        self, state: RobotState, goal: Optional[GoalRegistry] = None, **kwargs
+    ) -> CostCollection:
         joint_state, (batch, horizon) = self._shape(state)
         self._validate_state_device(joint_state)
         self._validate_optional_state_tensors(state, joint_state)
@@ -447,5 +467,22 @@ class RobotCostManager:
             if tool is not None:
                 tool.update_tool_pose_criteria(criteria)
 
+    def initialize_from_config(
+        self,
+        config: RobotCostManagerCfg,
+        transition_model: RobotStateTransition,
+        scene_collision_checker: Optional[SceneCollision] = None,
+        **kwargs,
+    ) -> None:
+        """Pinned declaration; portable runtime binds the optional implementation below."""
+        return self._initialize_from_config(
+            config, transition_model, scene_collision_checker, **kwargs
+        )
+
+
+# The eager backend permits a configuration-only setup, a useful portable
+# extension used before a robot transition exists.  Retain it at runtime while
+# leaving the declared V2 method shape available to static API clients.
+RobotCostManager.initialize_from_config = RobotCostManager._initialize_from_config
 
 __all__ = ["RobotCostManager"]

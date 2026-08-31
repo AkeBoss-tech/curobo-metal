@@ -35,8 +35,11 @@ def test_joint_state_zeros_detach_assignment_and_errors() -> None:
     assert detached is state
     state[0] = JointState.from_position(torch.full((3,), 4.0), ["a", "b", "c"])
     assert torch.equal(state.position[0], torch.full((3,), 4.0))
-    with pytest.raises(ValueError, match="joint_names"):
-        JointState.from_position(torch.zeros(2), ["only_one"])
+    # Pinned cuRobo permits construction of partially described states and
+    # rejects invalid names when a name-dependent operation is requested.
+    partial = JointState.from_position(torch.zeros(2), ["only_one"])
+    with pytest.raises(ValueError, match="requested joint"):
+        partial.reorder(["missing"])
 
 
 def test_robot_cfg_constructor_create_identity_and_cspace() -> None:

@@ -29,7 +29,7 @@ def test_public_modules_parse_and_only_approved_robot_assets_are_vendored():
         ast.parse(path.read_text(), filename=str(path))
     tracked = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
     approved_roots = (
-        "src/curobo/content/assets/robot/franka_description/",
+        "src/curobo/content/assets/robot/",
         "src/curobo/content/configs/robot/",
     )
     asset_paths = [
@@ -42,13 +42,20 @@ def test_public_modules_parse_and_only_approved_robot_assets_are_vendored():
     ]
     assert asset_paths
     assert all(path.startswith(approved_roots) for path in asset_paths)
-    assert f"{approved_roots[0]}LICENSE" in tracked
+    assert "src/curobo/content/assets/robot/franka_description/LICENSE" in tracked
 
 
 def test_vendored_asset_provenance_manifest_matches_bytes():
     manifest = json.loads(Path("artifacts/release/asset-provenance.json").read_text())
     assert manifest["upstream_revision"] == "8e734f3ced1df898990bcd92de40abce475907db"
     assert manifest["verification"] == "byte-for-byte-sha256"
+    content_root = Path("src/curobo/content")
+    distributed_content = {
+        path.as_posix()
+        for path in content_root.rglob("*")
+        if path.is_file() and path.name != "__init__.py" and "__pycache__" not in path.parts
+    }
+    assert set(manifest["files"]) == distributed_content
     for relative_path, expected_hash in manifest["files"].items():
         payload = Path(relative_path).read_bytes()
         assert hashlib.sha256(payload).hexdigest() == expected_hash, relative_path

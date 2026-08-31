@@ -42,11 +42,12 @@ Parent integration suite after the upstream-example replay wave: 285 tests passi
 `PYTORCH_ENABLE_MPS_FALLBACK=0`.
 
 The portable implementation and deterministic MPS replay corpus are complete.
-On 2026-08-10 the self-verifying handoff executed successfully on iLab1 against
-the exact pinned upstream revision using an NVIDIA RTX A4500, CUDA 12.6, and
-PyTorch 2.7.1+cu126. On 2026-08-11, all 19 registered adapters passed the strict
-paired comparison; the latest dated aggregate report is checked in under
-`artifacts/parity/cuda-replay/paired-report-2026-08-11.json`.
+On 2026-08-26 a fresh self-verifying handoff executed successfully on the iLab
+NVIDIA RTX 3090 host against the exact pinned upstream revision. All 19
+registered adapters passed the strict paired comparison with executed invalid,
+edge, and expanded multi-case matrix evidence; the promotable aggregate report
+is checked in under
+`artifacts/parity/cuda-replay/paired-report-2026-08-26-matrix.json`.
 The replay runner now has real, asset-independent pinned-upstream CUDA adapters
 for `DeviceCfg`, `Pose`, `JointState`, and shared `BaseSolverResult`
 construction/clone behavior. A fifth adapter uses a license-clean serialized

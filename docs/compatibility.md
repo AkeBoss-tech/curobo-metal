@@ -9,9 +9,10 @@ and the checked release artifacts control.
 
 ## Release status
 
-The alpha is a bounded Apple Silicon/MPS preview, not a complete source-
-unchanged replacement for NVIDIA cuRobo. Compatibility targets exactly cuRobo
-commit `8e734f3ced1df898990bcd92de40abce475907db`.
+The alpha is a bounded portable Python drop-in for the audited Apple
+Silicon/MPS scope, not a CUDA/Warp ABI or external-ecosystem replacement.
+Compatibility targets exactly cuRobo commit
+`8e734f3ced1df898990bcd92de40abce475907db`.
 
 The distribution exposes both `curobo_metal` and a compatibility-oriented
 `curobo` namespace. NVIDIA cuRobo and `curobo-metal` must not be installed in
@@ -19,9 +20,8 @@ the same environment because both own `curobo`.
 
 ## Audited alpha claims
 
-- All 361 pinned upstream runtime module paths import from the installed wheel.
-- The documented non-`_src` public facades have no known static export or
-  callable-shape differences in the current inventory audit.
+- The strict pinned Python surface is exact: 361/361 runtime modules, 3,870/
+  3,870 AST-discovered exports, and 747/747 callable shapes.
 - CPU and Apple MPS production paths exist for the documented configuration,
   types, kinematics, collision, cost, IK, trajectory, graph-planning,
   perception, dynamics, and high-level planning slices. Requested MPS execution
@@ -30,16 +30,19 @@ the same environment because both own `curobo`.
   pinned-CUDA/Metal evidence. Passing a bounded replay is evidence only for its
   serialized operation and schema, not for every method or numerical regime in
   that subsystem.
-- The wheel includes a hash-pinned Franka 0.7.0 URDF/mesh subset and five
-  NVIDIA YAML configs. See `THIRD_PARTY_NOTICES.md` and
+- The wheel includes 40 byte-exact, hash-pinned upstream robot, configuration,
+  and scene assets. See `THIRD_PARTY_NOTICES.md` and
   `artifacts/release/asset-provenance.json`.
+- All 225 pinned upstream test/example modules are classified. The 55
+  applicable modules pass unchanged against a clean installed wheel (1,116
+  tests); 13 external-unavailable, 35 not-applicable, and 122
+  platform-substituted entries retain explicit reasons.
 
-## Not yet claimed
+## Bounded claims
 
-The alpha does not claim full `_src` compatibility. The strict audit currently
-reports 1,263 missing AST-discovered exports and 446 callable-shape differences
-under `_src`; many are imported typing/backend implementation names, but the
-remaining user-relevant members have not all been classified and closed.
+The exact static surface is not a claim of byte-identical source or behavior in
+every numerical regime. The 19 paired adapters certify their declared corpora
+and matrices; they do not turn platform-specific ABIs into portable APIs.
 
 L-BFGS now has fallback-disabled MPS and pinned-CUDA outcome evidence for an
 eager, batched quadratic solve. The shared claim deliberately excludes hard
@@ -76,19 +79,17 @@ API, its tests, and the capability inventory for the exact slice.
 
 A stable drop-in claim requires all of the following:
 
-1. Classify every strict `_src` export/signature difference and make the
-   supported-symbol gate fail closed.
-2. Broaden all nineteen capabilities beyond their bounded paired replays across
-   dtype/device, batch/layout, invalid/infeasible,
-   mutation/cache, gradient, collision-boundary, and repeatability cases.
+1. The strict `_src` export/signature gate is fail-closed and complete.
+2. All nineteen paired capabilities cover their declared dtype/device,
+   batch/layout, invalid/infeasible, mutation/cache, gradient,
+   collision-boundary, and repeatability matrices.
 3. Classify the 211 pinned upstream test modules and 14 examples; execute every
    applicable item unchanged against the installed wheel and record exclusions.
-   `artifacts/api_compat/upstream-execution-census.json` now tracks all 225
-   entries and intentionally fails `--require-reviewed` until that review is
-   complete.
+   This gate is complete: the census has no unreviewed entries, and the 55
+   applicable modules pass 1,116 unchanged tests in aggregate.
 4. Pass clean wheel and sdist installs on the supported Python matrix, full
    fallback-disabled Apple MPS tests, CUDA replay, metadata/license checks, and
    namespace-conflict checks from a clean tagged commit.
 
-Until those gates close, release notes and package metadata must retain the
-alpha/non-drop-in warning.
+Until the remaining packaging and publication mechanics close, release notes
+and package metadata retain the alpha warning.

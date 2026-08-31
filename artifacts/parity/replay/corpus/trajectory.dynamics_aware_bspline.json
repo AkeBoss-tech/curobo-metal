@@ -4,6 +4,7 @@
   "inputs": [
     "q"
   ],
+  "required_matrix": {"cases": ["endpoint", "two_horizons", "constraint", "invalid_termination", "vjp"], "output": "matrix_observed"},
   "required_evidence": {
     "edge": {
       "case": "endpoint_constraints",

@@ -15,8 +15,9 @@ from .sequencer_base import BaseSequencer
 
 class SampleBuffer:
     def __init__(
-        self, sequencer, ndims: int, device_cfg: DeviceCfg = DeviceCfg(),
-        up_bounds=[1], low_bounds=[0], store_buffer=2000,
+        self, sequencer: BaseSequencer, ndims: int, device_cfg: DeviceCfg = DeviceCfg(),
+        up_bounds: List[float] = [1], low_bounds: List[float] = [0],
+        store_buffer: Optional[int] = 2000,
     ):
         if sequencer.ndims != ndims:
             raise ValueError("sequencer ndims does not match ndims")
@@ -52,25 +53,36 @@ class SampleBuffer:
         )
         return self._sample_buffer[idx]
 
-    def get_samples(self, num_samples: int, bounded: bool = False):
+    def get_samples(self, num_samples: int, bounded: bool = False) -> torch.Tensor:
         samples = self._get_samples(num_samples)
         return self.bound_samples(samples, self.range_b, self.low_bounds) if bounded else samples
 
-    def get_gaussian_samples(self, num_samples: int, variance: float = 1.0):
+    def get_gaussian_samples(self, num_samples: int, variance: float = 1.0) -> torch.Tensor:
         return self.gaussian_transform(
             self.get_samples(num_samples), self.proj_mat, self.i_mat, float(np.sqrt(variance))
         )
 
     @staticmethod
-    def bound_samples(samples, range_b, low_bounds):
+    def bound_samples(samples: torch.Tensor, range_b: torch.Tensor, low_bounds: torch.Tensor):
         return samples * range_b + low_bounds
 
     @staticmethod
-    def gaussian_transform(uniform_samples, proj_mat, i_mat, std_dev):
+    def gaussian_transform(
+        uniform_samples: torch.Tensor,
+        proj_mat: torch.Tensor,
+        i_mat: torch.Tensor,
+        std_dev: float,
+    ):
         return (proj_mat * torch.erfinv(1.98 * uniform_samples - 0.99)) @ (i_mat * std_dev)
 
     @staticmethod
-    def sample_by_random_index(sample_buffer, num_samples, int_generator, device, out_buffer):
+    def sample_by_random_index(
+        sample_buffer: torch.Tensor,
+        num_samples: int,
+        int_generator: torch.Generator,
+        device: torch.device,
+        out_buffer: Optional[torch.Tensor],
+    ):
         idx = torch.randint(
             sample_buffer.shape[0], (num_samples,), generator=int_generator,
             device=device, out=out_buffer,
@@ -78,19 +90,28 @@ class SampleBuffer:
         return sample_buffer[idx], idx
 
     @classmethod
-    def create_halton_sample_buffer(cls, ndims, up_bounds, low_bounds, store_buffer=2000,
-                                    seed=123, device_cfg=DeviceCfg()):
+    def create_halton_sample_buffer(
+        cls, ndims: int, up_bounds: List[float], low_bounds: List[float],
+        store_buffer: Optional[int] = 2000, seed: int = 123,
+        device_cfg: DeviceCfg = DeviceCfg(),
+    ):
         from .sequencer_halton import HaltonSequencer
         return cls(HaltonSequencer(ndims, seed), ndims, device_cfg, up_bounds, low_bounds, store_buffer)
 
     @classmethod
-    def create_random_sample_buffer(cls, ndims, up_bounds, low_bounds, store_buffer=2000,
-                                    seed=123, device_cfg=DeviceCfg()):
+    def create_random_sample_buffer(
+        cls, ndims: int, up_bounds: List[float], low_bounds: List[float],
+        store_buffer: Optional[int] = 2000, seed: int = 123,
+        device_cfg: DeviceCfg = DeviceCfg(),
+    ):
         from .sequencer_random import RandomSequencer
         return cls(RandomSequencer(ndims, seed), ndims, device_cfg, up_bounds, low_bounds, store_buffer)
 
     @classmethod
-    def create_roberts_sample_buffer(cls, ndims, up_bounds, low_bounds, store_buffer=2000,
-                                     seed=123, device_cfg=DeviceCfg()):
+    def create_roberts_sample_buffer(
+        cls, ndims: int, up_bounds: List[float], low_bounds: List[float],
+        store_buffer: Optional[int] = 2000, seed: int = 123,
+        device_cfg: DeviceCfg = DeviceCfg(),
+    ):
         from .sequencer_roberts import RobertsSequencer
         return cls(RobertsSequencer(ndims, seed), ndims, device_cfg, up_bounds, low_bounds, store_buffer)

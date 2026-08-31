@@ -9,13 +9,16 @@ rollout, and gradients tell the optimizer how to move the CoM back into it.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import torch
 
-from curobo._src.geom.convex_polygon_helper import ConvexPolygon2DHelper
+if TYPE_CHECKING:
+    from curobo._src.cost.cost_support_polygon_cfg import CostSupportPolygonCfg
 
-from .portable import BaseCost, CostSupportPolygonCfg as _CostSupportPolygonCfg
+from curobo._src.cost.cost_base import BaseCost
+from curobo._src.geom.convex_polygon_helper import ConvexPolygon2DHelper
+from curobo._src.util.logging import log_and_raise
 
 
 class CostSupportPolygon(BaseCost):
@@ -32,14 +35,12 @@ class CostSupportPolygon(BaseCost):
     _DEFAULT_CONTACT_PADDING = 0.05
     _INSIDE_MARGIN = 0.1
 
-    def __init__(self, config: _CostSupportPolygonCfg):
+    def __init__(self, config: CostSupportPolygonCfg):
         super().__init__(config)
         self._polygon_helper = ConvexPolygon2DHelper(config.device_cfg)
         self.vertices: Optional[torch.Tensor] = None
 
-    def build_convex_hull(
-        self, vertices: torch.Tensor, padding: Optional[float] = None
-    ) -> torch.Tensor:
+    def build_convex_hull(self, vertices: torch.Tensor, padding: Optional[float] = None):
         """Build and cache a hull for each batch element.
 
         The helper detaches the vertices before its discrete hull operation.
@@ -60,6 +61,9 @@ class CostSupportPolygon(BaseCost):
         # into a direct, portable error instead of allowing a later index error.
         if self.vertices is None:
             raise RuntimeError("convex hull construction did not produce a hull")
+        # The pinned API does not declare a return value.  Returning this
+        # portable convenience value remains backward compatible while the
+        # exact callable shape stays unchanged.
         return self.vertices
 
     def _validate_input(self, robot_com: torch.Tensor, robot_spheres: torch.Tensor) -> torch.Tensor:
@@ -108,7 +112,7 @@ class CostSupportPolygon(BaseCost):
     def _compute_support_polygon_cost_vectorized(self, com_pos: torch.Tensor) -> torch.Tensor:
         """Evaluate signed hull distances and the pinned inside-margin loss."""
         if self._polygon_helper._cached_convex_hulls is None:
-            raise RuntimeError("No convex hull cached; call build_convex_hull first")
+            log_and_raise("No convex hull cached, call build_convex_hull first")
         batch_indices = torch.arange(com_pos.shape[0], device=com_pos.device)
         signed_distances = self._polygon_helper.compute_point_hull_distance(
             com_pos.unsqueeze(2), batch_indices
@@ -135,10 +139,6 @@ class CostSupportPolygon(BaseCost):
             self.build_convex_hull(foot_spheres, padding=self._DEFAULT_CONTACT_PADDING)
         return self._compute_support_polygon_cost_vectorized(robot_com[..., :2])
 
+    # ``BaseCost`` is deliberately framework-neutral in this Metal port, so
+    # retain PyTorch module-style invocation as a portable extension.
     __call__ = forward
-
-
-CostSupportPolygonCfg = _CostSupportPolygonCfg
-
-
-__all__ = ["BaseCost", "ConvexPolygon2DHelper", "CostSupportPolygon", "CostSupportPolygonCfg"]

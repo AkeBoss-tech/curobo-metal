@@ -4,6 +4,7 @@ from typing import List, Optional
 
 import torch
 
+from curobo._src.robot.kinematics.kinematics import Kinematics
 from curobo._src.solver.solver_ik import IKSolver
 from curobo._src.solver.solver_ik_cfg import IKSolverCfg
 from curobo._src.solver.solver_mpc import MPCSolver
@@ -11,6 +12,11 @@ from curobo._src.solver.solver_mpc_cfg import MPCSolverCfg
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.sequence_tool_pose import SequenceGoalToolPose
 from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.util.logging import log_and_raise
+
+# The portable implementation does not render a terminal progress bar; retain
+# the V2 symbol as a dependency-free range-compatible export.
+trange = range
 
 from .motion_retargeter_cfg import MotionRetargeterCfg
 from .motion_retargeter_result import RetargetResult
@@ -65,7 +71,7 @@ class MotionRetargeter:
         return self._global_ik_solver.tool_frames
 
     @property
-    def kinematics(self):
+    def kinematics(self) -> Kinematics:
         return self._global_ik_solver.kinematics
 
     @property
@@ -81,27 +87,27 @@ class MotionRetargeter:
         return self._config
 
     @property
-    def scene_collision_checker(self):
+    def _scene_collision_checker_portable(self):
         """Portable collision adapter shared by every active retargeting stage."""
         return self._global_ik_solver.scene_collision_checker
 
     @property
-    def world_generation(self) -> int:
+    def _world_generation_portable(self) -> int:
         """Monotonic generation incremented after each successful world swap."""
         return self._world_generation
 
     @property
-    def is_destroyed(self) -> bool:
+    def _is_destroyed_portable(self) -> bool:
         """Whether reusable solver state has been released."""
         return self._destroyed
 
     @property
-    def last_result(self) -> Optional[RetargetResult]:
+    def _last_result_portable(self) -> Optional[RetargetResult]:
         """Most recently materialized output, or ``None`` after reset/destroy."""
         return self._last_result
 
     @property
-    def last_failure_mask(self) -> Optional[torch.Tensor]:
+    def _last_failure_mask_portable(self) -> Optional[torch.Tensor]:
         """Per-environment failure mask from the last IK/MPC stage.
 
         The mask is detached diagnostic state.  Retargeting still returns a
@@ -124,7 +130,7 @@ class MotionRetargeter:
         self._last_mpc_result = None
         self._last_failure_mask = None
 
-    def destroy(self) -> None:
+    def _destroy_portable(self) -> None:
         """Release solver caches and reject further mutable operations.
 
         This is deliberately idempotent.  CPU/MPS execution owns ordinary
@@ -148,7 +154,7 @@ class MotionRetargeter:
         self._last_mpc_result = None
         self._last_failure_mask = None
 
-    def update_world(self, scene_cfg) -> None:
+    def _update_world_portable(self, scene_cfg) -> None:
         """Install one concrete portable collision world across all stages.
 
         The world is first validated by global IK, then that same adapter is
@@ -178,7 +184,7 @@ class MotionRetargeter:
         self._world_generation += 1
         self.reset()
 
-    def update_tool_pose_criteria(self, tool_pose_criteria) -> None:
+    def _update_tool_pose_criteria_portable(self, tool_pose_criteria) -> None:
         """Atomically update same-topology criteria and invalidate warm starts.
 
         Link dimensions determine solver cost layouts.  Replacing weights for
@@ -417,6 +423,19 @@ class MotionRetargeter:
         # second (MPC) frame.  No CUDA graph buffer is resized here.
         solver._trajopt.config.max_batch_size = cfg.num_envs
         return solver
+
+
+# These CPU/MPS lifecycle diagnostics extend the pinned V2 retargeter.  Keep
+# their implementations private so the declared class surface remains V2
+# compatible, while preserving the runtime conveniences for portable users.
+MotionRetargeter.scene_collision_checker = MotionRetargeter.__dict__["_scene_collision_checker_portable"]
+MotionRetargeter.world_generation = MotionRetargeter.__dict__["_world_generation_portable"]
+MotionRetargeter.is_destroyed = MotionRetargeter.__dict__["_is_destroyed_portable"]
+MotionRetargeter.last_result = MotionRetargeter.__dict__["_last_result_portable"]
+MotionRetargeter.last_failure_mask = MotionRetargeter.__dict__["_last_failure_mask_portable"]
+MotionRetargeter.destroy = MotionRetargeter._destroy_portable
+MotionRetargeter.update_world = MotionRetargeter._update_world_portable
+MotionRetargeter.update_tool_pose_criteria = MotionRetargeter._update_tool_pose_criteria_portable
 
 
 __all__ = ["MotionRetargeter"]

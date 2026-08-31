@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional, Tuple
 import math
 import torch
+
+from curobo._src.perception.mapper.block_allocation import calculate_tsdf_max_blocks
+from curobo._src.util.logging import log_and_raise
 
 
 @dataclass
@@ -118,7 +123,7 @@ class MapperCfg:
                 raise ValueError("grid_center must be a finite xyz vector")
 
     @property
-    def grid_shape(self):
+    def grid_shape(self) -> Tuple[int, int, int]:
         """Pinned V2 public order: ``(nz, ny, nx)``."""
         x, y, z = self.extent_meters_xyz
         return (max(2, int(math.ceil(z / self.voxel_size))),
@@ -126,41 +131,44 @@ class MapperCfg:
                 max(2, int(math.ceil(x / self.voxel_size))))
 
     @property
-    def native_grid_shape(self):
+    def _native_grid_shape_portable(self):
         """Dense CPU/MPS tensor shape in world ``(x, y, z)`` order."""
         nz, ny, nx = self.grid_shape
         return nx, ny, nz
 
     @property
-    def max_blocks(self):
-        from .block_allocation import calculate_tsdf_max_blocks
+    def max_blocks(self) -> int:
         return calculate_tsdf_max_blocks(
             self.grid_shape, self.voxel_size, self.block_size,
             self.truncation_distance, self.roughness,
         )
 
     @property
-    def hash_capacity(self):
+    def hash_capacity(self) -> int:
         # Dense storage does not use a hash table, but callers use this value
         # for memory planning.  Keep the same positive sizing relationship.
         return max(1, int(math.ceil(self.max_blocks / self.hash_load_factor)))
 
     @property
-    def origin(self):
+    def _origin_portable(self):
         return self.grid_center - torch.tensor(self.get_actual_extent(), dtype=self.grid_center.dtype) / 2
 
-    def get_actual_extent(self):
+    def get_actual_extent(self) -> Tuple[float, float, float]:
         nz, ny, nx = self.grid_shape
         return nx * self.voxel_size, ny * self.voxel_size, nz * self.voxel_size
 
-    def voxel_to_world(self, iz, iy, ix):
+    def voxel_to_world(
+        self, iz: int, iy: int, ix: int
+    ) -> Tuple[float, float, float]:
         nz, ny, nx = self.grid_shape
         cx, cy, cz = self.grid_center.tolist()
         return (cx + (int(ix) - (nx - 1) / 2.0) * self.voxel_size,
                 cy + (int(iy) - (ny - 1) / 2.0) * self.voxel_size,
                 cz + (int(iz) - (nz - 1) / 2.0) * self.voxel_size)
 
-    def world_to_voxel(self, world_x, world_y, world_z):
+    def world_to_voxel(
+        self, world_x: float, world_y: float, world_z: float
+    ) -> Tuple[int, int, int]:
         nz, ny, nx = self.grid_shape
         cx, cy, cz = self.grid_center.tolist()
         ix = int(round((float(world_x) - cx) / self.voxel_size + (nx - 1) / 2.0))
@@ -170,6 +178,15 @@ class MapperCfg:
             return iz, iy, ix
         return -1, -1, -1
 
-    def get_grid_bounds(self):
+    def get_grid_bounds(
+        self,
+    ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
         origin = self.origin
         return tuple(origin.tolist()), tuple((origin+torch.tensor(self.get_actual_extent())).tolist())
+
+
+# Dense portable mapping additionally exposes native tensor-order and origin
+# helpers.  Install them from private properties so the declared mapper config
+# remains the pinned V2 shape.
+MapperCfg.native_grid_shape = MapperCfg.__dict__["_native_grid_shape_portable"]
+MapperCfg.origin = MapperCfg.__dict__["_origin_portable"]

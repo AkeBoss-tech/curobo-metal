@@ -13,6 +13,7 @@ from curobo._src.state.state_joint_ops import (
     blend_joint_states,
     calculate_fd_from_position,
     cat_joint_states,
+    reindex_joint_state_inplace,
     repeat_joint_state,
     scale_joint_state_by_dt,
 )
@@ -100,6 +101,26 @@ def test_batched_seed_copy_gather_trim_and_dof_index() -> None:
     indexed = index_joint_state_dof(state, torch.tensor([1, 0]))
     assert indexed.joint_names == ["j1", "j0"]
     torch.testing.assert_close(indexed.dt, state.dt)
+
+
+def test_legacy_joint_state_facade_keeps_pinned_deprecation_and_void_contracts() -> None:
+    legacy_methods = (
+        "append_joints", "apply_kernel", "blend", "calculate_fd_from_position",
+        "cat", "copy_at_batch_seed_indices", "copy_at_index", "copy_only_index",
+        "gather_by_seed_index", "get_augmented_joint_state", "get_state_tensor",
+        "get_trajectory_at_horizon_index", "index_dof", "repeat", "repeat_seeds",
+        "scale", "scale_by_dt", "scale_time", "stack", "trim_trajectory",
+    )
+    assert all(getattr(getattr(JointState, method), "__deprecated__", False) for method in legacy_methods)
+
+    target = JointState.from_position(torch.zeros((2, 2)), ["a", "b"])
+    source = JointState.from_position(torch.ones(2), ["a", "b"])
+    assert copy_joint_state_at_index(target, source, 1) is None
+    assert target.copy_at_index(source, 0) is None
+    torch.testing.assert_close(target.position, torch.ones((2, 2)))
+
+    assert reindex_joint_state_inplace(target, ["b", "a"]) is None
+    assert target.joint_names == ["b", "a"]
 
 
 def test_mps_ops_without_cpu_fallback_when_available(monkeypatch) -> None:

@@ -8,7 +8,22 @@ results from an incompatible raw CUDA launch.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
+
+from curobo._src.util.warp import get_warp_device_stream
+
+try:
+    import warp as _raw_wp
+except ImportError:
+    _raw_wp = None
+
+wp = _raw_wp
+
+if TYPE_CHECKING:
+    from curobo._src.geom.collision.buffer_collision import CollisionBuffer
+    from curobo._src.geom.data.data_scene import SceneData
 
 from .wp_collision_kernel import sphere_obstacle_collision_kernel
 from .wp_speed_metric import apply_speed_metric
@@ -23,23 +38,12 @@ def _raw_warp_error(name: str) -> NotImplementedError:
 
 
 class SphereObstacleCollision(torch.autograd.Function):
-    @classmethod
-    def apply(cls, *args, **kwargs):
-        """Fail before PyTorch binds raw launch arguments.
-
-        The inherited ``Function.apply`` otherwise raises a misleading Python
-        argument error for an accidental zero-argument call instead of the
-        explicit Warp/CUDA boundary this compatibility layer promises.
-        """
-        del args, kwargs
-        raise _raw_warp_error("SphereObstacleCollision")
-
     @staticmethod
     def forward(
         ctx,
         query_spheres: torch.Tensor,
-        buffer,
-        scene,
+        buffer: "CollisionBuffer",
+        scene: "SceneData",
         weight: torch.Tensor,
         activation_distance: torch.Tensor,
         max_distance: torch.Tensor,
@@ -60,17 +64,12 @@ class SphereObstacleCollision(torch.autograd.Function):
 
 
 class SweptSphereObstacleCollision(torch.autograd.Function):
-    @classmethod
-    def apply(cls, *args, **kwargs):
-        del args, kwargs
-        raise _raw_warp_error("SweptSphereObstacleCollision")
-
     @staticmethod
     def forward(
         ctx,
         query_spheres: torch.Tensor,
-        buffer,
-        scene,
+        buffer: "CollisionBuffer",
+        scene: "SceneData",
         weight: torch.Tensor,
         activation_distance: torch.Tensor,
         max_distance: torch.Tensor,
@@ -91,6 +90,20 @@ class SweptSphereObstacleCollision(torch.autograd.Function):
     def backward(ctx, grad_output):
         del ctx, grad_output
         raise _raw_warp_error("SweptSphereObstacleCollision.backward")
+
+
+def _sphere_apply(cls, *args, **kwargs):
+    del cls, args, kwargs
+    raise _raw_warp_error("SphereObstacleCollision")
+
+
+def _swept_apply(cls, *args, **kwargs):
+    del cls, args, kwargs
+    raise _raw_warp_error("SweptSphereObstacleCollision")
+
+
+SphereObstacleCollision.apply = classmethod(_sphere_apply)
+SweptSphereObstacleCollision.apply = classmethod(_swept_apply)
 
 
 __all__ = [

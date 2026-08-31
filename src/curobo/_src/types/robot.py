@@ -13,15 +13,21 @@ from copy import deepcopy
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from curobo_metal.config.robot import RobotCfg as _MetalRobotCfg
+
+from curobo._src.robot.dynamics.dynamics_cfg import DynamicsCfg
+from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
+from curobo._src.robot.loader.kinematics_loader_cfg import KinematicsLoaderCfg
+from curobo._src.robot.types.cspace_params import CSpaceParams
+from curobo._src.util_file import write_yaml
 
 from .device_cfg import DeviceCfg
 
 
 @dataclass
-class RobotCfg:
+class _PortableRobotCfg:
     """Robot configuration consumed by portable CPU/MPS solvers.
 
     ``kinematics`` is normally a portable
@@ -150,12 +156,27 @@ class RobotCfg:
             load_collision_spheres=load_collision_spheres,
             num_envs=num_envs,
         )
+        from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg, _apply_locked_joints
+
+        _apply_locked_joints(metal)
+        params = cls._kinematics_params(metal)
+        if num_envs != params.num_envs:
+            params.set_num_envs(num_envs)
+        kinematics = KinematicsCfg(
+            device_cfg,
+            list(metal.tool_frames),
+            params,
+            self_collision_config={
+                "ignore": metal.self_collision_ignore,
+                "buffer": metal.self_collision_buffer,
+            },
+        )
         dynamics = (
-            cls._create_dynamics_config(cls._kinematics_params(metal), device_cfg)
+            cls._create_dynamics_config(params, device_cfg)
             if request_dynamics
             else None
         )
-        return cls(metal, dynamics=dynamics, device_cfg=device_cfg)
+        return cls(kinematics, dynamics=dynamics, device_cfg=device_cfg)
 
     @classmethod
     def from_basic(
@@ -180,12 +201,16 @@ class RobotCfg:
         metal = _MetalRobotCfg.from_basic(
             urdf_path, base_link, tool_frames, device_cfg=device_cfg, load_dynamics=False
         )
+        from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
+
+        params = cls._kinematics_params(metal)
+        kinematics = KinematicsCfg(device_cfg, list(tool_frames), params)
         dynamics = (
-            cls._create_dynamics_config(cls._kinematics_params(metal), device_cfg)
+            cls._create_dynamics_config(params, device_cfg)
             if load_dynamics
             else None
         )
-        return cls(metal, dynamics=dynamics, device_cfg=device_cfg)
+        return cls(kinematics, dynamics=dynamics, device_cfg=device_cfg)
 
     @property
     def cspace(self) -> Any:
@@ -222,6 +247,64 @@ class RobotCfg:
                 "write_config requires a portable curobo-metal robot configuration"
             )
         model.write_config(file_path)
+
+
+@dataclass
+class RobotCfg(_PortableRobotCfg):
+    """Pinned RobotCfg surface backed by the richer portable implementation."""
+
+    kinematics: KinematicsCfg
+    dynamics: Optional[DynamicsCfg] = None
+    device_cfg: DeviceCfg = DeviceCfg()
+
+    @staticmethod
+    def _create_dynamics_config(
+        kinematics_config,
+        device_cfg: DeviceCfg,
+    ) -> Optional[DynamicsCfg]:
+        return _PortableRobotCfg._create_dynamics_config(kinematics_config, device_cfg)
+
+    @staticmethod
+    def create(
+        data: Union[Dict[str, Any], "RobotCfg"],
+        device_cfg: DeviceCfg = DeviceCfg(),
+        load_collision_spheres: bool = True,
+        num_envs: int = 1,
+    ) -> "RobotCfg":
+        if isinstance(data, RobotCfg):
+            return data
+        value = _PortableRobotCfg.create.__func__(
+            RobotCfg,
+            data,
+            device_cfg=device_cfg,
+            load_collision_spheres=load_collision_spheres,
+            num_envs=num_envs,
+        )
+        return value
+
+    @staticmethod
+    def from_basic(
+        urdf_path: str,
+        base_link: str,
+        tool_frames: List[str],
+        device_cfg: DeviceCfg = DeviceCfg(),
+        load_dynamics: bool = False,
+    ):
+        return _PortableRobotCfg.from_basic.__func__(
+            RobotCfg,
+            urdf_path,
+            base_link,
+            tool_frames,
+            device_cfg=device_cfg,
+            load_dynamics=load_dynamics,
+        )
+
+    def write_config(self, file_path):
+        return super().write_config(file_path)
+
+    @property
+    def cspace(self) -> CSpaceParams:
+        return super().cspace
 
 
 __all__ = ["RobotCfg"]

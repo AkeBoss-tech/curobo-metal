@@ -1,0 +1,103 @@
+{
+  "backend": "cuda",
+  "capability": "kinematics.forward_kinematics",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "empty_batch",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "wrong_dof",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "zero",
+        "one",
+        "many",
+        "noncontiguous",
+        "tree_links",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "0cfdc3958d76c8ebd933a070ca165b1e946dfabe7c8d24ccf0d98c6ba1233760",
+  "input_tensor_count": 4,
+  "operation": "forward_kinematics",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "0a6f95e46691ea92020ea6ea9d41e64493b1ecbd639f2b981ac711e904d2126d",
+    "tensors": {
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "input_gradient": {
+        "dtype": "float32",
+        "shape": [
+          2,
+          2
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          6
+        ]
+      },
+      "tool_position": {
+        "dtype": "float32",
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "tool_quaternion": {
+        "dtype": "float32",
+        "shape": [
+          2,
+          4
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 8e-05,
+    "rtol": 8e-05
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

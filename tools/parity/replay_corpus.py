@@ -102,10 +102,21 @@ def load(corpus_root: Path, case: Case) -> tuple[dict[str, np.ndarray], dict[str
     }
     if evidence != expected_evidence:
         raise ValueError(f"corpus evidence contract mismatch: {case.capability}")
+    required_matrix = {
+        "cases": list(case.matrix_cases),
+        "output": "matrix_observed",
+    }
+    declared_matrix = spec.get("required_matrix")
+    if case.matrix_cases:
+        if declared_matrix != required_matrix:
+            raise ValueError(f"corpus matrix evidence contract mismatch: {case.capability}")
+    elif declared_matrix is not None:
+        raise ValueError(f"unexpected matrix evidence contract: {case.capability}")
     return ({key: _tensor(key, tensors[key]) for key in keys}, {
         "case_file": case_path,
         "case_sha256": sha256(case_path),
         "common_file": shared_path,
         "common_sha256": sha256(shared_path),
         "required_evidence": expected_evidence,
+        "required_matrix": required_matrix if case.matrix_cases else None,
     })

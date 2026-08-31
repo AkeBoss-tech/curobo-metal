@@ -10,16 +10,24 @@ operator; this file deliberately does not implement a second mesh kernel.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional, Sequence
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 import torch
 
 from curobo._src.geom.types import Mesh, SceneCfg
+from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.types.pose import Pose
+from curobo._src.util.logging import log_and_raise, log_warn
+from curobo._src.util.warp import init_warp, warp_support_bvh_constructor_type
 from curobo_metal.ops.world_collision import Mesh as BackendMesh
 from curobo_metal.ops.world_collision import MeshDistanceResult, mesh_distance
 
 from ._portable import PortableObstacleData, PortableWarpStruct, inverse_pose, pose_vector, raw_warp
+from .helper_pose import get_obs_idx, load_transform_from_inv_pose
+
+wp = None
 
 
 def _rotation_from_wxyz(quaternion: torch.Tensor) -> torch.Tensor:
@@ -34,7 +42,7 @@ def _rotation_from_wxyz(quaternion: torch.Tensor) -> torch.Tensor:
 
 
 @dataclass(frozen=True)
-class WarpMeshCache:
+class _WarpMeshCachePortable:
     """Immutable local geometry shared by every environment using ``name``.
 
     ``mesh_id`` is intentionally a portable, monotonically allocated cache ID.
@@ -58,7 +66,7 @@ class MeshDataWarp(PortableWarpStruct):
 
 
 @dataclass(init=False)
-class MeshData(PortableObstacleData):
+class _MeshDataPortable(PortableObstacleData):
     """Mutable, multi-environment mesh data with vectorized CPU/MPS queries.
 
     Geometry is cached once by mesh name, matching cuRobo's shared Warp cache
@@ -377,7 +385,41 @@ class MeshData(PortableObstacleData):
             self._next_mesh_id = 1
 
 
-is_obs_enabled = load_obstacle_transform = compute_local_sdf = compute_local_sdf_with_grad = raw_warp
+def is_obs_enabled(obs_set: MeshDataWarp, env_idx: wp.int32, local_idx: wp.int32) -> wp.bool: raise NotImplementedError
+def load_obstacle_transform(obs_set: MeshDataWarp, env_idx: wp.int32, local_idx: wp.int32) -> wp.transform: raise NotImplementedError
+def compute_local_sdf(obs_set: MeshDataWarp, env_idx: wp.int32, local_idx: wp.int32, local_pt: wp.vec3) -> wp.float32: raise NotImplementedError
+def compute_local_sdf_with_grad(obs_set: MeshDataWarp, env_idx: wp.int32, local_idx: wp.int32, local_pt: wp.vec3, query_distance: wp.float32) -> wp.vec4: raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class WarpMeshCache:
+    def get_bounds(self) -> Tuple[torch.Tensor, torch.Tensor]: raise NotImplementedError
+
+
+class MeshData:
+    @classmethod
+    def create_cache(cls, max_n: int, num_envs: int, device_cfg: DeviceCfg, max_dist: float = 0.1) -> MeshData: raise NotImplementedError
+    @classmethod
+    def from_scene_cfg(cls, scene_cfg: SceneCfg, device_cfg: DeviceCfg, env_idx: int = 0, num_envs: int = 1, max_n: Optional[int] = None, max_dist: float = 0.1) -> MeshData: raise NotImplementedError
+    @classmethod
+    def from_batch_scene_cfg(cls, scene_cfg_list: List[SceneCfg], device_cfg: DeviceCfg, max_n: Optional[int] = None, max_dist: float = 0.1) -> MeshData: raise NotImplementedError
+    def load_batch(self, meshes: List[Mesh], env_idx: int) -> None: raise NotImplementedError
+    def add(self, mesh: Mesh, env_idx: int = 0) -> int: raise NotImplementedError
+    def update_pose(self, name: str, w_obj_pose: Optional[Pose] = None, obj_w_pose: Optional[Pose] = None, env_idx: int = 0) -> None: raise NotImplementedError
+    def update_from_warp_id(self, warp_mesh_id: int, name: str, w_obj_pose: Optional[Pose] = None, obj_w_pose: Optional[Pose] = None, env_idx: int = 0, mesh_idx: Optional[int] = None) -> None: raise NotImplementedError
+    def set_enabled(self, name: str, enabled: bool, env_idx: int = 0) -> None: raise NotImplementedError
+    def has_name(self, name: str, env_idx: int = 0) -> bool: raise NotImplementedError
+    def get_idx(self, name: str, env_idx: int = 0) -> int: raise NotImplementedError
+    def get_active_count(self, env_idx: int = 0) -> int: raise NotImplementedError
+    def get_names(self, env_idx: int = 0) -> List[str]: raise NotImplementedError
+    def get_cached_mesh_names(self) -> List[str]: raise NotImplementedError
+    def clear(self, env_idx: Optional[int] = None, clear_warp_cache: bool = False) -> None: raise NotImplementedError
+    def to_warp(self, max_dist: Optional[float] = None) -> MeshDataWarp: raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    WarpMeshCache = _WarpMeshCachePortable
+    MeshData = _MeshDataPortable
 
 __all__ = [
     "MeshData", "MeshDataWarp", "WarpMeshCache", "is_obs_enabled", "load_obstacle_transform",

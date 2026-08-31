@@ -9,20 +9,30 @@ not claim Warp mesh-ID, BVH, CUDA graph, or signed-distance numerical parity.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import math
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 
+from curobo._src.curobolib.cuda_ops.tensor_checks import check_float32_tensors
+from curobo._src.perception.optim_pose_lm import compute_predicted_reduction, solve_lm_step, trust_region_update
 from curobo._src.types.camera import CameraObservation
 from curobo._src.types.pose import Pose, matrix_to_quaternion
+from curobo._src.util.cuda_graph_util import GraphExecutor
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_profiler_decorator
+from curobo._src.util.warp import get_warp_device_stream
 
 from .detection_result import DetectionResult
 from .mesh_robot import RobotMesh
 from .pose_detector import PoseDetector
 from .sdf_pose_detector_cfg import SDFDetectorCfg
 from .util import extract_observed_points, huber_loss, resample_points
+from .wp_mesh_sdf_alignment import jacobian_reduce_kernel, mesh_surface_distance_query_kernel
+
+wp = None
 
 
 class SDFRefinementState:
@@ -34,7 +44,7 @@ class SDFRefinementState:
     without depending on CUDA graph-owned buffers.
     """
 
-    def __init__(self, *args, **kwargs) -> None:
+    def _portable_init(self, *args, **kwargs) -> None:
         # Upstream positional layout is (observed_points, n_points,
         # best_position, best_quaternion, ...); compact portable layout has a
         # quaternion tensor as its second argument.
@@ -77,15 +87,15 @@ class SDFRefinementState:
             raise TypeError(f"unexpected SDFRefinementState fields: {', '.join(sorted(kwargs))}")
 
     @property
-    def best_position(self) -> torch.Tensor:
+    def _portable_best_position(self) -> torch.Tensor:
         return self.position
 
     @property
-    def best_quaternion(self) -> torch.Tensor:
+    def _portable_best_quaternion(self) -> torch.Tensor:
         return self.quaternion
 
     @property
-    def best_error(self) -> torch.Tensor:
+    def _portable_best_error(self) -> torch.Tensor:
         return self.loss
 
     def clone(self) -> "SDFRefinementState":
@@ -147,7 +157,7 @@ def _axis_angle_matrix(omega: torch.Tensor) -> torch.Tensor:
 class SDFPoseDetector(PoseDetector):
     """Required-initial-pose local mesh registration with V2-like LM state."""
 
-    def __init__(self, robot_mesh: RobotMesh, config: Optional[SDFDetectorCfg] = None) -> None:
+    def __init__(self, robot_mesh: RobotMesh, config: Optional[SDFDetectorCfg] = None):
         if not isinstance(robot_mesh, RobotMesh):
             raise TypeError("robot_mesh must be a RobotMesh")
         self.robot_mesh = robot_mesh
@@ -169,16 +179,16 @@ class SDFPoseDetector(PoseDetector):
         self.geometry = robot_mesh
 
     @property
-    def last_refinement_state(self) -> Optional[SDFRefinementState]:
+    def _portable_last_refinement_state(self) -> Optional[SDFRefinementState]:
         """Return an isolated snapshot of the most recently completed run."""
         return None if self._last_state is None else self._last_state.clone()
 
     @property
-    def run_count(self) -> int:
+    def _portable_run_count(self) -> int:
         """Number of completed calls to :meth:`detect_from_points`."""
         return self._run_count
 
-    def reset(self) -> None:
+    def _portable_reset(self) -> None:
         """Discard the retained portable state snapshot without changing mesh state."""
         self._last_state = None
         self._run_count = 0
@@ -367,6 +377,17 @@ class SDFPoseDetector(PoseDetector):
             alignment_error=float(state.loss.detach().cpu()), n_iterations=state.iterations,
             compute_time=time.perf_counter() - started,
         )
+
+
+# Keep portable state diagnostics available dynamically without widening the
+# pinned public declaration shape.
+SDFRefinementState.__init__ = SDFRefinementState._portable_init
+SDFRefinementState.best_position = SDFRefinementState._portable_best_position
+SDFRefinementState.best_quaternion = SDFRefinementState._portable_best_quaternion
+SDFRefinementState.best_error = SDFRefinementState._portable_best_error
+SDFPoseDetector.last_refinement_state = SDFPoseDetector._portable_last_refinement_state
+SDFPoseDetector.run_count = SDFPoseDetector._portable_run_count
+SDFPoseDetector.reset = SDFPoseDetector._portable_reset
 
 
 __all__ = ["SDFPoseDetector", "SDFRefinementState"]

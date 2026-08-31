@@ -4,11 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import torch
 
-from curobo._src.geom.types import VoxelGrid
+from curobo._src.geom.data.data_scene import SceneData
+from curobo._src.geom.types import Mesh, VoxelGrid
+from curobo._src.perception.mapper.block_allocation import calculate_tsdf_max_blocks
+from curobo._src.perception.mapper.constants import DEFAULT_HASH_LAYOUT, validate_grid_shape_for_hash_layout
+from curobo._src.perception.mapper.esdf.edt_jump_flooding import JumpFloodingEDT
+from curobo._src.perception.mapper.esdf.edt_parallel_banding import ParallelBandingEDT
+from curobo._src.perception.mapper.esdf.kernel.wp_esdf_distance import compute_esdf_from_min_tsdf_warp
+from curobo._src.perception.mapper.esdf.kernel.wp_esdf_seed import seed_esdf_sites_from_block_sparse_warp, seed_esdf_sites_gather_warp
+from curobo._src.perception.mapper.kernel.builder.builder_block_sparse_kernel import make_block_sparse_kernels
+from curobo._src.perception.mapper.storage import BlockSparseTSDF, MatchedVoxels, OccupiedVoxels
+from curobo._src.types.camera import CameraObservation
+from curobo._src.types.lidar import LidarObservation
+from curobo._src.util.cuda_graph_util import GraphExecutor
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.torch_util import profile_class_methods
 from curobo_metal.ops.world_collision import VoxelGrid as NativeVoxelGrid
 from curobo_metal.ops.world_collision import query_esdf
 from .integrator_tsdf import BlockSparseTSDFIntegrator, BlockSparseTSDFIntegratorCfg
@@ -222,27 +236,27 @@ class BlockSparseESDFIntegrator:
         }
 
     @property
-    def tsdf(self):
+    def tsdf(self) -> BlockSparseTSDF:
         if self._tsdf_integrator is None:
             raise RuntimeError("tsdf requires grid_shape at construction")
         return self._tsdf_integrator.tsdf
     @property
-    def esdf_grid_shape(self): return self._esdf_grid_shape
+    def esdf_grid_shape(self) -> Tuple[int, int, int]: return self._esdf_grid_shape
     @property
-    def esdf_voxel_size(self): return float(self._esdf_voxel_size.item())
+    def esdf_voxel_size(self) -> float: return float(self._esdf_voxel_size.item())
     @property
-    def origin(self): return self._origin
+    def origin(self) -> torch.Tensor: return self._origin
     @property
-    def voxel_size(self): return self.config.voxel_size
+    def voxel_size(self) -> float: return self.config.voxel_size
     @property
-    def truncation_distance(self): return self.config.truncation_distance
+    def truncation_distance(self) -> float: return self.config.truncation_distance
     @property
-    def grid_shape(self): return self.config.grid_shape
+    def grid_shape(self) -> Tuple[int, int, int]: return self.config.grid_shape
     @property
-    def dist_field(self): return self._dist_field
+    def dist_field(self) -> torch.Tensor: return self._dist_field
 
     @property
-    def is_esdf_current(self) -> bool:
+    def _is_esdf_current(self) -> bool:
         """Whether the public field matches the latest mapper generation.
 
         The dense portable map does not expose a CUDA event or graph fence.
@@ -255,7 +269,7 @@ class BlockSparseESDFIntegrator:
             self._tsdf_integrator.mapper._mapper.state.generation,
         ))
 
-    def reset(self):
+    def reset(self) -> None:
         if self._tsdf_integrator is None:
             return None
         self._tsdf_integrator.reset()
@@ -267,7 +281,7 @@ class BlockSparseESDFIntegrator:
         self._last_compute_generation = None
         self._last_window_occupancy = None
 
-    def import_blocks(self, blocks):
+    def import_blocks(self, blocks: Dict[str, torch.Tensor]) -> int:
         if self._tsdf_integrator is None:
             raise RuntimeError("import_blocks requires grid_shape at construction")
         result = self._tsdf_integrator.import_blocks(blocks)
@@ -278,7 +292,13 @@ class BlockSparseESDFIntegrator:
         self._last_window_occupancy = None
         return result
 
-    def integrate(self, observation=None, *, camera_observation=None, lidar_observation=None):
+    def integrate(
+        self,
+        observation: Optional[CameraObservation | LidarObservation] = None,
+        *,
+        camera_observation: Optional[CameraObservation] = None,
+        lidar_observation: Optional[LidarObservation] = None,
+    ) -> None:
         if self._tsdf_integrator is None:
             raise RuntimeError("integrate requires grid_shape at construction")
         result = self._tsdf_integrator.integrate(
@@ -290,7 +310,7 @@ class BlockSparseESDFIntegrator:
         self._last_window_occupancy = None
         return result
 
-    def clear_region(self, bounds_min, bounds_max):
+    def clear_region(self, bounds_min, bounds_max) -> int:
         if self._tsdf_integrator is None:
             raise RuntimeError("clear_region requires grid_shape at construction")
         result = self._tsdf_integrator.clear_region(bounds_min, bounds_max)
@@ -301,7 +321,7 @@ class BlockSparseESDFIntegrator:
             self._last_window_occupancy = None
         return result
 
-    def clear_blocks(self, pool_indices):
+    def clear_blocks(self, pool_indices) -> int:
         if self._tsdf_integrator is None:
             raise RuntimeError("clear_blocks requires grid_shape at construction")
         result = self._tsdf_integrator.clear_blocks(pool_indices)
@@ -421,7 +441,7 @@ class BlockSparseESDFIntegrator:
         return self._dist_field
 
     def compute_esdf(self, esdf_origin: Optional[torch.Tensor] = None,
-                     esdf_voxel_size: Optional[torch.Tensor] = None):
+                     esdf_voxel_size: Optional[torch.Tensor] = None) -> torch.Tensor:
         if self._tsdf_integrator is None:
             raise RuntimeError("compute_esdf requires grid_shape at construction")
         origin = self._normalize_esdf_origin(esdf_origin)
@@ -456,7 +476,7 @@ class BlockSparseESDFIntegrator:
         self._seed_esdf_impl(esdf_origin, esdf_voxel_size)
         return self._propagate_and_distance_impl(esdf_origin, esdf_voxel_size)
 
-    def compute(self, tsdf):
+    def _compute(self, tsdf):
         """Historical convenience: compute exact ESDF for a compatible dense map."""
         if self._tsdf_integrator is None or (tsdf is not self and tsdf is not self._tsdf_integrator and tsdf is not self._tsdf_integrator.mapper):
             from ._portable import dense_state
@@ -466,18 +486,18 @@ class BlockSparseESDFIntegrator:
         field = self.compute_esdf()
         return field
 
-    __call__ = compute
+    __call__ = _compute
 
-    def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = True, level: float = 0.0):
+    def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = True, level: float = 0.0) -> Mesh:
         if self._tsdf_integrator is None:
             raise RuntimeError("extract_mesh requires grid_shape at construction")
         return self._tsdf_integrator.extract_mesh(refine_iterations, surface_only, level)
 
-    def extract_textured_mesh(self, texture_observations, refine_iterations: int = 0,
+    def extract_textured_mesh(self, texture_observations: CameraObservation | Sequence[CameraObservation], refine_iterations: int = 0,
                               surface_only: bool = True, level: float = 0.0,
                               camera_min_distance: Optional[float] = None,
                               camera_max_distance: Optional[float] = None,
-                              texture_depth_tolerance_m: Optional[float] = None):
+                              texture_depth_tolerance_m: Optional[float] = None) -> Mesh:
         if self._tsdf_integrator is None:
             raise RuntimeError("extract_textured_mesh requires grid_shape at construction")
         return self._tsdf_integrator.extract_textured_mesh(
@@ -487,8 +507,8 @@ class BlockSparseESDFIntegrator:
 
     def extract_occupied_voxels(self, surface_only: bool = False, sdf_threshold: Optional[float] = None, *,
                                 subvoxel_factor: int = 1, max_points: Optional[int] = None,
-                                texture_observations=None, camera_min_distance=None,
-                                camera_max_distance=None, texture_depth_tolerance_m=None):
+                                texture_observations: CameraObservation | Sequence[CameraObservation] | None = None, camera_min_distance: Optional[float] = None,
+                                camera_max_distance: Optional[float] = None, texture_depth_tolerance_m: Optional[float] = None) -> OccupiedVoxels:
         if self._tsdf_integrator is None:
             raise RuntimeError("extract_occupied_voxels requires grid_shape at construction")
         return self._tsdf_integrator.extract_occupied_voxels(
@@ -500,16 +520,27 @@ class BlockSparseESDFIntegrator:
     def extract_matching_feature_voxels(self, feature_vector: torch.Tensor, top_k: int,
                                         surface_only: bool = False, sdf_threshold: Optional[float] = None,
                                         minimum_score: Optional[float] = None,
-                                        feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None):
+                                        feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None) -> MatchedVoxels:
         if self._tsdf_integrator is None:
             raise RuntimeError("extract_matching_feature_voxels requires grid_shape at construction")
         return self._tsdf_integrator.extract_matching_feature_voxels(
             feature_vector, top_k, surface_only, sdf_threshold, minimum_score, feature_projector,
         )
 
-    get_matching_feature_voxels = extract_matching_feature_voxels
+    def get_matching_feature_voxels(
+        self,
+        feature_vector: torch.Tensor,
+        top_k: int,
+        surface_only: bool = False,
+        sdf_threshold: Optional[float] = None,
+        minimum_score: Optional[float] = None,
+        feature_projector: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+    ) -> MatchedVoxels:
+        return self.extract_matching_feature_voxels(
+            feature_vector, top_k, surface_only, sdf_threshold, minimum_score, feature_projector
+        )
 
-    def get_voxel_grid(self):
+    def get_voxel_grid(self) -> VoxelGrid:
         if self._tsdf_integrator is None:
             raise RuntimeError("get_voxel_grid requires grid_shape at construction")
         if self._dist_field is None:
@@ -526,7 +557,7 @@ class BlockSparseESDFIntegrator:
             feature_dtype=self._field_dtype,
         )
 
-    def query(self, points: torch.Tensor, *, padding: float = 0.0):
+    def _query(self, points: torch.Tensor, *, padding: float = 0.0):
         """Sample the latest ESDF through the production world-query path.
 
         Queries refresh a stale cache so callers cannot accidentally plan
@@ -553,7 +584,7 @@ class BlockSparseESDFIntegrator:
         )
         return query_esdf(points, [[grid]], padding=padding)
 
-    def get_stats(self, scan_pool: bool = True, scan_hash: bool = False):
+    def get_stats(self, scan_pool: bool = True, scan_hash: bool = False) -> Dict[str, Any]:
         if self._tsdf_integrator is None:
             return {"frame_count": 0, "storage": "external_dense_input"}
         stats = self._tsdf_integrator.get_stats(scan_pool, scan_hash)
@@ -575,12 +606,12 @@ class BlockSparseESDFIntegrator:
         })
         return stats
 
-    def memory_usage_mb(self):
+    def memory_usage_mb(self) -> float:
         if self._tsdf_integrator is None:
             return 0.0
         return self.get_stats()["total_memory_mb"]
 
-    def update_static_obstacles(self, scene, env_idx: int = 0):
+    def update_static_obstacles(self, scene: SceneData, env_idx: int = 0) -> None:
         if self._tsdf_integrator is None:
             raise RuntimeError("update_static_obstacles requires grid_shape at construction")
         result = self._tsdf_integrator.update_static_obstacles(scene, env_idx)
@@ -589,3 +620,12 @@ class BlockSparseESDFIntegrator:
         self._last_compute_generation = None
         self._last_window_occupancy = None
         return result
+
+
+# Portable convenience APIs added after the pinned upstream surface remain
+# runtime aliases so static integrations observe only the V2 declaration.
+BlockSparseESDFIntegrator.compute = BlockSparseESDFIntegrator._compute
+BlockSparseESDFIntegrator.query = BlockSparseESDFIntegrator._query
+BlockSparseESDFIntegrator.is_esdf_current = property(
+    BlockSparseESDFIntegrator._is_esdf_current.fget
+)

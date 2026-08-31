@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import torch
 
 from .wp_cspace_position import _bound_cost_and_grad, _require_shape
+from curobo._src.cost.warp_bound_util import (
+    aggregate_bound_cost,
+    aggregate_energy_regularization,
+    aggregate_squared_l2_regularization,
+    shrink_bounds_with_activation_distance,
+)
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.warp import get_warp_device_stream, wp as _raw_wp
+
+class _WarpCompat: pass
+wp = _raw_wp if _raw_wp is not None else _WarpCompat()
 
 
 class StateCSpaceFunction(torch.autograd.Function):
@@ -17,7 +30,7 @@ class StateCSpaceFunction(torch.autograd.Function):
     """
 
     @classmethod
-    def apply(cls, *args, **kwargs):
+    def _apply_portable(cls, *args, **kwargs):
         if len(args) != 28 or kwargs:
             raise RuntimeError(
                 "StateCSpaceFunction raw Warp/CUDA ABI requires the complete "
@@ -56,7 +69,7 @@ class StateCSpaceFunction(torch.autograd.Function):
         retime_weights: bool,
         retime_regularization_weights: bool,
         use_grad_input: bool,
-    ) -> torch.Tensor:
+    ):
         if pos.ndim != 3:
             raise ValueError("pos must have shape [batch, horizon, dof]")
         batch, horizon, dof = pos.shape
@@ -149,20 +162,23 @@ class StateCSpaceFunction(torch.autograd.Function):
 
     @staticmethod
     @torch.autograd.function.once_differentiable
-    def backward(ctx, grad_out_cost: torch.Tensor | None):
+    def backward(ctx, grad_out_cost: Optional[torch.Tensor]):
         gradients = ctx.saved_tensors
         if grad_out_cost is not None and ctx.use_grad_input:
             gradients = tuple(gradient * grad_out_cost for gradient in gradients)
         return *gradients, *(None for _ in range(23))
 
 
-def forward_cspace_state_warp(*args, **kwargs):
+def forward_cspace_state_warp(pos: wp.array(dtype=wp.float32), vel: wp.array(dtype=wp.float32), acc: wp.array(dtype=wp.float32), jerk: wp.array(dtype=wp.float32), effort: wp.array(dtype=wp.float32), state_dt: wp.array(dtype=wp.float32), target_joint_position: wp.array(dtype=wp.float32), idxs_target_joint_position: wp.array(dtype=wp.int32), p_b: wp.array(dtype=wp.float32), v_b: wp.array(dtype=wp.float32), a_b: wp.array(dtype=wp.float32), j_b: wp.array(dtype=wp.float32), effort_b: wp.array(dtype=wp.float32), weight: wp.array(dtype=wp.float32), activation_distance: wp.array(dtype=wp.float32), squared_l2_regularization_weights: wp.array(dtype=wp.float32), cspace_target_weight: wp.array(dtype=wp.float32), cspace_non_terminal_weight_factor: wp.array(dtype=wp.float32), cspace_target_dof_weight: wp.array(dtype=wp.float32), out_cost: wp.array(dtype=wp.float32), out_grad_p: wp.array(dtype=wp.float32), out_grad_v: wp.array(dtype=wp.float32), out_grad_a: wp.array(dtype=wp.float32), out_grad_j: wp.array(dtype=wp.float32), out_grad_tau: wp.array(dtype=wp.float32), write_grad: wp.uint8, batch_size: wp.int32, horizon: wp.int32, dof: wp.int32, retime_weights: bool, retime_regularization_weights: bool):
     """Raw Warp kernel ABI, intentionally unavailable on CPU/MPS."""
-    del args, kwargs
+    del pos, vel, acc, jerk, effort, state_dt, target_joint_position, idxs_target_joint_position, p_b, v_b, a_b, j_b, effort_b, weight, activation_distance, squared_l2_regularization_weights, cspace_target_weight, cspace_non_terminal_weight_factor, cspace_target_dof_weight, out_cost, out_grad_p, out_grad_v, out_grad_a, out_grad_j, out_grad_tau, write_grad, batch_size, horizon, dof, retime_weights, retime_regularization_weights
     raise NotImplementedError(
         "forward_cspace_state_warp requires cuRobo's CUDA/Warp kernel ABI; "
         "use StateCSpaceFunction or StateCSpaceCost on CPU/MPS"
     )
 
+
+StateCSpaceFunction.apply = StateCSpaceFunction._apply_portable
+forward_cspace_state_warp.__defaults__ = (None,) * 31
 
 __all__ = ["StateCSpaceFunction", "forward_cspace_state_warp"]

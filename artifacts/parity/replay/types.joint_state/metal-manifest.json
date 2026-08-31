@@ -3,7 +3,7 @@
   "capability": "types.joint_state",
   "corpus": {
     "case_file": "types.joint_state.json",
-    "case_sha256": "2991fc0b55b7b968b40373e1e1a605928af4ca4613b5c2b7858b5e5c6b4a03dd",
+    "case_sha256": "76f2d1ba72dfb9fa10ae9b532263b29afd91516ec0b77215dd810c1634098472",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -11,29 +11,43 @@
   "equivalence_claimed": false,
   "evidence": {
     "edge": {
-      "case": "singleton_batch",
+      "case": "noncontiguous_state",
       "executed": true,
       "output": "edge_observed"
     },
-    "gradient": false,
+    "gradient": true,
     "invalid": {
       "case": "name_width_mismatch",
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "zero",
+        "one",
+        "many",
+        "noncontiguous",
+        "optional_channels",
+        "mutation",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "joint_state",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "ecbc49cd1162099546a40b822c1c050f2838a1fb8c843de4ecd764d7b53eb4bb"
+    "sha256": "c7db9328f988a1bb2db4e10c4055ace300a63208753d0697fc8bccc6382eec46"
   },
   "operation": "joint_state",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "f4d9d6894052341abf37c96300ce58c9624ddbcc3550939d1e9459e197a931fb"
+    "sha256": "2445eb1a7a523664b3ddc0fbef83dd91d5098300787353730b5d6f111f78e955"
   },
   "runtime": {
     "python": "3.13.9",

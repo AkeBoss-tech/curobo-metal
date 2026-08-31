@@ -8,12 +8,13 @@ Apple MPS without requiring CUDA graph capture or packed CUDA buffers.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 
 from curobo._src.state.filter_coeff import FilterCoeff
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_ops import blend_joint_states
 from curobo._src.types.control_space import ControlSpace
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.tensor import T_DOF
@@ -38,12 +39,12 @@ class FilterCfg:
     @staticmethod
     def create(
         coeff_dict,
-        enable: bool = True,
-        dt: float = 0.0,
-        control_space: ControlSpace = ControlSpace.ACCELERATION,
-        device_cfg: DeviceCfg = DeviceCfg(),
-        teleport_mode: bool = False,
-    ) -> "FilterCfg":
+        enable=True,
+        dt=0.0,
+        control_space=ControlSpace.ACCELERATION,
+        device_cfg=DeviceCfg(),
+        teleport_mode=False,
+    ):
         """Create a config from the conventional coefficient mapping.
 
         Accepting a materialized :class:`FilterCoeff` as well is useful for
@@ -77,7 +78,7 @@ class JointStateFilter(FilterCfg):
         else:  # Defensive for deserialized/foreign enum-like values.
             raise ValueError(f"unsupported control space: {self.control_space!r}")
 
-    def filter_joint_state(self, raw_joint_state: JointState) -> JointState:
+    def filter_joint_state(self, raw_joint_state: JointState):
         """Filter a raw state into the persistent command state.
 
         Assignment is functional rather than an in-place ``copy_`` so a
@@ -185,10 +186,10 @@ class JointStateFilter(FilterCfg):
 
     def integrate_jerk(
         self,
-        qddd_des: T_DOF,
+        qddd_des,
         cmd_joint_state: Optional[JointState] = None,
-        dt: Optional[float | torch.Tensor] = None,
-    ) -> JointState:
+        dt: Optional[float] = None,
+    ):
         state = self._set_state(cmd_joint_state)
         step = self._dt(dt)
         jerk = self._action(qddd_des, "qddd_des")
@@ -202,8 +203,8 @@ class JointStateFilter(FilterCfg):
         self,
         qdd_des: T_DOF,
         cmd_joint_state: Optional[JointState] = None,
-        dt: Optional[float | torch.Tensor] = None,
-    ) -> JointState:
+        dt: Optional[float] = None,
+    ):
         state = self._set_state(cmd_joint_state)
         step = self._dt(dt)
         acceleration = self._action(qdd_des, "qdd_des")
@@ -220,8 +221,8 @@ class JointStateFilter(FilterCfg):
         self,
         qd_des: T_DOF,
         cmd_joint_state: Optional[JointState] = None,
-        dt: Optional[float | torch.Tensor] = None,
-    ) -> JointState:
+        dt: Optional[float] = None,
+    ):
         state = self._set_state(cmd_joint_state)
         step = self._dt(dt)
         velocity = self._action(qd_des, "qd_des")
@@ -233,8 +234,8 @@ class JointStateFilter(FilterCfg):
         self,
         q_des: T_DOF,
         cmd_joint_state: Optional[JointState] = None,
-        dt: Optional[float | torch.Tensor] = None,
-    ) -> JointState:
+        dt: Optional[float] = None,
+    ):
         state = self._set_state(cmd_joint_state)
         position = self._action(q_des, "q_des")
         if not self.teleport_mode:
@@ -243,6 +244,6 @@ class JointStateFilter(FilterCfg):
         state.position = position
         return state
 
-    def reset(self) -> None:
+    def reset(self):
         """Discard persistent command buffers before a shape/device change."""
         self.cmd_joint_state = None

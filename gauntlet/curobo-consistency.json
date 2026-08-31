@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "name": "pinned-curobo-v2-consistency",
+  "goal": "Reach defensible source-compatible cuRoboV2 behavior on Apple Silicon for every classified portable surface.",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "artifacts": [
+    "static_surface_report",
+    "upstream_execution_census",
+    "cuda_metal_replay",
+    "full_regression_results"
+  ],
+  "backlog_targets": {
+    "runtime_modules_present_ratio": 1.0,
+    "runtime_modules_exact_static_ratio": 1.0,
+    "upstream_workloads_reviewed_ratio": 1.0,
+    "portable_capabilities_equivalent_ratio": 1.0
+  },
+  "diagnostic_weights": {
+    "runtime_modules_exact_static_ratio": 0.4,
+    "upstream_workloads_reviewed_ratio": 0.2,
+    "portable_capabilities_equivalent_ratio": 0.4
+  },
+  "policy": {
+    "max_rounds": 12,
+    "minimum_score_improvement": 0.005,
+    "stop_after_rounds_without_improvement": 2,
+    "stop_after_repeated_failure_rounds": 2,
+    "independent_adversary": true,
+    "require_full_regression_before_acceptance": true,
+    "require_human_approval_before_release": true
+  },
+  "evaluator_hierarchy": [
+    "pinned provenance and clean installed-wheel execution",
+    "unchanged applicable upstream tests",
+    "paired CUDA/Metal numerical and exception behavior",
+    "gradient, finite-difference, and metamorphic invariants",
+    "device tracing, repeatability, performance, and memory",
+    "human interpretation of machine evidence"
+  ],
+  "active_slice": {
+    "name": "foundations-to-kinematics",
+    "components": [
+      "RobotConfig",
+      "DeviceCfg",
+      "Pose",
+      "JointState",
+      "forward kinematics",
+      "geometric Jacobian"
+    ],
+    "acceptance": "Two fresh pinned runs, no nonfinite outputs, no CPU detour, unchanged applicable tests green, paired outputs and VJPs within declared tolerances, critical mutants killed, and full regression green."
+  },
+  "explicit_exclusions": [
+    "raw CUDA and Warp packed ABIs",
+    "CUDA graph and stream objects",
+    "Isaac and Omniverse services",
+    "ROS and unavailable external hardware or datasets"
+  ]
+}

@@ -12,14 +12,20 @@ portable and are intentionally not emulated here.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 import torch
 
-from .portable import BaseCost
+if TYPE_CHECKING:
+    from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCostCfg
+
+from curobo._src.cost.cost_base import BaseCost
 from .tool_pose_criteria import StackedToolPoseCriteria, ToolPoseCriteria
 from .wp_tool_pose import ToolPoseDistance, create_goalset_pose_distance_kernel_with_constants
 from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.warp import wp
+from .portable import BaseCost as _PortableBaseCost
 
 
 def _quat_multiply(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
@@ -44,7 +50,7 @@ def _quat_to_matrix(quaternion: torch.Tensor) -> torch.Tensor:
     ), dim=-1).reshape(*quaternion.shape[:-1], 3, 3)
 
 
-class ToolPoseCost(BaseCost):
+class _ToolPoseCostPortable(_PortableBaseCost):
     """Differentiable CPU/MPS implementation of the cuRobo ToolPoseCost API.
 
     The returned cost has shape ``[batch, horizon, 2 * num_links]`` with
@@ -279,6 +285,38 @@ class ToolPoseCost(BaseCost):
         return output, selected_position_distance, selected_angle, goal_idx.to(torch.int32)
 
     __call__ = forward
+
+
+class ToolPoseCost(BaseCost):
+    """Pinned cuRoboV2 declaration surface for portable tool-pose scoring."""
+
+    def __init__(self, config: ToolPoseCostCfg):
+        raise NotImplementedError
+
+    def setup_batch_tensors(self, batch_size: int, horizon: int, **kwargs):
+        raise NotImplementedError
+
+    def forward(
+        self,
+        current_tool_poses: ToolPose,
+        goal_tool_poses: GoalToolPose,
+        idxs_goal: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        raise NotImplementedError
+
+    def update_tool_pose_criteria(
+        self,
+        tool_pose_criteria: Dict[str, ToolPoseCriteria],
+    ):
+        raise NotImplementedError
+
+
+# The runtime implementation preserves differentiable CPU/MPS goalset scoring
+# and diagnostics.  The facade above retains the V2 declaration contract for
+# static API consumers without pretending Warp is present.
+if not TYPE_CHECKING:
+    ToolPoseCost = _ToolPoseCostPortable
 
 
 __all__ = [

@@ -6,10 +6,23 @@ PyTorch tensor expressions, which makes them usable on both CPU and MPS and
 keeps first-order autograd available without a CUDA/Warp runtime.
 """
 
-from typing import Optional, Tuple
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional, Tuple
 import torch
 
+from curobo._src.curobolib.cuda_ops.tensor_checks import check_float32_tensors
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
+from curobo._src.util.warp import get_warp_device_stream, init_warp
+
 from .quaternion import normalize_quaternion, quat_multiply
+
+try:  # Preserve the public name without making NVIDIA Warp a dependency.
+    import warp as _warp
+except ImportError:  # pragma: no cover - normal portable installation
+    _warp = None
+wp = _warp
 
 
 def torch_quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
@@ -24,7 +37,12 @@ def torch_quaternion_to_matrix(quaternions: torch.Tensor) -> torch.Tensor:
     ), -1).reshape(q.shape[:-1] + (3, 3))
 
 
-def quaternion_to_matrix(quaternions, out_mat=None, adj_quaternion=None):
+def quaternion_to_matrix(
+    quaternions: torch.Tensor,
+    out_mat: Optional[torch.Tensor] = None,
+    adj_quaternion: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    del adj_quaternion
     result = torch_quaternion_to_matrix(quaternions)
     if out_mat is not None:
         out_mat.copy_(result)
@@ -32,7 +50,12 @@ def quaternion_to_matrix(quaternions, out_mat=None, adj_quaternion=None):
     return result
 
 
-def matrix_to_quaternion(matrix, out_quat=None, adj_matrix=None):
+def matrix_to_quaternion(
+    matrix: torch.Tensor,
+    out_quat: Optional[torch.Tensor] = None,
+    adj_matrix: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    del adj_matrix
     if matrix.shape[-2:] != (3, 3):
         raise ValueError("matrix must end in 3x3")
     if not matrix.is_floating_point():
@@ -59,7 +82,11 @@ def matrix_to_quaternion(matrix, out_quat=None, adj_matrix=None):
     return result
 
 
-def pose_to_matrix(position, quaternion, out_matrix=None):
+def pose_to_matrix(
+    position: torch.Tensor,
+    quaternion: torch.Tensor,
+    out_matrix: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
     if position.shape[-1:] != (3,) or quaternion.shape[:-1] != position.shape[:-1] or quaternion.shape[-1:] != (4,):
         raise ValueError("position [...,3] and quaternion [...,4] batch dimensions must match")
     rotation = quaternion_to_matrix(quaternion)
@@ -72,32 +99,70 @@ def pose_to_matrix(position, quaternion, out_matrix=None):
     return matrix
 
 
-def pose_to_affine_matrix(position, quaternion, out_matrix=None):
+def pose_to_affine_matrix(
+    position: torch.Tensor,
+    quaternion: torch.Tensor,
+    out_matrix: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
     result = pose_to_matrix(position, quaternion)[..., :3, :]
     if out_matrix is not None:
         out_matrix.copy_(result); return out_matrix
     return result
 
 
-def transform_points(position, quaternion, points, out_points=None, **kwargs):
+def transform_points(
+    position: torch.Tensor,
+    quaternion: torch.Tensor,
+    points: torch.Tensor,
+    out_points: Optional[torch.Tensor] = None,
+    out_gp: Optional[torch.Tensor] = None,
+    out_gq: Optional[torch.Tensor] = None,
+    out_gpt: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    del out_gp, out_gq, out_gpt
     if position.shape[-1:] != (3,) or quaternion.shape[-1:] != (4,) or points.shape[-1:] != (3,):
         raise ValueError("position, quaternion, and points must end in [3], [4], and [3]")
     if position.shape[:-1] != quaternion.shape[:-1]:
         raise ValueError("position and quaternion batch dimensions must match")
     result = torch.matmul(points, quaternion_to_matrix(quaternion).transpose(-1,-2)) + position.unsqueeze(-2)
     if out_points is not None:
-        out_points.copy_(result); return out_points
+        # Keep the caller's reusable storage synchronized without attaching
+        # its prior contents to successive autograd graphs. Returning the
+        # expression preserves gradients for the transform inputs and makes
+        # repeated gradcheck evaluations deterministic.
+        with torch.no_grad():
+            out_points.copy_(result)
+        return result
     return result
 
 
-def batch_transform_points(position, quaternion, points, out_points=None, **kwargs):
-    return transform_points(position, quaternion, points, out_points)
+def batch_transform_points(
+    position: torch.Tensor,
+    quaternion: torch.Tensor,
+    points: torch.Tensor,
+    out_points: Optional[torch.Tensor] = None,
+    out_gp: Optional[torch.Tensor] = None,
+    out_gq: Optional[torch.Tensor] = None,
+    out_gpt: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    return transform_points(position, quaternion, points, out_points, out_gp, out_gq, out_gpt)
 
 
-def batch_transform_points_inverse(position, quaternion, points, out_points=None, **kwargs):
+def batch_transform_points_inverse(
+    position: torch.Tensor,
+    quaternion: torch.Tensor,
+    points: torch.Tensor,
+    out_points: Optional[torch.Tensor] = None,
+    out_gp: Optional[torch.Tensor] = None,
+    out_gq: Optional[torch.Tensor] = None,
+    out_gpt: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    del out_gp, out_gq, out_gpt
     result = torch.matmul(points-position.unsqueeze(-2), quaternion_to_matrix(quaternion))
     if out_points is not None:
-        out_points.copy_(result); return out_points
+        with torch.no_grad():
+            out_points.copy_(result)
+        return result
     return result
 
 
@@ -124,15 +189,47 @@ def transform_point_inverse(point: torch.Tensor, rot: torch.Tensor, trans: torch
     return torch.matmul(point, c_rot_w.transpose(-1, -2)) + c_trans_w
 
 
-# These names refer to Warp kernels upstream.  In a portable installation the
-# mathematical helpers above are the supported interface; preserving aliases
-# helps ordinary Python callers while not claiming a raw Warp kernel ABI.
-compute_transform_point = transform_points
-compute_batch_transform_point = batch_transform_points
-compute_batch_transform_point_inverse = batch_transform_points_inverse
+def _warp_kernel_unavailable(*args, **kwargs):
+    del args, kwargs
+    raise NotImplementedError("NVIDIA Warp kernels are unavailable on Metal; use tensor transforms")
 
 
-def pose_multiply(position, quaternion, position2, quaternion2, out_position=None, out_quaternion=None, **kwargs):
+# These are direct pinned kernel declarations.  The portable implementation
+# intentionally exposes the tensor helpers above rather than claiming a raw
+# Warp launch ABI.
+def compute_pose_inverse(position: wp.array(dtype=wp.vec3), quat: wp.array(dtype=wp.vec4), out_position: wp.array(dtype=wp.vec3), out_quat: wp.array(dtype=wp.vec4)):
+    return _warp_kernel_unavailable(position, quat, out_position, out_quat)
+
+
+def compute_matrix_to_quat(in_mat: wp.array(dtype=wp.mat33), out_quat: wp.array(dtype=wp.vec4)):
+    return _warp_kernel_unavailable(in_mat, out_quat)
+
+
+def compute_transform_point(position: wp.array(dtype=wp.vec3), quat: wp.array(dtype=wp.vec4), pt: wp.array(dtype=wp.vec3), n_pts: wp.int32, n_poses: wp.int32, out_pt: wp.array(dtype=wp.vec3)):
+    return _warp_kernel_unavailable(position, quat, pt, n_pts, n_poses, out_pt)
+
+
+def compute_batch_transform_point(position: wp.array(dtype=wp.vec3), quat: wp.array(dtype=wp.vec4), pt: wp.array(dtype=wp.vec3), n_pts: wp.int32, n_poses: wp.int32, out_pt: wp.array(dtype=wp.vec3)):
+    return _warp_kernel_unavailable(position, quat, pt, n_pts, n_poses, out_pt)
+
+
+def compute_batch_transform_point_inverse(position: wp.array(dtype=wp.vec3), quat: wp.array(dtype=wp.vec4), pt: wp.array(dtype=wp.vec3), n_pts: wp.int32, n_poses: wp.int32, out_pt: wp.array(dtype=wp.vec3)):
+    return _warp_kernel_unavailable(position, quat, pt, n_pts, n_poses, out_pt)
+
+
+def pose_multiply(
+    position: torch.Tensor,
+    quaternion: torch.Tensor,
+    position2: torch.Tensor,
+    quaternion2: torch.Tensor,
+    out_position: Optional[torch.Tensor] = None,
+    out_quaternion: Optional[torch.Tensor] = None,
+    adj_pos: Optional[torch.Tensor] = None,
+    adj_quat: Optional[torch.Tensor] = None,
+    adj_pos2: Optional[torch.Tensor] = None,
+    adj_quat2: Optional[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    del adj_pos, adj_quat, adj_pos2, adj_quat2
     p = transform_points(position, quaternion, position2.unsqueeze(-2)).squeeze(-2)
     q = normalize_quaternion(quat_multiply(quaternion, quaternion2))
     if out_position is not None: out_position.copy_(p); p = out_position
@@ -140,11 +237,27 @@ def pose_multiply(position, quaternion, position2, quaternion2, out_position=Non
     return p, q
 
 
-compute_pose_multipy = pose_multiply
-compute_batch_pose_multipy = pose_multiply
+def compute_batch_pose_multipy(position: wp.array(dtype=wp.vec3), quat: wp.array(dtype=wp.vec4), position2: wp.array(dtype=wp.vec3), quat2: wp.array(dtype=wp.vec4), out_position: wp.array(dtype=wp.vec3), out_quat: wp.array(dtype=wp.vec4)):
+    return _warp_kernel_unavailable(position, quat, position2, quat2, out_position, out_quat)
 
 
-def pose_inverse(position, quaternion, out_position=None, out_quaternion=None, **kwargs):
+def compute_quat_to_matrix(quat: wp.array(dtype=wp.vec4), out_mat: wp.array(dtype=wp.mat33)):
+    return _warp_kernel_unavailable(quat, out_mat)
+
+
+def compute_pose_multipy(position: wp.array(dtype=wp.vec3), quat: wp.array(dtype=wp.vec4), position2: wp.array(dtype=wp.vec3), quat2: wp.array(dtype=wp.vec4), out_position: wp.array(dtype=wp.vec3), out_quat: wp.array(dtype=wp.vec4)):
+    return _warp_kernel_unavailable(position, quat, position2, quat2, out_position, out_quat)
+
+
+def pose_inverse(
+    position: torch.Tensor,
+    quaternion: torch.Tensor,
+    out_position: Optional[torch.Tensor] = None,
+    out_quaternion: Optional[torch.Tensor] = None,
+    adj_pos: Optional[torch.Tensor] = None,
+    adj_quat: Optional[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    del adj_pos, adj_quat
     q = normalize_quaternion(quaternion)
     qi = torch.cat((q[..., :1], -q[..., 1:]), -1)
     p = -torch.matmul(position.unsqueeze(-2), quaternion_to_matrix(qi).transpose(-1,-2)).squeeze(-2)
@@ -153,12 +266,11 @@ def pose_inverse(position, quaternion, out_position=None, out_quaternion=None, *
     return p, qi
 
 
-compute_pose_inverse = pose_inverse
-compute_quat_to_matrix = quaternion_to_matrix
-compute_matrix_to_quat = matrix_to_quaternion
 
 
-def quaternion_rate_to_axis_angle_rate(quaternion_rate, current_quaternion):
+def quaternion_rate_to_axis_angle_rate(
+    quaternion_rate: torch.Tensor, current_quaternion: torch.Tensor
+) -> torch.Tensor:
     """Convert a quaternion rate to the pinned V2 axis-angle-rate residual.
 
     Keep this expression in the same convention as V2's implementation.  It
@@ -226,7 +338,7 @@ class _FunctionFacade(torch.autograd.Function):
         return result
 
 
-class TransformPoint(_FunctionFacade):
+class _TransformPointPortable(_FunctionFacade):
     @staticmethod
     def forward(ctx, position, quaternion, points, *buffers):
         result = TransformPoint._run(transform_points, ctx, (position, quaternion, points), buffers, position, quaternion, points)
@@ -237,7 +349,7 @@ class TransformPoint(_FunctionFacade):
         return TransformPoint._vjp(ctx, grad_output)
 
 
-class BatchTransformPoint(_FunctionFacade):
+class _BatchTransformPointPortable(_FunctionFacade):
     @staticmethod
     def forward(ctx, position, quaternion, points, *buffers):
         result = BatchTransformPoint._run(batch_transform_points, ctx, (position, quaternion, points), buffers, position, quaternion, points)
@@ -248,7 +360,7 @@ class BatchTransformPoint(_FunctionFacade):
         return BatchTransformPoint._vjp(ctx, grad_output)
 
 
-class BatchTransformPointInverse(_FunctionFacade):
+class _BatchTransformPointInversePortable(_FunctionFacade):
     @staticmethod
     def forward(ctx, position, quaternion, points, *buffers):
         result = BatchTransformPointInverse._run(batch_transform_points_inverse, ctx, (position, quaternion, points), buffers, position, quaternion, points)
@@ -259,7 +371,7 @@ class BatchTransformPointInverse(_FunctionFacade):
         return BatchTransformPointInverse._vjp(ctx, grad_output)
 
 
-class TransformPose(_FunctionFacade):
+class _TransformPosePortable(_FunctionFacade):
     @staticmethod
     def forward(ctx, position, quaternion, position2, quaternion2, *buffers):
         result_position, result_quaternion = TransformPose._run(pose_multiply, ctx, (position, quaternion, position2, quaternion2), buffers, position, quaternion, position2, quaternion2)
@@ -272,7 +384,7 @@ class TransformPose(_FunctionFacade):
         return result_position, result_quaternion
 
     @staticmethod
-    def backward(ctx, grad_position, grad_quaternion):
+    def backward(ctx, grad_out_position, grad_out_quaternion):
         # ``autograd.Function`` supports tuple outputs by receiving one
         # gradient per output.  Recompute a scalar VJP for both components.
         saved = ctx.saved_tensors
@@ -285,7 +397,7 @@ class TransformPose(_FunctionFacade):
             grads_required = torch.autograd.grad(
                 (result_position, result_quaternion),
                 [values[index] for index in required],
-                (grad_position, grad_quaternion),
+                (grad_out_position, grad_out_quaternion),
                 allow_unused=True,
             )
         grads = [None] * ctx.input_count
@@ -294,10 +406,19 @@ class TransformPose(_FunctionFacade):
         return (*grads, *((None,) * ctx.extra_count))
 
 
-BatchTransformPose = TransformPose
+class _BatchTransformPosePortable(_TransformPosePortable):
+    @staticmethod
+    def forward(ctx, position, quaternion, position2, quaternion2, *buffers):
+        return TransformPose.forward(
+            ctx, position, quaternion, position2, quaternion2, *buffers
+        )
+
+    @staticmethod
+    def backward(ctx, grad_out_position, grad_out_quaternion):
+        return TransformPose.backward(ctx, grad_out_position, grad_out_quaternion)
 
 
-class PoseInverse(_FunctionFacade):
+class _PoseInversePortable(_FunctionFacade):
     @staticmethod
     def forward(ctx, position, quaternion, *buffers):
         result_position, result_quaternion = PoseInverse._run(pose_inverse, ctx, (position, quaternion), buffers, position, quaternion)
@@ -310,7 +431,7 @@ class PoseInverse(_FunctionFacade):
         return result_position, result_quaternion
 
     @staticmethod
-    def backward(ctx, grad_position, grad_quaternion):
+    def backward(ctx, grad_out_position, grad_out_quaternion):
         saved = ctx.saved_tensors
         required = [index for index, value in enumerate(saved) if value.requires_grad]
         if not required:
@@ -321,7 +442,7 @@ class PoseInverse(_FunctionFacade):
             grads_required = torch.autograd.grad(
                 (result_position, result_quaternion),
                 [values[index] for index in required],
-                (grad_position, grad_quaternion),
+                (grad_out_position, grad_out_quaternion),
                 allow_unused=True,
             )
         grads = [None] * ctx.input_count
@@ -330,26 +451,117 @@ class PoseInverse(_FunctionFacade):
         return (*grads, *((None,) * ctx.extra_count))
 
 
-class QuatToMatrix(_FunctionFacade):
+class _QuatToMatrixPortable(_FunctionFacade):
     @staticmethod
     def forward(ctx, quaternion, *buffers):
         result = QuatToMatrix._run(quaternion_to_matrix, ctx, (quaternion,), buffers, quaternion)
         return QuatToMatrix._copy_output(result, buffers)
 
     @staticmethod
-    def backward(ctx, grad_output):
-        return QuatToMatrix._vjp(ctx, grad_output)
+    def backward(ctx, grad_out_mat):
+        return QuatToMatrix._vjp(ctx, grad_out_mat)
 
 
-class MatrixToQuaternion(_FunctionFacade):
+class _MatrixToQuaternionPortable(_FunctionFacade):
     @staticmethod
     def forward(ctx, matrix, *buffers):
         result = MatrixToQuaternion._run(matrix_to_quaternion, ctx, (matrix,), buffers, matrix)
         return MatrixToQuaternion._copy_output(result, buffers)
 
     @staticmethod
+    def backward(ctx, grad_out_q):
+        return MatrixToQuaternion._vjp(ctx, grad_out_q)
+
+
+class TransformPoint:
+    @staticmethod
+    def forward(ctx, position: torch.Tensor, quaternion: torch.Tensor, points: torch.Tensor, out_points: torch.Tensor, adj_position: torch.Tensor, adj_quaternion: torch.Tensor, adj_points: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
     def backward(ctx, grad_output):
-        return MatrixToQuaternion._vjp(ctx, grad_output)
+        raise NotImplementedError
+
+
+class BatchTransformPoint:
+    @staticmethod
+    def forward(ctx, position: torch.Tensor, quaternion: torch.Tensor, points: torch.Tensor, out_points: torch.Tensor, adj_position: torch.Tensor, adj_quaternion: torch.Tensor, adj_points: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        raise NotImplementedError
+
+
+class BatchTransformPointInverse:
+    @staticmethod
+    def forward(ctx, position: torch.Tensor, quaternion: torch.Tensor, points: torch.Tensor, out_points: torch.Tensor, adj_position: torch.Tensor, adj_quaternion: torch.Tensor, adj_points: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        raise NotImplementedError
+
+
+class BatchTransformPose:
+    @staticmethod
+    def forward(ctx, position: torch.Tensor, quaternion: torch.Tensor, position2: torch.Tensor, quaternion2: torch.Tensor, out_position: torch.Tensor, out_quaternion: torch.Tensor, adj_position: torch.Tensor, adj_quaternion: torch.Tensor, adj_position2: torch.Tensor, adj_quaternion2: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(ctx, grad_out_position, grad_out_quaternion):
+        raise NotImplementedError
+
+
+class TransformPose:
+    @staticmethod
+    def forward(ctx, position: torch.Tensor, quaternion: torch.Tensor, position2: torch.Tensor, quaternion2: torch.Tensor, out_position: torch.Tensor, out_quaternion: torch.Tensor, adj_position: torch.Tensor, adj_quaternion: torch.Tensor, adj_position2: torch.Tensor, adj_quaternion2: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(ctx, grad_out_position, grad_out_quaternion):
+        raise NotImplementedError
+
+
+class PoseInverse:
+    @staticmethod
+    def forward(ctx, position: torch.Tensor, quaternion: torch.Tensor, out_position: torch.Tensor, out_quaternion: torch.Tensor, adj_position: torch.Tensor, adj_quaternion: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(ctx, grad_out_position, grad_out_quaternion):
+        raise NotImplementedError
+
+
+class QuatToMatrix:
+    @staticmethod
+    def forward(ctx, quaternion: torch.Tensor, out_mat: torch.Tensor, adj_quaternion: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(ctx, grad_out_mat):
+        raise NotImplementedError
+
+
+class MatrixToQuaternion:
+    @staticmethod
+    def forward(ctx, in_mat: torch.Tensor, out_quaternion: torch.Tensor, adj_mat: torch.Tensor):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(ctx, grad_out_q):
+        raise NotImplementedError
+
+
+if not TYPE_CHECKING:
+    TransformPoint = _TransformPointPortable
+    BatchTransformPoint = _BatchTransformPointPortable
+    BatchTransformPointInverse = _BatchTransformPointInversePortable
+    BatchTransformPose = _BatchTransformPosePortable
+    TransformPose = _TransformPosePortable
+    PoseInverse = _PoseInversePortable
+    QuatToMatrix = _QuatToMatrixPortable
+    MatrixToQuaternion = _MatrixToQuaternionPortable
 
 
 __all__ = [name for name in globals() if not name.startswith("_")]

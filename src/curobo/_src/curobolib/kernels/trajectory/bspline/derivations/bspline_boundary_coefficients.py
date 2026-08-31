@@ -6,9 +6,10 @@ or compiling CUDA.
 """
 
 import numpy as np
+from typing import Dict, Tuple
 
 
-def compute_cubic_bspline_basis(t):
+def compute_cubic_bspline_basis(t: float) -> np.ndarray:
     t = float(t)
     return np.asarray((
         (1.0 - t) ** 3 / 6.0,
@@ -18,7 +19,7 @@ def compute_cubic_bspline_basis(t):
     ))
 
 
-def compute_cubic_bspline_derivatives(t, dt):
+def compute_cubic_bspline_derivatives(t: float, dt: float) -> Dict[str, np.ndarray]:
     t = float(t)
     position = compute_cubic_bspline_basis(t)
     velocity = np.asarray((
@@ -37,7 +38,7 @@ def compute_cubic_bspline_derivatives(t, dt):
     }
 
 
-def derive_fixed_knot_coefficients_degree3():
+def derive_fixed_knot_coefficients_degree3() -> Tuple[np.ndarray, np.ndarray]:
     derivatives = compute_cubic_bspline_derivatives(1.0, 1.0)
     matrix = np.stack(tuple(derivatives.values()))
     return np.linalg.inv(matrix), matrix

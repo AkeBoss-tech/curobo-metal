@@ -3,7 +3,7 @@
   "capability": "kinematics.geometric_jacobian",
   "corpus": {
     "case_file": "kinematics.geometric_jacobian.json",
-    "case_sha256": "eafb862bd33b53574a1a30c1dd301a29072789d3c579a5d6e74f3b7342c9eb86",
+    "case_sha256": "9d486bd8c92f8e22d1f8592385c8ea1f7b1f21c0d6e3fc78da6e94d12b5e3be2",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,19 +21,32 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "zero",
+        "one",
+        "many",
+        "noncontiguous",
+        "tree_links",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "fk",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "a73cdab8d12d3b9e3f6c223050b38b48631268e19a9160f5255b2ef4cb2ff96d"
+    "sha256": "0cfdc3958d76c8ebd933a070ca165b1e946dfabe7c8d24ccf0d98c6ba1233760"
   },
   "operation": "geometric_jacobian",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "281a376c62494079044b88f82ed64daba434929936fa142eaa2678fdb2e9c7e6"
+    "sha256": "0bd6a780e61c7dc18146296a395bb15a6e0fae20e4b52347da3d383a6062ad63"
   },
   "runtime": {
     "python": "3.13.9",

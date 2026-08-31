@@ -64,7 +64,17 @@ def _primitive_vertices(obstacle: Obstacle, device_cfg: DeviceCfg) -> torch.Tens
     return vertices
 
 
-class AttachmentManager:
+class _AttachmentManagerPortableMixin:
+    @property
+    def attached_link_name(self) -> Optional[str]:
+        return self._attached_link_name
+
+    @property
+    def last_fit_result(self) -> Optional[SphereFitResult]:
+        return self._last_fit_result
+
+
+class AttachmentManager(_AttachmentManagerPortableMixin):
     """Own the single portable object attachment associated with a robot model.
 
     The pinned V2 manager owns one attachment at a time.  This implementation
@@ -94,7 +104,7 @@ class AttachmentManager:
         return self._kinematics.config.kinematics_config
 
     @property
-    def attached_link_name(self) -> Optional[str]:
+    def _attached_link_name_value(self) -> Optional[str]:
         """Name of the currently attached link, or ``None`` when detached.
 
         This is an additive portable lifecycle inspection helper.  Callers
@@ -104,7 +114,7 @@ class AttachmentManager:
         return self._attached_link_name
 
     @property
-    def last_fit_result(self) -> Optional[SphereFitResult]:
+    def _last_fit_result_value(self) -> Optional[SphereFitResult]:
         """Most recent deterministic sphere-fit result, if any."""
         return self._last_fit_result
 

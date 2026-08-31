@@ -3,7 +3,7 @@
   "capability": "collision.voxel_esdf_query",
   "corpus": {
     "case_file": "collision.voxel_esdf_query.json",
-    "case_sha256": "c47e4976f49eaf796ae439899a7887ff3900b84848ca23923cde40ec39f4ed0f",
+    "case_sha256": "bf962644fad618c706cc1e0bf7c625bc241bea76ae87b44799773a887cac3e49",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,19 +21,33 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "in_bounds",
+        "out_of_bounds",
+        "tie_winner",
+        "active_grid",
+        "multi_environment",
+        "cache_repeat",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "voxel",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "cf5a9f2fda86d917ca5a9338ebb3d39e9ed286fd24a8211dd4c9a9667bc70341"
+    "sha256": "f1130ef98edfa1fef2273e4dbd59d0a19c56bf5bac39bba7b1c23e2eb9b22842"
   },
   "operation": "voxel_esdf",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "78a0b7fd621acfbb1cf1272db44e28aa902f2b0fef675b692f56806ec05fc8b6"
+    "sha256": "fcca25db443c8aad524e713db501f9e7fb7716d12f592e6f7847bdb5c22340dd"
   },
   "runtime": {
     "python": "3.13.9",

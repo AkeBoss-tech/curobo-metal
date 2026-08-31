@@ -95,8 +95,7 @@ def _select_batch_value(value: Any, indices: torch.Tensor, batch_size: int) -> A
     return value
 
 
-@dataclass
-class IKSolverResult(BaseSolverResult):
+class _IKSolverResultPortableMixin:
     """A batched, multi-seed inverse-kinematics result.
 
     ``solution`` and all per-seed result tensors use ``[batch, seed, ...]``.
@@ -228,6 +227,11 @@ class IKSolverResult(BaseSolverResult):
             if isinstance(dst, torch.Tensor) and isinstance(src, torch.Tensor) and dst.shape == src.shape:
                 if dst.ndim >= mask.ndim and dst.shape[: mask.ndim] == mask.shape:
                     dst[mask] = src[mask]
+
+
+@dataclass
+class IKSolverResult(_IKSolverResultPortableMixin, BaseSolverResult):
+    pass
 
 
 __all__ = ["IKSolverResult"]

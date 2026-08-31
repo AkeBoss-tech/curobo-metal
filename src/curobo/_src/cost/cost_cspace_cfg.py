@@ -9,6 +9,7 @@ ignored on CPU/MPS).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from numbers import Integral
 from typing import Any, List, Optional, Union
 
@@ -17,6 +18,7 @@ import torch
 from curobo._src.curobolib.cuda_ops.tensor_checks import check_float16_tensors, check_float32_tensors
 from curobo._src.robot.types.joint_limits import JointLimits
 from curobo._src.transition.robot_state_transition import RobotStateTransition
+from curobo._src.util.logging import log_and_raise
 
 from .cost_base_cfg import BaseCostCfg
 from .portable import (
@@ -129,7 +131,7 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
                 if bool(torch.max(value[1] - value[0]).eq(0).item()):
                     raise ValueError(f"joint {name} limits must have non-zero range")
 
-    def set_bounds(self, bounds: Any, teleport_mode: bool = False):
+    def set_bounds(self, bounds: JointLimits, teleport_mode: bool = False):
         if bounds is None:
             raise TypeError("bounds must be a JointLimits-compatible record")
         # Validate before cloning so malformed custom records fail without
@@ -150,7 +152,7 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
         self._validate_joint_limits(self.joint_limits)
         return result
 
-    def initialize_from_transition_model(self, transition_model: Any):
+    def initialize_from_transition_model(self, transition_model: RobotStateTransition):
         action_dim = getattr(transition_model, "action_dim", None)
         if isinstance(action_dim, bool) or not isinstance(action_dim, Integral) or action_dim < 0:
             raise TypeError("transition_model.action_dim must be a non-negative integer")

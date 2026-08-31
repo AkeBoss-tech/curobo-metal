@@ -10,11 +10,15 @@ It deliberately does *not* claim CUDA graph or Warp-buffer compatibility.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.rollout.rollout_protocol import Rollout
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.logging import log_and_raise, log_info
 
 
 class MultiStageOptimizer:
@@ -26,7 +30,7 @@ class MultiStageOptimizer:
     reinterpretation in eager CPU/MPS execution.
     """
 
-    def __init__(self, optimizers: List[Any], rollout_list: Optional[List[Any]] = None):
+    def __init__(self, optimizers: List, rollout_list: Optional[List[Rollout]] = None):
         if not optimizers:
             raise ValueError("optimizers must not be empty")
         self.optimizers = list(optimizers)
@@ -74,10 +78,10 @@ class MultiStageOptimizer:
     def enabled(self) -> bool:
         return self._enabled
 
-    def enable(self) -> None:
+    def enable(self):
         self._enabled = True
 
-    def disable(self) -> None:
+    def disable(self):
         self._enabled = False
 
     @property
@@ -93,11 +97,11 @@ class MultiStageOptimizer:
         return self.action_horizon * self.action_dim
 
     @property
-    def outer_iters(self) -> int:
+    def outer_iters(self):
         return 1
 
     @property
-    def solver_names(self) -> list[str]:
+    def solver_names(self):
         return [str(stage.config.solver_name) for stage in self.optimizers]
 
     @property
@@ -105,7 +109,7 @@ class MultiStageOptimizer:
         return self.opt_dt
 
     @property
-    def last_stage_outputs(self) -> tuple[torch.Tensor, ...]:
+    def _last_stage_outputs_view(self) -> tuple[torch.Tensor, ...]:
         """Immutable view of outputs from the previous successful optimize."""
 
         return self._last_stage_outputs
@@ -258,7 +262,7 @@ class MultiStageOptimizer:
         mask: Optional[torch.Tensor] = None,
         clear_optimizer_state: bool = True,
         reset_num_iters: bool = False,
-    ) -> None:
+    ):
         canonical_action = self._canonical_seed(action)
         for optimizer in self.optimizers:
             if bool(getattr(optimizer, "enabled", True)):
@@ -286,7 +290,7 @@ class MultiStageOptimizer:
 
     _shift = shift
 
-    def update_num_problems(self, num_problems: int) -> None:
+    def update_num_problems(self, num_problems: int):
         if num_problems <= 0:
             raise ValueError("num_problems must be positive")
         for optimizer in self.optimizers:
@@ -297,22 +301,22 @@ class MultiStageOptimizer:
         self._last_iteration_state = None
         self._last_stage_outputs = ()
 
-    def update_rollout_params(self, goal: Any) -> None:
+    def update_rollout_params(self, goal):
         for optimizer in self.optimizers:
             if bool(getattr(optimizer, "enabled", True)):
                 self._call_lifecycle(optimizer, "update_rollout_params", goal)
 
-    def update_goal_dt(self, goal_dt: Any) -> None:
+    def update_goal_dt(self, goal):
         for optimizer in self.optimizers:
-            self._call_lifecycle(optimizer, "update_goal_dt", goal_dt)
+            self._call_lifecycle(optimizer, "update_goal_dt", goal)
 
-    def reset(self) -> None:
+    def _reset(self) -> None:
         for optimizer in self.optimizers:
             self._call_lifecycle(optimizer, "reset")
         self._last_iteration_state = None
         self._last_stage_outputs = ()
 
-    def get_all_rollout_instances(self) -> list[Any]:
+    def get_all_rollout_instances(self) -> List[Rollout]:
         instances: list[Any] = []
         for optimizer in self.optimizers:
             found = self._call_lifecycle(optimizer, "get_all_rollout_instances")
@@ -320,7 +324,7 @@ class MultiStageOptimizer:
                 instances.extend(found)
         return instances
 
-    def compute_metrics(self, action: torch.Tensor) -> Any:
+    def compute_metrics(self, action: torch.Tensor):
         # V2 expressly rejects this ambiguous request: stages can have
         # different rollout configurations.  Keep the error rather than
         # silently choosing a stage and reporting misleading metrics.
@@ -329,19 +333,19 @@ class MultiStageOptimizer:
             "compute_metrics is ambiguous for MultiStageOptimizer; call it on a specific stage"
         )
 
-    def reset_shape(self) -> None:
+    def reset_shape(self):
         for optimizer in self.optimizers:
             self._call_lifecycle(optimizer, "reset_shape")
         self._call_lifecycle(self.rollout_fn, "reset_shape")
         self._last_iteration_state = None
         self._last_stage_outputs = ()
 
-    def reset_seed(self) -> None:
+    def reset_seed(self):
         for optimizer in self.optimizers:
             self._call_lifecycle(optimizer, "reset_seed")
         self._call_lifecycle(self.rollout_fn, "reset_seed")
 
-    def reset_cuda_graph(self) -> None:
+    def reset_cuda_graph(self):
         """Reset portable execution state; no CUDA graph is captured on MPS."""
 
         for optimizer in self.optimizers:
@@ -353,7 +357,7 @@ class MultiStageOptimizer:
                 # ordinary persistent state instead.
                 self._call_lifecycle(optimizer, "reset")
 
-    def get_recorded_trace(self) -> Dict[str, list[Any]]:
+    def get_recorded_trace(self) -> Dict[str, Any]:
         trace: Dict[str, list[Any]] = {"debug": [], "debug_cost": []}
         for optimizer in self.optimizers:
             stage_trace = self._call_lifecycle(optimizer, "get_recorded_trace")
@@ -366,7 +370,7 @@ class MultiStageOptimizer:
                 trace[key].extend(value if isinstance(value, (tuple, list)) else [value])
         return trace
 
-    def update_niters(self, niters: int) -> None:
+    def update_niters(self, niters: int):
         for optimizer in self.optimizers:
             self._call_lifecycle(optimizer, "update_niters", niters)
 
@@ -384,10 +388,17 @@ class MultiStageOptimizer:
                 return False
         return True
 
-    def debug_dump(self, file_path: str = "") -> list[Any]:
+    def debug_dump(self, file_path: str = ""):
         """Delegate portable debug dumps to every stage and return their values."""
 
         return [self._call_lifecycle(optimizer, "debug_dump", file_path) for optimizer in self.optimizers]
+
+
+# These portable observability/lifecycle extensions deliberately stay outside
+# the pinned V2 declaration.  They retain the richer eager backend contract
+# without widening the statically compared cuRobo callable surface.
+MultiStageOptimizer.last_stage_outputs = MultiStageOptimizer._last_stage_outputs_view
+MultiStageOptimizer.reset = MultiStageOptimizer._reset
 
 
 __all__ = ["MultiStageOptimizer"]

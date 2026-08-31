@@ -10,17 +10,23 @@ it is not an analytic continuous-collision certificate or a Warp kernel ABI.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import torch
 
+if TYPE_CHECKING:
+    from curobo._src.cost.cost_scene_collision_cfg import SceneCollisionCostCfg
+
+from curobo._src.cost.cost_base import BaseCost
 from curobo._src.geom.collision.buffer_collision import CollisionBuffer
 from curobo._src.robot.kinematics.kinematics_state import KinematicsState
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 from .portable import BaseCost, SceneCollisionCost as _PortableSceneCollisionCost
 
 
-class SceneCollisionCost(_PortableSceneCollisionCost):
+class _SceneCollisionCostPortable(_PortableSceneCollisionCost):
     """Aggregate portable scene-clearance queries into a trajectory cost.
 
     A checker returning ``[batch, horizon, spheres]`` is understood to return
@@ -87,7 +93,10 @@ class SceneCollisionCost(_PortableSceneCollisionCost):
             raise TypeError("MPS scene collision supports float32 only")
         if not bool(torch.isfinite(spheres).all().item()):
             raise ValueError("scene collision spheres must contain only finite values")
-        if bool((spheres[..., 3] < 0).any().item()):
+        # Exactly -100 is the pinned disabled-attachment sentinel. Other
+        # negative radii remain malformed geometry and fail closed.
+        invalid_radius = (spheres[..., 3] < 0) & (spheres[..., 3] != -100.0)
+        if bool(invalid_radius.any().item()):
             raise ValueError("scene collision sphere radii must be non-negative")
         if self.config.num_spheres and spheres.shape[-2] != self.config.num_spheres:
             raise ValueError("sphere count does not match configured num_spheres")
@@ -299,6 +308,61 @@ class SceneCollisionCost(_PortableSceneCollisionCost):
         return self._discrete_fn(state, idxs_env_query)
 
     __call__ = forward
+
+
+class SceneCollisionCost(BaseCost):
+    """Pinned cuRoboV2 declaration surface for portable scene collision.
+
+    The live implementation is bound below.  It preserves the same useful
+    Python lifecycle while performing CPU/MPS tensor queries rather than
+    exposing the unavailable Warp kernel ABI.
+    """
+
+    def __init__(self, config: SceneCollisionCostCfg):
+        raise NotImplementedError
+
+    def setup_batch_tensors(self, batch_size: int, horizon: int):
+        raise NotImplementedError
+
+    def update_num_spheres(
+        self, num_spheres: int, batch_size: Optional[int] = None, horizon: Optional[int] = None
+    ):
+        raise NotImplementedError
+
+    def forward(
+        self,
+        state: KinematicsState,
+        idxs_env_query: Optional[torch.Tensor] = None,
+        trajectory_dt: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def validate_input(
+        self,
+        robot_spheres_in: torch.Tensor,
+        idxs_env_query: Optional[torch.Tensor] = None,
+        trajectory_dt: Optional[torch.Tensor] = None,
+    ):
+        raise NotImplementedError
+
+    def get_gradient_buffer(self) -> torch.Tensor:
+        raise NotImplementedError
+
+    @staticmethod
+    @get_torch_jit_decorator()
+    def jit_weight_distance(dist: torch.Tensor, sum_cost: bool) -> torch.Tensor:
+        raise NotImplementedError
+
+    @staticmethod
+    @get_torch_jit_decorator()
+    def jit_weight_collision(dist: torch.Tensor, sum_cost: bool) -> torch.Tensor:
+        raise NotImplementedError
+
+
+# Keep the complete V2 declaration visible to static consumers while the
+# runtime remains the portable implementation used throughout this package.
+if not TYPE_CHECKING:
+    SceneCollisionCost = _SceneCollisionCostPortable
 
 
 __all__ = ["BaseCost", "CollisionBuffer", "KinematicsState", "SceneCollisionCost"]

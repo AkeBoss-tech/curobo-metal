@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "round": 0,
+  "kind": "baseline",
+  "gauntlet": "pinned-curobo-v2-consistency",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "local_revision": "4bec1314f2764b55cd67964f4e487c26c9930c57",
+  "command": "PYTHONPATH=.:src .venv/bin/python -m tools.gauntlet.measure_curobo_consistency",
+  "metrics": {
+    "runtime_modules_total": 361,
+    "runtime_modules_present": 361,
+    "runtime_modules_exact_static": 95,
+    "missing_exports": 1263,
+    "different_callable_shapes": 446,
+    "upstream_workloads_total": 225,
+    "upstream_workloads_reviewed": 14,
+    "upstream_workloads_unreviewed": 211,
+    "portable_capabilities_total": 23,
+    "portable_capabilities_equivalent": 4
+  },
+  "ratios": {
+    "runtime_modules_present_ratio": 1.0,
+    "runtime_modules_exact_static_ratio": 0.2631578947368421,
+    "upstream_workloads_reviewed_ratio": 0.06222222222222222,
+    "portable_capabilities_equivalent_ratio": 0.17391304347826086
+  },
+  "backlog_completion_score": 0.18727281973048562,
+  "gaps": {
+    "static_runtime_modules": 266,
+    "unreviewed_upstream_workloads": 211,
+    "capabilities_without_full_equivalence": 19
+  },
+  "largest_gap": "static_runtime_modules",
+  "backlog_targets_met": false,
+  "verdict": "Begin with classification before implementation; raw counts mix public API gaps, internal CUDA/Warp surfaces, and inventory artifacts."
+}

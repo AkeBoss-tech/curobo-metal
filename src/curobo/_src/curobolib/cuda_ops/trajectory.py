@@ -3,14 +3,21 @@
 import torch
 
 from curobo._src.curobolib.backends import trajectory as trajectory_cu
+from curobo._src.curobolib.cuda_ops.tensor_checks import (
+    check_float32_tensors,
+    check_int32_tensors,
+    check_uint8_tensors,
+)
+from curobo._src.state.state_joint import JointState
+from curobo._src.util.logging import log_and_raise
 
 
 def get_bspline_interpolation(
-    input_trajectory,
-    output_trajectory,
+    input_trajectory: JointState,
+    output_trajectory: JointState,
     interpolation_dt: torch.Tensor,
-    current_state,
-    goal_state,
+    current_state: JointState,
+    goal_state: JointState,
     start_idx: torch.Tensor,
     goal_idx: torch.Tensor,
     use_implicit_goal_state: torch.Tensor,
@@ -68,7 +75,8 @@ class AccelerationTensorStepIdxKernel(torch.autograd.Function):
         return out_position, out_velocity, out_acceleration, out_jerk
 
     @staticmethod
-    def backward(ctx, *grad_outputs):
+    def backward(ctx, grad_out_p, grad_out_v, grad_out_a, grad_out_j):
+        del ctx, grad_out_p, grad_out_v, grad_out_a, grad_out_j
         raise NotImplementedError(
             "The CUDA acceleration-kernel custom VJP is unavailable; use the "
             "production trajectory optimizer's differentiable PyTorch rollout"
@@ -77,8 +85,63 @@ class AccelerationTensorStepIdxKernel(torch.autograd.Function):
 
 class BSplineIdxKernel(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, *args, **kwargs):
+    def forward(
+        ctx,
+        u_act,
+        start_position,
+        start_velocity,
+        start_acceleration,
+        start_jerk,
+        goal_position,
+        goal_velocity,
+        goal_acceleration,
+        goal_jerk,
+        start_idx,
+        goal_idx,
+        out_position,
+        out_velocity,
+        out_acceleration,
+        out_jerk,
+        out_dt,
+        traj_dt,
+        use_implicit_goal_state,
+        out_grad_position,
+        bspline_degree,
+        use_flat_gradient=False,
+    ):
+        del (
+            ctx,
+            u_act,
+            start_position,
+            start_velocity,
+            start_acceleration,
+            start_jerk,
+            goal_position,
+            goal_velocity,
+            goal_acceleration,
+            goal_jerk,
+            start_idx,
+            goal_idx,
+            out_position,
+            out_velocity,
+            out_acceleration,
+            out_jerk,
+            out_dt,
+            traj_dt,
+            use_implicit_goal_state,
+            out_grad_position,
+            bspline_degree,
+            use_flat_gradient,
+        )
         raise NotImplementedError(
             "BSplineIdxKernel is a CUDA packed-buffer ABI; use portable "
             "trajectory interpolation instead"
+        )
+
+    @staticmethod
+    def backward(ctx, grad_out_p, grad_out_v, grad_out_a, grad_out_j):
+        del ctx, grad_out_p, grad_out_v, grad_out_a, grad_out_j
+        raise NotImplementedError(
+            "BSplineIdxKernel's packed CUDA VJP is unavailable on Metal; use "
+            "portable trajectory interpolation with ordinary PyTorch autograd"
         )

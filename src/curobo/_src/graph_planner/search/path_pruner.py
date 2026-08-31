@@ -17,6 +17,7 @@ import torch
 
 from curobo._src.graph_planner.graph_planner_prm_cfg import PRMGraphPlannerCfg
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
 
 
 class PathPruner:
@@ -53,9 +54,9 @@ class PathPruner:
         action_dim: int,
         cspace_distance_weight: torch.Tensor,
         preallocated_node_buffer: torch.Tensor,
-        steer_and_register_edges_fn: Callable[..., Any],
-        find_path_for_index_pairs_fn: Callable[..., Any],
-    ) -> None:
+        steer_and_register_edges_fn: Callable,
+        find_path_for_index_pairs_fn: Callable,
+    ):
         """Install the roadmap and graph callbacks without copying tensors."""
         if not isinstance(action_dim, int) or isinstance(action_dim, bool) or action_dim < 1:
             raise ValueError("action_dim must be a positive integer")

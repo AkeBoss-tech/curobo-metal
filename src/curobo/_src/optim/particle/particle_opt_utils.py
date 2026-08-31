@@ -5,7 +5,7 @@ import torch
 class SquashType(Enum):
     CLAMP="CLAMP"; TANH="TANH"
 
-def scale_ctrl(ctrl, action_lows, action_highs, squash_fn=SquashType.CLAMP):
+def scale_ctrl(ctrl, action_lows, action_highs, squash_fn: SquashType = SquashType.CLAMP):
     mode=getattr(squash_fn,"name",str(squash_fn)).upper()
     if "TANH" in mode:
         return action_lows + (torch.tanh(ctrl)+1)*0.5*(action_highs-action_lows)

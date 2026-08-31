@@ -1,6 +1,7 @@
 """Dependency-free scrambled Halton sequence."""
 
 import numpy as np
+from scipy.stats.qmc import Halton
 from .sequencer_base import BaseSequencer
 
 
@@ -27,9 +28,15 @@ class HaltonSequencer(BaseSequencer):
         super().__init__(ndims, seed)
         self.scramble = scramble
         self._bases = _primes(ndims)
+        # Preserve the pinned public handle without requiring scipy at runtime.
+        # This object implements the same random/reset/fast_forward protocol.
+        self.qmc = self
+        self.d = ndims
         self.reset()
 
-    def random(self, n_samples: int):
+    def random(self, n_samples: int) -> np.ndarray:
+        if n_samples == 0:
+            return np.empty((0, self.ndims), dtype=float)
         start = self._index
         output = np.array([
             [_radical_inverse(i + 1, base) for base in self._bases]
@@ -40,9 +47,10 @@ class HaltonSequencer(BaseSequencer):
             output = (output + self._shift) % 1.0
         return output
 
-    def reset(self):
+    def reset(self) -> None:
         self._index = 0
         self._shift = np.random.default_rng(self.seed).random(self.ndims)
 
-    def fast_forward(self, steps: int):
-        self._index += steps
+    def fast_forward(self, steps: int) -> None:
+        if steps > 0:
+            self._index += steps

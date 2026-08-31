@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .cuda_adapters import ADAPTERS, run
+from .cuda_adapters import ADAPTERS, CUDA_MATRIX_BLOCKERS, run
 from .cuda_runtime import collect as collect_runtime, revision
 from .replay_registry import BY_ID, PIN
 
@@ -63,19 +63,37 @@ def main() -> None:
             "equivalence_claimed": False,
             "tolerance": {"rtol": case.rtol, "atol": case.atol},
         }
-        if args.capability in {
-            "graph.prm_planner",
-            "motion_generation.motion_gen",
-            "optim.lbfgs",
-            "optim.particle_evolution",
-        }:
-            for key in ("invalid_rejected", "edge_observed"):
+        if args.capability in CUDA_MATRIX_BLOCKERS:
+            record["matrix_evidence"] = {
+                "state": "blocked_pending_paired_cuda",
+                "dimensions": list(CUDA_MATRIX_BLOCKERS[args.capability]),
+            }
+        if case.matrix_cases:
+            required_outputs = (
+                "invalid_rejected",
+                "edge_observed",
+                "matrix_observed",
+            )
+            for key in required_outputs:
                 value = outputs.get(key)
-                if value is None or value.shape != (1,) or value.dtype != np.int8 or int(value[0]) != 1:
+                expected_shape = (
+                    (len(case.matrix_cases),) if key == "matrix_observed" else (1,)
+                )
+                if (
+                    value is None
+                    or value.shape != expected_shape
+                    or value.dtype != np.int8
+                    or not bool(value.all())
+                ):
                     raise RuntimeError(f"{args.capability}: CUDA {key} evidence did not execute")
             record["evidence"] = {
                 "invalid": {"case": case.invalid_case, "output": "invalid_rejected", "executed": True},
                 "edge": {"case": case.edge_case, "output": "edge_observed", "executed": True},
+                "matrix": {
+                    "cases": list(case.matrix_cases),
+                    "output": "matrix_observed",
+                    "executed": True,
+                },
             }
         (args.output / "cuda-manifest.json").write_text(
             json.dumps(record, indent=2, sort_keys=True) + "\n"

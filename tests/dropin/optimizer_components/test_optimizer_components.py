@@ -6,7 +6,9 @@ import torch
 from curobo._src.optim.components.action_bounds import ActionBounds
 from curobo._src.optim.components.best_tracker import BestTracker
 from curobo._src.optim.components.debug_recorder import DebugRecorder
+from curobo._src.optim.components.gaussian_distribution import CovType, GaussianDistribution
 from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.optim.particle.sample_strategies.particle_sampler_cfg import ParticleSamplerCfg
 from curobo._src.types.device_cfg import DeviceCfg
 
 
@@ -31,7 +33,7 @@ def test_action_bounds_preserve_v2_flat_buffers_and_refresh_mutable_values() -> 
 )
 def test_action_bounds_reject_invalid_shapes_and_limits(lows, highs, horizon) -> None:
     with pytest.raises((TypeError, ValueError)):
-        ActionBounds(lows, highs, horizon)
+        ActionBounds(lows, highs, horizon, 1.0)
 
 
 def test_best_tracker_tracks_strict_improvement_and_masked_clear() -> None:
@@ -79,6 +81,54 @@ def test_debug_recorder_returns_detached_action_and_cost_history() -> None:
     assert recorder.get_trace()["debug"] == recorder.get_trace()["debug_cost"] == []
 
 
+def test_gaussian_distribution_preserves_v2_covariance_and_sample_lifecycle() -> None:
+    device_cfg = DeviceCfg(device="cpu", dtype=torch.float32)
+    sample_cfg = ParticleSamplerCfg(
+        device_cfg=device_cfg, fixed_samples=False, sample_ratio={"random": 1.0}
+    )
+    distribution = GaussianDistribution(
+        device_cfg,
+        action_horizon=3,
+        action_dim=2,
+        cov_type=CovType.SIGMA_I,
+        init_mean=torch.zeros((1, 3, 2)),
+        init_cov=torch.tensor([4.0]),
+        sample_params=sample_cfg,
+        seed=7,
+    )
+    distribution.reset(2)
+    assert distribution.mean.shape == distribution.best_traj.shape == (2, 3, 2)
+    assert distribution.cov.shape == distribution.scale_tril.shape == (2, 1)
+    # The pinned SIGMA_I observable contract uses broadcast multiplication with I.
+    assert distribution.full_scale_tril.shape == (2, 1, 3, 1)
+    assert distribution.full_inv_cov.shape == (2, 2)
+
+    distribution.initialize_samples(2, 4, 2, fixed_samples=False, sample_per_problem=True)
+    first = distribution.get_samples(2, fixed_samples=False)
+    second = distribution.get_samples(2, fixed_samples=False)
+    assert first.shape == second.shape == (2, 4, 3, 2)
+    assert torch.count_nonzero(first[:, -1]) == torch.count_nonzero(second[:, -1]) == 0
+    assert distribution._sample_iter.item() == 0
+
+    distribution.shift(1, repeat_last=True)
+    torch.testing.assert_close(distribution.mean[:, -1], distribution.mean[:, -2])
+    torch.testing.assert_close(distribution.best_traj[:, -1], distribution.best_traj[:, -2])
+
+    diag = GaussianDistribution(
+        device_cfg,
+        action_horizon=3,
+        action_dim=2,
+        cov_type=CovType.DIAG_A,
+        init_mean=torch.zeros((1, 3, 2)),
+        init_cov=torch.tensor([1.0, 9.0, 4.0]),
+        sample_params=sample_cfg,
+    )
+    diag.reset(2)
+    assert diag.cov.shape == (6, 1, 2)
+    assert diag.full_scale_tril.shape == (6, 1, 3, 2)
+    assert diag.full_inv_cov.shape == (6, 2, 2)
+
+
 def test_optimizer_components_mps_without_cpu_fallback() -> None:
     if not torch.backends.mps.is_available():
         return
@@ -90,5 +140,7 @@ def test_optimizer_components_mps_without_cpu_fallback() -> None:
     )
     tracker.update(state, 2, 2, 0.0, 0.0, 0)
     assert tracker.action.device.type == state.best_action.device.type == "mps"
-    bounds = ActionBounds(torch.full((2,), -1.0, device="mps"), torch.ones(2, device="mps"), 2)
+    bounds = ActionBounds(
+        torch.full((2,), -1.0, device="mps"), torch.ones(2, device="mps"), 2, 1.0
+    )
     assert bounds.horizon_step_max.device.type == "mps"

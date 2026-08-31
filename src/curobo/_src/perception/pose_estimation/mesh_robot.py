@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import torch
+from curobo._src.state.state_joint import JointState
+
+Kinematics = object
+Pose = object
+trimesh = None
+wp = None
 
 
 def _device(value: str) -> str:
@@ -30,10 +36,10 @@ class RobotMesh:
 
     def __init__(
         self, vertices: torch.Tensor, faces: torch.Tensor, device: str = "cuda:0",
-        kinematics=None, link_vertex_ranges: Optional[List[Tuple[int, int]]] = None,
+        kinematics: Optional[Kinematics] = None, link_vertex_ranges: Optional[List[Tuple[int, int]]] = None,
         link_names: Optional[List[str]] = None,
         link_vertices_local: Optional[List[torch.Tensor]] = None,
-    ) -> None:
+    ):
         target = _device(device)
         values = torch.as_tensor(vertices, device=target)
         if values.ndim != 2 or values.shape[-1] != 3 or not values.is_floating_point():
@@ -53,7 +59,7 @@ class RobotMesh:
         self._sample_cache: dict[int, SurfaceSampleCache] = {}
 
     @classmethod
-    def from_kinematics(cls, kinematics, device: str = "cuda:0", initial_joint_angles: Optional[torch.Tensor] = None) -> "RobotMesh":
+    def from_kinematics(cls, kinematics: Kinematics, device: str = "cuda:0", initial_joint_angles: Optional[torch.Tensor] = None) -> RobotMesh:
         if not hasattr(kinematics, "get_robot_as_spheres"):
             raise TypeError("kinematics must expose get_robot_as_spheres")
         dof = getattr(kinematics, "dof", None)
@@ -69,7 +75,7 @@ class RobotMesh:
         return result
 
     @classmethod
-    def from_trimesh(cls, mesh, device: str = "cuda:0") -> "RobotMesh":
+    def from_trimesh(cls, mesh: trimesh.Trimesh, device: str = "cuda:0") -> RobotMesh:
         if not hasattr(mesh, "vertices") or not hasattr(mesh, "faces"):
             raise TypeError("mesh must expose vertices and triangular faces")
         return cls(torch.as_tensor(mesh.vertices), torch.as_tensor(mesh.faces), device)
@@ -99,11 +105,11 @@ class RobotMesh:
         return self.kinematics is not None
 
     @property
-    def mesh(self):
+    def mesh(self) -> wp.Mesh:
         raise NotImplementedError("raw Warp mesh handles are unavailable; use vertices and faces")
 
     @property
-    def mesh_id(self):
+    def mesh_id(self) -> wp.uint64:
         raise NotImplementedError("raw Warp mesh IDs are unavailable; use vertices and faces")
 
     def get_dof(self) -> int:
@@ -141,7 +147,7 @@ class RobotMesh:
         self._sample_cache[n_points] = SurfaceSampleCache(points, normals)
         return points, normals
 
-    def get_trimesh(self):
+    def get_trimesh(self) -> trimesh.Trimesh:
         try:
             import trimesh
         except ModuleNotFoundError as error:

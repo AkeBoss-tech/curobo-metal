@@ -17,7 +17,7 @@ def test_packaged_franka_public_surface_and_shapes():
     assert model.dof == 7
     assert model.joint_names == [f"panda_joint{i}" for i in range(1, 8)]
     assert model.tool_frames == ["panda_hand"]
-    assert model.total_spheres == 61
+    assert model.total_spheres == 65
 
     q = model.default_joint_position.repeat(2, 3, 1)
     state = model.compute_kinematics(
@@ -27,7 +27,7 @@ def test_packaged_franka_public_surface_and_shapes():
     assert state.tool_poses.position.shape == (2, 3, 1, 3)
     assert state.tool_poses.quaternion.shape == (2, 3, 1, 4)
     assert state.tool_jacobians.shape == (2, 3, 1, 6, 7)
-    assert state.robot_spheres.shape == (2, 3, 61, 4)
+    assert state.robot_spheres.shape == (2, 3, 65, 4)
     assert state.robot_com.shape == (2, 3, 4)
     torch.testing.assert_close(
         state.tool_poses.quaternion.norm(dim=-1), torch.ones(2, 3, 1)

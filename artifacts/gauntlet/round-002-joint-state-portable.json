@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "round": 2,
+  "gauntlet": "pinned-curobo-v2-consistency",
+  "slice": "joint-state-portable-conformance",
+  "status": "cuda_pending",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "probe": {
+    "sha256": "4328b37107edf4adcc970db762fde66b397d6015131a404fec6a6b9f655d8d6e",
+    "corpus_sha256": "a8a87c2c1422fede4bccc277a28c3121c9cb32d158d680886febde35ba97619e",
+    "observable_outputs": 16,
+    "gradient_outputs": 1,
+    "cpu_upstream_comparison": {
+      "outputs_matching": 16,
+      "outputs_different": 0,
+      "rtol": 0.000001,
+      "atol": 0.0000001
+    }
+  },
+  "metal": {
+    "fallback_enabled": false,
+    "input_sha256": "c7db9328f988a1bb2db4e10c4055ace300a63208753d0697fc8bccc6382eec46",
+    "output_sha256": "8b42e5e88bbc76f4c471f93d0718db380e30bd30fa3cde10f0f15232a3f020a8",
+    "manifest_sha256": "1da0095768d3a1d79a12d7f31383aba341e08d5140c3d65a106822e19871c28d",
+    "deterministic_replay_validation": "passed"
+  },
+  "coverage": [
+    "packed position/velocity/acceleration/jerk layout",
+    "joint-name reorder values",
+    "seed repetition and dt metadata",
+    "left-kernel application to values and dt",
+    "derivative time scaling",
+    "DOF concatenation",
+    "input VJP",
+    "noncontiguous position input",
+    "derivative-channel alias independence",
+    "clone storage independence"
+  ],
+  "adversarial_finding": {
+    "case": "batch dt rank",
+    "observed": "Pinned repeat_joint_state_seeds rejects dt shaped [batch] because its seed helper requires an explicit trailing axis.",
+    "resolution": "The shared valid corpus uses dt shaped [batch,1]; the rejected [batch] regime remains an explicit behavioral boundary to classify separately."
+  },
+  "acceptance": {
+    "portable_cpu": true,
+    "fallback_disabled_mps": true,
+    "pinned_cuda": false,
+    "full_slice_accepted": false,
+    "blocker": "The authenticated iLab and omen-3080 routes currently report no visible NVIDIA devices."
+  }
+}

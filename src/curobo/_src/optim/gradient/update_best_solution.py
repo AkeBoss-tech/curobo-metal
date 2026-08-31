@@ -1,5 +1,11 @@
 import torch
-def update_best_solution(iteration_state, action_horizon, action_dim, cost_delta_threshold, cost_relative_threshold, convergence_iteration):
+
+from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
+
+
+def _update_best_solution_portable(iteration_state, action_horizon, action_dim, cost_delta_threshold, cost_relative_threshold, convergence_iteration):
     del action_horizon, action_dim
     cost=iteration_state.cost
     if cost is None: return iteration_state
@@ -15,3 +21,23 @@ def update_best_solution(iteration_state, action_horizon, action_dim, cost_delta
     rel_ok=(cost-iteration_state.best_cost).abs() <= cost_relative_threshold*iteration_state.best_cost.abs().clamp_min(1)
     iteration_state.converged=(abs_ok|rel_ok)&(iteration_state.best_iteration>=convergence_iteration)
     return iteration_state
+
+
+@get_torch_jit_decorator(only_valid_for_compile=True)
+def update_best_solution(
+    iteration_state: OptimizationIterationState,
+    action_horizon: int,
+    action_dim: int,
+    cost_delta_threshold: float,
+    cost_relative_threshold: float,
+    convergence_iteration: int,
+) -> OptimizationIterationState:
+    """Update portable best-solution buffers with the pinned callable API."""
+    return _update_best_solution_portable(
+        iteration_state,
+        action_horizon,
+        action_dim,
+        cost_delta_threshold,
+        cost_relative_threshold,
+        convergence_iteration,
+    )

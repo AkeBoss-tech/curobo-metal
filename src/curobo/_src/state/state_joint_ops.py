@@ -9,12 +9,23 @@ and make no claim to reproduce CUDA packed-buffer/JIT ABI details.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING, List, Optional, Union
 
 import torch
+import torch.autograd.profiler as profiler
 
+from curobo._src.util.logging import log_and_raise
 from curobo._src.util.tensor_util import fd_tensor
 
 from .filter_coeff import FilterCoeff
+from .state_joint_jit_helpers import (
+    jit_inplace_reindex,
+    jit_joint_state_repeat_seeds,
+    jit_js_scale,
+)
+
+if TYPE_CHECKING:
+    from .state_joint import JointState
 
 
 _CHANNELS = ("position", "velocity", "acceleration", "jerk")
@@ -43,7 +54,9 @@ def _new_state(state, *, joint_names=_UNSET, **overrides):
     )
 
 
-def blend_joint_states(target, new_state, coeff: FilterCoeff):
+def blend_joint_states(
+    target: "JointState", new_state: "JointState", coeff: FilterCoeff
+) -> "JointState":
     """Blend materialized channels into ``target`` in place.
 
     Partial states are valid in the portable facade.  A missing channel is
@@ -60,7 +73,7 @@ def blend_joint_states(target, new_state, coeff: FilterCoeff):
     return target
 
 
-def joint_state_to_tensor(joint_state):
+def joint_state_to_tensor(joint_state: "JointState") -> torch.Tensor:
     """Pack position plus the three derivative channels into ``[..., 4*dof]``."""
     zero = torch.zeros_like(joint_state.position)
     return torch.cat(
@@ -70,7 +83,7 @@ def joint_state_to_tensor(joint_state):
     )
 
 
-def stack_joint_states(js1, js2):
+def stack_joint_states(js1: "JointState", js2: "JointState") -> "JointState":
     """Stack compatible states along the trajectory/sample axis."""
     if (
         js1.position.ndim < 2
@@ -94,7 +107,7 @@ def stack_joint_states(js1, js2):
     return result
 
 
-def cat_joint_states(js1, js2, dim: int):
+def cat_joint_states(js1: "JointState", js2: "JointState", dim: int) -> "JointState":
     """Concatenate state channels; DOF concatenation also joins joint names."""
     if js1.position.device != js2.position.device:
         raise ValueError("concatenated JointStates must be on the same device")
@@ -132,7 +145,9 @@ def _repeat_metadata(value, repeats: tuple[int, ...]):
     return value.repeat(*repeats[: value.ndim])
 
 
-def repeat_joint_state(joint_state, repeat_input: Sequence[int]):
+def repeat_joint_state(
+    joint_state: "JointState", repeat_input: List[int]
+) -> "JointState":
     """Repeat channels and batch-shaped timing/knot metadata."""
     repeats = tuple(int(value) for value in repeat_input)
     if len(repeats) != joint_state.position.ndim or any(value < 0 for value in repeats):
@@ -148,7 +163,9 @@ def repeat_joint_state(joint_state, repeat_input: Sequence[int]):
     return result
 
 
-def repeat_joint_state_seeds(joint_state, num_seeds: int):
+def repeat_joint_state_seeds(
+    joint_state: "JointState", num_seeds: int
+) -> "JointState":
     """Expand the first (batch) axis into contiguous batch-major seed rows."""
     if not isinstance(num_seeds, int) or num_seeds < 1:
         raise ValueError("num_seeds must be a positive integer")
@@ -169,7 +186,9 @@ def _apply_kernel(kernel_mat: torch.Tensor, value):
     return output.reshape(*kernel_mat.shape[:-1], *value.shape[1:])
 
 
-def apply_kernel_to_joint_state(joint_state, kernel_mat: torch.Tensor):
+def apply_kernel_to_joint_state(
+    joint_state: "JointState", kernel_mat: torch.Tensor
+) -> "JointState":
     """Apply a left kernel to every materialized state/batch channel."""
     if not isinstance(kernel_mat, torch.Tensor) or kernel_mat.ndim < 2:
         raise ValueError("kernel_mat must be a rank-two-or-greater tensor")
@@ -180,8 +199,12 @@ def apply_kernel_to_joint_state(joint_state, kernel_mat: torch.Tensor):
     )
 
 
-def scale_joint_state(joint_state, dt):
+def scale_joint_state(
+    joint_state: "JointState", dt: Union[float, torch.Tensor]
+) -> "JointState":
     """Scale derivatives for a dimensionless time factor without mutating input."""
+    if joint_state.knot_dt is not None:
+        raise ValueError("knot dt needs to be scaled")
     scale = torch.as_tensor(dt, device=joint_state.device, dtype=joint_state.dtype)
     def scale_for(value):
         result = scale
@@ -197,7 +220,9 @@ def scale_joint_state(joint_state, dt):
     )
 
 
-def scale_joint_state_by_dt(joint_state, dt, new_dt):
+def scale_joint_state_by_dt(
+    joint_state: "JointState", dt: torch.Tensor, new_dt: torch.Tensor
+) -> "JointState":
     """Rescale derivatives from ``dt`` to ``new_dt`` while retaining metadata."""
     old = torch.as_tensor(dt, device=joint_state.device, dtype=joint_state.dtype)
     new = torch.as_tensor(new_dt, device=joint_state.device, dtype=joint_state.dtype)
@@ -219,13 +244,17 @@ def scale_joint_state_by_dt(joint_state, dt, new_dt):
     )
 
 
-def scale_joint_state_time(joint_state, new_dt):
+def scale_joint_state_time(
+    joint_state: "JointState", new_dt: torch.Tensor
+) -> "JointState":
     if joint_state.dt is None:
         raise ValueError("joint_state.dt is required")
     return scale_joint_state_by_dt(joint_state, joint_state.dt, new_dt)
 
 
-def calculate_fd_from_position(joint_state, dt=None):
+def calculate_fd_from_position(
+    joint_state: "JointState", dt: Optional[torch.Tensor] = None
+) -> "JointState":
     """Populate finite-difference derivatives in place, preserving autograd."""
     step = joint_state.dt if dt is None else dt
     if step is None:
@@ -236,21 +265,29 @@ def calculate_fd_from_position(joint_state, dt=None):
     return joint_state
 
 
-def reorder_joint_state(joint_state, ordered_joint_names):
+def reorder_joint_state(
+    joint_state: "JointState", ordered_joint_names: List[str]
+) -> "JointState":
     return joint_state.reorder(list(ordered_joint_names))
 
 
-def reindex_joint_state_inplace(joint_state, joint_names):
-    """Reorder state channels in place and return the same object."""
+def reindex_joint_state_inplace(
+    joint_state: "JointState", joint_names: List[str]
+) -> None:
+    """Reorder state channels in place."""
     value = joint_state.reorder(list(joint_names))
-    return joint_state.copy_reference(value)
+    joint_state.copy_reference(value)
 
 
-def augment_joint_state(joint_state, joint_names, lock_joints=None):
+def augment_joint_state(
+    joint_state: "JointState",
+    joint_names: List[str],
+    lock_joints: Optional["JointState"] = None,
+) -> "JointState":
     """Fill a requested joint ordering from active plus optional locked joints."""
+    if joint_names is None or joint_state.joint_names is None:
+        raise ValueError("joint_names can't be None")
     names = list(joint_names)
-    if joint_state.joint_names is None:
-        raise ValueError("joint_names required")
     if len(set(names)) != len(names):
         raise ValueError("joint_names must not contain duplicates")
     if lock_joints is None:
@@ -276,7 +313,9 @@ def cat_many(states):
     return output
 
 
-def append_joints_to_state(joint_state, other_js):
+def append_joints_to_state(
+    joint_state: "JointState", other_js: "JointState"
+) -> "JointState":
     """Append joint channels, broadcasting a locked-state over trajectory axes.
 
     cuRobo commonly keeps locked joints as a single ``[D_locked]`` state and
@@ -298,7 +337,7 @@ def append_joints_to_state(joint_state, other_js):
     if joint_state.position.dtype != other_js.position.dtype:
         raise ValueError("appended JointStates must share dtype")
     if joint_state.knot is not None and other_js.knot is not None:
-        raise NotImplementedError("knot append requires a shared knot layout")
+        raise NotImplementedError("knot append needs to be implemented")
 
     target_shape = tuple(joint_state.position.shape)
     prefix = target_shape[:-1]

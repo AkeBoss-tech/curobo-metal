@@ -3,7 +3,7 @@
   "capability": "trajectory.trajectory_optimization",
   "corpus": {
     "case_file": "trajectory.trajectory_optimization.json",
-    "case_sha256": "398c29b921d7962c3848f911c166c1f629167e58b3093225b49fe5267e9f5676",
+    "case_sha256": "658c3a003989d65b955fdc2d568319f630b7e23ac9dba6197427a6f23f31af03",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,9 +21,20 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "endpoint",
+        "infeasible",
+        "alternate_config",
+        "result_layout"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "trajectory",
     "status": true
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
@@ -33,7 +44,7 @@
   "operation": "trajectory_optimization",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "69e36dfbec25ecd0ca2e0d94ca0db165f5d292896cad275fc489ea802fc5c1fa"
+    "sha256": "d0a73a5c97ccf1c6c0c9f1b0dabf51bf90b22e36da8d7db2074ac65d706bfb99"
   },
   "runtime": {
     "python": "3.13.9",

@@ -5,14 +5,28 @@ This version deliberately keeps the ordinary tensor/autograd behaviour on CPU
 and MPS and rejects graph capture through :class:`PortableOptimizer`.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import dataclass, field, fields
 import math
 import time
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+import torch.autograd.profiler as profiler
 
+import curobo._src.runtime as curobo_runtime
+from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.optim._portable import PortableOptCfg, PortableOptimizer, _objective
+
+# These CUDA-only helpers are public upstream reexports.  Importing their
+# modules initializes CUDA-oriented package state and creates a local circular
+# import, so retain declaration aliases rather than claiming those backends.
+ActionBounds = BestTracker = DebugRecorder = OptimizationIterationState = None
+CudaEventTimer = GraphExecutor = None
+Rollout = None
+check_nan_last_dimension = create_graph_executor = log_and_raise = update_best_solution = None
 
 
 @dataclass
@@ -75,11 +89,22 @@ class GradientDescentOptCfg(PortableOptCfg):
             self.cost_relative_threshold = 0.0
 
     @property
-    def outer_iters(self) -> int:
+    def outer_iters(self):
         return math.ceil(self.num_iters / self.inner_iters)
 
+    @property
+    def num_rollout_instances(self):
+        return self._num_rollout_instances
 
-class GradientDescentOpt(PortableOptimizer):
+    @classmethod
+    def create_data_dict(cls, data_dict, device_cfg=DeviceCfg(), child_dict=None):
+        return super().create_data_dict(data_dict, device_cfg, child_dict)
+
+    def update_niters(self, niters: int):
+        self.num_iters = niters
+
+
+class _GradientDescentOptPortable(PortableOptimizer):
     """Autograd gradient descent with V2's per-problem lifecycle.
 
     The portable implementation intentionally has no CUDA graph or packed
@@ -169,11 +194,12 @@ class GradientDescentOpt(PortableOptimizer):
         if bool((low > high).any().item()):
             raise ValueError("action_bound_lows must not exceed action_bound_highs")
         try:
-            return torch.maximum(torch.minimum(action, high), low)
+            torch.broadcast_shapes(action.shape, low.shape, high.shape)
         except RuntimeError as error:
             raise ValueError(
                 "action bounds must broadcast to [num_problems, action_horizon, action_dim]"
             ) from error
+        return action
 
     def _should_stop(self, previous: torch.Tensor, current: torch.Tensor, iteration: int) -> bool:
         """Update V2-style per-problem convergence and decide batch exit."""
@@ -384,6 +410,50 @@ class GradientDescentOpt(PortableOptimizer):
     def debug_dump(self, file_path=""):
         del file_path
         return None
+
+
+class GradientDescentOpt(_GradientDescentOptPortable):
+    """Pinned declaration façade rebound to the portable tensor lifecycle."""
+
+    def __init__(self, config: GradientDescentOptCfg, rollout_list: List[Rollout], use_cuda_graph: bool = False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self): pass
+    def action_horizon(self): pass
+    def action_step_max(self): pass
+    def compute_metrics(self, action): pass
+    def debug_dump(self, file_path=""): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self) -> bool: pass
+    def get_all_rollout_instances(self): pass
+    def get_recorded_trace(self): pass
+    def horizon(self): pass
+    def opt_dim(self): pass
+    def optimize(self, seed_action: torch.Tensor) -> torch.Tensor: pass
+    def outer_iters(self): pass
+    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False): pass
+    def reset_cuda_graph(self): pass
+    def reset_seed(self): pass
+    def reset_shape(self): pass
+    def shift(self, shift_steps=0): pass
+    def solve_time(self): pass
+    def solver_names(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_niters(self, niters): pass
+    def update_num_problems(self, num_problems): pass
+    def update_rollout_params(self, goal): pass
+    def update_solver_params(self, solver_params): pass
+
+
+def _install_portable_gradient_descent_runtime():
+    for base in reversed(_GradientDescentOptPortable.__mro__):
+        for name, value in base.__dict__.items():
+            if not (name.startswith("__") and name != "__init__"):
+                setattr(GradientDescentOpt, name, value)
+
+
+_install_portable_gradient_descent_runtime()
 
 
 class LineSearchGradientDescentOpt(GradientDescentOpt):

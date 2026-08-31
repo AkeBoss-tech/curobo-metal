@@ -42,7 +42,10 @@ def test_mapping_factory_has_typed_dynamics_and_does_not_mutate_input(tmp_path: 
     assert cfg.cspace.joint_names == ["shoulder"]
     assert cfg.kinematics.collision_spheres == []
     assert isinstance(cfg.dynamics, DynamicsCfg)
-    assert cfg.dynamics.kinematics_config.robot_cfg is cfg.kinematics
+    assert (
+        cfg.dynamics.kinematics_config.robot_cfg
+        is cfg.kinematics.kinematics_config.robot_cfg
+    )
     assert cfg.dynamics.get_gravity().device.type == "cpu"
 
     target = tmp_path / "portable_robot.yml"

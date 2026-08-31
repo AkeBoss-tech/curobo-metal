@@ -8,9 +8,19 @@ SR1 rank-one update.  No CUDA graph or Warp ABI is emulated.
 
 from __future__ import annotations
 
-import torch
+from typing import Any, Dict, List, Optional
 
-from .lbfgs import LBFGSOpt
+import torch
+import torch.autograd.profiler as profiler
+
+from .lbfgs import LBFGSOpt, LBFGSOptCfg
+from curobo._src.util.logging import log_info
+
+# Declaration aliases avoid importing the CUDA-oriented components package
+# during portable optimizer package initialization.
+GradientOptCore = OptimizationIterationState = QuasiNewtonBuffers = None
+Rollout = None
+get_torch_jit_decorator = None
 
 
 def _history_rows(value: torch.Tensor, batch: int, name: str) -> torch.Tensor:
@@ -31,7 +41,7 @@ def jit_lsr1_compute_step_direction(
     epsilon: float,
     stable_mode: bool,
     hessian_0: torch.Tensor,
-) -> torch.Tensor:
+):
     """Return a finite batched L-SR1 inverse-Hessian search direction.
 
     Histories may be portable ``[B, M, N]`` tensors or the pinned kernel's
@@ -87,7 +97,7 @@ def jit_lsr1_compute_step_direction(
     return (-result).reshape_as(grad)
 
 
-class LSR1Opt(LBFGSOpt):
+class _LSR1OptPortable(LBFGSOpt):
     """Batched eager L-SR1 with independent per-problem rank-one history."""
 
     strategy = "lsr1"
@@ -167,6 +177,58 @@ class LSR1Opt(LBFGSOpt):
     def reset_shape(self):
         super().reset_shape()
         self._hessian_0 = None
+
+
+class LSR1Opt(_LSR1OptPortable):
+    """Pinned declaration façade rebound to the portable L-SR1 lifecycle."""
+
+    def __init__(self, config: LBFGSOptCfg, rollout_list: List[Rollout], use_cuda_graph: bool = False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self): pass
+    def action_horizon(self): pass
+    def action_horizon_bounds_highs(self): pass
+    def action_horizon_bounds_lows(self): pass
+    def action_horizon_step_max(self): pass
+    def action_step_max(self): pass
+    def compute_metrics(self, action): pass
+    def config(self): pass
+    def debug_dump(self, file_path=""): pass
+    def device_cfg(self): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self): pass
+    def get_all_rollout_instances(self): pass
+    def get_recorded_trace(self): pass
+    def horizon(self): pass
+    def opt_dim(self): pass
+    def opt_dt(self, value): pass
+    def optimize(self, seed_action): pass
+    def outer_iters(self): pass
+    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False): pass
+    def reset_cuda_graph(self): pass
+    def reset_seed(self): pass
+    def reset_shape(self): pass
+    def rollout_fn(self): pass
+    def shift(self, shift_steps=0): pass
+    def solve_time(self): pass
+    def solver_names(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_niters(self, niters): pass
+    def update_num_problems(self, num_problems): pass
+    def update_rollout_params(self, goal): pass
+    def update_solver_params(self, solver_params): pass
+    def use_cuda_graph(self): pass
+
+
+def _install_portable_lsr1_runtime():
+    for base in reversed(_LSR1OptPortable.__mro__):
+        for name, value in base.__dict__.items():
+            if not (name.startswith("__") and name != "__init__"):
+                setattr(LSR1Opt, name, value)
+
+
+_install_portable_lsr1_runtime()
 
 
 __all__ = ["LSR1Opt", "jit_lsr1_compute_step_direction"]

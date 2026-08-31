@@ -127,12 +127,12 @@ class RobotRolloutCfg:
     @classmethod
     def create_with_component_types(
         cls,
-        data_dict: Dict[str, Any],
-        robot_cfg: Union[Dict[str, Any], RobotCfg],
+        data_dict: Dict,
+        robot_cfg: Union[Dict, RobotCfg],
         device_cfg: DeviceCfg = DeviceCfg(),
         transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
         cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,
-    ) -> "RobotRolloutCfg":
+    ):
         """Compile a YAML-style rollout mapping without mutating the caller's data.
 
         The created config retains every V2 field and uses the caller-selected
@@ -160,7 +160,7 @@ class RobotRolloutCfg:
             cost_manager_config_instance_type=cost_manager_config_instance_type,
         )
 
-    def get_cost_manager_configs(self, include_constraint_cfg: bool = True) -> list[RobotCostManagerCfg]:
+    def get_cost_manager_configs(self, include_constraint_cfg: bool = True) -> List[RobotCostManagerCfg]:
         """Return configured managers in the pinned cost/constraint order."""
         values = [self.cost_cfg]
         if include_constraint_cfg:

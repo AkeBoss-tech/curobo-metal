@@ -1,0 +1,150 @@
+{
+  "backend": "cuda",
+  "capability": "optim.lbfgs",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "action_range_batch_solve",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "unstable_mode_disabled",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "bounded_config",
+        "alternate_config",
+        "reset_lifecycle",
+        "debug_trace",
+        "nonfinite_termination",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "dc66594d0d2b722efb22cf16a1031ef318a1d1d798444524069be86eb45bed9d",
+  "input_tensor_count": 5,
+  "operation": "lbfgs",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "ad191ffb0caaf05f666f8030c92b8b6f6b5c7381b8fa4eb270298d2a26c18c81",
+    "tensors": {
+      "batch_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "bounds_satisfied": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "convergence_code": {
+        "dtype": "int8",
+        "shape": [
+          3
+        ]
+      },
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "final_objective": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "initial_objective": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          6
+        ]
+      },
+      "nonfinite_status": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "objective_improved": {
+        "dtype": "bool",
+        "shape": [
+          3
+        ]
+      },
+      "projected_optimality_norm": {
+        "dtype": "float32",
+        "shape": [
+          3
+        ]
+      },
+      "reset_equivalent": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "solution": {
+        "dtype": "float32",
+        "shape": [
+          3,
+          3,
+          2
+        ]
+      },
+      "solution_shape": {
+        "dtype": "int64",
+        "shape": [
+          3
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 2e-05,
+    "rtol": 0.0002
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

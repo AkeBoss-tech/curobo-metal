@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from importlib import import_module
+import os
+from typing import Any, Optional
+
+import curobo._src.runtime as runtime
+from curobo._src.util.logging import log_and_raise, log_info, log_warn
 
 
 class _BackendProxy:
@@ -16,11 +21,11 @@ class _BackendProxy:
         return getattr(module, attr)
 
 
-def get_backend_name():
+def get_backend_name() -> str:
     return "portable"
 
 
-def get_backend():
+def get_backend() -> dict:
     return {name: _BackendProxy(name) for name in _BackendProxy._MODULES}
 
 

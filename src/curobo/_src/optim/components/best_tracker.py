@@ -7,10 +7,22 @@ from typing import Optional
 import torch
 
 from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.optim.gradient.update_best_solution import update_best_solution
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
-class BestTracker:
+class _BestTrackerPortableMixin:
+    @property
+    def best_cost(self) -> Optional[torch.Tensor]:
+        return self.cost
+
+    @property
+    def best_action(self) -> Optional[torch.Tensor]:
+        return self.action
+
+
+class BestTracker(_BestTrackerPortableMixin):
     """Track the best cost/action and convergence age for each problem.
 
     The buffers deliberately mirror V2's public fields while relying only on
@@ -20,8 +32,8 @@ class BestTracker:
     _initial_cost = 5_000_000.0
     _reset_cost = 5_000_000_000_000.0
 
-    def __init__(self, device_cfg: Optional[DeviceCfg] = None, *_, **__) -> None:
-        self.device_cfg = device_cfg if device_cfg is not None else DeviceCfg()
+    def __init__(self, device_cfg: DeviceCfg):
+        self.device_cfg = device_cfg
         if not isinstance(self.device_cfg, DeviceCfg):
             raise TypeError("device_cfg must be a DeviceCfg")
         self.cost: Optional[torch.Tensor] = None
@@ -31,16 +43,7 @@ class BestTracker:
         self.previous_step_direction: Optional[torch.Tensor] = None
         self.converged: Optional[torch.Tensor] = None
 
-    # Backward-compatible aliases from the first portable surface.
-    @property
-    def best_cost(self) -> Optional[torch.Tensor]:
-        return self.cost
-
-    @property
-    def best_action(self) -> Optional[torch.Tensor]:
-        return self.action
-
-    def resize(self, num_problems: int, action_horizon: int, action_dim: int) -> None:
+    def resize(self, num_problems: int, action_horizon: int, action_dim: int):
         num_problems, action_horizon, action_dim = map(int, (num_problems, action_horizon, action_dim))
         if min(num_problems, action_horizon, action_dim) <= 0:
             raise ValueError("num_problems, action_horizon, and action_dim must be positive")
@@ -59,7 +62,7 @@ class BestTracker:
         assert self.current_iteration is not None and self.converged is not None
         return self.cost, self.action, self.iteration, self.current_iteration, self.converged
 
-    def clear(self, mask: Optional[torch.Tensor] = None) -> None:
+    def clear(self, mask: Optional[torch.Tensor] = None):
         """Clear all or selected tracker entries in place."""
         cost, action, iteration, current_iteration, converged = self._require_initialized()
         if mask is None:
@@ -76,7 +79,7 @@ class BestTracker:
         self.previous_step_direction[mask] = 0.0
         converged[mask] = 0
 
-    def reset(self) -> None:
+    def reset(self):
         self.clear()
 
     @staticmethod

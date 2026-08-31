@@ -33,7 +33,7 @@ def test_portable_getting_started_flows(device: str) -> None:
     evidence = json.loads(result.stdout)
     assert evidence["device"] == device
     assert evidence["forward_kinematics"]["dof"] == 7
-    assert evidence["forward_kinematics"]["sphere_count"] == 61
+    assert evidence["forward_kinematics"]["sphere_count"] == 65
     assert evidence["forward_kinematics"]["gradient_norm"] > 0
     assert evidence["inverse_kinematics"]["success"]
     assert evidence["inverse_kinematics"]["solution_device"] == device

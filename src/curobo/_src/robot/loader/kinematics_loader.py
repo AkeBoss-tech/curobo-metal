@@ -9,12 +9,17 @@ to expose CUDA/Warp ABI buffers.
 
 from __future__ import annotations
 
+import copy
+from collections import Counter
 from copy import deepcopy
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
+import torch.autograd.profiler as profiler
 
+from curobo._src.curobolib.cuda_ops.kinematics import KinematicsFusedFunction
+from curobo._src.geom.types import tensor_sphere
 from curobo._src.robot.parser import UrdfRobotParser
 from curobo._src.robot.types import (
     CSpaceParams, JointLimits, KinematicsParams, LinkParams, SelfCollisionKinematicsCfg,
@@ -22,6 +27,8 @@ from curobo._src.robot.types import (
 from curobo._src.robot.types.joint_types import JointType
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.pose import Pose
+from curobo._src.state.state_joint_ops import append_joints_to_state
+from curobo._src.util.logging import log_and_raise
 from curobo_metal.config.robot import CSpaceConfig, CollisionSphere, JointConfig, JointLimits as ScalarJointLimits, LinkConfig
 from curobo_metal.config.loaders import load_urdf
 
@@ -75,20 +82,20 @@ class KinematicsLoader(KinematicsLoaderCfg):
         return self._self_collision_data
 
     @property
-    def kinematics_parser(self) -> UrdfRobotParser:
+    def kinematics_parser(self):
         """Parser for the original URDF plus configured portable extra links."""
         return self._parser
 
     @property
-    def joint_names(self) -> List[str]:
+    def _portable_joint_names(self) -> List[str]:
         return self._robot.joint_names.copy()
 
     @property
-    def num_dof(self) -> int:
+    def _portable_num_dof(self) -> int:
         return self._num_dof
 
     @property
-    def total_spheres(self) -> int:
+    def _portable_total_spheres(self) -> int:
         return self._kinematics_config.total_spheres
 
     def _apply_config_to_robot(self) -> None:
@@ -106,8 +113,48 @@ class KinematicsLoader(KinematicsLoaderCfg):
         self._set_cspace()
         for link in self.extra_links.values():
             self._append_link(link)
+        self._validate_configured_cspace()
+        self.non_fixed_joint_names = [
+            joint.name for joint in self._robot.joints
+            if joint.kind != "fixed" and joint.mimic_joint is None
+        ]
         self._apply_locked_joints()
         self._validate_model_references()
+
+    def _validate_configured_cspace(self) -> None:
+        names = list(self._robot.cspace.joint_names)
+        locked = set(self.lock_joints or {})
+        if len(names) != len(set(names)):
+            raise ValueError("cspace contains duplicate joint names")
+        joints = {joint.name: joint for joint in self._robot.joints}
+        active = {
+            joint.name for joint in self._robot.joints
+            if joint.kind != "fixed" and joint.mimic_joint is None
+        }
+        mimic = {joint.name: joint.mimic_joint for joint in self._robot.joints if joint.mimic_joint}
+        mimic_locks = sorted(locked & set(mimic))
+        if mimic_locks:
+            raise ValueError(
+                f"mimic lock joints {mimic_locks} are invalid; lock the active joint instead"
+            )
+        absent = sorted(locked - set(joints) - set(names))
+        if absent:
+            raise ValueError(
+                f"configured lock joints {absent} were not found in the kinematic tree or cspace"
+            )
+        non_parser_locks = sorted((locked & set(names)) - active)
+        if non_parser_locks:
+            raise ValueError(
+                f"configured cspace lock joints {non_parser_locks} are not parser actuated joints"
+            )
+        cspace_only = sorted(set(names) - active - locked)
+        if cspace_only:
+            raise ValueError(
+                f"cspace joints {cspace_only} are not active in the configured tree"
+            )
+        missing = sorted(active - set(names) - locked)
+        if missing:
+            raise ValueError(f"cspace is missing active tree joints: {missing}")
 
     def _set_collision_spheres(self) -> None:
         spheres: List[CollisionSphere] = []
@@ -121,6 +168,7 @@ class KinematicsLoader(KinematicsLoaderCfg):
     def _set_cspace(self) -> None:
         if self.cspace is None:
             return
+        self._robot.metadata["cspace_configured"] = True
         source = self.cspace
         # RobotCfg deliberately stores serializable lists.  The public loader
         # configuration retains its tensor-valued CSpaceParams separately, so
@@ -196,36 +244,25 @@ class KinematicsLoader(KinematicsLoaderCfg):
             self._robot.metadata["lock_joints"] = {}
             self.lock_jointstate = None
             return
-        available = {joint.name: joint for joint in self._robot.joints}
-        unknown = sorted(set(locked) - set(available))
-        if unknown:
-            raise ValueError(f"lock_joints contain unknown joints: {unknown}")
-        active = set(self._robot.joint_names)
-        mimic_names = {joint.name for joint in self._robot.joints if joint.mimic_joint is not None}
-        invalid = sorted((set(locked) - active) | (set(locked) & mimic_names))
-        if invalid:
-            raise ValueError(
-                "lock_joints must name independent active joints; lock the mimic source instead: "
-                f"{invalid}"
-            )
-        for name, value in locked.items():
-            joint = available[name]
-            if joint.kind == "revolute" and float(value) != 0.0:
-                raise NotImplementedError(
-                    "locking a nonzero revolute joint requires transform composition"
-                )
-            if joint.kind == "prismatic":
-                joint.xyz = tuple(origin + float(value) * axis for origin, axis in zip(joint.xyz, joint.axis))
-            joint.kind = "fixed"
-        old_names = list(self._robot.cspace.joint_names)
-        defaults = dict(zip(old_names, self._robot.cspace.default_joint_position))
-        self._robot.cspace.joint_names = [name for name in old_names if name not in locked]
-        self._robot.cspace.default_joint_position = [
-            defaults[name] for name in self._robot.cspace.joint_names
-        ]
         self._robot.metadata["lock_joints"] = dict(locked)
+        from curobo._src.robot.kinematics.kinematics_cfg import _apply_locked_joints
+
+        _apply_locked_joints(self._robot)
         self.lock_jointstate = JointState.from_position(
             self.device_cfg.to_device(list(locked.values())), joint_names=list(locked)
+        )
+
+    def _get_link_poses(self, q, query_link_names, kinematics_config):
+        """Evaluate portable FK for loader-internal lock transform queries."""
+        from curobo._src.robot.kinematics.kinematics import Kinematics
+
+        state = Kinematics(kinematics_config).compute_kinematics(
+            JointState.from_position(q, joint_names=kinematics_config.joint_names)
+        )
+        poses = [state.tool_poses[name] for name in query_link_names]
+        return Pose(
+            torch.stack([pose.position.reshape(-1, 3)[0] for pose in poses]).unsqueeze(0),
+            torch.stack([pose.quaternion.reshape(-1, 4)[0] for pose in poses]).unsqueeze(0),
         )
 
     def _validate_model_references(self) -> None:
@@ -246,7 +283,7 @@ class KinematicsLoader(KinematicsLoaderCfg):
         # in the currently compiled pair bank, so preserve rather than reject
         # them here.
 
-    def initialize_tensors(self) -> None:
+    def initialize_tensors(self):
         """Rebuild all cached portable metadata from the current robot model."""
         self._validate_model_references()
         self._kinematics_config = KinematicsParams(self._robot)
@@ -255,7 +292,7 @@ class KinematicsLoader(KinematicsLoaderCfg):
         self._kinematics_config.make_contiguous()
         self._joint_limits = self._kinematics_config.joint_limits
         self._num_dof = self._kinematics_config.num_dof
-        self.non_fixed_joint_names = self._kinematics_config.non_fixed_joint_names
+        self.cspace = self._kinematics_config.cspace
         self._self_collision_data = self._build_self_collision_config()
 
     def _build_self_collision_config(self) -> SelfCollisionKinematicsCfg:
@@ -305,7 +342,7 @@ class KinematicsLoader(KinematicsLoaderCfg):
             num_spheres=params.total_spheres, sphere_padding=full_padding, collision_pairs=pairs,
         )
 
-    def add_link(self, link_params: LinkParams) -> None:
+    def add_link(self, link_params: LinkParams):
         """Add an extra link and atomically rebuild portable cached metadata."""
         if not isinstance(link_params, LinkParams):
             raise TypeError("link_params must be a LinkParams")
@@ -321,7 +358,7 @@ class KinematicsLoader(KinematicsLoaderCfg):
         parent_link_name: str,
         joint_name: Optional[str] = None,
         transform: Optional[Pose] = None,
-    ) -> None:
+    ):
         """Add a fixed link with an identity or caller-provided rigid offset."""
         if transform is None:
             matrix = np.concatenate((np.eye(3), np.zeros((3, 1))), axis=1)
@@ -370,5 +407,9 @@ class KinematicsLoader(KinematicsLoaderCfg):
 
 
 from curobo._src.state.state_joint import JointState  # kept as pinned public re-export
+
+KinematicsLoader.joint_names = KinematicsLoader._portable_joint_names
+KinematicsLoader.num_dof = KinematicsLoader._portable_num_dof
+KinematicsLoader.total_spheres = KinematicsLoader._portable_total_spheres
 
 __all__ = ["KinematicsLoader"]

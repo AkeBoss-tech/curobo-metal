@@ -14,13 +14,20 @@ from dataclasses import dataclass, fields, is_dataclass
 from typing import Any, Mapping, Optional, Sequence, Union
 
 import torch
+import torch.autograd.profiler as profiler
 
+import curobo._src.runtime as curobo_runtime
+from curobo._src.rollout.metrics import RolloutMetrics
+from curobo._src.runtime import debug as debug_mode
 from curobo._src.solver.solver_base_result import BaseSolverResult, _select_batch_value
 from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_joint_trajectory_ops import (
     copy_joint_state_at_batch_seed_indices,
     gather_joint_state_by_seed,
+    trim_joint_state_trajectory,
 )
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 def _clone_value(value: Any) -> Any:
@@ -75,7 +82,7 @@ def _gather_seed_value(value: Any, indices: torch.Tensor, seed_shape: tuple[int,
 
 
 @dataclass
-class TrajOptSolverResult(BaseSolverResult):
+class _PortableTrajOptSolverResult(BaseSolverResult):
     """Trajectory optimisation output with portable batch/seed operations.
 
     Tensor data follows cuRobo's public ``[batch, seed, ...]`` convention.  The
@@ -457,6 +464,48 @@ class TrajOptSolverResult(BaseSolverResult):
                 "interpolated metric values must provide copy_at_batch_seed_indices for portable seed merging"
             )
         copy(source_metrics, batch_idx, seed_idx)
+
+
+@dataclass
+class TrajOptSolverResult(_PortableTrajOptSolverResult):
+    """Pinned V2 declaration facade over the portable trajectory result."""
+
+    solution: Optional[torch.Tensor] = None
+    js_solution: Optional[JointState] = None
+    interpolated_trajectory: Optional[JointState] = None
+    interpolated_last_tstep: Optional[torch.Tensor] = None
+    interpolated_metrics: Optional[RolloutMetrics] = None
+    maximum_trajectory_dt: Optional[torch.Tensor] = None
+    minimum_trajectory_dt: Optional[torch.Tensor] = None
+
+    def copy_at_batch_indices(self, other: "TrajOptSolverResult", mask: torch.Tensor) -> None:
+        _PortableTrajOptSolverResult.copy_at_batch_indices(self, other, mask)
+
+    def motion_time(self) -> torch.Tensor:
+        return _PortableTrajOptSolverResult.motion_time(self)
+
+    @profiler.record_function("trajopt_solver_result/clone")
+    @get_torch_jit_decorator(only_valid_for_compile=True, slow_to_compile=True)
+    def clone(self) -> TrajOptSolverResult:
+        return _PortableTrajOptSolverResult.clone(self)
+
+    @profiler.record_function("trajopt_solver_result/get_interpolated_plan")
+    def get_interpolated_plan(self) -> JointState:
+        return _PortableTrajOptSolverResult.get_interpolated_plan(self)
+
+    @profiler.record_function("trajopt_solver_result/process_metrics_and_rank_seeds")
+    def process_metrics_and_rank_seeds(self):
+        _PortableTrajOptSolverResult.process_metrics_and_rank_seeds(self)
+
+    @profiler.record_function("trajopt_solver_result/get_topk_seeds")
+    @get_torch_jit_decorator(only_valid_for_compile=True, slow_to_compile=True)
+    def get_topk_seeds(self, topk: int) -> TrajOptSolverResult:
+        return _PortableTrajOptSolverResult.get_topk_seeds(self, topk)
+
+    @profiler.record_function("trajopt_solver_result/copy_successful_solutions")
+    @get_torch_jit_decorator(only_valid_for_compile=True, slow_to_compile=True)
+    def copy_successful_solutions(self, other: TrajOptSolverResult):
+        _PortableTrajOptSolverResult.copy_successful_solutions(self, other)
 
 
 __all__ = ["TrajOptSolverResult"]

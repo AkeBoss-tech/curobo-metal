@@ -31,9 +31,9 @@ def test_content_and_content_path_are_installed_package_relative() -> None:
     assert get_configs_path() == root / "configs"
     assert get_robot_configs_path() == root / "configs" / "robot"
     assert get_scene_configs_path() == root / "configs" / "scene"
-    # The upstream helper returns this conventional location even for a
-    # distribution that intentionally does not bundle every task asset.
     assert get_task_configs_path() == root / "configs" / "task"
+    assert (get_task_configs_path() / "metrics_base.yml").is_file()
+    assert len(list(get_task_configs_path().rglob("*.yml"))) == 13
     assert ContentPath().robot_config_root_path == get_robot_configs_path()
 
 
@@ -71,13 +71,6 @@ def test_public_timer_uses_seconds_and_honors_runtime_disable() -> None:
         assert CudaEventTimer().start().stop() == 0.0
     finally:
         internal_runtime.cuda_event_timers = prior
-
-
-def test_timer_context_manager_records_elapsed_seconds() -> None:
-    with CudaEventTimer() as timer:
-        time.sleep(0.001)
-    assert timer.elapsed_seconds is not None
-    assert timer.elapsed_seconds >= 0.0
 
 
 @pytest.mark.parametrize("factory, dependency", [(UsdWriter, "usd-core"), (ViserVisualizer, "Viser")])

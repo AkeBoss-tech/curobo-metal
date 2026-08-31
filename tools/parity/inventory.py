@@ -18,6 +18,8 @@ CLASSES = (
     "external_integration_only",
     "evidence_blocked",
 )
+PAIRED_REPORT = Path("artifacts/parity/cuda-replay/paired-report-2026-08-26-matrix.json")
+PAIRED_CUDA_ROOT = Path("artifacts/parity/cuda-replay/2026-08-26")
 
 # The inventory is deliberately curated.  AST validation prevents stale source
 # citations, but classification remains an audit decision based on the cited
@@ -306,6 +308,41 @@ def checked_evidence(root: Path, evidence: tuple[str, str], label: str) -> dict[
     return {"path": relative, "symbol": symbol, "line": line_for(path, symbol)}
 
 
+def checked_paired_capabilities(repository: Path) -> set[str]:
+    """Return capabilities certified by the committed full-matrix CUDA replay."""
+    report_path = repository / PAIRED_REPORT
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if (
+        report.get("format") != "curobo-metal-paired-report"
+        or report.get("upstream_revision") != PIN
+        or report.get("passed") is not True
+        or report.get("errors") != []
+    ):
+        raise SystemExit(f"paired evidence is not promotable: {PAIRED_REPORT}")
+    required = set(report.get("required_capabilities", ()))
+    passed = {
+        row["capability"]
+        for row in report.get("results", ())
+        if row.get("passed") is True
+    }
+    if not required or passed != required:
+        raise SystemExit("paired report does not pass every required capability")
+    for capability in sorted(required):
+        metal = json.loads(
+            (repository / "artifacts/parity/replay" / capability / "metal-manifest.json").read_text()
+        )
+        cuda = json.loads(
+            (repository / PAIRED_CUDA_ROOT / capability / "cuda-manifest.json").read_text()
+        )
+        if metal["input"]["sha256"] != cuda["input_sha256"]:
+            raise SystemExit(f"paired input provenance mismatch: {capability}")
+        for backend, manifest in (("metal", metal), ("cuda", cuda)):
+            evidence = manifest.get("evidence", {})
+            if not all(evidence.get(kind, {}).get("executed") is True for kind in ("invalid", "edge", "matrix")):
+                raise SystemExit(f"incomplete {backend} evidence matrix: {capability}")
+    return required
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--upstream", type=Path, required=True)
@@ -317,9 +354,22 @@ def main() -> None:
     if actual != PIN:
         raise SystemExit(f"expected upstream {PIN}, found {actual}")
 
+    paired_capabilities = checked_paired_capabilities(repository)
     records = []
     for capability in CAPABILITIES:
         classification = capability["classification"]
+        paired_evidence = None
+        boundary = capability["boundary"]
+        evidence_needed = capability.get("evidence_needed")
+        if capability["id"] in paired_capabilities:
+            classification = "semantically_equivalent"
+            evidence_needed = None
+            paired_evidence = str(PAIRED_REPORT)
+            boundary = (
+                boundary
+                + " Fresh paired Metal/CUDA replay against the pinned revision passed its "
+                  "invalid, edge, and multi-case matrix on 2026-08-26."
+            )
         if classification not in CLASSES:
             raise AssertionError(classification)
         test_evidence = []
@@ -335,9 +385,10 @@ def main() -> None:
                 "area": capability["id"].split(".", 1)[0],
                 "capability": capability["id"].split(".", 1)[1],
                 "classification": classification,
-                "boundary": capability["boundary"],
+                "boundary": boundary,
                 "implementable_gaps": capability["implementable_gaps"],
-                "evidence_needed": capability.get("evidence_needed"),
+                "evidence_needed": evidence_needed,
+                "paired_evidence": paired_evidence,
                 "upstream_evidence": checked_evidence(upstream, capability["upstream"], "upstream"),
                 "local_evidence": None if local is None else checked_evidence(repository, local, "local"),
                 "test_evidence": test_evidence,

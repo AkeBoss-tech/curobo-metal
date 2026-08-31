@@ -1,0 +1,104 @@
+{
+  "backend": "cuda",
+  "capability": "collision.voxel_esdf_query",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "grid_boundary",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "bad_environment",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "in_bounds",
+        "out_of_bounds",
+        "tie_winner",
+        "active_grid",
+        "multi_environment",
+        "cache_repeat",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "f1130ef98edfa1fef2273e4dbd59d0a19c56bf5bac39bba7b1c23e2eb9b22842",
+  "input_tensor_count": 12,
+  "operation": "voxel_esdf",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "ab287cd1368126a148324defa550611add3c25f1f0c6411eb0f9b0e794ef6b2b",
+    "tensors": {
+      "distance": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          2
+        ]
+      },
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          7
+        ]
+      },
+      "valid": {
+        "dtype": "bool",
+        "shape": [
+          1,
+          2
+        ]
+      },
+      "winner": {
+        "dtype": "int64",
+        "shape": [
+          1,
+          2
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 3e-06,
+    "rtol": 3e-05
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

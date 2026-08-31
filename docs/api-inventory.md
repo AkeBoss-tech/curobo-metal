@@ -3,8 +3,8 @@
 Phase 1 records the statically recoverable Python API of cuRoboV2 commit
 `8e734f3ced1df898990bcd92de40abce475907db`. The checked-in inventory is
 [`artifacts/api_compat/upstream-api.json`](../artifacts/api_compat/upstream-api.json).
-It is a baseline for compatibility work; it is not a claim that every upstream
-API is already implemented.
+The strict static surface is now exact at 361/361 modules. The inventory remains
+non-behavioral evidence and does not prove runtime semantics or backend ABI.
 
 ## What is inventoried
 
@@ -75,8 +75,8 @@ python tools/api_compat/generate.py \
 ```
 
 `--check` fails when the file is missing or stale. `--require-compatible` adds a
-strict drop-in gate and fails while any module is partial or missing. It is
-separate because Phase 1 intentionally establishes the gap baseline.
+strict static drop-in gate; it currently passes at 361/361 exact modules. It
+remains separate because static equality alone is not behavioral equivalence.
 
 The generator resolves `HEAD^{commit}` and refuses every revision other than the
 pin. There is no override. Neither upstream nor local modules are imported, so

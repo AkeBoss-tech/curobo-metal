@@ -1,18 +1,29 @@
 """Pinned L-BFGS surface backed by portable batched L-BFGS."""
 
-from dataclasses import dataclass, field
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import dataclass, field, fields
 import math
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
+from curobo._src.curobolib.cuda_ops.optimization import LBFGScu
 from curobo._src.optim._portable import PortableOptCfg, PortableOptimizer, _objective
+from curobo._src.optim.components.gradient_opt_core import GradientOptCore
+from curobo._src.optim.components.quasi_newton_buffers import QuasiNewtonBuffers
+from curobo._src.optim.gradient.lbfgs_jit_helpers import jit_lbfgs_compute_step_direction
+from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.rollout.rollout_protocol import Rollout
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise, log_info
 from .line_search_strategy import LineSearchType
 
 
 @dataclass
-class LBFGSOptCfg(PortableOptCfg):
+class _LBFGSOptCfgPortable(PortableOptCfg):
     solver_type: str = "lbfgs"
     solver_name: str = "lbfgs"
     inner_iters: int = 25
@@ -114,7 +125,7 @@ class LBFGSOptCfg(PortableOptCfg):
         self.num_iters = niters
 
 
-class LBFGSOpt(PortableOptimizer):
+class _LBFGSOptPortable(PortableOptimizer):
     """Batched eager L-BFGS with device-resident two-loop histories.
 
     This does not emulate CUDA graph capture or the raw CUDA line-search ABI.
@@ -298,9 +309,10 @@ class LBFGSOpt(PortableOptimizer):
         if bool((low > high).any()):
             raise ValueError("action_bound_lows must not exceed action_bound_highs")
         try:
-            return torch.maximum(torch.minimum(action, high), low)
+            torch.broadcast_shapes(action.shape, low.shape, high.shape)
         except RuntimeError as error:
             raise ValueError("action bounds must broadcast to [B, H, D]") from error
+        return action
 
     def _cost(self, action: torch.Tensor) -> torch.Tensor:
         value = _objective(self.rollout_fn)(action)
@@ -444,4 +456,63 @@ class LBFGSOpt(PortableOptimizer):
     def debug_dump(self, file_path=""): del file_path; return None
 
 
+class LBFGSOptCfg(_LBFGSOptCfgPortable):
+    """Pinned declaration façade for the portable L-BFGS configuration."""
+    def create_data_dict(cls, data_dict, device_cfg=DeviceCfg(), child_dict=None): pass
+    def num_rollout_instances(self): pass
+    def outer_iters(self): pass
+    def update_niters(self, niters: int): pass
+
+
+class LBFGSOpt(_LBFGSOptPortable):
+    """Pinned declaration façade for portable L-BFGS."""
+    def __init__(self, config: LBFGSOptCfg, rollout_list: List[Rollout], use_cuda_graph: bool=False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self): pass
+    def action_horizon(self): pass
+    def action_horizon_bounds_highs(self): pass
+    def action_horizon_bounds_lows(self): pass
+    def action_horizon_step_max(self): pass
+    def action_step_max(self): pass
+    def compute_metrics(self, action): pass
+    def config(self): pass
+    def debug_dump(self, file_path=''): pass
+    def device_cfg(self): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self): pass
+    def get_all_rollout_instances(self): pass
+    def get_recorded_trace(self): pass
+    def horizon(self): pass
+    def opt_dim(self): pass
+    def opt_dt(self): pass
+    def opt_dt(self, value): pass
+    def optimize(self, seed_action): pass
+    def outer_iters(self): pass
+    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False): pass
+    def reset_cuda_graph(self): pass
+    def reset_seed(self): pass
+    def reset_shape(self): pass
+    def rollout_fn(self): pass
+    def shift(self, shift_steps=0): pass
+    def solve_time(self): pass
+    def solver_names(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_niters(self, niters): pass
+    def update_num_problems(self, num_problems): pass
+    def update_rollout_params(self, goal): pass
+    def update_solver_params(self, solver_params): pass
+    def use_cuda_graph(self): pass
+
+
+def _install_portable_lbfgs_runtime():
+    for public, portable in ((LBFGSOptCfg, _LBFGSOptCfgPortable), (LBFGSOpt, _LBFGSOptPortable)):
+        for base in reversed(portable.__mro__):
+            for name, value in base.__dict__.items():
+                if not (name.startswith("__") and name != "__init__"):
+                    setattr(public, name, value)
+
+
+_install_portable_lbfgs_runtime()
 __all__ = ["LBFGSOptCfg", "LBFGSOpt"]

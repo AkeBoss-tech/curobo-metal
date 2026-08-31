@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "round": 1,
+  "gauntlet": "pinned-curobo-v2-consistency",
+  "slice": "unchanged-upstream-foundations",
+  "status": "accepted",
+  "upstream": {
+    "repository": "https://github.com/NVlabs/curobo.git",
+    "revision": "8e734f3ced1df898990bcd92de40abce475907db",
+    "conftest_sha256": "cd9d99c1b8f1095a99fd3044e55d3e44feed0341ae9122d99507726e5d3a093f"
+  },
+  "wheel": {
+    "filename": "curobo_metal-0.1.0a1-py3-none-any.whl",
+    "sha256": "b864ba9754f4a001d54871a5bb3e118ae174b99bf60862994d89fb3a97d7aa7b",
+    "version": "0.1.0a1",
+    "import_path": "/tmp/curobo-gauntlet-round1.phFs4d/venv/lib/python3.13/site-packages/curobo/__init__.py",
+    "imported_from_site_packages": true
+  },
+  "environment": {
+    "python": "3.13.9",
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "torch": "2.13.0",
+    "mps_built": true,
+    "mps_available": true,
+    "pytorch_enable_mps_fallback": "0"
+  },
+  "pytest": {
+    "source_unchanged": true,
+    "upstream_conftest_active": true,
+    "collected": 135,
+    "passed": 135,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "xfailed": 0,
+    "duration_seconds": 0.58
+  },
+  "modules": {
+    "curobo.tests.test_curobo_version": "999b25f52de7d100fe4848fed764497ee0fe56dcadd2bbc973208b3470733033",
+    "curobo.tests._src.cost.test_cost_types": "3590caab49515e3f6620ff80b2d10530629edd0014adabe2186e3c3766f2eca1",
+    "curobo.tests._src.types.test_control_space": "f15e9a53852fe1159966c960cd0e91ba5aac0436789e4705d0c20ca76a3a5ae0",
+    "curobo.tests._src.solver.test_solve_mode": "edf71088bd3fcc280f33b0ab27adfeea5f3b3ac598e08cd3710fb4a7e5fe2872",
+    "curobo.tests._src.state.test_filter_coeff": "c6d48c61b3ed45954bdfa87c7105e848452e1c787c670b47430b0b0377acd7c7",
+    "curobo.tests._src.util.test_logging": "455be4fec6bbde8d013e8e3b6cd144b2f57a383f7dfed8caae1831e9a7db2aca",
+    "curobo.tests._src.util.test_python_util": "a9d6f4cedad8910cb5f64f7e606ec7ffb7fd6235e99b9a9375d97f4af4d3f409",
+    "curobo.tests._src.types.test_content_path": "53851b1bf83e6bef4197af2023c78e204d9171d39086ca29dab049ebc3b6b3a4",
+    "curobo.tests._src.util.test_config_io": "c68ed8353fcd3ec50953c4db3eecf3c6d98a0577217c5311eacb6feb58572dfa"
+  },
+  "before": {
+    "upstream_workloads_reviewed": 14,
+    "upstream_workloads_unreviewed": 211
+  },
+  "after": {
+    "upstream_workloads_reviewed": 23,
+    "upstream_workloads_unreviewed": 202
+  },
+  "critic_notes": [
+    "This proves only the nine listed unchanged modules against this wheel hash.",
+    "It does not establish CUDA/Metal numerical equivalence or broader public API parity.",
+    "The separate upstream test_version.py remains red and is not included in this accepted batch."
+  ]
+}

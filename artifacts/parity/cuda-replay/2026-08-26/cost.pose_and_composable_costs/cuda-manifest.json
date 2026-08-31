@@ -1,0 +1,94 @@
+{
+  "backend": "cuda",
+  "capability": "cost.pose_and_composable_costs",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "zero_pose_error",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "invalid_pose_cost_input",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "zero_error",
+        "weighted_pose",
+        "composed_aggregation",
+        "noncontiguous_error",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "446b13a3aef4d9f1eb6bff3e8508a87e5a22905205f43dd6e78bbdb151d03213",
+  "input_tensor_count": 3,
+  "operation": "pose_costs",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "f3ebaa1e725dbf01314890940dc668ddf40a9e4b577339b6245f1a5e62ef5ead",
+    "tensors": {
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          5
+        ]
+      },
+      "position_gradient": {
+        "dtype": "float32",
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "value": {
+        "dtype": "float32",
+        "shape": [
+          2
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 2e-06,
+    "rtol": 2e-05
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

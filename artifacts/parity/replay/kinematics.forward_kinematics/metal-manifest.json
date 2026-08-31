@@ -3,7 +3,7 @@
   "capability": "kinematics.forward_kinematics",
   "corpus": {
     "case_file": "kinematics.forward_kinematics.json",
-    "case_sha256": "9bca90c535eddb7281144f8f825acf8438f07abe0aba0542ff2a471450a251b3",
+    "case_sha256": "cfab1086589f0b37e4fa34756d24afde6f06f2151f554080feb647c70b4585b5",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,19 +21,32 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "zero",
+        "one",
+        "many",
+        "noncontiguous",
+        "tree_links",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "fk",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "a73cdab8d12d3b9e3f6c223050b38b48631268e19a9160f5255b2ef4cb2ff96d"
+    "sha256": "0cfdc3958d76c8ebd933a070ca165b1e946dfabe7c8d24ccf0d98c6ba1233760"
   },
   "operation": "forward_kinematics",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "af4cf51ae8168b91d2447fad50942790579ff033a168744340f0ca2f348d026e"
+    "sha256": "66af5fbdcfc0be6075eb25757917a418a354dcd6b6351160e5119f07a498a730"
   },
   "runtime": {
     "python": "3.13.9",

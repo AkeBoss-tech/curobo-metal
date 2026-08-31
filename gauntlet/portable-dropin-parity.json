@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "name": "pinned-curobo-v2-portable-dropin-parity",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "goal": "Every upstream user-observable behavior that can exist on Apple Silicon executes against the installed curobo-metal wheel; mechanism-only CUDA exclusions are narrow and case-specific.",
+  "source_disposition": "platform_substituted",
+  "completion_policy": {
+    "allow_failing_portable_cases_while_implementing": true,
+    "allow_collection_errors": false,
+    "allow_unreviewed_skips": false,
+    "allow_module_wide_exclusions": false,
+    "require_case_level_mechanism_exclusions": true,
+    "require_installed_wheel_execution": true,
+    "require_mps_fallback_disabled": true,
+    "maximum_case_runtime_seconds": 300
+  },
+  "test_adaptation": {
+    "permitted": [
+      "Replace an exact Python string literal equal to cuda with mps.",
+      "Replace an exact Python string literal equal to cuda:0 with mps:0.",
+      "Replace an exact torch.cuda.is_available() gate with torch.backends.mps.is_available() in test modules."
+    ],
+    "forbidden": [
+      "Changing assertions, tolerances, test parameters, or expected values.",
+      "Renaming or emulating CUDA graph, CUDA stream, CUDA event, or Warp APIs.",
+      "Adding skip or xfail markers outside a reviewed case-level mechanism exclusion."
+    ]
+  },
+  "mechanism_exclusions": [
+    {
+      "case_pattern": "curobo.tests._src.geom.test_pose::tests._src.geom.test_pose::test_get_matrix[mps:0]",
+      "reason": "The pose matrix behavior completes before the test oracle implicitly constructs a NumPy float64 tensor on MPS; MPS has no float64 storage and the CPU twin covers the same assertion."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.test_quaternion::tests._src.geom.test_quaternion::test_angular_distance_gradcheck[mps]",
+      "reason": "PyTorch gradcheck requires float64 inputs, which MPS cannot represent; the paired CPU case executes the identical derivative check."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.test_quaternion::tests._src.geom.test_quaternion::test_axis_angle_error_gradcheck[mps]",
+      "reason": "PyTorch gradcheck requires float64 inputs, which MPS cannot represent; the paired CPU case executes the identical derivative check."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.test_quaternion::tests._src.geom.test_quaternion::test_normalize_quaternion_gradcheck[mps]",
+      "reason": "PyTorch gradcheck requires float64 inputs, which MPS cannot represent; the paired CPU case executes the identical derivative check."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.test_quaternion::tests._src.geom.test_quaternion::test_quat_multiply_gradcheck[mps]",
+      "reason": "PyTorch gradcheck requires float64 inputs, which MPS cannot represent; the paired CPU case executes the identical derivative check."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestTeleportGradcheck::test_gradcheck_teleport",
+      "reason": "The pinned test explicitly allocates float64 on the selected device for torch.gradcheck; MPS cannot represent float64, while portable teleport autograd executes in the non-gradcheck transition cases."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestCliqueGradcheck::test_gradcheck_clique",
+      "reason": "The pinned test explicitly allocates float64 on the selected device for torch.gradcheck; MPS cannot represent float64, while clique backward and gradient-magnitude cases execute on MPS."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestBSplineGradcheck::test_gradcheck_bspline",
+      "reason": "The pinned test explicitly allocates float64 on the selected device for torch.gradcheck; MPS cannot represent float64, while B-spline backward cases execute on MPS."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestAccelerationBackwardNoNaN::test_backward_no_nan",
+      "reason": "The pinned upstream case is unconditionally skipped because AccelerationTensorStepIdxKernel backward is not implemented; this is an upstream CUDA-kernel mechanism limitation, not an Apple behavioral failure."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestAccelerationBackwardNoNaN::test_backward_no_nan_velocity_loss",
+      "reason": "The pinned upstream case is unconditionally skipped because AccelerationTensorStepIdxKernel backward is not implemented; this is an upstream CUDA-kernel mechanism limitation, not an Apple behavioral failure."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestAccelerationGradcheck::test_gradcheck_acceleration",
+      "reason": "The pinned upstream class is unconditionally skipped because AccelerationTensorStepIdxKernel backward is not implemented; this is an upstream CUDA-kernel mechanism limitation."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestGradientMagnitude::test_gradient_magnitude_acceleration",
+      "reason": "The pinned upstream case is unconditionally skipped because AccelerationTensorStepIdxKernel backward is not implemented; this is an upstream CUDA-kernel mechanism limitation."
+    },
+    {
+      "case_pattern": "curobo.tests._src.transition.test_transition_gradients::tests._src.transition.test_transition_gradients.TestCliqueBackwardNoNaN::test_backward_no_nan",
+      "reason": "The pinned upstream case is unconditionally skipped for a documented Inf-gradient numerical-stability issue and therefore defines no executable parity oracle on CUDA or MPS."
+    }
+  ]
+}

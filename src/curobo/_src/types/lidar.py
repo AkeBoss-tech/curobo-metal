@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 import torch
+from torch.profiler import record_function
 
+from curobo._src.util.logging import log_and_raise
 from .camera import _pose_from_payload, _pose_to_payload
 from .pose import Pose
 
@@ -24,8 +26,43 @@ _TENSOR_FIELDS = (
 )
 
 
+class _LidarObservationPortableMixin:
+    @property
+    def device(self) -> torch.device:
+        return self._device_portable
+
+    def validate(self, **requirements) -> "LidarObservation":
+        return self._validate_portable(**requirements)
+
+    def valid_mask(self) -> torch.Tensor:
+        return self._valid_mask_portable()
+
+    def to_pointcloud(self, *, project_to_pose: bool = False) -> torch.Tensor:
+        return self._to_pointcloud_portable(project_to_pose=project_to_pose)
+
+    def detach(self) -> "LidarObservation":
+        return self._detach_portable()
+
+    def requires_grad_(self, requires_grad: bool = True) -> "LidarObservation":
+        return self._requires_grad_portable(requires_grad)
+
+    def as_dict(self) -> dict[str, Any]:
+        return self._as_dict_portable()
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "LidarObservation":
+        return cls._from_dict_portable(value)
+
+    def save_to_file(self, file_path: str | Path) -> None:
+        self._save_to_file_portable(file_path)
+
+    @classmethod
+    def load_from_file(cls, file_path: str | Path, *, map_location=None) -> "LidarObservation":
+        return cls._load_from_file_portable(file_path, map_location=map_location)
+
+
 @dataclass
-class LidarObservation:
+class LidarObservation(_LidarObservationPortableMixin):
     """Structured range-image observation with CPU/MPS-safe lifecycle helpers.
 
     Range values are Euclidean metres from the sensor origin.  ``to_pointcloud``
@@ -53,13 +90,13 @@ class LidarObservation:
             raise TypeError("pose must be a Pose or None")
 
     @property
-    def shape(self) -> torch.Size:
+    def shape(self):
         if self.range_image is None:
             raise ValueError("range_image is None, cannot get shape")
         return self.range_image.shape
 
     @property
-    def device(self) -> torch.device:
+    def _device_portable(self) -> torch.device:
         for field in _TENSOR_FIELDS:
             value = getattr(self, field)
             if value is not None:
@@ -68,7 +105,7 @@ class LidarObservation:
             return self.pose.device
         raise ValueError("empty LidarObservation has no device")
 
-    def validate(
+    def _validate_portable(
         self, *, require_range: bool = False, require_rgb: bool = False,
         require_pose: bool = False, require_calibration: bool = False,
     ) -> "LidarObservation":
@@ -129,7 +166,7 @@ class LidarObservation:
                 raise ValueError("planar LiDAR requires equal elevation_range_rad bounds")
         return self
 
-    def valid_mask(self) -> torch.Tensor:
+    def _valid_mask_portable(self) -> torch.Tensor:
         """Return finite in-range pixels, preserving batch/rank/device."""
         self.validate(require_range=True)
         assert self.range_image is not None
@@ -140,7 +177,7 @@ class LidarObservation:
             mask = mask & (self.range_image >= lower) & (self.range_image <= upper)
         return mask
 
-    def to_pointcloud(self, *, project_to_pose: bool = False) -> torch.Tensor:
+    def _to_pointcloud_portable(self, *, project_to_pose: bool = False) -> torch.Tensor:
         """Convert calibrated-elevation range pixels to differentiable XYZ points.
 
         The returned ``[N,H,W,3]`` points are in LiDAR frame unless
@@ -174,7 +211,7 @@ class LidarObservation:
             points = self.pose.batch_transform_points(points)
         return points
 
-    def copy_(self, new_data: "LidarObservation") -> "LidarObservation":
+    def copy_(self, new_data: LidarObservation):
         if not isinstance(new_data, LidarObservation):
             raise TypeError("new_data must be a LidarObservation")
         for field in _TENSOR_FIELDS:
@@ -193,10 +230,10 @@ class LidarObservation:
             self.pose.copy_(new_data.pose)
         return self
 
-    def clone(self) -> "LidarObservation":
+    def clone(self):
         return type(self)(name=self.name).copy_(self)
 
-    def detach(self) -> "LidarObservation":
+    def _detach_portable(self) -> "LidarObservation":
         value = self.clone()
         for field in _TENSOR_FIELDS:
             tensor = getattr(value, field)
@@ -206,7 +243,7 @@ class LidarObservation:
             value.pose = value.pose.detach()
         return value
 
-    def requires_grad_(self, requires_grad: bool = True) -> "LidarObservation":
+    def _requires_grad_portable(self, requires_grad: bool = True) -> "LidarObservation":
         for field in _TENSOR_FIELDS:
             tensor = getattr(self, field)
             if tensor is not None and (tensor.is_floating_point() or tensor.is_complex()):
@@ -215,7 +252,7 @@ class LidarObservation:
             self.pose.requires_grad_(requires_grad)
         return self
 
-    def to(self, device: torch.device | str) -> "LidarObservation":
+    def to(self, device: torch.device):
         for field in _TENSOR_FIELDS:
             value = getattr(self, field)
             if value is not None:
@@ -224,24 +261,26 @@ class LidarObservation:
             self.pose.to(device=device)
         return self
 
-    def as_dict(self) -> dict[str, Any]:
+    def _as_dict_portable(self) -> dict[str, Any]:
         result = {field: getattr(self, field) for field in _TENSOR_FIELDS}
         result.update({"name": self.name, "pose": _pose_to_payload(self.pose)})
         return result
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, Any]) -> "LidarObservation":
+    def _from_dict_portable(cls, value: Mapping[str, Any]) -> "LidarObservation":
         if not isinstance(value, Mapping):
             raise TypeError("LiDAR observation payload must be a mapping")
         fields = {field: value.get(field) for field in _TENSOR_FIELDS}
         return cls(name=value.get("name", "lidar_range_image"),
                    pose=_pose_from_payload(value.get("pose")), **fields)
 
-    def save_to_file(self, file_path: str | Path) -> None:
+    def _save_to_file_portable(self, file_path: str | Path) -> None:
         torch.save(self.as_dict(), file_path)
 
     @classmethod
-    def load_from_file(cls, file_path: str | Path, *, map_location=None) -> "LidarObservation":
+    def _load_from_file_portable(
+        cls, file_path: str | Path, *, map_location=None
+    ) -> "LidarObservation":
         try:
             payload = torch.load(file_path, map_location=map_location, weights_only=False)
         except TypeError:

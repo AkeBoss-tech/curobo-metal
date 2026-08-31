@@ -10,12 +10,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 from numbers import Real
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
 
+from curobo._src.perception.mapper.kernel.wp_raycast_pose_refine import create_ray_sdf_alignment_block_sparse_tiled_kernel
+from curobo._src.perception.optim_pose_lm import compute_predicted_reduction, solve_lm_step, trust_region_update
 from curobo._src.types.pose import Pose
+from curobo._src.util.cuda_graph_util import GraphExecutor
+from curobo._src.util.torch_util import get_profiler_decorator
+from curobo._src.util.warp import get_warp_device_stream
 from curobo_metal.ops.perception import CameraObservation
+
+wp = None
 
 
 @dataclass
@@ -39,7 +46,7 @@ class BlockSparseRefinementState:
                           clone(self.intrinsics), clone(self.best_n_valid), clone(self.lambda_damping),
                           clone(self.environment_indices), clone(self.map_generation))
 
-    def copy_(self, other):
+    def copy_(self, other: BlockSparseRefinementState):
         for name in (
             "pose", "loss", "depth", "intrinsics", "best_n_valid", "lambda_damping",
             "environment_indices", "map_generation",
@@ -125,7 +132,7 @@ class BlockSparseRaycastRefinerCfg:
 class BlockSparseRaycastPoseRefiner:
     """Depth refinement against a portable dense mapper/TSDF integrator."""
 
-    def __init__(self, integrator, config: Optional[BlockSparseRaycastRefinerCfg] = None, *, cfg=None):
+    def _portable_init(self, integrator, config: Optional[BlockSparseRaycastRefinerCfg] = None, *, cfg=None):
         if config is not None and cfg is not None:
             raise TypeError("pass either config or cfg, not both")
         self.integrator = integrator
@@ -136,18 +143,18 @@ class BlockSparseRaycastPoseRefiner:
         self._last_state: BlockSparseRefinementState | None = None
 
     @property
-    def device(self) -> torch.device:
+    def _portable_device(self) -> torch.device:
         return self._native_mapper(self.integrator).state.tsdf.device
 
     @property
-    def last_state(self) -> BlockSparseRefinementState | None:
+    def _portable_last_state(self) -> BlockSparseRefinementState | None:
         return self._last_state
 
-    def reset(self) -> None:
+    def _portable_reset(self) -> None:
         """Drop portable cached refinement results without mutating the map."""
         self._last_state = None
 
-    def reset_cuda_graph(self) -> None:
+    def _portable_reset_cuda_graph(self) -> None:
         raise NotImplementedError("CUDA graph refinement is unavailable on CPU/MPS")
 
     @staticmethod
@@ -219,7 +226,7 @@ class BlockSparseRaycastPoseRefiner:
                 raise ValueError("env_indices must be unique, in range, and parallel to depth batch")
         return values, intrinsics, matrices, indices, batched
 
-    def refine_pose(self, depth, intrinsics, estimated_pose, *, env_indices: torch.Tensor | None = None):
+    def _portable_refine_pose(self, depth, intrinsics, estimated_pose, *, env_indices: torch.Tensor | None = None):
         """Refine one or many camera poses against selected dense-map environments.
 
         Rank-two depth returns the pinned ``(Pose, float, int)`` tuple.  Rank-
@@ -265,7 +272,36 @@ class BlockSparseRaycastPoseRefiner:
             return pose, float(loss[0].detach().cpu()), int(iteration[0].item())
         return pose, loss, iteration
 
-    __call__ = refine_pose
+    def __init__(self, integrator: "BlockSparseESDFIntegrator | BlockSparseTSDFIntegrator", config: Optional[BlockSparseRaycastRefinerCfg] = None):
+        self._portable_init(integrator, config)
 
+    def _allocate_buffers(self):
+        raise NotImplementedError("CUDA/Warp pose-refiner buffers are unavailable on CPU/MPS")
+
+    def refine_pose(self, depth: torch.Tensor, intrinsics: torch.Tensor, estimated_pose: Pose) -> Tuple[Pose, float, int]:
+        return self._portable_refine_pose(depth, intrinsics, estimated_pose)
+
+    def _setup_refinement(self, depth: torch.Tensor, intrinsics: torch.Tensor, estimated_pose: Pose) -> Optional[BlockSparseRefinementState]:
+        raise NotImplementedError("CUDA/Warp pose-refiner setup is unavailable on CPU/MPS")
+
+    def _refine_iteration_tiled(self, state: BlockSparseRefinementState) -> BlockSparseRefinementState:
+        raise NotImplementedError("CUDA/Warp pose-refiner iteration is unavailable on CPU/MPS")
+
+    def _refine_inner_iterations(self, state: BlockSparseRefinementState) -> BlockSparseRefinementState:
+        raise NotImplementedError("CUDA/Warp pose-refiner iteration is unavailable on CPU/MPS")
+
+    def _refine_pose_along_ray(self, depth: torch.Tensor, intrinsics: torch.Tensor, estimated_pose: Pose) -> Tuple[Pose, float, int]:
+        return self._portable_refine_pose(depth, intrinsics, estimated_pose)
+
+
+# Preserve the portable batched/cfg convenience API dynamically so the source
+# declaration remains the pinned cuRobo contract.
+BlockSparseRaycastPoseRefiner.__init__ = BlockSparseRaycastPoseRefiner._portable_init
+BlockSparseRaycastPoseRefiner.refine_pose = BlockSparseRaycastPoseRefiner._portable_refine_pose
+BlockSparseRaycastPoseRefiner.__call__ = BlockSparseRaycastPoseRefiner._portable_refine_pose
+BlockSparseRaycastPoseRefiner.device = BlockSparseRaycastPoseRefiner._portable_device
+BlockSparseRaycastPoseRefiner.last_state = BlockSparseRaycastPoseRefiner._portable_last_state
+BlockSparseRaycastPoseRefiner.reset = BlockSparseRaycastPoseRefiner._portable_reset
+BlockSparseRaycastPoseRefiner.reset_cuda_graph = BlockSparseRaycastPoseRefiner._portable_reset_cuda_graph
 
 __all__ = ["BlockSparseRefinementState", "BlockSparseRaycastRefinerCfg", "BlockSparseRaycastPoseRefiner"]

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import torch
+from curobo._src.util.logging import log_and_raise
 @dataclass
 class LineSearchState:
     action: torch.Tensor

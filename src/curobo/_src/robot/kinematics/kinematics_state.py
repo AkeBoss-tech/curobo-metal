@@ -28,8 +28,35 @@ def _tensor_like_values(state: "KinematicsState"):
             yield name, value
 
 
+class _KinematicsStatePortableMixin:
+    @property
+    def batch_size(self) -> int:
+        return self._batch_size_value
+
+    @property
+    def horizon(self) -> int:
+        return self._horizon_value
+
+    @property
+    def device(self) -> torch.device:
+        return self._device_value
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self._dtype_value
+
+    def contiguous(self):
+        return self._contiguous()
+
+    def to(self, *args, **kwargs):
+        return self._to(*args, **kwargs)
+
+    def requires_grad_(self, *args, **kwargs):
+        return self._requires_grad(*args, **kwargs)
+
+
 @dataclass
-class KinematicsState:
+class KinematicsState(_KinematicsStatePortableMixin):
     """Kinematic state of a robot.
 
     The primary FK tensors retain ``[B, H, ...]`` layout: tool poses are
@@ -62,34 +89,34 @@ class KinematicsState:
         return [] if self.tool_poses is None else self.tool_poses.tool_frames
 
     @property
-    def batch_size(self) -> int:
+    def _batch_size_value(self) -> int:
         """Number of FK batch entries, or zero for an empty state."""
         return len(self)
 
     @property
-    def horizon(self) -> int:
+    def _horizon_value(self) -> int:
         """FK horizon length, or zero for an empty state."""
         for _, value in _tensor_like_values(self):
             return int(value.shape[1])
         return 0
 
     @property
-    def device(self) -> torch.device:
+    def _device_value(self) -> torch.device:
         for _, value in _tensor_like_values(self):
             return value.device
         raise ValueError("empty KinematicsState has no device")
 
     @property
-    def dtype(self) -> torch.dtype:
+    def _dtype_value(self) -> torch.dtype:
         for _, value in _tensor_like_values(self):
             return value.dtype
         raise ValueError("empty KinematicsState has no dtype")
 
-    def get_link_spheres(self) -> Optional[torch.Tensor]:
+    def get_link_spheres(self) -> torch.Tensor:
         """Return collision spheres in ``[B,H,S,4]`` layout without copying."""
         return self.robot_spheres
 
-    def clone(self) -> "KinematicsState":
+    def clone(self):
         """Deep-copy all materialized tensor and geometry records."""
         return type(self)(
             tool_poses=None if self.tool_poses is None else self.tool_poses.clone(),
@@ -103,7 +130,7 @@ class KinematicsState:
             ),
         )
 
-    def detach(self) -> "KinematicsState":
+    def detach(self):
         """Detach tensor and collision-geometry payloads from autograd."""
         return type(self)(
             tool_poses=None if self.tool_poses is None else self.tool_poses.detach(),
@@ -119,7 +146,7 @@ class KinematicsState:
             ),
         )
 
-    def contiguous(self) -> "KinematicsState":
+    def _contiguous(self) -> "KinematicsState":
         """Materialize contiguous tensor storage while retaining state metadata."""
         poses = None
         if self.tool_poses is not None:
@@ -136,7 +163,7 @@ class KinematicsState:
             robot_collision_geometry=self.robot_collision_geometry,
         )
 
-    def to(
+    def _to(
         self,
         device_cfg: Optional[DeviceCfg] = None,
         device: Optional[torch.device | str] = None,
@@ -181,7 +208,7 @@ class KinematicsState:
             )
         return type(self)(poses, move(self.tool_jacobians), move(self.robot_spheres), move(self.robot_com), geometry)
 
-    def requires_grad_(self, requires_grad: bool = True) -> "KinematicsState":
+    def _requires_grad(self, requires_grad: bool = True) -> "KinematicsState":
         """Set gradients for every floating-point FK tensor in place."""
         if self.tool_poses is not None:
             self.tool_poses.requires_grad_(requires_grad)
@@ -191,7 +218,7 @@ class KinematicsState:
                 value.requires_grad_(requires_grad)
         return self
 
-    def copy_(self, other: "KinematicsState") -> "KinematicsState":
+    def copy_(self, other: KinematicsState):
         """Copy materialized fields into a preallocated state buffer.
 
         A target field that exists must have a corresponding source field. This

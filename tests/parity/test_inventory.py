@@ -37,7 +37,7 @@ def test_no_full_port_classification_exists():
     assert "partial" not in classifications
     assert set(data["classification_vocabulary"]) == allowed
     assert data["summary"]["partial"] == 0
-    assert data["summary"]["evidence_blocked"] > 0
+    assert data["summary"]["evidence_blocked"] == 0
 
 
 def test_equivalence_and_blocked_claims_carry_the_required_evidence():
@@ -47,10 +47,13 @@ def test_equivalence_and_blocked_claims_carry_the_required_evidence():
     assert all(item["test_evidence"] and not item["implementable_gaps"] for item in equivalent)
 
     blocked = [item for item in records if item["classification"] == "evidence_blocked"]
-    assert blocked
     assert all(item["evidence_needed"] for item in blocked)
     # Evidence requirements are not portable implementation gaps.
     assert all(not item["implementable_gaps"] for item in blocked)
+
+    paired = [item for item in records if item["paired_evidence"]]
+    assert len(paired) == 19
+    assert all(item["evidence_needed"] is None for item in paired)
 
 
 def test_every_partial_record_names_an_implementable_gap():

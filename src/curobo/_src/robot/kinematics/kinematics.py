@@ -2,29 +2,30 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import torch
+import torch.autograd.profiler as profiler
 
+try:  # Optional geometry integration; mesh construction remains explicitly unsupported below.
+    import trimesh as _trimesh
+except ModuleNotFoundError:  # Keep the import-compatible public name on minimal installs.
+    _trimesh = None
+trimesh = _trimesh
+
+from curobo._src.curobolib.cuda_ops.kinematics import KinematicsFusedFunction
+from curobo._src.geom.types import Mesh, Sphere
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
-from curobo._src.robot.kinematics.kinematics_state import KinematicsState, ToolPose
+from curobo._src.robot.kinematics.kinematics_state import KinematicsState
 from curobo._src.robot.types import JointLimits, KinematicsParams, SelfCollisionKinematicsCfg
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_ops import augment_joint_state
 from curobo._src.types.pose import Pose
-from curobo._src.geom.types import Mesh
+from curobo._src.types.tool_pose import ToolPose
+from curobo._src.util.logging import log_and_raise
 from curobo_metal.config.robot import _topological_links
 from curobo_metal.ops.whole_body import WholeBodyModel, tree_forward_kinematics
 from curobo_metal.reference.tree_kinematics import TreeRobot
-
-
-@dataclass
-class Sphere:
-    """Robot sphere value compatible with cuRobo geometry consumers."""
-
-    name: str
-    pose: list[float]
-    radius: float
 
 
 def _matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
@@ -90,6 +91,7 @@ class Kinematics:
     def tool_frames(self) -> List[str]:
         return self.config.tool_frames
 
+    @profiler.record_function("cuda_robot_model/update_batch_size")
     def update_batch_size(
         self, batch: int, horizon: int, force_update: bool = False, reset_buffers: bool = False
     ):
@@ -193,7 +195,7 @@ class Kinematics:
 
     def get_robot_as_spheres(
         self, q: torch.Tensor, filter_valid: bool = True
-    ) -> Union[list, List[list]]:
+    ) -> Union[List[Sphere], List[List[Sphere]]]:
         if q.ndim == 1:
             raise ValueError("q should be [batch_size, dof]")
         state = self._forward(q.unsqueeze(1) if q.ndim == 2 else q)
@@ -203,9 +205,9 @@ class Kinematics:
             result.append(
                 [
                     Sphere(
-                        f"curobo/robot_sphere_{index}",
-                        [*sphere[:3], 1, 0, 0, 0],
-                        sphere[3],
+                        name=f"curobo/robot_sphere_{index}",
+                        pose=[*sphere[:3], 1, 0, 0, 0],
+                        radius=sphere[3],
                     )
                     for index, sphere in enumerate(batch)
                     if not filter_valid or sphere[3] > 0
@@ -244,7 +246,7 @@ class Kinematics:
     def all_articulated_joint_names(self) -> List[str]:
         return self.config.kinematics_config.non_fixed_joint_names
 
-    def get_self_collision_config(self):
+    def get_self_collision_config(self) -> SelfCollisionKinematicsCfg:
         return self.config.self_collision_config
 
     def get_link_transform(self, link_name: str) -> Pose:
@@ -278,30 +280,44 @@ class Kinematics:
     def get_active_js(self, full_js: JointState):
         return full_js.reorder(self.joint_names)
 
-    def get_full_js(self, active_js: JointState) -> JointState:
+    def get_full_js(self, joint_state: JointState) -> JointState:
         """Expand an active state with its configured locked joint values."""
-        if not isinstance(active_js, JointState):
-            raise TypeError("active_js must be a JointState")
-        if active_js.joint_names is None:
-            active_js = JointState(
-                position=active_js.position,
-                velocity=active_js.velocity,
-                acceleration=active_js.acceleration,
-                jerk=active_js.jerk,
+        if not isinstance(joint_state, JointState):
+            raise TypeError("joint_state must be a JointState")
+        if joint_state.joint_names is None:
+            joint_state = JointState(
+                position=joint_state.position,
+                velocity=joint_state.velocity,
+                acceleration=joint_state.acceleration,
+                jerk=joint_state.jerk,
                 joint_names=list(self.joint_names),
             )
         else:
-            active_js = active_js.reorder(self.joint_names)
+            joint_state = joint_state.reorder(self.joint_names)
         locked = self.lock_jointstate
         if locked is None or not locked.joint_names:
-            return active_js
-        return active_js.append_joints(locked)
+            return joint_state
+        return joint_state.append_joints(locked)
 
     def get_mimic_js(self, joint_state: JointState) -> JointState:
         """Expose the compiled state for chains whose mimic joints are reduced."""
-        return self.get_full_js(joint_state)
+        result = self.get_full_js(joint_state)
+        for name, (source, multiplier, offset) in self.config.kinematics_config.mimic_joints.items():
+            if name in result.joint_names:
+                continue
+            source_state = result.reorder([source])
+            mimic = JointState.from_position(
+                source_state.position * multiplier + offset,
+                joint_names=[name],
+            )
+            for channel in ("velocity", "acceleration", "jerk"):
+                value = getattr(source_state, channel)
+                if value is not None:
+                    setattr(mimic, channel, value * multiplier)
+            result = result.append_joints(mimic)
+        return result
 
-    def update_kinematics_config(self, new_kin_config) -> None:
+    def update_kinematics_config(self, new_kin_config: KinematicsParams):
         """Update the model parameters and recompile its portable tree.
 
         cuRobo accepts a ``KinematicsParams`` record here.  Supporting that
@@ -321,18 +337,18 @@ class Kinematics:
         self._compile_model()
         self.update_batch_size(self._batch or 1, self._horizon or 1, reset_buffers=True)
 
-    def get_link_mesh(self, link_name: str):
+    def get_link_mesh(self, link_name: str) -> Mesh:
         del link_name
         raise NotImplementedError(
             "portable Kinematics does not construct mesh assets; use RobotParser.get_link_mesh"
         )
 
-    def get_robot_link_meshes(self):
+    def get_robot_link_meshes(self) -> List[Mesh]:
         raise NotImplementedError(
             "portable Kinematics does not construct mesh assets; use RobotParser instead"
         )
 
-    def get_robot_as_mesh(self, joint_position: torch.Tensor):
+    def get_robot_as_mesh(self, joint_position: torch.Tensor) -> List[Mesh]:
         del joint_position
         return self.get_robot_link_meshes()
 
@@ -352,9 +368,9 @@ class Kinematics:
     def default_joint_state(self) -> JointState:
         return JointState.from_position(self.default_joint_position, joint_names=self.joint_names)
 
-    def get_joint_limits(self):
+    def get_joint_limits(self) -> JointLimits:
         return self.config.get_joint_limits()
 
     @property
-    def kinematics_config(self):
+    def kinematics_config(self) -> KinematicsParams:
         return self.config.kinematics_config

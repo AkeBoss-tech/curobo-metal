@@ -125,11 +125,12 @@ def test_prismatic_lock_reduces_active_cspace_and_preserves_lock_state(tmp_path)
     assert loader.lock_jointstate.joint_names == ["slide"]
     torch.testing.assert_close(loader.lock_jointstate.position, torch.tensor([0.4]))
     assert loader._robot.joints[0].xyz == pytest.approx((0.4, 0.0, 0.0))
-    with pytest.raises(NotImplementedError, match="nonzero revolute"):
-        KinematicsLoader(KinematicsLoaderCfg(
-            base_link="base", tool_frames=["tool"], urdf_path=str(urdf),
-            lock_joints={"wrist": 0.1},
-        ))
+    revolute = KinematicsLoader(KinematicsLoaderCfg(
+        base_link="base", tool_frames=["tool"], urdf_path=str(urdf),
+        lock_joints={"wrist": 0.1},
+    ))
+    assert revolute.lock_jointstate.joint_names == ["wrist"]
+    torch.testing.assert_close(revolute.lock_jointstate.position, torch.tensor([0.1]))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import torch
 
 from curobo._src.curobolib.cuda_ops.geometry import SelfCollisionDistance
+from curobo._src.util.logging import log_and_raise
 from curobo_metal.ops.collision import sphere_sphere_signed_distance
 
 from .portable import BaseCost
@@ -23,7 +24,12 @@ if TYPE_CHECKING:
     from .cost_self_collision_cfg import SelfCollisionCostCfg
 
 
-class SelfCollisionCost(BaseCost):
+class _SelfCollisionCostPortableMixin:
+    def get_gradient_buffer(self) -> Optional[torch.Tensor]:
+        return self._out_grad
+
+
+class SelfCollisionCost(_SelfCollisionCostPortableMixin, BaseCost):
     """Evaluate the maximum configured sphere-pair squared overlap.
 
     For a pair ``(i, j)`` the V2 CUDA kernel evaluates
@@ -32,7 +38,7 @@ class SelfCollisionCost(BaseCost):
     exact ties, which makes diagnostics deterministic on CPU and Metal.
     """
 
-    def __init__(self, config: "SelfCollisionCostCfg"):
+    def __init__(self, config: SelfCollisionCostCfg):
         if getattr(config, "self_collision_kin_config", None) is None:
             raise ValueError("SelfCollisionCostCfg must contain self_collision_kin_config")
         super().__init__(config)
@@ -102,7 +108,7 @@ class SelfCollisionCost(BaseCost):
         )
         return True
 
-    def validate_input(self, robot_spheres: torch.Tensor) -> bool:
+    def validate_input(self, robot_spheres: torch.Tensor):
         if not isinstance(robot_spheres, torch.Tensor) or robot_spheres.ndim != 4:
             raise ValueError("robot_spheres must have shape [batch,horizon,spheres,4]")
         if robot_spheres.shape[-1] != 4:
@@ -189,7 +195,7 @@ class SelfCollisionCost(BaseCost):
         flat_sparse[torch.arange(flat_sparse.shape[0], device=spheres.device), flat_first] = active_flat
         flat_sparse[torch.arange(flat_sparse.shape[0], device=spheres.device), flat_second] = active_flat
 
-    def forward(self, robot_spheres: torch.Tensor) -> torch.Tensor:
+    def forward(self, robot_spheres: torch.Tensor):
         # Upstream requires explicit setup.  Lazy setup preserves that layout
         # while keeping the Python façade ergonomic for standalone users.
         if self._batch_size < 0:
@@ -229,10 +235,7 @@ class SelfCollisionCost(BaseCost):
 
     __call__ = forward
 
-    def get_gradient_buffer(self) -> Optional[torch.Tensor]:
-        return self._out_grad
-
-    def reset(self, reset_problem_ids: Optional[torch.Tensor] = None, **kwargs) -> None:
+    def reset(self, reset_problem_ids: Optional[torch.Tensor] = None, **kwargs):
         del kwargs
         buffers = (
             self._out_distance,

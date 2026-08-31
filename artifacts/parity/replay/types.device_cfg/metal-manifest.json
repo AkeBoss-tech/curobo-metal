@@ -3,7 +3,7 @@
   "capability": "types.device_cfg",
   "corpus": {
     "case_file": "types.device_cfg.json",
-    "case_sha256": "24698ef28ba75cbdc24a28ce271f920d6deb702b8295c753a959d6649f71da1e",
+    "case_sha256": "eb8b2043f5bdbd3287be84f53ddb54f91d8c685fe54ff31764410c907017cc5d",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,19 +21,31 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "zero",
+        "one",
+        "many",
+        "empty",
+        "device_roundtrip"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "device",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "a04e3803e265bbb47a1c56a9662feae87b5382e1d2f7232d390afd6566dd50e6"
+    "sha256": "ce3901b0e3538c8b9826a667c32cd17f1dd2aac212ed075c58cd0982e219dba9"
   },
   "operation": "device_cfg",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "348d2dcf56567d4c3d4cd52c5428268447ce29feb44a2a5b44f7f145d360450e"
+    "sha256": "39c0fc900301022596331766af940fe30279a2d50c97f9b0cc7a50f4191fc9bc"
   },
   "runtime": {
     "python": "3.13.9",

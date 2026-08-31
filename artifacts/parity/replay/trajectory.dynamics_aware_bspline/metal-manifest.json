@@ -3,7 +3,7 @@
   "capability": "trajectory.dynamics_aware_bspline",
   "corpus": {
     "case_file": "trajectory.dynamics_aware_bspline.json",
-    "case_sha256": "7f05359bed018125615bed41c5ac7db6aba874426db534f01b1488ad14cf11c0",
+    "case_sha256": "e0a9caf76db63c2a941d160c9e895cdc2e564bf4e95cb89cba0ee6b87598054c",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,9 +21,21 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "endpoint",
+        "two_horizons",
+        "constraint",
+        "invalid_termination",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "bspline",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
@@ -33,7 +45,7 @@
   "operation": "dynamics_aware_bspline",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "5c7439e8abb2b705a6fc11a274c014ec0e92843c403c0b93d76e1321bce23ea5"
+    "sha256": "17296d44548f2bf551832e3e08e202062b6c33609a695ff827004b02b337b18c"
   },
   "runtime": {
     "python": "3.13.9",

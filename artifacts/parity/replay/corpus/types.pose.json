@@ -3,8 +3,14 @@
   "format": "curobo-metal-replay-corpus",
   "inputs": [
     "pose",
-    "points"
+    "points",
+    "pose_matrix",
+    "pose_noncontiguous_source"
   ],
+  "required_matrix": {
+    "cases": ["zero_points", "one_point", "many_points", "noncontiguous_points", "vjp"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "empty_points",
@@ -14,6 +20,10 @@
       "case": "zero_quaternion",
       "output": "invalid_rejected"
     }
+  },
+  "tensors": {
+    "pose_matrix": {"dtype": "float32", "shape": [3, 7], "data": [[1.0, 2.0, 3.0, 1.0, 0.0, 0.0, 0.0], [0.0, 0.5, -1.0, 0.9238795, 0.0, 0.0, 0.3826834], [-2.0, 1.0, 0.25, 0.7071068, 0.0, 0.7071068, 0.0]]},
+    "pose_noncontiguous_source": {"dtype": "float32", "shape": [2, 6], "data": [[0.2, 99.0, 0.2, 99.0, 0.5, 99.0], [2.0, 99.0, 0.0, 99.0, 0.0, 99.0]]}
   },
   "version": 1
 }

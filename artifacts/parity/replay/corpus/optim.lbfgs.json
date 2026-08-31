@@ -8,6 +8,7 @@
     "lbfgs_lower",
     "lbfgs_upper"
   ],
+  "required_matrix": {"cases": ["bounded_config", "alternate_config", "reset_lifecycle", "debug_trace", "nonfinite_termination", "vjp"], "output": "matrix_observed"},
   "required_evidence": {
     "edge": {
       "case": "action_range_batch_solve",

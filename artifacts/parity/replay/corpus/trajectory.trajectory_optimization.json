@@ -4,6 +4,7 @@
   "inputs": [
     "q"
   ],
+  "required_matrix": {"cases": ["endpoint", "infeasible", "alternate_config", "result_layout"], "output": "matrix_observed"},
   "required_evidence": {
     "edge": {
       "case": "exact_endpoints",

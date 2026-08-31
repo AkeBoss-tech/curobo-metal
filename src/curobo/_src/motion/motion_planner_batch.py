@@ -32,6 +32,7 @@ from curobo._src.types.tool_pose import GoalToolPose, ToolPose
 from curobo._src.util.logging import log_and_raise
 
 from .motion_planner import MotionPlanner, _axis_string_to_vector
+from .motion_planner_cfg import MotionPlannerCfg
 
 
 class BatchMotionPlanner(MotionPlanner):
@@ -43,6 +44,75 @@ class BatchMotionPlanner(MotionPlanner):
     through the normal collision checker, but PRM graph seeds are intentionally
     disabled because a shared roadmap is not valid across different worlds.
     """
+
+    def __init__(self, config: MotionPlannerCfg):
+        """Create the portable batched planner from a V2 planner config."""
+        super().__init__(config)
+
+    # Keep the V2 batch-planner declarations local to this module.  The
+    # portable implementation deliberately shares the single-planner lifecycle
+    # machinery with ``MotionPlanner``; these small forwarding methods retain
+    # that behavior while presenting the same class-owned public surface as
+    # the upstream standalone batch planner.
+    def destroy(self):
+        super().destroy()
+
+    @property
+    def attachment_manager(self) -> AttachmentManager:
+        return super().attachment_manager
+
+    @property
+    def joint_names(self) -> List[str]:
+        return super().joint_names
+
+    @property
+    def action_dim(self) -> int:
+        return super().action_dim
+
+    @property
+    def tool_frames(self) -> List[str]:
+        return super().tool_frames
+
+    @property
+    def default_joint_state(self) -> JointState:
+        return super().default_joint_state
+
+    @property
+    def kinematics(self) -> Kinematics:
+        return super().kinematics
+
+    def compute_kinematics(self, state: JointState) -> KinematicsState:
+        return super().compute_kinematics(state)
+
+    def update_world(self, scene_cfg: SceneCfg):
+        super().update_world(scene_cfg)
+
+    def clear_scene_cache(self):
+        super().clear_scene_cache()
+
+    def reset_seed(self):
+        super().reset_seed()
+
+    def enable_link_collision(self, enable_collision_links: List[str]):
+        super().enable_link_collision(enable_collision_links)
+
+    def disable_link_collision(self, disable_collision_links: List[str]):
+        super().disable_link_collision(disable_collision_links)
+
+    def update_link_inertial(
+        self,
+        link_name: str,
+        mass: Optional[float] = None,
+        com: Optional[torch.Tensor] = None,
+        inertia: Optional[torch.Tensor] = None,
+    ) -> None:
+        super().update_link_inertial(link_name, mass, com, inertia)
+
+    def update_links_inertial(
+        self,
+        link_properties: dict[str, dict[str, Union[float, torch.Tensor]]],
+    ) -> None:
+        super().update_links_inertial(link_properties)
 
     def _initialize_components(self):
         # Reuse the production portable composition and only remove the graph
@@ -128,7 +198,7 @@ class BatchMotionPlanner(MotionPlanner):
             self._copy_result_rows(best, candidate, newly_solved)
         return best, solved | candidate_solved
 
-    def warmup(self, enable_graph: bool = True, num_warmup_iterations: int = 5):
+    def warmup(self, enable_graph: bool = True, num_warmup_iterations: int = 5) -> bool:
         self._assert_live()
         if not isinstance(num_warmup_iterations, int) or num_warmup_iterations < 1:
             raise ValueError("num_warmup_iterations must be a positive integer")
@@ -165,11 +235,11 @@ class BatchMotionPlanner(MotionPlanner):
         success_ratio: float = 1.0,
         enable_graph_attempt: int = 0,
         finetune_attempts: int = 1,
-        initial_iters=None,
-        time_optimal_iters=None,
-        finetune_iters=None,
+        initial_iters: Optional[int] = None,
+        time_optimal_iters: Optional[int] = None,
+        finetune_iters: Optional[int] = None,
         finetune_dt_scale: float = 0.55,
-    ):
+    ) -> Optional[TrajOptSolverResult]:
         self._assert_live()
         batch = self._validate_batch_state(current_state, "current_state")
         if not isinstance(goal_tool_poses, GoalToolPose):
@@ -250,7 +320,7 @@ class BatchMotionPlanner(MotionPlanner):
         max_attempts: int = 1,
         success_ratio: float = 1.0,
         enable_graph_attempt: int = 0,
-    ):
+    ) -> Optional[TrajOptSolverResult]:
         self._assert_live()
         batch = self._validate_batch_state(current_state, "current_state")
         goal_batch = self._validate_batch_state(goal_states, "goal_states")
@@ -455,7 +525,7 @@ class BatchMotionPlanner(MotionPlanner):
         output.lift_interpolated_last_tstep = lift_result.interpolated_last_tstep
         return output
 
-    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]) -> None:
+    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, "ToolPoseCriteria"]):
         # Preserve the parent validation and retained public lifecycle state.
         super().update_tool_pose_criteria(tool_pose_criteria)
 

@@ -1,0 +1,63 @@
+{
+  "artifact_version": 1,
+  "release": "0.1.0a1",
+  "scope": "bounded-alpha",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "source_gates": {
+    "api_inventory_fresh": true,
+    "asset_provenance_exact": true,
+    "default_tests": {
+      "passed": 1256,
+      "failed": 0
+    },
+    "public_facades": {
+      "modules": 24,
+      "exports_present": 122,
+      "exports_expected": 122,
+      "matching_callable_shapes": 10,
+      "different_callable_shapes": 0
+    },
+    "upstream_workloads": {
+      "reviewed": 225,
+      "unreviewed": 0,
+      "applicable_modules": 53,
+      "unchanged_tests_passed": 1083,
+      "artifact": "artifacts/gauntlet/round-040-all-applicable-upstream.json",
+      "artifact_sha256": "a45122cda4d3165034b1f43080b18b4010d8bef69fe917ae9bebd6b97fc00b16"
+    }
+  },
+  "distributions": {
+    "wheel": {
+      "filename": "curobo_metal-0.1.0a1-py3-none-any.whl",
+      "sha256": "0a4c216b34d3dd3a3755295cc366467c46c39f6a777f12a82990bae505183e7b",
+      "twine_check": "passed",
+      "content_check": "passed",
+      "clean_install_smoke": "passed",
+      "dependency_check": "passed",
+      "runtime_imports": 361
+    },
+    "sdist": {
+      "filename": "curobo_metal-0.1.0a1.tar.gz",
+      "sha256": "333f5ebedc1e055fdc7171dd667ebcde21770170ffe625b8f3dd67e526f5a92e",
+      "twine_check": "passed",
+      "content_check": "passed",
+      "clean_install_smoke": "passed",
+      "dependency_check": "passed",
+      "runtime_imports": 361
+    }
+  },
+  "explicit_nonclaims": {
+    "full_drop_in_equivalence": false,
+    "full_consistency_backlog_met": false,
+    "fresh_cuda_replay": "external-unavailable-no-nvidia-device",
+    "testpypi_publish": "external-setup-required"
+  },
+  "consistency_backlog": {
+    "measurement": "artifacts/gauntlet/round-041-consistency-measurement.json",
+    "measurement_sha256": "0b2625b576ca737a6c899c807e6757fc501e3edd8f00d8d5c55becf4ddef7322",
+    "tests_passed": 333,
+    "tests_failed": 277,
+    "intentionally_release_blocking_for_full_drop_in_only": true
+  },
+  "verdict": "release-ready for the documented bounded alpha; not a stable full cuRobo drop-in"
+}

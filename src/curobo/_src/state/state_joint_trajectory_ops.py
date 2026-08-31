@@ -7,7 +7,16 @@ buffer ABI.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, List, Optional, Union
+
 import torch
+
+from curobo._src.util.logging import log_and_raise
+
+from .state_joint_jit_helpers import trim_trajectory_jit
+
+if TYPE_CHECKING:
+    from .state_joint import JointState
 
 
 _FIELDS = ("position", "velocity", "acceleration", "jerk", "dt", "knot", "knot_dt")
@@ -34,7 +43,14 @@ def _state_like(state, *, joint_names=_UNSET, **changes):
     )
 
 
-def gather_joint_state_by_seed(joint_state, idx: torch.Tensor):
+def _has_leading_shape(value: torch.Tensor, shape: tuple[int, ...]) -> bool:
+    """Return whether metadata is indexed by the JointState's leading dimensions."""
+    return value.ndim >= len(shape) and tuple(value.shape[: len(shape)]) == shape
+
+
+def gather_joint_state_by_seed(
+    joint_state: "JointState", idx: torch.Tensor
+) -> "JointState":
     """Gather ``[batch, topk]`` seed choices from a ``[batch, seed, ...]`` state."""
     if not isinstance(idx, torch.Tensor) or idx.ndim != 2:
         raise ValueError("idx must be a rank-two tensor [batch, topk]")
@@ -59,56 +75,80 @@ def gather_joint_state_by_seed(joint_state, idx: torch.Tensor):
     return _state_like(joint_state, **{name: gather(getattr(joint_state, name)) for name in _FIELDS})
 
 
-def copy_joint_state_only_index(target, source, idx):
+def copy_joint_state_only_index(
+    target: "JointState", source: "JointState", idx: Union[int, torch.Tensor]
+) -> "JointState":
     """Copy matching indexed entries from source to target, in place."""
+    batch_shape = (target.position.shape[0],)
     with torch.no_grad():
         for name in _FIELDS:
             dst, src = getattr(target, name), getattr(source, name)
-            if dst is not None and src is not None:
+            if (
+                dst is not None
+                and src is not None
+                and _has_leading_shape(dst, batch_shape)
+                and _has_leading_shape(src, batch_shape)
+            ):
                 dst[idx] = src[idx]
     return target
 
 
-def copy_joint_state_at_index(target, source, idx):
+def copy_joint_state_at_index(
+    target: "JointState",
+    source: "JointState",
+    idx: Union[int, List, torch.Tensor],
+) -> None:
     """Copy an unbatched source state into one or more target batch slots."""
     if isinstance(idx, int):
         maximum = idx
     elif isinstance(idx, torch.Tensor):
         if idx.numel() == 0:
-            return target
+            return None
         maximum = int(idx.max().item())
     else:
         if not idx:
-            return target
+            return None
         maximum = max(idx)
     if maximum >= target.position.shape[0] or maximum < -target.position.shape[0]:
         raise ValueError(f"{maximum} index out of range, current state is of length {target.position.shape[0]}")
+    batch_shape = (target.position.shape[0],)
     with torch.no_grad():
         for name in _FIELDS:
             dst, src = getattr(target, name), getattr(source, name)
-            if dst is not None and src is not None:
+            if dst is not None and src is not None and _has_leading_shape(dst, batch_shape):
                 dst[idx] = src
-    return target
 
 
-def copy_joint_state_at_batch_seed_indices(target, source, batch_idx, seed_idx):
+def copy_joint_state_at_batch_seed_indices(
+    target: "JointState",
+    source: "JointState",
+    batch_idx: torch.Tensor,
+    seed_idx: torch.Tensor,
+) -> "JointState":
     """Copy selected ``[batch, seed]`` entries through all materialized fields."""
     if not isinstance(batch_idx, torch.Tensor) or not isinstance(seed_idx, torch.Tensor):
         raise ValueError("batch_idx and seed_idx must be tensors")
     if batch_idx.shape != seed_idx.shape:
         raise ValueError("batch_idx and seed_idx must have equal shape")
+    batch_seed_shape = tuple(target.position.shape[:2])
     batch = batch_idx.to(device=target.device, dtype=torch.long)
     seed = seed_idx.to(device=target.device, dtype=torch.long)
     with torch.no_grad():
         for name in _FIELDS:
             dst, src = getattr(target, name), getattr(source, name)
-            if dst is not None and src is not None:
-                if dst.ndim >= 2 and src.ndim >= 2:
-                    dst[batch, seed] = src[batch, seed]
+            if (
+                dst is not None
+                and src is not None
+                and _has_leading_shape(dst, batch_seed_shape)
+                and _has_leading_shape(src, batch_seed_shape)
+            ):
+                dst[batch, seed] = src[batch, seed]
     return target
 
 
-def get_joint_state_at_horizon_index(joint_state, horizon_index: int):
+def get_joint_state_at_horizon_index(
+    joint_state: "JointState", horizon_index: int
+) -> "JointState":
     """Select a waypoint along the final non-DOF (horizon) axis."""
     if joint_state.position.ndim < 2:
         raise ValueError("JointState does not have horizon")
@@ -129,7 +169,9 @@ def get_joint_state_at_horizon_index(joint_state, horizon_index: int):
     )
 
 
-def trim_joint_state_trajectory(joint_state, start_idx: int, end_idx=None):
+def trim_joint_state_trajectory(
+    joint_state: "JointState", start_idx: int, end_idx: Optional[int] = None
+) -> "JointState":
     """Return a trajectory slice without retaining stale knot parameterization."""
     if joint_state.position.ndim < 2:
         raise ValueError("JointState does not have horizon")
@@ -151,7 +193,9 @@ def trim_joint_state_trajectory(joint_state, start_idx: int, end_idx=None):
     )
 
 
-def index_joint_state_dof(joint_state, idx):
+def index_joint_state_dof(
+    joint_state: "JointState", idx: torch.Tensor
+) -> "JointState":
     """Select joint/DOF columns while retaining timing and solver metadata."""
     if not isinstance(idx, torch.Tensor):
         idx = torch.as_tensor(idx, device=joint_state.device)

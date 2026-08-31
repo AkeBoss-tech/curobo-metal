@@ -9,7 +9,7 @@ explicit methods fail rather than quietly changing execution semantics.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, TypeVar, Union
 
 import torch
 import torch.autograd.profiler as profiler
@@ -41,7 +41,7 @@ from .solver_core_cfg import SolverCoreCfg
 T_BDOF = TypeVar("T_BDOF", bound=torch.Tensor)
 
 
-class SolverCore:
+class _SolverCorePortable:
     """Own the portable FK, goal registry, sampling, and rollout lifecycle.
 
     ``SolverCoreCfg`` can be assembled by a high-level IK/TrajOpt/MPC facade
@@ -615,6 +615,175 @@ class SolverCore:
     def debug_dump(self, file_path: str):
         del file_path
         raise NotImplementedError("CUDA graph debug dumps are unavailable on CPU/MPS")
+
+
+class SolverCore:
+    """Pinned cuRoboV2 declaration surface for the portable solver core."""
+
+    def __init__(
+        self, config: SolverCoreCfg, scene_collision_checker: Optional[SceneCollision] = None
+    ):
+        raise NotImplementedError
+
+    @property
+    def action_dim(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def kinematics(self) -> Kinematics:
+        raise NotImplementedError
+
+    @property
+    def transition_model(self):
+        raise NotImplementedError
+
+    @property
+    def action_horizon(self) -> int:
+        raise NotImplementedError
+
+    @property
+    def default_joint_position(self) -> torch.Tensor:
+        raise NotImplementedError
+
+    @property
+    def default_joint_state(self) -> JointState:
+        raise NotImplementedError
+
+    @property
+    def joint_names(self) -> List[str]:
+        raise NotImplementedError
+
+    @property
+    def tool_frames(self) -> List[str]:
+        raise NotImplementedError
+
+    @property
+    def solve_state(self) -> SolveState:
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/get_all_rollout_instances")
+    def get_all_rollout_instances(
+        self, include_optimizer_rollouts: bool = True, include_auxiliary_rollout: bool = True
+    ) -> List[RobotRollout]:
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/update_rollout_params")
+    def update_rollout_params(
+        self, goal_buffer: GoalRegistry, include_auxiliary_rollout: bool = True
+    ):
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/reset_shape")
+    def reset_shape(self):
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/reset_seed")
+    def reset_seed(self):
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/reset_cuda_graph")
+    def reset_cuda_graph(self):
+        raise NotImplementedError
+
+    def destroy(self):
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/prepare_goal_buffer")
+    def prepare_goal_buffer(
+        self,
+        solve_state: SolveState,
+        goal_tool_poses: GoalToolPose,
+        current_state: Optional[JointState] = None,
+        use_implicit_goal: bool = False,
+        seed_goal_state: Optional[JointState] = None,
+        goal_state: Optional[JointState] = None,
+    ):
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/prepare_action_seeds")
+    def prepare_action_seeds(
+        self,
+        batch_size: int,
+        num_seeds: int,
+        seed_config: Optional[T_BDOF] = None,
+        current_state: Optional[JointState] = None,
+        seed_traj: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/prepare_trajectory_seeds")
+    def prepare_trajectory_seeds(
+        self,
+        batch_size: int,
+        num_seeds: int,
+        current_state: JointState,
+        seed_config: Optional[T_BDOF] = None,
+        seed_traj: Optional[torch.Tensor] = None,
+    ):
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/enable_tool_pose_tracking")
+    def enable_tool_pose_tracking(
+        self, tool_frames: Optional[List[str]] = None, non_terminal_weight_factor: float = 0.0
+    ) -> None:
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/disable_tool_pose_tracking")
+    def disable_tool_pose_tracking(self, tool_frames: Optional[List[str]] = None) -> None:
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/enable_joint_position_tracking")
+    def enable_joint_position_tracking(self) -> None:
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/disable_joint_position_tracking")
+    def disable_joint_position_tracking(self) -> None:
+        raise NotImplementedError
+
+    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]):
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/sample_configs")
+    def sample_configs(
+        self,
+        num_samples: int,
+        rejection_ratio: int = 10,
+        optimizer_collision_activation_distance: float = 0.01,
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def compute_kinematics(self, state: JointState) -> KinematicsState:
+        raise NotImplementedError
+
+    def get_active_js(self, full_js: JointState) -> JointState:
+        raise NotImplementedError
+
+    def get_full_js(self, active_js: JointState) -> JointState:
+        raise NotImplementedError
+
+    def update_link_inertial(
+        self,
+        link_name: str,
+        mass: Optional[float] = None,
+        com: Optional[torch.Tensor] = None,
+        inertia: Optional[torch.Tensor] = None,
+    ) -> None:
+        raise NotImplementedError
+
+    def update_links_inertial(
+        self, link_properties: dict[str, dict[str, Union[float, torch.Tensor]]]
+    ) -> None:
+        raise NotImplementedError
+
+    @profiler.record_function("solver_core/debug_dump")
+    def debug_dump(self, file_path: str):
+        raise NotImplementedError
+
+
+# The runtime binding exposes the complete eager CPU/MPS lifecycle, including
+# portable-only cache and attachment-management conveniences.
+if not TYPE_CHECKING:
+    SolverCore = _SolverCorePortable
 
 
 __all__ = ["SolverCore"]

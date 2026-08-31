@@ -9,20 +9,30 @@ rollout buffers intentionally remain unavailable.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, fields
 import math
 from numbers import Real
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
 from .mppi import MPPI, MPPICfg, jit_compute_total_cost
 from ..components.gaussian_distribution import CovType
-from ..components.particle_opt_core import SampleMode
+from ..components.particle_opt_core import ParticleOptCore, SampleMode
+from ..particle.mppi import jit_blend_cov, jit_blend_mean, jit_diag_a_cov_update
+from ..particle.particle_opt_utils import SquashType, gaussian_entropy, scale_ctrl
+from curobo._src.rollout.metrics import RolloutResult
+from curobo._src.rollout.rollout_protocol import Rollout
+from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.tensor_util import stable_topk
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 @dataclass
-class EvolutionStrategiesCfg(MPPICfg):
+class _EvolutionStrategiesCfgPortable(MPPICfg):
     """Configuration for portable natural-gradient evolution strategies."""
 
     solver_type: str = "es"
@@ -40,7 +50,7 @@ class EvolutionStrategiesCfg(MPPICfg):
             raise ValueError("learning_rate must be a finite positive real number")
 
 
-class EvolutionStrategies(MPPI):
+class _EvolutionStrategiesPortable(MPPI):
     """Deterministic ES with persistent Gaussian distribution state.
 
     The public lifecycle mirrors the V2 optimizer (warm starts, shifts,
@@ -252,7 +262,7 @@ class EvolutionStrategies(MPPI):
         raise ValueError(f"unidentified ES sample mode: {mode!r}")
 
 
-def calc_exp(total_costs: torch.Tensor) -> torch.Tensor:
+def calc_exp(total_costs):
     """Return per-problem ES z-score utilities for lower-is-better costs.
 
     Non-finite populations and singleton populations deterministically produce
@@ -276,13 +286,13 @@ def calc_exp(total_costs: torch.Tensor) -> torch.Tensor:
 
 
 def compute_es_mean(
-    w: torch.Tensor,
-    actions: torch.Tensor,
-    mean_action: torch.Tensor,
-    full_inv_cov: torch.Tensor | None,
+    w,
+    actions,
+    mean_action,
+    full_inv_cov,
     num_particles: int,
     learning_rate: float,
-) -> torch.Tensor:
+):
     """Compute the ES natural-gradient mean update on ``[P,N,H,D]`` actions."""
     if num_particles <= 0:
         raise ValueError("num_particles must be positive")
@@ -310,4 +320,90 @@ def compute_es_mean(
     return mean_action + float(learning_rate) * weighted * inv_diag / float(num_particles)
 
 
+class EvolutionStrategiesCfg(_EvolutionStrategiesCfgPortable):
+    """Pinned declaration façade for the portable ES configuration."""
+    pass
+
+
+class EvolutionStrategies(_EvolutionStrategiesPortable):
+    """Pinned declaration façade for portable Evolution Strategies."""
+    def __init__(self, config: EvolutionStrategiesCfg, rollout_list: List[Rollout], use_cuda_graph: bool=False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self): pass
+    def action_horizon(self): pass
+    def action_horizon_bounds_highs(self): pass
+    def action_horizon_bounds_lows(self): pass
+    def action_step_max(self): pass
+    def best_traj(self): pass
+    def best_traj(self, value): pass
+    def compute_metrics(self, action): pass
+    def config(self): pass
+    def cov_action(self): pass
+    def cov_action(self, value): pass
+    def debug_dump(self, file_path=''): pass
+    def device_cfg(self): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self): pass
+    def full_inv_cov(self): pass
+    def full_scale_tril(self): pass
+    def gamma_seq(self): pass
+    def generate_noise(self, shape, base_seed=None): pass
+    def get_all_rollout_instances(self): pass
+    def get_recorded_trace(self): pass
+    def get_rollouts(self): pass
+    def horizon(self): pass
+    def initialize_samples(self): pass
+    def inv_cov_action(self): pass
+    def mean_action(self): pass
+    def mean_action(self, value): pass
+    def neg_per_problem(self): pass
+    def null_act_seqs(self): pass
+    def null_per_problem(self): pass
+    def opt_dim(self): pass
+    def opt_dt(self): pass
+    def opt_dt(self, value): pass
+    def optimize(self, seed_action): pass
+    def outer_iters(self): pass
+    def particles_per_problem(self): pass
+    def problem_col(self): pass
+    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False): pass
+    def reset_covariance(self, reset_problem_ids=None): pass
+    def reset_cuda_graph(self): pass
+    def reset_distribution(self, reset_problem_ids=None): pass
+    def reset_mean(self, reset_problem_ids=None): pass
+    def reset_seed(self): pass
+    def reset_shape(self): pass
+    def rollout_fn(self): pass
+    def sample_actions(self, init_act): pass
+    def sample_lib(self): pass
+    def sampled_particles_per_problem(self): pass
+    def scale_tril(self): pass
+    def scale_tril(self, value): pass
+    def shift(self, shift_steps=0): pass
+    def solve_time(self): pass
+    def solver_names(self): pass
+    def top_trajs(self): pass
+    def total_num_particles(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_init_mean(self, init_mean): pass
+    def update_niters(self, niters): pass
+    def update_num_problems(self, num_problems): pass
+    def update_rollout_params(self, goal): pass
+    def update_samples(self): pass
+    def update_seed(self, init_act): pass
+    def update_solver_params(self, solver_params): pass
+    def use_cuda_graph(self): pass
+
+
+def _install_portable_es_runtime():
+    for public, portable in ((EvolutionStrategiesCfg, _EvolutionStrategiesCfgPortable), (EvolutionStrategies, _EvolutionStrategiesPortable)):
+        for base in reversed(portable.__mro__):
+            for name, value in base.__dict__.items():
+                if not (name.startswith("__") and name != "__init__"):
+                    setattr(public, name, value)
+
+
+_install_portable_es_runtime()
 __all__ = ["EvolutionStrategiesCfg", "EvolutionStrategies", "calc_exp", "compute_es_mean"]

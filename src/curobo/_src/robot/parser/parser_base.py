@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from curobo._src.geom.types import Mesh, Obstacle
 from curobo._src.robot.types import JointType, LinkParams
+from curobo._src.util.logging import log_and_raise
 
 
 class RobotParser:
@@ -21,12 +22,12 @@ class RobotParser:
         self._parent_map: Dict[str, Dict[str, object]] = {}
 
     @abstractmethod
-    def build_link_parent(self) -> None: ...
+    def build_link_parent(self): ...
 
     @abstractmethod
     def get_link_parameters(self, link_name: str, base: bool = False) -> LinkParams: ...
 
-    def add_absolute_path_to_link_meshes(self, mesh_dir: str = "") -> None:
+    def add_absolute_path_to_link_meshes(self, mesh_dir: str = ""):
         del mesh_dir
 
     @abstractmethod

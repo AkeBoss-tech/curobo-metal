@@ -12,6 +12,8 @@ from typing import Tuple
 import torch
 
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.tensor_util import stable_topk
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 
 class DistanceNeighborCalculator:

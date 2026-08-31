@@ -152,7 +152,20 @@ def _mask_spheres_image_cdist(
     return (mask[0], filtered[0]) if squeezed and batch == 1 else (mask, filtered)
 
 
-class RobotSegmenter:
+class _RobotSegmenterPortableMixin:
+    def invalidate_camera_projection(self) -> None:
+        """Forget cached camera calibration after an out-of-band update."""
+        self._projection_rays = None
+        self._calibration_signature = None
+        self.ready = False
+
+    def reset(self) -> None:
+        """Reset portable execution and calibration state."""
+        self.invalidate_camera_projection()
+        self._graph_executor.reset()
+
+
+class RobotSegmenter(_RobotSegmenterPortableMixin):
     """Segment robot pixels using portable forward kinematics and spheres.
 
     ``use_cuda_graph`` retains source compatibility.  On CPU/MPS it selects a
@@ -167,7 +180,7 @@ class RobotSegmenter:
         distance_threshold: float = 0.05,
         use_cuda_graph: bool = True,
         ops_dtype: torch.dtype = torch.bfloat16,
-    ) -> None:
+    ):
         if not isinstance(kinematics, Kinematics):
             raise TypeError("kinematics must be a curobo Kinematics instance")
         if not isinstance(distance_threshold, (int, float)) or not torch.isfinite(
@@ -278,7 +291,7 @@ class RobotSegmenter:
         signature = self._camera_calibration_signature(camera_obs)
         assert camera_obs.depth_image is not None
         depth, _ = _canonical_depth(camera_obs.depth_image)
-        expected = (*depth.shape, 3)
+        expected = (depth.shape[0], depth.shape[-2] * depth.shape[-1], 3)
         if (
             self._projection_rays is None
             or self._projection_rays.shape != expected
@@ -291,29 +304,8 @@ class RobotSegmenter:
         # Here we retain ordinary PyTorch semantics by casting only depth to
         # the calibrated ray dtype; the depth image returned to the caller is
         # never modified or downcast.
-        return project_depth_using_rays(depth.to(dtype=rays.dtype), rays)
-
-    def invalidate_camera_projection(self) -> None:
-        """Forget cached camera calibration after an out-of-band update.
-
-        Most callers need not invoke this: ``get_pointcloud_from_depth``
-        detects replaced or in-place-mutated intrinsics.  It remains useful
-        for deterministic calibration lifecycle tests and external capture
-        systems that explicitly reset their camera configuration.
-        """
-        self._projection_rays = None
-        self._calibration_signature = None
-        self.ready = False
-
-    def reset(self) -> None:
-        """Reset portable execution and calibration state.
-
-        This is the CPU/MPS analogue of discarding V2's CUDA-graph buffers.
-        It intentionally does not alter robot kinematics or caller-owned
-        camera observations.
-        """
-        self.invalidate_camera_projection()
-        self._graph_executor.reset()
+        points = project_depth_using_rays(depth.to(dtype=rays.dtype), rays)
+        return points.reshape(*depth.shape, 3)
 
     def _points_in_robot_frame(self, camera_obs: CameraObservation) -> torch.Tensor:
         points = self.get_pointcloud_from_depth(camera_obs)

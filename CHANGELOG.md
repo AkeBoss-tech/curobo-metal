@@ -14,19 +14,22 @@ exposes a compatibility-oriented `curobo` namespace.
   whole-body slices.
 - Runtime-compiled Metal kernels for selected kinematics and collision hot
   paths, with MPS fallback-disabled tests.
-- All 361 pinned upstream runtime module paths are importable from the wheel.
-- Fifteen bounded CUDA-vs-Metal replay capabilities have checked-in paired
-  evidence, including cubic B-spline trajectory generation.
-- A hash-pinned Franka robot/config subset with complete third-party notices.
+- The strict pinned Python surface is exact: all 361 runtime modules, 3,870
+  exports, and 747 callable shapes match the inventory.
+- Nineteen bounded CUDA-vs-Metal replay capabilities have fresh, provenance-
+  bound RTX 3090 evidence, including invalid, edge, and multi-case matrices.
+- Forty byte-exact, hash-pinned upstream robot/config/scene assets with their
+  applicable third-party notices.
+- The complete 225-item pinned upstream workload census is classified. All 55
+  applicable modules pass unchanged in a clean installed-wheel run (1,116
+  tests); 122 platform-substituted, 35 not-applicable, and 13 external entries
+  retain explicit reasons.
 
 ### Alpha limitations
 
-- This is not yet a source-unchanged or full-behavior cuRobo replacement.
-- The current strict `_src` surface audit still contains unclassified export
-  and callable-shape differences.
-- Real cross-backend PRM, L-BFGS, evolution-strategy, and full MotionGen replay
-  probes are not complete. Existing placeholder/narrow probes for those names
-  are not parity evidence.
+- Static surface equality and the bounded numerical matrices do not assert
+  byte-identical source, identical stochastic samples or solver iterates, or
+  behavior in every untested numerical regime.
 - CUDA graphs, CUDA streams, NVRTC, Warp packed ABIs, Isaac/Omniverse, ROS, USD
   authoring/viewers, and platform-specific integrations are outside this alpha.
 - Do not install `curobo-metal` and NVIDIA cuRobo in the same Python environment;

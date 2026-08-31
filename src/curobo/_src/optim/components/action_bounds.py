@@ -8,6 +8,8 @@ aliases are retained for the portable optimizers in this package.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import torch
 
 
@@ -25,8 +27,8 @@ class ActionBounds:
         action_bound_lows: torch.Tensor,
         action_bound_highs: torch.Tensor,
         action_horizon: int,
-        step_scale: float = 1.0,
-    ) -> None:
+        step_scale: float,
+    ):
         self._action_horizon = 0
         self._step_scale = self._validate_scale(step_scale)
         self.lows: torch.Tensor
@@ -99,14 +101,14 @@ class ActionBounds:
         action_bound_lows: torch.Tensor,
         action_bound_highs: torch.Tensor,
         action_horizon: int,
-    ) -> "ActionBounds":
+    ):
         """Refresh cached values after a rollout changes its bounds or horizon.
 
         Upstream refreshes only on a horizon change.  Refreshing changed bound
         values as well avoids stale limits for mutable portable rollouts while
         preserving the same result for immutable inputs.
         """
-        return self._compute(
+        self._compute(
             action_bound_lows,
             action_bound_highs,
             action_horizon,

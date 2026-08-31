@@ -15,7 +15,15 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 
-from .constants import PY_HASH_PRIME_X, PY_HASH_PRIME_Y, PY_HASH_PRIME_Z, PY_POSITIVE_MASK
+from curobo._src.perception.mapper.constants import (
+    DEFAULT_HASH_LAYOUT,
+    PY_HASH_EMPTY,
+    PY_HASH_PRIME_X,
+    PY_HASH_PRIME_Y,
+    PY_HASH_PRIME_Z,
+    PY_POSITIVE_MASK,
+)
+from curobo.logging import log_and_raise
 
 BLOCK_CHECKPOINT_FORMAT = "curobo.mapper_blocks"
 BLOCK_CHECKPOINT_SCHEMA_VERSION = 1.0
@@ -79,11 +87,11 @@ def load_block_checkpoint(file_path: Union[str, PathLike[str]]) -> Dict[str, Any
 
 
 def clone_blocks_to_cpu(blocks: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-    return {key: require_tensor(blocks, key).detach().cpu().clone() for key in blocks}
+    return {key: require_tensor(blocks, key, None).detach().cpu().clone() for key in blocks}
 
 
 def clone_blocks(blocks: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-    return {key: require_tensor(blocks, key).detach().clone() for key in blocks}
+    return {key: require_tensor(blocks, key, None).detach().clone() for key in blocks}
 
 
 def validate_block_checkpoint(checkpoint: Any) -> None:
@@ -146,20 +154,20 @@ def validate_dense_block_payload(blocks: Any, block_metadata: Dict[str, Any]) ->
     if not is_portable_dense_block_payload(blocks):
         raise ValueError("portable dense blocks must contain exactly tsdf, weight, occupancy, esdf, gradient, and generation")
     shape = tuple(int(value) for value in block_metadata["grid_shape"])
-    tsdf = require_tensor(blocks, "tsdf")
+    tsdf = require_tensor(blocks, "tsdf", None)
     if tsdf.ndim != 4 or tuple(tsdf.shape[1:]) != shape or tsdf.dtype not in (torch.float32, torch.float64):
         raise ValueError("tsdf must be float32/float64 [E, *grid_shape]")
     environments = int(tsdf.shape[0])
     if environments < 1:
         raise ValueError("dense checkpoint must contain at least one environment")
     for key in ("weight", "esdf"):
-        value = require_tensor(blocks, key)
+        value = require_tensor(blocks, key, None)
         if value.shape != tsdf.shape or value.dtype != tsdf.dtype:
             raise ValueError(f"{key} must match tsdf shape and dtype")
     occupancy = require_tensor(blocks, "occupancy", torch.bool)
     if occupancy.shape != tsdf.shape:
         raise ValueError("occupancy must match tsdf shape")
-    gradient = require_tensor(blocks, "gradient")
+    gradient = require_tensor(blocks, "gradient", None)
     if gradient.shape != tsdf.shape + (3,) or gradient.dtype != tsdf.dtype:
         raise ValueError("gradient must match tsdf shape with a trailing xyz dimension")
     generation = require_tensor(blocks, "generation", torch.int64)
@@ -257,7 +265,11 @@ def validate_import_block_coords_for_grid(coords: torch.Tensor, grid_shape: Tupl
         raise ValueError("block coordinates lie outside grid_shape")
 
 
-def rebuild_import_hash_state(coords: torch.Tensor, hash_capacity: int, max_blocks: int):
+def rebuild_import_hash_state(
+    coords: torch.Tensor,
+    hash_capacity: int,
+    max_blocks: int,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     validate_import_block_coords_for_hash_layout(coords)
     if hash_capacity <= 0 or max_blocks < 0:
         raise ValueError("hash_capacity must be positive and max_blocks nonnegative")
@@ -278,7 +290,10 @@ def rebuild_import_hash_state(coords: torch.Tensor, hash_capacity: int, max_bloc
     return hashes, block_to_hash_slot
 
 
-def apply_constant_dynamic_weight(blocks: Dict[str, torch.Tensor], import_weight: float):
+def apply_constant_dynamic_weight(
+    blocks: Dict[str, torch.Tensor],
+    import_weight: float,
+) -> None:
     for key in ("weight", "block_grid_weight"):
         if key in blocks:
             original = blocks[key]
@@ -287,16 +302,23 @@ def apply_constant_dynamic_weight(blocks: Dict[str, torch.Tensor], import_weight
                 torch.full_like(original, import_weight),
                 torch.zeros_like(original),
             )
-    return blocks
 
 
-def apply_constant_feature_weight(blocks: Dict[str, torch.Tensor], import_weight: float):
-    return apply_constant_dynamic_weight(blocks, import_weight)
+def apply_constant_feature_weight(
+    blocks: Dict[str, torch.Tensor],
+    import_weight: float,
+) -> None:
+    apply_constant_dynamic_weight(blocks, import_weight)
 
 
-def prepare_blocks_for_import(blocks: Dict[str, torch.Tensor], block_metadata: Dict[str, Any], *,
-                              import_weight: Optional[float], minimum_tsdf_weight: float,
-                              block_empty_threshold: float):
+def prepare_blocks_for_import(
+    blocks: Dict[str, torch.Tensor],
+    block_metadata: Dict[str, Any],
+    *,
+    import_weight: Optional[float],
+    minimum_tsdf_weight: float,
+    block_empty_threshold: float,
+) -> Dict[str, torch.Tensor]:
     validate_block_metadata(block_metadata)
     validate_block_payload(blocks, block_metadata)
     if is_sparse_block_payload(blocks):
@@ -314,7 +336,11 @@ def prepare_blocks_for_import(blocks: Dict[str, torch.Tensor], block_metadata: D
     return result
 
 
-def validate_recycle_threshold(blocks: Dict[str, torch.Tensor], block_metadata: Dict[str, Any], block_empty_threshold: float):
+def validate_recycle_threshold(
+    blocks: Dict[str, torch.Tensor],
+    block_metadata: Dict[str, Any],
+    block_empty_threshold: float,
+) -> None:
     validate_block_payload(blocks, block_metadata)
     if block_empty_threshold < 0:
         raise ValueError("block_empty_threshold must be nonnegative")
@@ -325,7 +351,11 @@ def validate_recycle_threshold(blocks: Dict[str, torch.Tensor], block_metadata: 
             raise ValueError("imported dense voxels would be immediately recyclable; increase import_weight")
 
 
-def require_tensor(blocks: Dict[str, torch.Tensor], key: str, dtype: torch.dtype | None = None) -> torch.Tensor:
+def require_tensor(
+    blocks: Dict[str, torch.Tensor],
+    key: str,
+    dtype: torch.dtype,
+) -> torch.Tensor:
     value = blocks.get(key)
     if not isinstance(value, torch.Tensor):
         raise ValueError(f"block payload field {key!r} must be a torch.Tensor")
@@ -339,35 +369,35 @@ def require_shape(tensor: torch.Tensor, key: str, shape: tuple[int, ...]) -> Non
         raise ValueError(f"{key} must have shape {shape}, got {tuple(tensor.shape)}")
 
 
-def require_positive_float(values: Dict[str, Any], key: str) -> None:
-    if not isinstance(values.get(key), (int, float)) or not math.isfinite(float(values[key])) or values[key] <= 0:
+def require_positive_float(block_metadata: Dict[str, Any], key: str) -> None:
+    if not isinstance(block_metadata.get(key), (int, float)) or not math.isfinite(float(block_metadata[key])) or block_metadata[key] <= 0:
         raise ValueError(f"{key} must be a positive finite float")
 
 
-def require_positive_int(values: Dict[str, Any], key: str) -> None:
-    if not isinstance(values.get(key), int) or isinstance(values[key], bool) or values[key] <= 0:
+def require_positive_int(block_metadata: Dict[str, Any], key: str) -> None:
+    if not isinstance(block_metadata.get(key), int) or isinstance(block_metadata[key], bool) or block_metadata[key] <= 0:
         raise ValueError(f"{key} must be a positive integer")
 
 
-def require_nonnegative_int(values: Dict[str, Any], key: str) -> None:
-    if not isinstance(values.get(key), int) or isinstance(values[key], bool) or values[key] < 0:
+def require_nonnegative_int(block_metadata: Dict[str, Any], key: str) -> None:
+    if not isinstance(block_metadata.get(key), int) or isinstance(block_metadata[key], bool) or block_metadata[key] < 0:
         raise ValueError(f"{key} must be a nonnegative integer")
 
 
-def require_bool(values: Dict[str, Any], key: str) -> None:
-    if not isinstance(values.get(key), bool):
+def require_bool(block_metadata: Dict[str, Any], key: str) -> None:
+    if not isinstance(block_metadata.get(key), bool):
         raise ValueError(f"{key} must be a bool")
 
 
-def require_vec3(values: Dict[str, Any], key: str) -> None:
-    if not isinstance(values.get(key), (list, tuple)) or len(values[key]) != 3:
+def require_vec3(block_metadata: Dict[str, Any], key: str) -> None:
+    if not isinstance(block_metadata.get(key), (list, tuple)) or len(block_metadata[key]) != 3:
         raise ValueError(f"{key} must be a length-3 vector")
-    if any(not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) for value in values[key]):
+    if any(not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) for value in block_metadata[key]):
         raise ValueError(f"{key} must contain finite numeric values")
 
 
-def require_int3(values: Dict[str, Any], key: str) -> None:
-    if not isinstance(values.get(key), (list, tuple)) or len(values[key]) != 3 or any(not isinstance(x, int) or x <= 0 for x in values[key]):
+def require_int3(block_metadata: Dict[str, Any], key: str) -> None:
+    if not isinstance(block_metadata.get(key), (list, tuple)) or len(block_metadata[key]) != 3 or any(not isinstance(x, int) or x <= 0 for x in block_metadata[key]):
         raise ValueError(f"{key} must be three positive integers")
 
 

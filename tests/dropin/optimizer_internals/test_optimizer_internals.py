@@ -33,8 +33,12 @@ def test_iteration_state_clone_and_copy_are_device_resident():
 
 def test_gradient_helpers_and_optimizer_factory():
     grad = torch.tensor([[2.0, -1.0]])
-    direction = jit_cg_compute_step_direction(grad, grad * 0.5, -grad, 1.0, "polak_ribiere")
+    direction, previous_gradient, previous_step = jit_cg_compute_step_direction(
+        grad, grad * 0.5, -grad, 1.0, "polak_ribiere"
+    )
     assert direction.shape == grad.shape and torch.isfinite(direction).all()
+    torch.testing.assert_close(previous_gradient, grad)
+    torch.testing.assert_close(previous_step, direction)
     step = jit_lbfgs_compute_step_direction(
         torch.zeros(1, 2), torch.zeros(1, 2), torch.zeros(1, 2, 2),
         torch.zeros(1, 2, 2), grad, 2, 1e-8,

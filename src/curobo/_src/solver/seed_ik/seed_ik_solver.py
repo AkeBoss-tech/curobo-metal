@@ -12,18 +12,31 @@ import time
 from typing import Dict, Optional, Tuple
 
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.robot.kinematics.kinematics import Kinematics
+from curobo._src.optim.util.levenberg_marquardt_step import (
+    LevenbergMarquardtState,
+    LevenbergMarquardtStep,
+)
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.types.kinematics_params import KinematicsParams
 from curobo._src.solver.solver_ik_result import IKSolverResult
 from curobo._src.state.state_joint import JointState
-from curobo._src.types.tool_pose import GoalToolPose
+from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.cuda_graph_util import GraphExecutor, create_graph_executor
+from curobo._src.util.logging import log_and_raise, log_info
+from curobo._src.util.sampling.sample_buffer import SampleBuffer
+from curobo._src.util.tensor_util import stable_topk, tensor_repeat_seeds
+from curobo._src.util.torch_util import get_torch_jit_decorator
+from curobo._src.util.warp import init_warp
 
 from .seed_ik_error_calculator import SeedIKErrorCalculator
 from .seed_ik_solver_cfg import SeedIKSolverCfg
 from .seed_ik_state import SeedIKState
 from .seed_iteration_state_manager import SeedIterationStateManager
+from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
 
 
 class SeedIKSolver:
@@ -476,12 +489,24 @@ class SeedIKSolver:
             },
         )
 
-    def solve_single(self, goal_tool_poses, current_state=None, seed_config=None, return_seeds=1):
+    def solve_single(
+        self,
+        goal_tool_poses: GoalToolPose,
+        current_state: Optional[JointState] = None,
+        seed_config: Optional[torch.Tensor] = None,
+        return_seeds: int = 1,
+    ) -> IKSolverResult:
         if goal_tool_poses.batch_size != 1:
             raise ValueError("solve_single requires batch size 1")
         return self._solve_impl(goal_tool_poses, current_state, seed_config, return_seeds, 1)
 
-    def solve_batch(self, goal_tool_poses, current_state=None, seed_config=None, return_seeds=1):
+    def solve_batch(
+        self,
+        goal_tool_poses: GoalToolPose,
+        current_state: Optional[JointState] = None,
+        seed_config: Optional[torch.Tensor] = None,
+        return_seeds: int = 1,
+    ) -> IKSolverResult:
         return self._solve_impl(
             goal_tool_poses, current_state, seed_config, return_seeds, goal_tool_poses.batch_size
         )
@@ -490,20 +515,20 @@ class SeedIKSolver:
     def joint_limits(self):
         return self._robot_model.get_joint_limits()
 
-    def get_default_joint_position(self):
+    def get_default_joint_position(self) -> torch.Tensor:
         return self.default_joint_position.clone()
 
     @property
-    def kinematics(self):
+    def kinematics(self) -> Kinematics:
         return self._aux_robot_model
 
-    def compute_kinematics(self, joint_position):
+    def compute_kinematics(self, joint_position: JointState) -> CudaKinematicsState:
         state = joint_position if isinstance(joint_position, JointState) else JointState.from_position(
             joint_position, self.joint_names
         )
         return self.kinematics.compute_kinematics(state)
 
-    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, object]):
+    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]):
         self.error_calculator.update_tool_pose_criteria(tool_pose_criteria)
 
     def reset_seed(self):

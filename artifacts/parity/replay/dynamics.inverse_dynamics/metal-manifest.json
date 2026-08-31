@@ -3,7 +3,7 @@
   "capability": "dynamics.inverse_dynamics",
   "corpus": {
     "case_file": "dynamics.inverse_dynamics.json",
-    "case_sha256": "4e1765787b5c3b543fe159012b39febbb9ec2e49bce1484c3987940f86636c33",
+    "case_sha256": "5b2b0e1ba709ae10ea31709011e6b2d0961e768097156f9ca4cf874f466c0b7a",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,19 +21,31 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "zero_motion",
+        "batched_layout",
+        "noncontiguous_state",
+        "result_isolation",
+        "vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "dynamics",
     "status": true
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "618acde9f8f5745b1656ba242618e1182fc59742da2141d86d4cd16a277a3f1c"
+    "sha256": "afd56e5fca1375719d04ab8930c87662c04b03d8160024cb59c6685570052ae5"
   },
   "operation": "inverse_dynamics",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "1e2c4bcd6ddbaa2d9f987f0e6f6403842491b58c8a29de872fcc9a62b31a5284"
+    "sha256": "e0909e2fcb61d7ce05e6d730811c0a20c04d8204f53cce02fa8208be0edbe335"
   },
   "runtime": {
     "python": "3.13.9",

@@ -3,17 +3,26 @@
 from typing import Optional
 
 import torch
+from torch.autograd import Function
+
+from curobo._src.curobolib.backends import dynamics as dynamics_cu
+from curobo._src.curobolib.cuda_ops.tensor_checks import (
+    check_float32_tensors,
+    check_int16_tensors,
+    check_int8_tensors,
+)
+from curobo._src.types.device_cfg import DeviceCfg
 
 _CACHE_FLOATS_PER_LINK = 20
 
 
-class RNEAForwardFunction(torch.autograd.Function):
+class RNEAForwardFunction(Function):
     @staticmethod
     def create_buffers(
         batch_size: int,
         num_dof: int,
         num_links: int,
-        device_cfg=None,
+        device_cfg: DeviceCfg = DeviceCfg(),
         with_external_forces: bool = False,
     ) -> dict:
         device = getattr(device_cfg, "device", "cpu")
@@ -36,13 +45,32 @@ class RNEAForwardFunction(torch.autograd.Function):
 
     @staticmethod
     def forward(
-        ctx, q, qd, qdd, tau, grad_q_buf, grad_qd_buf, grad_qdd_buf,
-        forward_cache, fixed_transforms, link_masses_com, link_inertias,
-        joint_map_type, joint_map, link_map, joint_offset_map, gravity,
-        level_starts, level_links, num_links: int, num_dof: int, n_levels: int,
-        threads_per_batch: int, f_ext: Optional[torch.Tensor] = None,
+        ctx,
+        q: torch.Tensor,
+        qd: torch.Tensor,
+        qdd: torch.Tensor,
+        tau: torch.Tensor,
+        grad_q_buf: torch.Tensor,
+        grad_qd_buf: torch.Tensor,
+        grad_qdd_buf: torch.Tensor,
+        forward_cache: torch.Tensor,
+        fixed_transforms: torch.Tensor,
+        link_masses_com: torch.Tensor,
+        link_inertias: torch.Tensor,
+        joint_map_type: torch.Tensor,
+        joint_map: torch.Tensor,
+        link_map: torch.Tensor,
+        joint_offset_map: torch.Tensor,
+        gravity: torch.Tensor,
+        level_starts: torch.Tensor,
+        level_links: torch.Tensor,
+        num_links: int,
+        num_dof: int,
+        n_levels: int,
+        threads_per_batch: int,
+        f_ext: Optional[torch.Tensor] = None,
         grad_f_ext_buf: Optional[torch.Tensor] = None,
-    ):
+    ) -> torch.Tensor:
         raise NotImplementedError(
             "The raw CUDA-buffer RNEA function has no Metal equivalent; use "
             "curobo._src.robot.dynamics.Dynamics for differentiable CPU/MPS RNEA"

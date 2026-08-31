@@ -17,7 +17,9 @@ from curobo.util_file import (
 
 
 def test_pinned_franka_config_resolves_complete_real_asset_tree() -> None:
-    assert list_available_robots() == ["franka"]
+    assert list_available_robots() == [
+        "dual_ur10e", "franka", "simple_mimic_robot", "unitree_g1", "ur10e"
+    ]
     config_path = get_robot_path("franka")
     assert config_path == get_robot_configs_path() / "franka.yml"
 
@@ -49,7 +51,7 @@ def test_pinned_primitive_world_config_loads_without_accelerator_imports() -> No
 def test_missing_robot_error_matches_pinned_inventory() -> None:
     with pytest.raises(
         FileNotFoundError,
-        match=r"^Robot 'missing' not found\. Available robots: \['franka'\]$",
+        match=r"^Robot 'missing' not found\. Available robots: \['dual_ur10e', 'franka', 'simple_mimic_robot', 'unitree_g1', 'ur10e'\]$",
     ):
         get_robot_path("missing")
 

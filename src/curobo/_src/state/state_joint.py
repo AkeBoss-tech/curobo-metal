@@ -2,18 +2,32 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo_metal.types.state import JointState as _MetalJointState
 
 from curobo._src.types.control_space import ControlSpace
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import deprecated, log_and_raise, log_info, log_warn
+from curobo._src.util.tensor_util import (
+    check_tensor_shapes,
+    clone_if_not_none,
+    copy_tensor,
+)
 from .filter_coeff import FilterCoeff
 from .state_base import State
+from .state_joint_jit_helpers import (
+    clone_state_jit,
+    fn_get_index,
+    jit_get_index,
+    jit_get_index_int,
+    jit_joint_state_copy,
+)
 
 # The upstream aliases are intentionally tensors in the portable backend.  They
 # retain type-level compatibility without implying the CUDA packed-buffer ABI.
@@ -55,8 +69,6 @@ class JointState(_MetalJointState, State):
                 setattr(self, field, self.device_cfg.to_device(value))
         if self.joint_names is not None:
             self.joint_names = list(self.joint_names)
-            if len(self.joint_names) != self.position.shape[-1]:
-                raise ValueError("joint_names must match the final position dimension")
 
     # These accessors are deliberately declared on the compatibility class
     # rather than inherited invisibly from the portable value implementation.
@@ -80,7 +92,7 @@ class JointState(_MetalJointState, State):
     @staticmethod
     def from_state_tensor(
         state_tensor, joint_names=None, dof=7
-    ) -> "JointState":
+    ):
         return JointState(
             state_tensor[..., :dof].contiguous(),
             state_tensor[..., dof : 2 * dof].contiguous(),
@@ -140,13 +152,13 @@ class JointState(_MetalJointState, State):
             dt=torch.ones(size[0], **device_cfg.as_torch_dict()),
         )
 
-    def data_ptr(self) -> int:
+    def data_ptr(self):
         return self.position.data_ptr()
 
     def __len__(self) -> int:
         return self.position.shape[0]
 
-    def clone(self) -> "JointState":
+    def clone(self):
         """Clone every materialized state channel without breaking autograd.
 
         The base portable value model deliberately has a minimal clone helper.
@@ -202,6 +214,7 @@ class JointState(_MetalJointState, State):
             knot_dt=self.knot_dt,
         )
 
+    @deprecated("Use repeat_joint_state() from state_joint_ops instead.")
     def repeat(self, repeat_input: List[int]):
         repeats = tuple(repeat_input)
         return self._shape_result(
@@ -251,8 +264,26 @@ class JointState(_MetalJointState, State):
         if isinstance(index, list):
             index = torch.as_tensor(index, device=self.device, dtype=torch.long)
 
+        if isinstance(index, int):
+            if index >= self.position.shape[0] or index < -self.position.shape[0]:
+                raise ValueError(
+                    f"{index} index out of range, current state is of length {self.position.shape}"
+                )
+        elif isinstance(index, torch.Tensor) and index.numel():
+            maximum = int(index.max().item())
+            minimum = int(index.min().item())
+            if maximum >= self.position.shape[0] or minimum < -self.position.shape[0]:
+                raise ValueError(
+                    f"{maximum} index out of range, current state is of length {self.position.shape}"
+                )
+
         def select(value):
             return self._apply_optional(value, lambda tensor: tensor[index])
+
+        def select_if_nonscalar(value):
+            if value is None or value.ndim == 0:
+                return value
+            return value[index]
 
         batch_index = index[0] if isinstance(index, tuple) and index else index
 
@@ -269,8 +300,8 @@ class JointState(_MetalJointState, State):
             select(self.position), select(self.velocity), select(self.acceleration),
             None if self.joint_names is None else self.joint_names.copy(), select(self.jerk),
             self.device_cfg, select_batch_metadata(self.dt), aux_data=dict(self.aux_data),
-            knot=select_batch_metadata(self.knot),
-            knot_dt=select_batch_metadata(self.knot_dt),
+            knot=select(self.knot),
+            knot_dt=select_if_nonscalar(self.knot_dt),
             control_space=self.control_space,
         )
 
@@ -298,7 +329,7 @@ class JointState(_MetalJointState, State):
         output.joint_names = list(joint_names)
         return output
 
-    def copy_data(self, in_joint_state: "JointState"):
+    def copy_data(self, in_joint_state: JointState):
         """Copy tensor contents while retaining this object's metadata buffers.
 
         This is a deprecated upstream API, but planner buffer owners still use
@@ -321,7 +352,7 @@ class JointState(_MetalJointState, State):
                 setattr(self, field, source)
         return self
 
-    def to(self, device_cfg: DeviceCfg) -> "JointState":
+    def to(self, device_cfg: DeviceCfg):
         convert = lambda value: None if value is None else device_cfg.to_device(value)
         return type(self)(
             convert(self.position), convert(self.velocity), convert(self.acceleration),
@@ -331,7 +362,7 @@ class JointState(_MetalJointState, State):
             control_space=self.control_space,
         )
 
-    def detach(self) -> "JointState":
+    def detach(self):
         for field in self._tensor_fields():
             value = getattr(self, field)
             if value is not None:
@@ -397,6 +428,7 @@ class JointState(_MetalJointState, State):
         value = self.reorder(joint_names)
         self.copy_reference(value)
 
+    @deprecated("Use stack_joint_states() from state_joint_ops instead.")
     def stack(self, new_state: JointState):
         # Despite the historical name, pinned cuRobo stacks consecutive
         # waypoints by concatenating the second-to-last (trajectory) axis.
@@ -405,6 +437,7 @@ class JointState(_MetalJointState, State):
         from .state_joint_ops import stack_joint_states
         return stack_joint_states(self, new_state)
 
+    @deprecated("Use cat_joint_states() from state_joint_ops instead.")
     def cat(self, other_js: JointState, dim: int):
         dof_dim = dim if dim >= 0 else self.position.ndim + dim
         return self._combine(
@@ -429,7 +462,8 @@ class JointState(_MetalJointState, State):
             control_space=self.control_space, **values,
         )
 
-    def repeat_seeds(self, num_seeds: int) -> "JointState":
+    @deprecated("Use repeat_joint_state_seeds() from state_joint_ops instead.")
+    def repeat_seeds(self, num_seeds: int):
         if num_seeds <= 1:
             return self.clone()
 
@@ -454,7 +488,8 @@ class JointState(_MetalJointState, State):
             control_space=self.control_space,
         )
 
-    def get_state_tensor(self) -> torch.Tensor:
+    @deprecated("Use joint_state_to_tensor() from state_joint_ops instead.")
+    def get_state_tensor(self):
         # The V2 packing ABI always allocates four derivative channels.  A
         # partial state therefore packs absent derivatives as zeros rather
         # than shifting the position/velocity layout based on optional fields.
@@ -466,64 +501,79 @@ class JointState(_MetalJointState, State):
             dim=-1,
         )
 
-    def blend(self, coeff: FilterCoeff, new_state: "JointState"):
+    @deprecated("Use blend_joint_states() from state_joint_ops instead.")
+    def blend(self, coeff: FilterCoeff, new_state: JointState):
         from .state_joint_ops import blend_joint_states
         return blend_joint_states(self, new_state, coeff)
 
+    @deprecated("Use apply_kernel_to_joint_state() from state_joint_ops instead.")
     def apply_kernel(self, kernel_mat):
         from .state_joint_ops import apply_kernel_to_joint_state
         return apply_kernel_to_joint_state(self, kernel_mat)
 
+    @deprecated("Use scale_joint_state() from state_joint_ops instead.")
     def scale(self, dt: Union[float, torch.Tensor]):
         from .state_joint_ops import scale_joint_state
         return scale_joint_state(self, dt)
 
+    @deprecated("Use scale_joint_state_by_dt() from state_joint_ops instead.")
     def scale_by_dt(self, dt: torch.Tensor, new_dt: torch.Tensor):
         from .state_joint_ops import scale_joint_state_by_dt
         return scale_joint_state_by_dt(self, dt, new_dt)
 
+    @deprecated("Use scale_joint_state_time() from state_joint_ops instead.")
     def scale_time(self, new_dt: torch.Tensor):
         from .state_joint_ops import scale_joint_state_time
         return scale_joint_state_time(self, new_dt)
 
+    @deprecated("Use calculate_fd_from_position() from state_joint_ops instead.")
     def calculate_fd_from_position(self, dt: Optional[torch.Tensor] = None):
         from .state_joint_ops import calculate_fd_from_position
         return calculate_fd_from_position(self, dt)
 
+    @deprecated("Use augment_joint_state() from state_joint_ops instead.")
     def get_augmented_joint_state(self, joint_names, lock_joints: Optional[JointState] = None) -> JointState:
         from .state_joint_ops import augment_joint_state
         return augment_joint_state(self, joint_names, lock_joints)
 
+    @deprecated("Use append_joints_to_state() from state_joint_ops instead.")
     def append_joints(self, joint_state: JointState):
         from .state_joint_ops import append_joints_to_state
         return append_joints_to_state(self, joint_state)
 
+    @deprecated("Use gather_joint_state_by_seed() from state_joint_trajectory_ops instead.")
     def gather_by_seed_index(self, idx: torch.Tensor):
         from .state_joint_trajectory_ops import gather_joint_state_by_seed
         return gather_joint_state_by_seed(self, idx)
 
+    @deprecated("Use copy_joint_state_only_index() from state_joint_trajectory_ops instead.")
     def copy_only_index(self, in_joint_state: JointState, idx: Union[int, torch.Tensor]):
         from .state_joint_trajectory_ops import copy_joint_state_only_index
         return copy_joint_state_only_index(self, in_joint_state, idx)
 
+    @deprecated("Use copy_joint_state_at_index() from state_joint_trajectory_ops instead.")
     def copy_at_index(self, in_joint_state: JointState, idx: Union[int, torch.Tensor]):
         from .state_joint_trajectory_ops import copy_joint_state_at_index
-        return copy_joint_state_at_index(self, in_joint_state, idx)
+        copy_joint_state_at_index(self, in_joint_state, idx)
 
+    @deprecated("Use copy_joint_state_at_batch_seed_indices() from state_joint_trajectory_ops.")
     def copy_at_batch_seed_indices(self, in_joint_state: JointState, batch_idx: torch.Tensor, seed_idx: torch.Tensor):
         from .state_joint_trajectory_ops import copy_joint_state_at_batch_seed_indices
         return copy_joint_state_at_batch_seed_indices(
             self, in_joint_state, batch_idx, seed_idx
         )
 
+    @deprecated("Use get_joint_state_at_horizon_index() from state_joint_trajectory_ops instead.")
     def get_trajectory_at_horizon_index(self, horizon_index: int):
         from .state_joint_trajectory_ops import get_joint_state_at_horizon_index
         return get_joint_state_at_horizon_index(self, horizon_index)
 
+    @deprecated("Use trim_joint_state_trajectory() from state_joint_trajectory_ops instead.")
     def trim_trajectory(self, start_idx: int, end_idx: Optional[int] = None):
         from .state_joint_trajectory_ops import trim_joint_state_trajectory
         return trim_joint_state_trajectory(self, start_idx, end_idx)
 
+    @deprecated("Use index_joint_state_dof() from state_joint_trajectory_ops instead.")
     def index_dof(self, idx: int):
         from .state_joint_trajectory_ops import index_joint_state_dof
         if isinstance(idx, int):

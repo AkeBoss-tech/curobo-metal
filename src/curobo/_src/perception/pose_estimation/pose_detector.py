@@ -14,7 +14,13 @@ from .detection_result import DetectionResult
 from .geometry import ArticulatedRobotGeometry, RigidObjectGeometry
 from .mesh_robot import RobotMesh
 from .pose_detector_cfg import DetectorCfg
-from .util import extract_observed_points
+from .util import (
+    compute_pose_point_to_plane_cholesky,
+    compute_pose_point_to_plane_svd,
+    extract_observed_points,
+    find_nearest_neighbors,
+    resample_points,
+)
 
 
 class PoseDetector:
@@ -25,7 +31,11 @@ class PoseDetector:
     registration on ordinary PyTorch tensors.
     """
 
-    def __init__(self, geometry: Union[RigidObjectGeometry, ArticulatedRobotGeometry, RobotMesh], config: DetectorCfg) -> None:
+    def __init__(
+        self,
+        geometry: Union[RigidObjectGeometry, ArticulatedRobotGeometry, RobotMesh],
+        config: DetectorCfg,
+    ):
         self.geometry = geometry
         self.config = config
 

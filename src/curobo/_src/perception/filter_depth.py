@@ -15,6 +15,9 @@ from typing import Optional, Tuple
 import torch
 import torch.nn.functional as F
 
+from curobo._src.curobolib.cuda_ops.tensor_checks import check_float32_tensors
+from curobo._src.util.logging import log_and_raise
+
 
 @dataclass
 class FilterDepthConfig:
@@ -73,7 +76,7 @@ class FilterDepth:
         bilateral_sigma_depth: float = 0.1,
         device: str = "cuda",
         num_batch: int = 1,
-    ) -> None:
+    ):
         if len(image_shape) != 2 or any(not isinstance(value, int) or value <= 0 for value in image_shape):
             raise ValueError("image_shape must be a positive (height, width) pair")
         if int(num_batch) < 1:
@@ -255,7 +258,7 @@ class FilterDepth:
         depth_maximum_distance: Optional[float] = None,
         flying_pixel_threshold: Optional[float] = None,
         bilateral_sigma_depth: Optional[float] = None,
-    ) -> None:
+    ):
         """Update source-supported runtime settings without reallocating buffers.
 
         Passing ``flying_pixel_threshold=0`` disables that filter, matching V2;

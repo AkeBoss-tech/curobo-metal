@@ -5,6 +5,7 @@
     "motion_start",
     "motion_goal_delta"
   ],
+  "required_matrix": {"cases": ["cspace", "success", "infeasible", "multiseed", "retry_schedule", "result_layout", "endpoints_metrics", "residual_vjp"], "output": "matrix_observed"},
   "required_evidence": {
     "edge": {
       "case": "single_attempt_cspace_lifecycle",

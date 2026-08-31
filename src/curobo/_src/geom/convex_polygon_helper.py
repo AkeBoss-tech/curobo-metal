@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 import torch
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_warn
 
 class ConvexPolygon2DHelper:
     def __init__(self, device_cfg: DeviceCfg = DeviceCfg()):

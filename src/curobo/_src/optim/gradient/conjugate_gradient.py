@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from copy import deepcopy
+from dataclasses import dataclass, field, fields
 import math
 from numbers import Real
 import time
+from typing import Any, Dict, List, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
 from .gradient_descent import GradientDescentOpt, GradientDescentOptCfg
 from .line_search_strategy import LineSearchType
+from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.optim._portable import _objective
+
+# CUDA-oriented upstream reexports are declaration aliases on the portable
+# backend; eagerly importing their package graph is circular here.
+GradientOptCore = OptimizationIterationState = None
+Rollout = None
+get_torch_jit_decorator = log_and_raise = shift_buffer = None
 
 
 def _cg_method(method: str) -> str:
@@ -60,12 +70,12 @@ def jit_cg_compute_step_direction(
         )
     beta = torch.nan_to_num(beta, nan=0.0, posinf=0.0, neginf=0.0).clamp(0.0, max_beta)
     direction = -grad + beta.reshape(beta.shape + (1,) * (grad.ndim - beta.ndim)) * prev_step
-    return direction
+    prev_step.copy_(direction)
+    prev_grad.copy_(grad)
+    return direction, prev_grad, prev_step
 
 
-def jit_cg_shift_buffers(
-    prev_grad: torch.Tensor, prev_step: torch.Tensor, shift_steps: int, action_dim: int
-):
+def jit_cg_shift_buffers(prev_grad, prev_step, shift_steps: int, action_dim: int):
     """Shift MPC history and zero-fill the newly exposed terminal actions."""
 
     if shift_steps < 0 or action_dim <= 0:
@@ -137,8 +147,23 @@ class ConjugateGradientOptCfg(GradientDescentOptCfg):
         # CUDA kernel was selected.
         self.use_cuda_kernel_line_search = False
 
+    @property
+    def num_rollout_instances(self):
+        return self._num_rollout_instances
 
-class ConjugateGradientOpt(GradientDescentOpt):
+    @property
+    def outer_iters(self):
+        return math.ceil(self.num_iters / self.inner_iters)
+
+    @classmethod
+    def create_data_dict(cls, data_dict, device_cfg=DeviceCfg(), child_dict=None):
+        return super().create_data_dict(data_dict, device_cfg, child_dict)
+
+    def update_niters(self, niters: int):
+        self.num_iters = niters
+
+
+class _ConjugateGradientOptPortable(GradientDescentOpt):
     """Batched nonlinear CG with deterministic fixed-candidate line search."""
 
     def __init__(self, config, rollout_list, use_cuda_graph: bool = False):
@@ -285,7 +310,7 @@ class ConjugateGradientOpt(GradientDescentOpt):
                 if previous_gradient is None:
                     direction = -gradient
                 else:
-                    direction = jit_cg_compute_step_direction(
+                    direction, previous_gradient, previous_direction = jit_cg_compute_step_direction(
                         gradient, previous_gradient, previous_direction, self.config.max_beta, self.config.cg_method
                     )
                 direction = self._scale_direction(direction)
@@ -354,6 +379,55 @@ class ConjugateGradientOpt(GradientDescentOpt):
         return True
 
     _shift = shift
+
+
+class ConjugateGradientOpt(_ConjugateGradientOptPortable):
+    """Pinned declaration façade rebound to the portable CG implementation."""
+
+    def __init__(self, config: ConjugateGradientOptCfg, rollout_list: List[Rollout], use_cuda_graph: bool = False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self): pass
+    def action_horizon(self): pass
+    def action_step_max(self): pass
+    def compute_metrics(self, action): pass
+    def config(self): pass
+    def debug_dump(self, file_path=""): pass
+    def device_cfg(self): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self): pass
+    def get_all_rollout_instances(self): pass
+    def get_recorded_trace(self): pass
+    def horizon(self): pass
+    def opt_dim(self): pass
+    def opt_dt(self, value): pass
+    def optimize(self, seed_action): pass
+    def outer_iters(self): pass
+    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False): pass
+    def reset_cuda_graph(self): pass
+    def reset_seed(self): pass
+    def reset_shape(self): pass
+    def rollout_fn(self): pass
+    def shift(self, shift_steps=0): pass
+    def solve_time(self): pass
+    def solver_names(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_niters(self, niters): pass
+    def update_num_problems(self, num_problems): pass
+    def update_rollout_params(self, goal): pass
+    def update_solver_params(self, solver_params): pass
+    def use_cuda_graph(self): pass
+
+
+def _install_portable_cg_runtime():
+    for base in reversed(_ConjugateGradientOptPortable.__mro__):
+        for name, value in base.__dict__.items():
+            if not (name.startswith("__") and name != "__init__"):
+                setattr(ConjugateGradientOpt, name, value)
+
+
+_install_portable_cg_runtime()
 
 
 __all__ = [

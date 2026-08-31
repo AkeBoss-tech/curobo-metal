@@ -75,7 +75,7 @@ class GoalRegistry:
         return None if self.link_goal_poses is None else self.link_goal_poses.to_dict()
 
     @profiler.record_function("GoalRegistry/repeat_seeds")
-    def repeat_seeds(self, num_seeds, repeat_seed_idx_buffers=False):
+    def repeat_seeds(self, num_seeds: int, repeat_seed_idx_buffers: bool = False):
         if not isinstance(num_seeds, int) or isinstance(num_seeds, bool) or num_seeds < 1:
             raise ValueError("num_seeds must be positive")
         out = self.clone()
@@ -102,7 +102,7 @@ class GoalRegistry:
             None if self.current_state_dt is None else self.current_state_dt.clone()
         )
         return type(self)(**values)
-    def apply_kernel(self, kernel_mat: torch.Tensor):
+    def apply_kernel(self, kernel_mat):
         """Map index buffers through a caller-provided batch selection matrix.
 
         Payloads intentionally remain shared (or cloned according to
@@ -128,7 +128,12 @@ class GoalRegistry:
                 setattr(out, name, (kernel_mat @ value.to(torch.float32)).to(torch.int32))
         return out
     @profiler.record_function("GoalRegistry/copy_")
-    def copy_(self, goal: "GoalRegistry", update_idx_buffers=True, allow_clone=True):
+    def copy_(
+        self,
+        goal: GoalRegistry,
+        update_idx_buffers: bool = True,
+        allow_clone: bool = True,
+    ):
         if not isinstance(goal, GoalRegistry):
             raise TypeError("goal must be a GoalRegistry")
         for name in ("goal_js", "seed_goal_js", "current_js"):
@@ -176,8 +181,15 @@ class GoalRegistry:
             return self.goal_js
         return self.goal_js[self.idxs_link_pose[:, 0].to(torch.long)]
     @classmethod
-    def create_idx(cls, pose_batch_size, multi_env, num_seeds, device_cfg,
-                   seed_goal_state=None, repeat_seed_idx_buffers=False):
+    def create_idx(
+        cls,
+        pose_batch_size: int,
+        multi_env: bool,
+        num_seeds: int,
+        device_cfg: DeviceCfg,
+        seed_goal_state: Optional[JointState] = None,
+        repeat_seed_idx_buffers: bool = False,
+    ):
         if not isinstance(device_cfg, DeviceCfg):
             raise TypeError("device_cfg must be a DeviceCfg")
         if (not isinstance(pose_batch_size, int) or isinstance(pose_batch_size, bool)
@@ -195,7 +207,13 @@ class GoalRegistry:
             idxs_env=base.clone() if multi_env else torch.zeros_like(base),
         )
         return registry.repeat_seeds(num_seeds, repeat_seed_idx_buffers)
-    def create_index_buffers(self, batch_size, multi_env, num_seeds, device_cfg):
+    def create_index_buffers(
+        self,
+        batch_size: int,
+        multi_env: bool,
+        num_seeds: int,
+        device_cfg: DeviceCfg,
+    ):
         indexed = type(self).create_idx(batch_size, multi_env, num_seeds, device_cfg)
         indexed.copy_(self, update_idx_buffers=False)
         return indexed

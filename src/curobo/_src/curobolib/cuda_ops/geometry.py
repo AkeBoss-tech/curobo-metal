@@ -5,6 +5,11 @@ from typing import Optional
 import torch
 
 from curobo._src.curobolib.backends import geometry as geometry_cu
+from curobo._src.curobolib.cuda_ops.tensor_checks import (
+    check_float32_tensors,
+    check_int16_tensors,
+    check_uint8_tensors,
+)
 
 
 class SelfCollisionDistance(torch.autograd.Function):

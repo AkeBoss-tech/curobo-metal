@@ -20,8 +20,37 @@ from curobo._src.types.device_cfg import DeviceCfg
 _INTEGER_DTYPES = {torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8}
 
 
+class _RobotCollisionGeometryPortableMixin:
+    @property
+    def num_spheres(self) -> int:
+        return int(self.link_sphere_idx_map.numel())
+
+    @property
+    def device(self) -> torch.device:
+        return self.link_sphere_idx_map.device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.link_sphere_idx_map.dtype
+
+    def link_mask(self, link_index: int) -> torch.Tensor:
+        return self._link_mask(link_index)
+
+    def contiguous(self) -> "RobotCollisionGeometry":
+        return self._contiguous()
+
+    def to(
+        self,
+        device: Union[DeviceCfg, torch.device, str, None] = None,
+        *,
+        non_blocking: bool = False,
+        copy: bool = False,
+    ) -> "RobotCollisionGeometry":
+        return self._to(device, non_blocking=non_blocking, copy=copy)
+
+
 @dataclass
-class RobotCollisionGeometry:
+class RobotCollisionGeometry(_RobotCollisionGeometryPortableMixin):
     """Map every collision sphere to the link that owns it.
 
     ``link_sphere_idx_map`` is a rank-one integer tensor of shape
@@ -58,21 +87,21 @@ class RobotCollisionGeometry:
                 raise ValueError("link_sphere_idx_map contains an out-of-range link index")
 
     @property
-    def num_spheres(self) -> int:
+    def _num_spheres(self) -> int:
         """Number of collision spheres represented by this topology."""
         return int(self.link_sphere_idx_map.numel())
 
     @property
-    def device(self) -> torch.device:
+    def _device(self) -> torch.device:
         """Device on which the reusable topology index buffer resides."""
         return self.link_sphere_idx_map.device
 
     @property
-    def dtype(self) -> torch.dtype:
+    def _dtype(self) -> torch.dtype:
         """Integer dtype of the link-index buffer."""
         return self.link_sphere_idx_map.dtype
 
-    def link_mask(self, link_index: int) -> torch.Tensor:
+    def _link_mask(self, link_index: int) -> torch.Tensor:
         """Return a device-resident boolean mask for one owning link.
 
         A mask is useful for selecting the same sphere subset from any
@@ -86,14 +115,14 @@ class RobotCollisionGeometry:
             raise ValueError("link_index is out of range")
         return self.link_sphere_idx_map == link_index
 
-    def clone(self) -> "RobotCollisionGeometry":
+    def clone(self) -> RobotCollisionGeometry:
         """Deep-copy the link-index buffer while retaining link metadata."""
         return RobotCollisionGeometry(
             link_sphere_idx_map=self.link_sphere_idx_map.clone(),
             num_links=self.num_links,
         )
 
-    def copy_(self, other: "RobotCollisionGeometry") -> None:
+    def copy_(self, other: RobotCollisionGeometry):
         """Copy into a compatible caller-owned topology buffer.
 
         Pinned V2 treats ``num_links`` as immutable metadata for a launch
@@ -110,20 +139,20 @@ class RobotCollisionGeometry:
             raise ValueError("copy_ requires link_sphere_idx_map tensors on the same device")
         self.link_sphere_idx_map.copy_(other.link_sphere_idx_map)
 
-    def detach(self) -> "RobotCollisionGeometry":
+    def detach(self) -> RobotCollisionGeometry:
         """Detach the index buffer while preserving storage/device metadata."""
         return RobotCollisionGeometry(
             link_sphere_idx_map=self.link_sphere_idx_map.detach(),
             num_links=self.num_links,
         )
 
-    def contiguous(self) -> "RobotCollisionGeometry":
+    def _contiguous(self) -> "RobotCollisionGeometry":
         """Materialize contiguous index storage when a sliced map is reused."""
         if self.link_sphere_idx_map.is_contiguous():
             return self
         return RobotCollisionGeometry(self.link_sphere_idx_map.contiguous(), self.num_links)
 
-    def to(
+    def _to(
         self,
         device: Union[DeviceCfg, torch.device, str, None] = None,
         *,

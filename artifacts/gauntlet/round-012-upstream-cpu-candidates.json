@@ -1,0 +1,36 @@
+{
+  "conftest_sha256": "cd9d99c1b8f1095a99fd3044e55d3e44feed0341ae9122d99507726e5d3a093f",
+  "environment": {
+    "mps_available": true,
+    "mps_built": true,
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "pytorch_enable_mps_fallback": "0",
+    "torch": "2.13.0"
+  },
+  "modules": {
+    "curobo.tests._src.geom.test_cv": "7fce64a94bec6acc5869cfa546017245b4d8870d76b60bdf5758024b4c68f925",
+    "curobo.tests._src.geom.test_mesh_triangulation": "0dbfdc46ba85d282d8b17f56e02fbe220ec80c19b7707b33b1d0f9c5ca73f63f",
+    "curobo.tests._src.graph_planner.test_path_finder_networkx": "150923725d1bbfe4563fbe88fc095a24df7d83b80874b773fdec001b778d5f10",
+    "curobo.tests._src.robot.loader.test_util": "d7eac4cc28dce3bfd46115e83d9a27dba36a7b3803841d9de1426284c3c40a8b",
+    "curobo.tests._src.util.test_xrdf_util": "3c02692e775ce0097952e4e5524e496c6302b64d9a0bf43ab3f3a6f07402e8d4"
+  },
+  "pytest": {
+    "errors": 0,
+    "exit_code": 1,
+    "failures": 45,
+    "passed": 50,
+    "skipped": 0,
+    "tests": 95
+  },
+  "schema_version": 1,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "1b83c4c6ca94ee5a7fa3f0d5cf1e9fe7886c1ef3f1a205873cb166380ba04889",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "wheel": {
+    "import_path": "/private/var/folders/bl/vb31sscj37930_m8hffp11lh0000gn/T/tmp.NdzoOxxG30/venv/lib/python3.13/site-packages/curobo/__init__.py",
+    "path": "/private/var/folders/bl/vb31sscj37930_m8hffp11lh0000gn/T/tmp.oX94Ma4v8h/curobo_metal-0.1.0a1-py3-none-any.whl",
+    "sha256": "4bd28118c9592db881e2b53548b55382fba5f879cd1865781e33250a4c243cc4",
+    "version": "0.1.0a1"
+  }
+}

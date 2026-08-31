@@ -11,6 +11,7 @@ gradient semantics hold on CPU and MPS.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import wraps
 from typing import Dict, List, Optional, Sequence, Union
 
 import torch
@@ -72,8 +73,73 @@ def _to_options(
     return options
 
 
+def _portable_requires_grad_default(method):
+    """Keep the portable no-argument convenience without changing its declaration."""
+
+    @wraps(method)
+    def wrapped(self, requires_grad: bool = True):
+        return method(self, requires_grad)
+
+    return wrapped
+
+
+class _ToolPosePortableMixin:
+    """Portable conveniences kept outside the pinned direct class surface."""
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.position.dtype
+
+    def to(
+        self,
+        device_cfg: Optional[DeviceCfg] = None,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> "ToolPose":
+        options = _to_options(device_cfg, device, dtype)
+        return type(self)(self.tool_frames.copy(), self.position.to(**options), self.quaternion.to(**options))
+
+    def cpu(self) -> "ToolPose":
+        return self.to(device="cpu")
+
+
+class _GoalToolPosePortableMixin:
+    """Portable conveniences kept outside the pinned direct class surface."""
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.position.dtype
+
+    def contiguous(self) -> "GoalToolPose":
+        return type(self)(self.tool_frames.copy(), self.position.contiguous(), self.quaternion.contiguous())
+
+    def to(
+        self,
+        device_cfg: Optional[DeviceCfg] = None,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> "GoalToolPose":
+        options = _to_options(device_cfg, device, dtype)
+        return type(self)(self.tool_frames.copy(), self.position.to(**options), self.quaternion.to(**options))
+
+    def cpu(self) -> "GoalToolPose":
+        return self.to(device="cpu")
+
+    def get_goalset(self, goalset_index: int) -> "ToolPose":
+        """Return one target from every batch/horizon/link as a 4D ToolPose."""
+        if not isinstance(goalset_index, int):
+            raise TypeError("goalset_index must be an integer")
+        if not -self.num_goalset <= goalset_index < self.num_goalset:
+            raise IndexError(f"goalset_index {goalset_index} is outside [0, {self.num_goalset})")
+        return ToolPose(
+            self.tool_frames.copy(),
+            self.position[:, :, :, goalset_index, :],
+            self.quaternion[:, :, :, goalset_index, :],
+        )
+
+
 @dataclass
-class ToolPose(Sequence):
+class ToolPose(_ToolPosePortableMixin, Sequence):
     """4D FK output with layout ``[B, H, L, 3/4]``."""
 
     tool_frames: List[str]
@@ -105,20 +171,16 @@ class ToolPose(Sequence):
         return self.position.shape[2]
 
     @property
-    def shape(self) -> torch.Size:
+    def shape(self):
         return self.position.shape
 
     @property
-    def ndim(self) -> int:
+    def ndim(self):
         return self.position.ndim
 
     @property
-    def device(self) -> torch.device:
+    def device(self):
         return self.position.device
-
-    @property
-    def dtype(self) -> torch.dtype:
-        return self.position.dtype
 
     def get_link_pose(self, link_name: str, make_contiguous: bool = False) -> Pose:
         """Extract a named link as a flattened 2D ``Pose`` of shape ``[B*H, ...]``."""
@@ -135,7 +197,7 @@ class ToolPose(Sequence):
     def to_dict(self, make_contiguous: bool = True) -> Dict[str, Pose]:
         return {name: self.get_link_pose(name, make_contiguous) for name in self.tool_frames}
 
-    def copy_(self, other: "ToolPose") -> "ToolPose":
+    def copy_(self, other: ToolPose):
         if not isinstance(other, ToolPose):
             raise TypeError("other must be a ToolPose")
         if self.position.shape != other.position.shape or self.quaternion.shape != other.quaternion.shape:
@@ -147,31 +209,20 @@ class ToolPose(Sequence):
         self.quaternion.copy_(other.quaternion)
         return self
 
-    def requires_grad_(self, requires_grad: bool = True) -> "ToolPose":
+    @_portable_requires_grad_default
+    def requires_grad_(self, requires_grad: bool):
         self.position.requires_grad_(requires_grad)
         self.quaternion.requires_grad_(requires_grad)
         return self
 
-    def clone(self) -> "ToolPose":
+    def clone(self) -> ToolPose:
         return type(self)(self.tool_frames.copy(), self.position.clone(), self.quaternion.clone())
 
-    def detach(self) -> "ToolPose":
+    def detach(self) -> ToolPose:
         return type(self)(self.tool_frames.copy(), self.position.detach(), self.quaternion.detach())
 
-    def contiguous(self) -> "ToolPose":
+    def contiguous(self) -> ToolPose:
         return type(self)(self.tool_frames.copy(), self.position.contiguous(), self.quaternion.contiguous())
-
-    def to(
-        self,
-        device_cfg: Optional[DeviceCfg] = None,
-        device: Optional[torch.device | str] = None,
-        dtype: Optional[torch.dtype] = None,
-    ) -> "ToolPose":
-        options = _to_options(device_cfg, device, dtype)
-        return type(self)(self.tool_frames.copy(), self.position.to(**options), self.quaternion.to(**options))
-
-    def cpu(self) -> "ToolPose":
-        return self.to(device="cpu")
 
     def __len__(self) -> int:
         return len(self.tool_frames)
@@ -190,7 +241,7 @@ class ToolPose(Sequence):
             raise IndexError("ToolPose indexing must select only the batch dimension")
         return type(self)(self.tool_frames.copy(), position, quaternion)
 
-    def reorder_links(self, ordered_tool_frames: List[str]) -> "ToolPose":
+    def reorder_links(self, ordered_tool_frames: List[str]) -> ToolPose:
         _validate_frames(ordered_tool_frames)
         if not set(ordered_tool_frames).issubset(self.tool_frames):
             raise ValueError(f"Ordered link names {ordered_tool_frames} not a subset of {self.tool_frames}")
@@ -203,13 +254,13 @@ class ToolPose(Sequence):
             self.quaternion.index_select(2, indices).contiguous(),
         )
 
-    def as_goal(self, ordered_tool_frames: Optional[List[str]] = None) -> "GoalToolPose":
+    def as_goal(self, ordered_tool_frames: Optional[List[str]] = None) -> GoalToolPose:
         value = self.reorder_links(ordered_tool_frames) if ordered_tool_frames is not None else self
         return GoalToolPose(value.tool_frames.copy(), value.position.unsqueeze(3), value.quaternion.unsqueeze(3))
 
 
 @dataclass
-class GoalToolPose(Sequence):
+class GoalToolPose(_GoalToolPosePortableMixin, Sequence):
     """5D target pose value with layout ``[B, H, L, G, 3/4]``."""
 
     tool_frames: List[str]
@@ -245,20 +296,16 @@ class GoalToolPose(Sequence):
         return self.position.shape[3]
 
     @property
-    def shape(self) -> torch.Size:
+    def shape(self):
         return self.position.shape
 
     @property
-    def ndim(self) -> int:
+    def ndim(self):
         return self.position.ndim
 
     @property
-    def device(self) -> torch.device:
+    def device(self):
         return self.position.device
-
-    @property
-    def dtype(self) -> torch.dtype:
-        return self.position.dtype
 
     @classmethod
     def from_poses(
@@ -266,7 +313,7 @@ class GoalToolPose(Sequence):
         pose_dict: Dict[str, Pose],
         ordered_tool_frames: Optional[List[str]] = None,
         num_goalset: int = 1,
-    ) -> "GoalToolPose":
+    ) -> GoalToolPose:
         if not pose_dict:
             raise ValueError("pose_dict cannot be empty")
         if not isinstance(num_goalset, int) or num_goalset < 1:
@@ -310,7 +357,7 @@ class GoalToolPose(Sequence):
     def to_dict(self, make_contiguous: bool = True) -> Dict[str, Pose]:
         return {name: self.get_link_pose(name, make_contiguous) for name in self.tool_frames}
 
-    def copy_(self, other: "GoalToolPose") -> "GoalToolPose":
+    def copy_(self, other: GoalToolPose):
         if not isinstance(other, GoalToolPose):
             raise TypeError("other must be a GoalToolPose")
         if self.position.shape != other.position.shape or self.quaternion.shape != other.quaternion.shape:
@@ -322,31 +369,17 @@ class GoalToolPose(Sequence):
         self.quaternion.copy_(other.quaternion)
         return self
 
-    def requires_grad_(self, requires_grad: bool = True) -> "GoalToolPose":
+    @_portable_requires_grad_default
+    def requires_grad_(self, requires_grad: bool):
         self.position.requires_grad_(requires_grad)
         self.quaternion.requires_grad_(requires_grad)
         return self
 
-    def clone(self) -> "GoalToolPose":
+    def clone(self) -> GoalToolPose:
         return type(self)(self.tool_frames.copy(), self.position.clone(), self.quaternion.clone())
 
-    def detach(self) -> "GoalToolPose":
+    def detach(self) -> GoalToolPose:
         return type(self)(self.tool_frames.copy(), self.position.detach(), self.quaternion.detach())
-
-    def contiguous(self) -> "GoalToolPose":
-        return type(self)(self.tool_frames.copy(), self.position.contiguous(), self.quaternion.contiguous())
-
-    def to(
-        self,
-        device_cfg: Optional[DeviceCfg] = None,
-        device: Optional[torch.device | str] = None,
-        dtype: Optional[torch.dtype] = None,
-    ) -> "GoalToolPose":
-        options = _to_options(device_cfg, device, dtype)
-        return type(self)(self.tool_frames.copy(), self.position.to(**options), self.quaternion.to(**options))
-
-    def cpu(self) -> "GoalToolPose":
-        return self.to(device="cpu")
 
     def __len__(self) -> int:
         return len(self.tool_frames)
@@ -363,7 +396,7 @@ class GoalToolPose(Sequence):
             raise IndexError("GoalToolPose indexing must select only the batch dimension")
         return type(self)(self.tool_frames.copy(), position, quaternion)
 
-    def reorder_links(self, ordered_tool_frames: List[str]) -> "GoalToolPose":
+    def reorder_links(self, ordered_tool_frames: List[str]) -> GoalToolPose:
         _validate_frames(ordered_tool_frames)
         if not set(ordered_tool_frames).issubset(self.tool_frames):
             raise ValueError(f"Ordered link names {ordered_tool_frames} not a subset of {self.tool_frames}")
@@ -375,14 +408,5 @@ class GoalToolPose(Sequence):
             self.position.index_select(2, indices).contiguous(),
             self.quaternion.index_select(2, indices).contiguous(),
         )
-
-    def get_goalset(self, goalset_index: int) -> ToolPose:
-        """Return one target from every batch/horizon/link as a 4D ToolPose."""
-        if not isinstance(goalset_index, int):
-            raise TypeError("goalset_index must be an integer")
-        if not -self.num_goalset <= goalset_index < self.num_goalset:
-            raise IndexError(f"goalset_index {goalset_index} is outside [0, {self.num_goalset})")
-        return ToolPose(self.tool_frames.copy(), self.position[:, :, :, goalset_index, :], self.quaternion[:, :, :, goalset_index, :])
-
 
 __all__ = ["ToolPose", "GoalToolPose"]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict, List
 
 import torch
 
@@ -42,7 +42,13 @@ class _DebugTrace(list[OptimizationIterationState]):
         return self[key] if key in {"debug", "debug_cost"} else default
 
 
-class DebugRecorder:
+class _DebugRecorderPortableMixin:
+    @property
+    def trace(self) -> list[OptimizationIterationState]:
+        return list(self._states)
+
+
+class DebugRecorder(_DebugRecorderPortableMixin):
     """Record immutable action/cost snapshots for each optimization iteration.
 
     This is deliberately eager-PyTorch state, not CUDA graph debug storage.
@@ -50,7 +56,7 @@ class DebugRecorder:
     optimizer is used over many MPC iterations.
     """
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.clear()
 
     def record(
@@ -58,7 +64,7 @@ class DebugRecorder:
         iteration_state: OptimizationIterationState,
         action_horizon: int,
         action_dim: int,
-    ) -> None:
+    ):
         if not isinstance(iteration_state, OptimizationIterationState):
             raise TypeError("iteration_state must be an OptimizationIterationState")
         action_horizon, action_dim = int(action_horizon), int(action_dim)
@@ -80,17 +86,12 @@ class DebugRecorder:
             self.costs.append(cost_snapshot)
         self._states.append(OptimizationIterationState(action=action_snapshot, cost=cost_snapshot))
 
-    def clear(self) -> None:
+    def clear(self):
         self.actions: list[torch.Tensor] = []
         self.costs: list[torch.Tensor] = []
         self._states: list[OptimizationIterationState] = []
 
-    @property
-    def trace(self) -> list[OptimizationIterationState]:
-        """Legacy state-shaped view of the independently stored snapshots."""
-        return list(self._states)
-
-    def get_trace(self) -> Any:
+    def get_trace(self) -> Dict[str, Any]:
         """Return V2 fields and retain legacy list iteration compatibility."""
         return _DebugTrace(self._states, self.actions, self.costs)
 

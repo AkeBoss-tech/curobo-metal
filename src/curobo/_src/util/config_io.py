@@ -210,7 +210,7 @@ def _yaml_value(value: Any) -> Any:
     return value
 
 
-def write_yaml(data: Dict, file_path: str) -> None:
+def write_yaml(data: Dict, file_path: str):
     """Write mappings and portable dataclass records as UTF-8 YAML."""
     with open(_portable_config_path(file_path), "w", encoding="utf-8") as file:
         yaml.dump(_yaml_value(data), file)
@@ -273,7 +273,7 @@ def is_file_xrdf(file_path: str) -> bool:
     return file_path.endswith(".xrdf") or file_path.endswith(".XRDF")
 
 
-def create_dir_if_not_exists(dir_path: str) -> None:
+def create_dir_if_not_exists(dir_path: str):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
 

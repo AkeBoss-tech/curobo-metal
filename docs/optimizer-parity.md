@@ -42,8 +42,10 @@ The compatibility compiler now accepts `LBFGS`, `PARTICLE`, and `ES` for IK and
 trajectory configuration and carries graph cache options into `MotionGenConfig`.
 Trajectory execution consumes the selected optimizer. IK problem callers can
 select the same choices directly; joint-space MotionGen does not invoke IK.
-The audit classifies these records as evidence-blocked: portable gaps are
-closed, but no CUDA equivalence is claimed without paired pinned replay.
+The audit classifies these portable records as semantically equivalent after
+the 2026-08-26 paired pinned replay passed their multi-seed, termination,
+invalid, edge, and expanded matrix checks. It does not claim identical CUDA
+RNG samples, solver iterates, or fused-kernel execution.
 
 ## Verification
 

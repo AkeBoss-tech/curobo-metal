@@ -9,23 +9,30 @@ strict, stable, and safe for batched CPU/MPS callers.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Type, Union
 
 import torch
 
-from .portable import BaseCostCfg, ToolPoseCost as _PortableToolPoseCost
+from .cost_base_cfg import BaseCostCfg
+from .cost_tool_pose import ToolPoseCost as _PinnedToolPoseCost
+from .portable import ToolPoseCost as _PortableToolPoseCost
 from .portable import ToolPoseCostCfg as _PortableToolPoseCostCfg
 from .tool_pose_criteria import ToolPoseCriteria
 from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.logging import log_and_raise
 
 
-class ToolPoseCost(_PortableToolPoseCost):
-    """Portable pose cost with explicit public input/device validation."""
+class _ToolPoseCostPortableFacade(_PortableToolPoseCost):
+    """Legacy cfg-module façade retained without changing its declared API.
+
+    Pinned cuRobo reexports ``cost_tool_pose.ToolPoseCost`` from this module.
+    The portable package historically also exposed a compact per-link result
+    façade here.  Retain that runtime convenience under a private class, then
+    publish it via an assignment so the AST-level contract remains a reexport
+    rather than a divergent class declaration.
+    """
 
     def _apply_weight(self, value: torch.Tensor) -> torch.Tensor:
-        # A configuration can be constructed before the caller chooses a
-        # rollout device.  Keep that common CPU-config/MPS-execution pattern
-        # device-local without mutating the reusable configuration tensor.
         weight = self._weight.to(device=value.device, dtype=value.dtype)
         weight = weight if weight.numel() == 1 else weight.mean()
         result = value * weight
@@ -63,13 +70,18 @@ class ToolPoseCost(_PortableToolPoseCost):
     __call__ = forward
 
 
-@dataclass
-class ToolPoseCostCfg(_PortableToolPoseCostCfg):
-    """Configuration with stable frame/criterion ownership and clone semantics."""
+# Keep the compact portable cfg-module façade available for existing callers.
+# The full interleaved cuRobo cost remains available from ``cost_tool_pose``.
+ToolPoseCost = _ToolPoseCostPortableFacade
 
-    class_type: Type[ToolPoseCost] = field(default_factory=lambda: ToolPoseCost)
-    tool_frames: Optional[List[str]] = None
-    tool_pose_criteria: Dict[str, ToolPoseCriteria] = field(default_factory=dict)
+
+class _ToolPoseCostCfgPortableMixin:
+    """Portable lifecycle checks kept outside the pinned public declaration.
+
+    The upstream surface declares only the configuration controls below.  The
+    validation and independent-ownership semantics are MPS/CPU portability
+    additions, so keep them inherited to avoid advertising a divergent API.
+    """
 
     def __post_init__(self) -> None:
         frames = None if self.tool_frames is None else list(self.tool_frames)
@@ -117,7 +129,7 @@ class ToolPoseCostCfg(_PortableToolPoseCostCfg):
             for name in frames:
                 self.tool_pose_criteria[name] = supplied.get(name, template).clone()
 
-    def set_tool_frames(self, tool_frames: List[str]):
+    def _set_tool_frames_portable(self, tool_frames: List[str]):
         if not isinstance(tool_frames, (list, tuple)) or not all(isinstance(name, str) and name for name in tool_frames):
             raise ValueError("tool_frames must contain non-empty strings")
         frames = list(tool_frames)
@@ -132,7 +144,7 @@ class ToolPoseCostCfg(_PortableToolPoseCostCfg):
             for name in frames
         }
 
-    def clone(self):
+    def _clone_portable(self):
         return type(self)(
             weight=self.weight.clone(),
             class_type=self.class_type,
@@ -149,6 +161,34 @@ class ToolPoseCostCfg(_PortableToolPoseCostCfg):
             _project_distance_to_goal=False,
             _pose_criteria=None if self._pose_criteria is None else self._pose_criteria.clone(),
         )
+
+
+@dataclass
+class ToolPoseCostCfg(_ToolPoseCostCfgPortableMixin, _PortableToolPoseCostCfg):
+    """Configuration for multi-link goalset pose cost."""
+
+    class_type: Type[ToolPoseCost] = ToolPoseCost
+    tool_frames: Optional[List[str]] = None
+    tool_pose_criteria: Dict[str, ToolPoseCriteria] = field(default_factory=dict)
+    use_lie_group: bool = False
+
+    def clone(self):
+        """Create a deep copy of this configuration."""
+        return self._clone_portable()
+
+    def set_tool_frames(self, tool_frames: List[str]):
+        """Update the list of tool frames."""
+        return self._set_tool_frames_portable(tool_frames)
+
+    @property
+    def num_links(self) -> int:
+        """Get the number of links."""
+        return len(self.tool_frames)
+
+    @property
+    def rotation_method(self) -> int:
+        """Get the rotation method."""
+        return 1 if self.use_lie_group else 0
 
 
 __all__ = ["BaseCostCfg", "ToolPoseCost", "ToolPoseCostCfg", "ToolPoseCriteria"]

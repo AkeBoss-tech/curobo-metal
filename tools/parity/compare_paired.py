@@ -64,7 +64,7 @@ def _validate_common(manifest: dict[str, Any], capability: str) -> None:
 def _validate_required_evidence(
     manifest: dict[str, Any], outputs: np.lib.npyio.NpzFile, capability: str
 ) -> None:
-    """Reject a paired report that silently drops invalid or edge coverage."""
+    """Reject a paired report that silently drops declared replay coverage."""
     case = BY_ID[capability]
     expected = {
         "invalid": {
@@ -78,17 +78,24 @@ def _validate_required_evidence(
             "executed": True,
         },
     }
+    if case.matrix_cases:
+        expected["matrix"] = {
+            "cases": list(case.matrix_cases),
+            "output": "matrix_observed",
+            "executed": True,
+        }
     evidence = manifest.get("evidence")
     if not isinstance(evidence, dict) or any(
         evidence.get(key) != value for key, value in expected.items()
     ):
-        raise ValueError(f"{capability}: required invalid/edge evidence metadata is missing")
+        raise ValueError(f"{capability}: required replay evidence metadata is missing")
     for label, record in expected.items():
         key = record["output"]
         if key not in outputs.files:
             raise ValueError(f"{capability}: committed {label}-case evidence is missing")
         value = outputs[key]
-        if value.shape != (1,) or value.dtype != np.int8 or int(value[0]) != 1:
+        expected_shape = (len(record["cases"]),) if label == "matrix" else (1,)
+        if value.shape != expected_shape or value.dtype != np.int8 or not bool(value.all()):
             raise ValueError(f"{capability}: committed {label}-case evidence did not execute")
 
 
@@ -262,6 +269,41 @@ def _validate_motion_planner_semantics(
     return report
 
 
+def _validate_trajopt_semantics(
+    outputs: np.lib.npyio.NpzFile, _inputs: np.lib.npyio.NpzFile, backend: str
+) -> dict[str, dict[str, Any]]:
+    """Check solver-independent TrajOpt outcome/layout invariants."""
+    success = outputs["success"] if "success" in outputs.files else np.array([])
+    shape = outputs["solution_shape"] if "solution_shape" in outputs.files else np.array([])
+    endpoint = outputs["endpoint_converged"] if "endpoint_converged" in outputs.files else np.array([])
+    return {
+        "success": {"passed": bool(success.size and success.dtype == np.bool_ and success.all()), "semantic": True, "backend": backend},
+        "result_layout": {"passed": bool(shape.dtype == np.int64 and shape.size >= 3 and np.all(shape > 0)), "semantic": True, "backend": backend},
+        "endpoint_converged": {"passed": bool(endpoint.size and endpoint.dtype == np.bool_ and endpoint.all()), "semantic": True, "backend": backend},
+    }
+
+
+def _validate_bspline_semantics(
+    outputs: np.lib.npyio.NpzFile, inputs: np.lib.npyio.NpzFile, backend: str
+) -> dict[str, dict[str, Any]]:
+    """Validate endpoint and finite derivative constraints, not spline internals."""
+    q = inputs["q"]
+    position = outputs["position"] if "position" in outputs.files else np.array([])
+    finite = all(
+        key in outputs.files and np.isfinite(outputs[key]).all()
+        for key in ("position", "velocity", "acceleration", "jerk")
+    )
+    endpoints = (
+        position.ndim >= 3
+        and np.allclose(position[..., 0, :], q[:1], rtol=0.0, atol=1e-5)
+        and np.allclose(position[..., -1, :], q[1:], rtol=0.0, atol=1e-5)
+    )
+    return {
+        "endpoint_constraints": {"passed": bool(endpoints), "semantic": True, "backend": backend},
+        "finite_derivatives": {"passed": bool(finite), "semantic": True, "backend": backend},
+    }
+
+
 def _validate_particle_semantics(
     outputs: np.lib.npyio.NpzFile, inputs: np.lib.npyio.NpzFile, backend: str
 ) -> dict[str, dict[str, Any]]:
@@ -396,7 +438,7 @@ def compare_capability(
         # not expose an equivalent low-level probe without constructing
         # unrelated CUDA/Warp state.  Validate that evidence above, then
         # compare only the declared numerical operation outputs.
-        evidence_outputs = {"invalid_rejected", "edge_observed"}
+        evidence_outputs = {"invalid_rejected", "edge_observed", "matrix_observed"}
         metal_keys = set(metal.files) - evidence_outputs
         cuda_keys = set(cuda.files) - evidence_outputs
         if metal_keys != cuda_keys:
@@ -412,22 +454,26 @@ def compare_capability(
         }
         if declared != actual:
             raise ValueError(f"{capability}: CUDA tensor schema does not match manifest")
+        _validate_required_evidence(cuda_manifest, cuda, capability)
         if capability in {
             "graph.prm_planner",
             "motion_generation.motion_gen",
             "optim.lbfgs",
             "optim.particle_evolution",
+            "trajectory.trajectory_optimization",
+            "trajectory.dynamics_aware_bspline",
         }:
             # Planner roadmaps and optimizer iteration histories need not be
             # identical across devices. Require both backends to satisfy the
             # capability's observable outcome invariants instead.
-            _validate_required_evidence(cuda_manifest, cuda, capability)
             with np.load(input_path, allow_pickle=False) as inputs:
                 validator = {
                     "graph.prm_planner": _validate_prm_semantics,
                     "motion_generation.motion_gen": _validate_motion_planner_semantics,
                     "optim.lbfgs": _validate_lbfgs_semantics,
                     "optim.particle_evolution": _validate_particle_semantics,
+                    "trajectory.trajectory_optimization": _validate_trajopt_semantics,
+                    "trajectory.dynamics_aware_bspline": _validate_bspline_semantics,
                 }[capability]
                 metal_semantics = validator(metal, inputs, "metal")
                 cuda_semantics = validator(cuda, inputs, "cuda")

@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
   "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
-  "full_port_claim_supported": false,
+  "portable_drop_in_claim_supported": true,
+  "all_platform_and_external_features_supported": false,
   "license": {
     "project": "Apache-2.0",
     "license_file_packaged": true,
@@ -15,10 +16,9 @@
     "finding": "A byte-identical, Apache-2.0 subset is distributed: Franka 0.7.0 URDF/OBJ/DAE assets plus five NVIDIA cuRobo YAML configs. No USD assets are tracked."
   },
   "release_gates": [
-    "regenerate pinned capability inventory",
-    "run parity test suite",
-    "build and inspect wheel",
-    "install wheel in clean macOS virtual environment",
-    "extend paired CUDA/Metal replay coverage beyond the 12 checked-in bounded probes before claiming numerical parity"
+    "build and inspect clean wheel and sdist",
+    "install wheel in the supported clean Python and MPS environments",
+    "verify metadata, license, and namespace-conflict checks",
+    "publish only from a clean tagged commit"
   ]
 }

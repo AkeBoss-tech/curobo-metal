@@ -1,0 +1,32 @@
+{
+  "conftest_sha256": "cd9d99c1b8f1095a99fd3044e55d3e44feed0341ae9122d99507726e5d3a093f",
+  "environment": {
+    "mps_available": true,
+    "mps_built": true,
+    "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "pytorch_enable_mps_fallback": "0",
+    "torch": "2.13.0"
+  },
+  "modules": {
+    "curobo.tests._src.util.test_torch_util": "f081a571ead04944e383fa18e0c369a0da47019e5f94fc72c31f427e603b669f"
+  },
+  "pytest": {
+    "errors": 0,
+    "exit_code": 1,
+    "failures": 3,
+    "passed": 22,
+    "skipped": 0,
+    "tests": 25
+  },
+  "schema_version": 1,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "80689716564cd0e40d8733c2ab937498890a6bf67f012ad7409abb9ef4845f56",
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "wheel": {
+    "import_path": "/private/var/folders/bl/vb31sscj37930_m8hffp11lh0000gn/T/tmp.NdzoOxxG30/venv/lib/python3.13/site-packages/curobo/__init__.py",
+    "path": "/private/tmp/curobo-wheel.nfnZTz/curobo_metal-0.1.0a1-py3-none-any.whl",
+    "sha256": "62c78a1a396f1d861655d8c31d56c3711b00760e95520ebde941d1112d0f9c06",
+    "version": "0.1.0a1"
+  }
+}

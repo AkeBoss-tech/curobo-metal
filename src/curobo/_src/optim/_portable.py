@@ -66,6 +66,22 @@ def _objective(rollout: object) -> Callable[[torch.Tensor], torch.Tensor]:
         value = getattr(rollout, name, None)
         if callable(value):
             return value
+    evaluate_action = getattr(rollout, "evaluate_action", None)
+    if callable(evaluate_action):
+        def evaluate_objective(action: torch.Tensor) -> torch.Tensor:
+            trajectories = evaluate_action(action)
+            costs_and_constraints = getattr(trajectories, "costs_and_constraints", None)
+            if costs_and_constraints is None:
+                raise TypeError("rollout evaluate_action result has no costs_and_constraints")
+            if getattr(costs_and_constraints, "constraints", None) is None:
+                value = costs_and_constraints.get_sum_cost(sum_horizon=True)
+            else:
+                value = costs_and_constraints.get_sum_cost_and_constraint(sum_horizon=True)
+            if value is None:
+                raise ValueError("rollout produced no costs or constraints")
+            return value
+
+        return evaluate_objective
     raise TypeError("portable optimizer rollout must be callable or expose objective/cost_fn")
 
 

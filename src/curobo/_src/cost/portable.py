@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields, is_dataclass, replace
-from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import torch
 
 from curobo._src.cost.tool_pose_criteria import StackedToolPoseCriteria, ToolPoseCriteria
+from curobo._src.cost.cost_cspace_type import CSpaceCostType
+from curobo._src.cost.cost_pose_type import PoseErrorType
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.tool_pose import GoalToolPose, ToolPose
@@ -17,18 +18,6 @@ from curobo_metal.ops.costs import collision_cost
 
 class UnsupportedCostFeature(RuntimeError):
     """Raised only when the requested operation fundamentally requires Warp/CUDA."""
-
-
-class CSpaceCostType(Enum):
-    POSITION = 0
-    STATE = 1
-
-
-class PoseErrorType(Enum):
-    SINGLE_GOAL = 0
-    BATCH_GOAL = 1
-    GOALSET = 2
-    BATCH_GOALSET = 3
 
 
 @dataclass

@@ -11,6 +11,19 @@ from dataclasses import dataclass
 
 import torch
 
+from curobo._src.util.warp import wp as _raw_wp
+
+
+class _WarpCompat:
+    """Declaration-only Warp façade; portable calls use tensor operations."""
+
+    @staticmethod
+    def func(function):
+        return function
+
+
+wp = _raw_wp if _raw_wp is not None else _WarpCompat()
+
 
 @dataclass
 class SphereQueryData:
@@ -21,7 +34,7 @@ class SphereQueryData:
     radius_adjusted: torch.Tensor
 
 
-def apply_collision_activation(dist, eta):
+def apply_collision_activation(dist: wp.float32, eta: wp.float32) -> wp.vec2:
     """Return V2's C1 ``(cost, gradient_scale)`` activation pair.
 
     ``dist`` is penetration (positive in collision).  The result is a tensor
@@ -49,7 +62,9 @@ def apply_collision_activation(dist, eta):
     return torch.stack((cost, scale), dim=-1)
 
 
-def load_sphere_query(spheres, idx, eta) -> SphereQueryData:
+def load_sphere_query(
+    spheres: wp.array(dtype=wp.vec4), idx: wp.int32, eta: wp.float32
+) -> SphereQueryData:
     """Decode one V2-layout query sphere from a tensor or numeric array."""
     values = torch.as_tensor(spheres)
     sphere = values.reshape(-1, values.shape[-1])[int(idx)]
@@ -59,7 +74,13 @@ def load_sphere_query(spheres, idx, eta) -> SphereQueryData:
     return SphereQueryData(sphere[:3], sphere[3], sphere[3] + eta_value)
 
 
-def accumulate_collision(sph_flat_idx, cost, grad, distance, gradient) -> None:
+def accumulate_collision(
+    sph_flat_idx: wp.int32,
+    cost: wp.float32,
+    grad: wp.vec3,
+    distance: wp.array(dtype=wp.float32),
+    gradient: wp.array(dtype=wp.float32),
+):
     """Deterministically accumulate one raw-layout result into tensor buffers."""
     if not isinstance(distance, torch.Tensor) or not isinstance(gradient, torch.Tensor):
         raise NotImplementedError(
@@ -80,14 +101,14 @@ def accumulate_collision(sph_flat_idx, cost, grad, distance, gradient) -> None:
 
 
 def process_collision_result(
-    sdf_result,
-    radius_adjusted,
-    weight,
-    eta,
-    sph_flat_idx,
-    distance,
-    gradient,
-) -> None:
+    sdf_result: wp.vec4,
+    radius_adjusted: wp.float32,
+    weight: wp.float32,
+    eta: wp.float32,
+    sph_flat_idx: wp.int32,
+    distance: wp.array(dtype=wp.float32),
+    gradient: wp.array(dtype=wp.float32),
+):
     """Apply the V2 activation rule and accumulate a tensor SDF result."""
     result = torch.as_tensor(sdf_result)
     if result.numel() != 4:

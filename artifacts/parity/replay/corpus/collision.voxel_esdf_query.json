@@ -9,8 +9,16 @@
     "voxel_out_of_bounds",
     "voxel_points",
     "voxel_oob_points",
-    "voxel_boundary_points"
+    "voxel_boundary_points",
+    "voxel_values_alt",
+    "voxel_matrix_points",
+    "voxel_matrix_env_indices",
+    "voxel_grid_active"
   ],
+  "required_matrix": {
+    "cases": ["in_bounds", "out_of_bounds", "tie_winner", "active_grid", "multi_environment", "cache_repeat", "vjp"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "grid_boundary",
@@ -20,6 +28,12 @@
       "case": "bad_environment",
       "output": "invalid_rejected"
     }
+  },
+  "tensors": {
+    "voxel_values_alt": {"dtype": "float32", "shape": [2, 2, 2], "data": [[[10.0, 11.0], [12.0, 13.0]], [[14.0, 15.0], [16.0, 17.0]]]},
+    "voxel_matrix_points": {"dtype": "float32", "shape": [2, 3], "data": [[0.1, 0.1, 0.1], [-0.25, 0.25, 0.25]]},
+    "voxel_matrix_env_indices": {"dtype": "int64", "shape": [2], "data": [0, 1]},
+    "voxel_grid_active": {"dtype": "bool", "shape": [2, 2], "data": [[true, true], [false, true]]}
   },
   "version": 1
 }

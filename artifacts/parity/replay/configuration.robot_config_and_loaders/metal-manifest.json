@@ -3,7 +3,7 @@
   "capability": "configuration.robot_config_and_loaders",
   "corpus": {
     "case_file": "configuration.robot_config_and_loaders.json",
-    "case_sha256": "19b79cb5d1792be7b8293dc3de709fbe6d4dcdf8765d15af3ca9d4bef5bc6ea1",
+    "case_sha256": "6c536112e73b3434d824e51d745bf5081818a5a47a38cea6a4ef3f9c2fb7347e",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,19 +21,29 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "single_tree",
+        "branched_tree",
+        "serialization_roundtrip"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "serialization",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
     "file": "inputs.npz",
-    "sha256": "e4fc4c483ec4c7befc894d090aa1f5ad64ab5e215210686b84da527635a60999"
+    "sha256": "ee570779a77e62a627d491570a97ba672e8d8b6eae0b899c8b4654f849530a84"
   },
   "operation": "robot_config",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "20b4228d96baa5edc9d55ed0038fade0d3b12cf566a319bb2ac9af72c928b81f"
+    "sha256": "a3015eb14035959063b9e6160a9e94754d66d9e8ca2c40a729cefc26b304c789"
   },
   "runtime": {
     "python": "3.13.9",

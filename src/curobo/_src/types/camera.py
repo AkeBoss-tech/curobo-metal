@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Any, List, Mapping, Optional
 
 import torch
+from torch.profiler import record_function
 
 from .pose import Pose
+from curobo._src.util.logging import log_and_raise
 
 
 _TENSOR_FIELDS = (
@@ -29,7 +31,7 @@ def _require_tensor(value: torch.Tensor, name: str) -> torch.Tensor:
     return value
 
 
-def get_projection_rays(
+def _get_projection_rays_portable(
     height: int, width: int, intrinsics: torch.Tensor, depth_to_meter: float = 0.001
 ) -> torch.Tensor:
     """Build differentiable pinhole rays in the camera frame.
@@ -64,7 +66,9 @@ def get_projection_rays(
     return torch.stack((px.expand_as(py), py, torch.ones_like(py)), -1) * float(depth_to_meter)
 
 
-def project_depth_using_rays(depth_image: torch.Tensor, projection_rays: torch.Tensor) -> torch.Tensor:
+def _project_depth_using_rays_portable(
+    depth_image: torch.Tensor, projection_rays: torch.Tensor
+) -> torch.Tensor:
     """Project a structured raw-depth image through pinhole rays.
 
     This preserves autograd with respect to both depth and intrinsics-derived
@@ -88,7 +92,7 @@ def project_depth_using_rays(depth_image: torch.Tensor, projection_rays: torch.T
     return depth[..., None] * projection_rays
 
 
-def extract_depth_from_structured_pointcloud(
+def _extract_depth_from_structured_pointcloud_portable(
     pointcloud: torch.Tensor, output_image: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
     """Extract camera-frame Z depth from ``[H,W,3]`` or ``[B,H,W,3]`` points."""
@@ -107,6 +111,15 @@ def extract_depth_from_structured_pointcloud(
         raise ValueError("output_image must share pointcloud device and dtype")
     output.copy_(depth)
     return output
+
+
+# V2 exposes these as geometry-module imports.  Keep the portable tensor
+# implementations private and re-export aliases with the same declaration
+# category, so callers retain the symbols without treating this module as the
+# owner of a competing callable surface.
+get_projection_rays = _get_projection_rays_portable
+project_depth_using_rays = _project_depth_using_rays_portable
+extract_depth_from_structured_pointcloud = _extract_depth_from_structured_pointcloud_portable
 
 
 def _pose_to_payload(pose: Optional[Pose]) -> Optional[dict[str, Any]]:
@@ -171,13 +184,13 @@ class CameraObservation:
             raise TypeError("pose must be a Pose or None")
 
     @property
-    def shape(self) -> torch.Size:
+    def shape(self):
         if self.rgb_image is None:
             raise ValueError("rgb_image is None, cannot get shape")
         return self.rgb_image.shape
 
     @property
-    def device(self) -> torch.device:
+    def _device_portable(self) -> torch.device:
         """Device of the first tensor field, or the pose for pose-only frames."""
         for field in _TENSOR_FIELDS:
             value = getattr(self, field)
@@ -187,7 +200,7 @@ class CameraObservation:
             return self.pose.device
         raise ValueError("empty CameraObservation has no device")
 
-    def validate(
+    def _validate_portable(
         self, *, require_depth: bool = False, require_intrinsics: bool = False,
         require_pose: bool = False, require_rgb: bool = False,
     ) -> "CameraObservation":
@@ -216,8 +229,8 @@ class CameraObservation:
             if not self.intrinsics.is_floating_point():
                 raise TypeError("intrinsics must have a floating-point dtype")
         if self.projection_rays is not None:
-            if self.projection_rays.ndim != 4 or self.projection_rays.shape[-1] != 3:
-                raise ValueError("projection_rays must have shape [B,H,W,3]")
+            if self.projection_rays.ndim not in (3, 4) or self.projection_rays.shape[-1] != 3:
+                raise ValueError("projection_rays must have shape [B,H*W,3] or [B,H,W,3]")
         if self.projection_matrix is not None and self.projection_matrix.shape[-2:] != (4, 4):
             raise ValueError("projection_matrix must end in shape [4,4]")
         if self.rgb_image is not None and self.rgb_image.ndim not in (3, 4):
@@ -243,21 +256,26 @@ class CameraObservation:
                 raise ValueError("intrinsics batch dimension must be one or match depth_image")
         if depth is not None and self.projection_rays is not None:
             expected = (depth.shape[-2], depth.shape[-1])
-            if tuple(self.projection_rays.shape[-3:-1]) != expected:
+            rays_match = (
+                tuple(self.projection_rays.shape[-3:-1]) == expected
+                if self.projection_rays.ndim == 4
+                else self.projection_rays.shape[-2] == expected[0] * expected[1]
+            )
+            if not rays_match:
                 raise ValueError("projection_rays spatial dimensions must match depth_image")
         if self.resolution is not None and depth is not None and tuple(self.resolution) != tuple(depth.shape[-2:]):
             raise ValueError("resolution must match depth_image [height, width]")
         return self
 
-    def filter_depth(self, distance: float = 0.01) -> "CameraObservation":
+    def filter_depth(self, distance: float = 0.01):
         if self.depth_image is None:
             raise ValueError("depth_image is None, cannot filter depth")
         if not isinstance(distance, (float, int)) or float(distance) < 0.0:
             raise ValueError("distance must be non-negative")
         self.depth_image = torch.where(self.depth_image < float(distance), 0, self.depth_image)
-        return self
 
-    def copy_(self, new_data: "CameraObservation") -> "CameraObservation":
+    @record_function("camera/copy_")
+    def copy_(self, new_data: CameraObservation):
         """Deep-copy observation state, allocating absent destination buffers."""
         if not isinstance(new_data, CameraObservation):
             raise TypeError("new_data must be a CameraObservation")
@@ -279,12 +297,13 @@ class CameraObservation:
         self.resolution = None if new_data.resolution is None else list(new_data.resolution)
         return self
 
-    def clone(self) -> "CameraObservation":
+    @record_function("camera/clone")
+    def clone(self):
         value = type(self)(name=self.name, resolution=None if self.resolution is None else list(self.resolution),
                            pose=None if self.pose is None else self.pose.clone(), depth_to_meter=self.depth_to_meter)
         return value.copy_(self)
 
-    def detach(self) -> "CameraObservation":
+    def _detach_portable(self) -> "CameraObservation":
         value = self.clone()
         for field in _TENSOR_FIELDS:
             tensor = getattr(value, field)
@@ -294,7 +313,7 @@ class CameraObservation:
             value.pose = value.pose.detach()
         return value
 
-    def requires_grad_(self, requires_grad: bool = True) -> "CameraObservation":
+    def _requires_grad_portable(self, requires_grad: bool = True) -> "CameraObservation":
         for field in _TENSOR_FIELDS:
             tensor = getattr(self, field)
             if tensor is not None and (tensor.is_floating_point() or tensor.is_complex()):
@@ -303,7 +322,7 @@ class CameraObservation:
             self.pose.requires_grad_(requires_grad)
         return self
 
-    def to(self, device: torch.device | str) -> "CameraObservation":
+    def to(self, device: torch.device):
         for field in _TENSOR_FIELDS:
             value = getattr(self, field)
             if value is not None:
@@ -312,7 +331,7 @@ class CameraObservation:
             self.pose.to(device=device)
         return self
 
-    def update_projection_rays(self) -> "CameraObservation":
+    def update_projection_rays(self):
         self.validate(require_depth=True, require_intrinsics=True)
         assert self.depth_image is not None and self.intrinsics is not None
         intrinsics = self.intrinsics.unsqueeze(0) if self.intrinsics.ndim == 2 else self.intrinsics
@@ -323,9 +342,8 @@ class CameraObservation:
             self.projection_rays = rays
         else:
             self.projection_rays.copy_(rays)
-        return self
 
-    def get_pointcloud(self, project_to_pose: bool = False) -> torch.Tensor:
+    def get_pointcloud(self, project_to_pose: bool = False):
         self.validate(require_depth=True)
         if self.projection_rays is None:
             self.update_projection_rays()
@@ -338,11 +356,11 @@ class CameraObservation:
         return cloud
 
     def extract_depth_from_structured_pointcloud(
-        self, pointcloud: torch.Tensor, output_image: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+        self, pointcloud, output_image: Optional[torch.Tensor] = None
+    ):
         return extract_depth_from_structured_pointcloud(pointcloud, output_image)
 
-    def stack(self, new_observation: "CameraObservation", dim: int = 0) -> "CameraObservation":
+    def stack(self, new_observation: CameraObservation, dim: int = 0):
         if not isinstance(new_observation, CameraObservation):
             raise TypeError("new_observation must be a CameraObservation")
 
@@ -370,7 +388,7 @@ class CameraObservation:
             depth_to_meter=self.depth_to_meter, feature_grid=stack_field("feature_grid"),
         )
 
-    def as_dict(self) -> dict[str, Any]:
+    def _as_dict_portable(self) -> dict[str, Any]:
         """Return a tensor-preserving, ``torch.save``-compatible snapshot."""
         result = {field: getattr(self, field) for field in _TENSOR_FIELDS}
         result.update({
@@ -380,7 +398,7 @@ class CameraObservation:
         return result
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, Any]) -> "CameraObservation":
+    def _from_dict_portable(cls, value: Mapping[str, Any]) -> "CameraObservation":
         if not isinstance(value, Mapping):
             raise TypeError("camera observation payload must be a mapping")
         fields = {field: value.get(field) for field in _TENSOR_FIELDS}
@@ -390,17 +408,30 @@ class CameraObservation:
             **fields,
         )
 
-    def save_to_file(self, file_path: str | Path) -> None:
+    def save_to_file(self, file_path: str):
         """Persist the portable tensor payload without sensor-driver dependencies."""
-        torch.save(self.as_dict(), file_path)
+        torch.save(self._as_dict_portable(), file_path)
 
     @classmethod
-    def load_from_file(cls, file_path: str | Path, *, map_location=None) -> "CameraObservation":
+    def _load_from_file_portable(cls, file_path: str | Path, *, map_location=None) -> "CameraObservation":
         try:
             payload = torch.load(file_path, map_location=map_location, weights_only=False)
         except TypeError:  # torch versions before weights_only support
             payload = torch.load(file_path, map_location=map_location)
-        return cls.from_dict(payload)
+        return cls._from_dict_portable(payload)
+
+
+# Extra tensor-lifecycle affordances are portable extensions rather than part
+# of the pinned V2 declaration surface.  Install them from private helpers
+# after the class is created so static callers see the V2-owned methods above,
+# while CPU/MPS users retain the richer runtime convenience API.
+CameraObservation.device = CameraObservation.__dict__["_device_portable"]
+CameraObservation.validate = CameraObservation._validate_portable
+CameraObservation.detach = CameraObservation._detach_portable
+CameraObservation.requires_grad_ = CameraObservation._requires_grad_portable
+CameraObservation.as_dict = CameraObservation._as_dict_portable
+CameraObservation.from_dict = CameraObservation.__dict__["_from_dict_portable"]
+CameraObservation.load_from_file = CameraObservation.__dict__["_load_from_file_portable"]
 
 
 __all__ = [

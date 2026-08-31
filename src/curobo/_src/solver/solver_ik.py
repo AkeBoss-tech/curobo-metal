@@ -3,17 +3,28 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
+from typing import Dict, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
 from curobo._src.geom.collision.buffer_collision import CollisionBuffer
-from curobo._src.robot.kinematics.kinematics import Kinematics
+from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
+from curobo._src.geom.collision.collision_scene import SceneCollision
+from curobo._src.geom.types import SceneCfg
+from curobo._src.robot.kinematics.kinematics import Kinematics, KinematicsState
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.types.kinematics_params import KinematicsParams
+from curobo._src.rollout.goal_registry import GoalRegistry
+from curobo._src.rollout.metrics import RolloutMetrics
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_robot import RobotState
 from curobo._src.types.pose import Pose
 from curobo._src.types.tool_pose import GoalToolPose, ToolPose
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.logging import log_and_raise, log_warn
+from curobo._src.util.tensor_util import stable_topk
+from curobo._src.util.torch_util import get_torch_jit_decorator
 
 from .manager_goal import GoalManager
 from .seed_ik.seed_ik_solver import SeedIKSolver
@@ -163,7 +174,9 @@ def _slice_batch_result(result: IKSolverResult, batch_size: int) -> IKSolverResu
 
 
 class IKSolver:
-    def __init__(self, config: IKSolverCfg, scene_collision_checker=None):
+    def __init__(
+        self, config: IKSolverCfg, scene_collision_checker: Optional[SceneCollision] = None
+    ):
         if not isinstance(config, IKSolverCfg):
             raise TypeError("config must be IKSolverCfg")
         self.config = config
@@ -234,17 +247,40 @@ class IKSolver:
             ))
 
     @property
-    def kinematics(self): return self._kinematics
+    def optimizer(self):
+        return self.core.optimizer
+
     @property
-    def joint_names(self): return self._kinematics.joint_names
+    def metrics_rollout(self):
+        return self.core.metrics_rollout
+
     @property
-    def tool_frames(self): return self._kinematics.tool_frames
+    def auxiliary_rollout(self):
+        return self.core.auxiliary_rollout
+
     @property
-    def device_cfg(self): return self.config.device_cfg
+    def kinematics(self):
+        return self._kinematics
+
     @property
-    def action_dim(self): return self._kinematics.dof
+    def transition_model(self):
+        return self.core.transition_model
+
     @property
-    def action_horizon(self): return 1
+    def action_dim(self) -> int:
+        return self._kinematics.dof
+
+    @property
+    def action_horizon(self) -> int:
+        return 1
+
+    @property
+    def joint_names(self):
+        return self._kinematics.joint_names
+
+    @property
+    def tool_frames(self):
+        return self._kinematics.tool_frames
     @property
     def default_joint_position(self):
         return self.core.default_joint_position
@@ -252,19 +288,30 @@ class IKSolver:
     def default_joint_state(self):
         return self.core.default_joint_state
 
-    optimizer = property(lambda self: self.core.optimizer)
-    metrics_rollout = property(lambda self: self.core.metrics_rollout)
-    auxiliary_rollout = property(lambda self: self.core.auxiliary_rollout)
-    transition_model = property(lambda self: self.core.transition_model)
-    solve_state = property(lambda self: self.core.solve_state)
-    seed_manager = property(lambda self: self.core.seed_manager)
-    goal_registry_manager = property(lambda self: self.core.goal_registry_manager)
+    @property
+    def device_cfg(self):
+        return self.config.device_cfg
+
+    @property
+    def scene_collision_checker(self):
+        return self._scene_collision_checker
+
+    @property
+    def goal_registry_manager(self):
+        return self.core.goal_registry_manager
+
+    @property
+    def solve_state(self) -> SolveState:
+        return self.core.solve_state
+
+    @property
+    def seed_manager(self):
+        return self.core.seed_manager
+
     # A few established V2 compositors intentionally replace this private
     # adapter before calling ``update_world``.  Keep the public property tied
     # to that live reference; explicit IKSolver world updates synchronize it
     # back into SolverCore below.
-    scene_collision_checker = property(lambda self: self._scene_collision_checker)
-
     @property
     def problem_batch_size(self) -> int:
         """Seed-expanded active problem size, or the configured capacity before a solve."""
@@ -273,10 +320,10 @@ class IKSolver:
             return self.config.max_batch_size * self.config.num_seeds
         return state.get_ik_batch_size() or state.get_batch_size()
 
-    def compute_kinematics(self, state: JointState):
+    def compute_kinematics(self, state: JointState) -> KinematicsState:
         return self.core.compute_kinematics(state)
-    def get_active_js(self, full_js): return self.core.get_active_js(full_js)
-    def get_full_js(self, active_js): return self.core.get_full_js(active_js)
+    def get_active_js(self, full_js: JointState) -> JointState: return self.core.get_active_js(full_js)
+    def get_full_js(self, active_js: JointState) -> JointState: return self.core.get_full_js(active_js)
     def reset_seed(self):
         if self.seed_ik_solver is not None:
             self.seed_ik_solver.reset_seed()
@@ -330,7 +377,7 @@ class IKSolver:
     def disable_joint_position_tracking(self):
         self._joint_position_tracking = False
         self.core.disable_joint_position_tracking()
-    def update_tool_pose_criteria(self, tool_pose_criteria):
+    def update_tool_pose_criteria(self, tool_pose_criteria: Dict[str, ToolPoseCriteria]):
         if not isinstance(tool_pose_criteria, dict):
             raise TypeError("tool_pose_criteria must be a mapping")
         unknown = set(tool_pose_criteria).difference(self.tool_frames)
@@ -342,7 +389,7 @@ class IKSolver:
         # This transport attribute is read directly by existing planner
         # facades.  Preserve it in addition to SolverCore's typed criteria.
         self.config.tool_pose_criteria = dict(tool_pose_criteria)
-    def update_world(self, scene_cfg):
+    def update_world(self, scene_cfg: SceneCfg) -> None:
         """Replace the active portable world collision scene.
 
         A supplied :class:`SceneCollision` is mutated in place, matching the
@@ -396,11 +443,11 @@ class IKSolver:
         return self.core.update_link_inertial(link_name, mass, com, inertia)
     def update_links_inertial(self, link_properties):
         return self.core.update_links_inertial(link_properties)
-    def debug_dump(self, *args, **kwargs):
-        del args, kwargs
+    def debug_dump(self, file_path: str):
+        del file_path
         return {"backend": "portable", "cuda_graph": False}
 
-    def sample_configs(self, num_samples: int, rejection_ratio: int = 10):
+    def sample_configs(self, num_samples: int, rejection_ratio: int = 10) -> torch.Tensor:
         return self.core.sample_configs(
             num_samples, rejection_ratio,
             self.config.optimizer_collision_activation_distance,

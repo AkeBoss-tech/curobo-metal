@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from curobo.content import get_assets_path, get_robot_configs_path, get_scene_configs_path
+from curobo._src.util.logging import log_and_raise, log_info
 from curobo.util_file import join_path
 
 

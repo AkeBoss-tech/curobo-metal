@@ -93,7 +93,7 @@ def compare_module(upstream: dict[str, Any], local_root: Path) -> dict[str, Any]
     for name in sorted(set(upstream_symbols) & set(local_symbols)):
         expected = _callable_shape(upstream_symbols[name])
         actual = _callable_shape(local_symbols[name])
-        if expected is None or actual is None:
+        if expected is None and actual is None:
             continue
         comparable.append(name)
         if expected == actual:

@@ -11,7 +11,7 @@ without claiming CUDA result-buffer compatibility.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Union
+from typing import Optional, Union
 
 import torch
 
@@ -22,8 +22,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 _BatchIndex = Union[int, slice, torch.Tensor, list[int], tuple[int, ...]]
 
 
-@dataclass
-class RetargetResult:
+class _RetargetResultPortableMixin:
     """Result from :meth:`MotionRetargeter.solve_frame` or ``solve_sequence``.
 
     ``joint_state.position`` has shape ``[environment, dof]`` for a frame and
@@ -184,6 +183,12 @@ class RetargetResult:
         if indices.numel() and (indices.min() < 0 or indices.max() >= self.batch_size):
             raise IndexError("retarget result batch index is out of range")
         return indices
+
+
+@dataclass
+class RetargetResult(_RetargetResultPortableMixin):
+    joint_state: JointState
+    trajectory: Optional[JointState] = None
 
 
 __all__ = ["RetargetResult"]

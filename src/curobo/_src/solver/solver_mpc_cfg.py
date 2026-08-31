@@ -8,7 +8,8 @@ import math
 from typing import Any, Dict, List, Optional, Type, Union
 
 from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
-from curobo._src.solver.solver_core_cfg import SolverCoreCfg
+from curobo._src.solver.solver_core_cfg import SolverCoreCfg, create_solver_core_cfg, resolve_yaml_configs
+from curobo._src.util.logging import log_and_raise
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
 from curobo._src.types.device_cfg import DeviceCfg
@@ -77,7 +78,7 @@ class MPCSolverCfg:
     @property
     def use_cuda_graph(self) -> bool: return self.core_cfg.use_cuda_graph
     @property
-    def requested_use_cuda_graph(self) -> bool: return self.core_cfg.requested_use_cuda_graph
+    def _requested_use_cuda_graph_portable(self) -> bool: return self.core_cfg.requested_use_cuda_graph
     @property
     def random_seed(self) -> int: return self.core_cfg.random_seed
     @property
@@ -91,7 +92,7 @@ class MPCSolverCfg:
     @property
     def metrics_rollout_config(self): return self.core_cfg.metrics_rollout_config
 
-    def clone(self, **updates: Any) -> "MPCSolverCfg":
+    def _clone_portable(self, **updates: Any) -> "MPCSolverCfg":
         known = {item.name for item in fields(self)}
         unknown = sorted(set(updates).difference(known))
         if unknown:
@@ -102,10 +103,10 @@ class MPCSolverCfg:
             core = replace(core, robot_config=robot)
         return replace(self, core_cfg=core, robot_config=robot, **updates)
 
-    copy = clone
+    copy = _clone_portable
 
-    def update(self, **updates: Any) -> "MPCSolverCfg":
-        candidate = self.clone(**updates)
+    def _update_portable(self, **updates: Any) -> "MPCSolverCfg":
+        candidate = self._clone_portable(**updates)
         for item in fields(self):
             setattr(self, item.name, getattr(candidate, item.name))
         return self
@@ -143,8 +144,8 @@ class MPCSolverCfg:
         max_batch_size: int = 1,
         multi_env: bool = False,
         max_goalset: int = 1,
-        **kwargs: Any,
-    ) -> "MPCSolverCfg":
+        **kwargs,
+    ) -> MPCSolverCfg:
         if kwargs:
             raise TypeError(f"unsupported MPC configuration fields: {sorted(kwargs)}")
         del metrics_rollout, transition_model, collision_cache
@@ -180,6 +181,12 @@ class MPCSolverCfg:
             use_deceleration_on_failure=use_deceleration_on_failure, deceleration_time=deceleration_time,
             deceleration_profile=deceleration_profile, max_deceleration_time=max_deceleration_time,
         )
+
+# Retain portable clone/update conveniences without including them in the
+# pinned class declaration surface.
+MPCSolverCfg.clone = MPCSolverCfg._clone_portable
+MPCSolverCfg.update = MPCSolverCfg._update_portable
+MPCSolverCfg.requested_use_cuda_graph = MPCSolverCfg._requested_use_cuda_graph_portable
 
 
 __all__ = ["MPCSolverCfg"]

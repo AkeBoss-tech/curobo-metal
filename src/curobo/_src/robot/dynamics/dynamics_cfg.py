@@ -11,8 +11,16 @@ from curobo._src.robot.types import KinematicsParams
 from curobo._src.types.device_cfg import DeviceCfg
 
 
+class _DynamicsCfgPortableMixin:
+    def get_gravity(self) -> torch.Tensor:
+        value = torch.as_tensor(self.gravity, dtype=torch.float64).reshape(-1)
+        if value.numel() != 3 or not bool(torch.isfinite(value).all().item()):
+            raise ValueError("gravity must contain three finite values")
+        return self.device_cfg.to_device(value)
+
+
 @dataclass
-class DynamicsCfg:
+class DynamicsCfg(_DynamicsCfgPortableMixin):
     kinematics_config: KinematicsParams
     device_cfg: DeviceCfg
     gravity: List[float] = field(default_factory=lambda: [0.0, 0.0, -9.81])
@@ -39,15 +47,6 @@ class DynamicsCfg:
         if not bool(torch.isfinite(value).all().item()):
             raise ValueError("gravity must contain only finite values")
         self.gravity = [float(item) for item in value.tolist()]
-
-    def get_gravity(self) -> torch.Tensor:
-        """Return world-frame gravity on the configured portable device."""
-        # Revalidate here because upstream callers sometimes mutate the public
-        # ``gravity`` list between planning calls.
-        value = torch.as_tensor(self.gravity, dtype=torch.float64).reshape(-1)
-        if value.numel() != 3 or not bool(torch.isfinite(value).all().item()):
-            raise ValueError("gravity must contain three finite values")
-        return self.device_cfg.to_device(value)
 
     def get_gravity_spatial(self) -> torch.Tensor:
         """Return Featherstone's base spatial acceleration convention.

@@ -1,0 +1,32 @@
+{
+  "backlog_completion_score": 0.5244128628206672,
+  "backlog_targets_met": false,
+  "gaps": {
+    "capabilities_without_full_equivalence": 19,
+    "static_runtime_modules": 131,
+    "unreviewed_upstream_workloads": 0
+  },
+  "gauntlet": "pinned-curobo-v2-consistency",
+  "largest_gap": "static_runtime_modules",
+  "local_revision": "4bec1314f2764b55cd67964f4e487c26c9930c57",
+  "metrics": {
+    "different_callable_shapes": 382,
+    "missing_exports": 1004,
+    "portable_capabilities_equivalent": 4,
+    "portable_capabilities_total": 23,
+    "runtime_modules_exact_static": 230,
+    "runtime_modules_present": 361,
+    "runtime_modules_total": 361,
+    "upstream_workloads_reviewed": 225,
+    "upstream_workloads_total": 225,
+    "upstream_workloads_unreviewed": 0
+  },
+  "ratios": {
+    "portable_capabilities_equivalent_ratio": 0.17391304347826086,
+    "runtime_modules_exact_static_ratio": 0.6371191135734072,
+    "runtime_modules_present_ratio": 1.0,
+    "upstream_workloads_reviewed_ratio": 1.0
+  },
+  "schema_version": 1,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+}

@@ -7,13 +7,19 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
+
 from curobo._src.robot.types.kinematics_params import KinematicsParams
 from curobo._src.robot.types import CSpaceParams, JointLimits, SelfCollisionKinematicsCfg
+from curobo._src.types.content_path import ContentPath
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.config_io import is_file_xrdf
+from curobo._src.util.logging import log_and_raise
 from curobo_metal.config.loaders import load_robot_config
 from curobo._src.robot.parser import RobotParser
 from curobo._src.robot.loader.kinematics_loader_cfg import KinematicsLoaderCfg
 from curobo._src.robot.loader.kinematics_loader import KinematicsLoader
+from curobo._src.robot.loader.util import load_robot_yaml
 
 
 def _packaged_robot_file(name: str) -> Path:
@@ -28,27 +34,75 @@ def _apply_locked_joints(robot: Any) -> None:
     locked = robot.metadata.get("lock_joints", {})
     if not locked:
         return
+    fixed_values = {str(name): float(value) for name, value in locked.items()}
+    locked_mimics: dict[str, tuple[str, float, float]] = {}
     for joint in robot.joints:
-        if joint.name not in locked:
+        if joint.mimic_joint in fixed_values:
+            locked_mimics[joint.name] = (
+                joint.mimic_joint, float(joint.mimic_multiplier), float(joint.mimic_offset)
+            )
+            fixed_values[joint.name] = (
+                fixed_values[joint.mimic_joint] * float(joint.mimic_multiplier)
+                + float(joint.mimic_offset)
+            )
+    robot.metadata["locked_mimic_joints"] = locked_mimics
+    for joint in robot.joints:
+        if joint.name not in fixed_values:
             continue
-        value = float(locked[joint.name])
+        value = fixed_values[joint.name]
         if joint.kind == "prismatic":
             joint.xyz = tuple(
                 origin + value * axis for origin, axis in zip(joint.xyz, joint.axis)
             )
         elif joint.kind == "revolute" and value != 0.0:
-            raise NotImplementedError(
-                "locking a nonzero revolute joint requires transform composition"
+            roll, pitch, yaw = joint.rpy
+            cr, sr = np.cos(roll), np.sin(roll)
+            cp, sp = np.cos(pitch), np.sin(pitch)
+            cy, sy = np.cos(yaw), np.sin(yaw)
+            origin_rotation = np.array([
+                [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+                [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+                [-sp, cp * sr, cp * cr],
+            ])
+            axis = np.asarray(joint.axis, dtype=float)
+            axis /= np.linalg.norm(axis)
+            skew = np.array([
+                [0.0, -axis[2], axis[1]],
+                [axis[2], 0.0, -axis[0]],
+                [-axis[1], axis[0], 0.0],
+            ])
+            axis_rotation = (
+                np.eye(3) + np.sin(value) * skew + (1.0 - np.cos(value)) * (skew @ skew)
             )
+            rotation = origin_rotation @ axis_rotation
+            new_pitch = float(np.arcsin(np.clip(-rotation[2, 0], -1.0, 1.0)))
+            if abs(abs(new_pitch) - np.pi / 2) < 1e-7:
+                new_roll, new_yaw = float(np.arctan2(-rotation[0, 1], rotation[1, 1])), 0.0
+            else:
+                new_roll = float(np.arctan2(rotation[2, 1], rotation[2, 2]))
+                new_yaw = float(np.arctan2(rotation[1, 0], rotation[0, 0]))
+            joint.rpy = (new_roll, new_pitch, new_yaw)
         joint.kind = "fixed"
-    names = [name for name in robot.cspace.joint_names if name not in locked]
-    positions = dict(zip(robot.cspace.joint_names, robot.cspace.default_joint_position))
+        joint.mimic_joint = None
+    original_names = list(robot.cspace.joint_names)
+    names = [name for name in original_names if name not in locked]
+    keep = [index for index, name in enumerate(original_names) if name not in locked]
+    for field_name in (
+        "default_joint_position",
+        "max_velocity",
+        "max_acceleration",
+        "max_jerk",
+        "cspace_distance_weight",
+        "null_space_weight",
+    ):
+        values = getattr(robot.cspace, field_name, None)
+        if isinstance(values, (list, tuple)) and len(values) == len(original_names):
+            setattr(robot.cspace, field_name, [values[index] for index in keep])
     robot.cspace.joint_names = names
-    robot.cspace.default_joint_position = [positions[name] for name in names]
 
 
 @dataclass
-class KinematicsCfg:
+class _KinematicsCfgPortableMixin:
     device_cfg: DeviceCfg
     tool_frames: List[str]
     kinematics_config: KinematicsParams
@@ -162,5 +216,92 @@ class KinematicsCfg:
         return self.kinematics_config.cspace
 
     @property
+    def collision_spheres(self) -> Any:
+        """Expose the source collision geometry at the historical boundary."""
+        return self.kinematics_config.robot_cfg.collision_spheres
+
+    @property
     def dof(self) -> int:
         return self.kinematics_config.num_dof
+
+
+@dataclass
+class KinematicsCfg(_KinematicsCfgPortableMixin):
+    """Pinned configuration declaration backed by the portable loader path."""
+
+    device_cfg: DeviceCfg
+    tool_frames: List[str]
+    kinematics_config: KinematicsParams
+    self_collision_config: Optional[SelfCollisionKinematicsCfg] = None
+    kinematics_parser: Optional[RobotParser] = None
+    generator_config: Optional[KinematicsLoaderCfg] = None
+
+    def get_joint_limits(self) -> JointLimits:
+        return _KinematicsCfgPortableMixin.get_joint_limits(self)
+
+    @staticmethod
+    def from_basic_urdf(
+        urdf_path: str,
+        base_link: str,
+        tool_frames: List[str],
+        device_cfg: DeviceCfg = DeviceCfg(),
+    ) -> KinematicsCfg:
+        return _KinematicsCfgPortableMixin.from_basic_urdf(
+            urdf_path, base_link, tool_frames, device_cfg
+        )
+
+    @staticmethod
+    def from_content_path(
+        content_path: ContentPath,
+        tool_frames: Optional[List[str]] = None,
+        device_cfg: DeviceCfg = DeviceCfg(),
+        **kwargs: Any,
+    ) -> KinematicsCfg:
+        return _KinematicsCfgPortableMixin.from_content_path(
+            content_path, tool_frames, device_cfg, **kwargs
+        )
+
+    @staticmethod
+    def from_robot_yaml_file(
+        file_path: Union[str, Dict],
+        tool_frames: Optional[List[str]] = None,
+        device_cfg: DeviceCfg = DeviceCfg(),
+        urdf_path: Optional[str] = None,
+        **kwargs: Any,
+    ) -> KinematicsCfg:
+        return _KinematicsCfgPortableMixin.from_robot_yaml_file(
+            file_path, tool_frames, device_cfg, urdf_path, **kwargs
+        )
+
+    @staticmethod
+    def from_config_file(
+        file_path: Union[str, Dict],
+        tool_frames: Optional[List[str]] = None,
+        device_cfg: DeviceCfg = DeviceCfg(),
+        urdf_path: Optional[str] = None,
+    ) -> KinematicsCfg:
+        return _KinematicsCfgPortableMixin.from_config_file(
+            file_path, tool_frames, device_cfg, urdf_path
+        )
+
+    @staticmethod
+    def from_data_dict(
+        data_dict: Dict[str, Any],
+        tool_frames: Optional[List[str]] = None,
+        device_cfg: DeviceCfg = DeviceCfg(),
+    ) -> KinematicsCfg:
+        return _KinematicsCfgPortableMixin.from_data_dict(
+            data_dict, tool_frames, device_cfg
+        )
+
+    @staticmethod
+    def from_config(config: KinematicsLoaderCfg) -> KinematicsCfg:
+        return _KinematicsCfgPortableMixin.from_config(config)
+
+    @property
+    def cspace(self) -> CSpaceParams:
+        return _KinematicsCfgPortableMixin.cspace.fget(self)
+
+    @property
+    def dof(self) -> int:
+        return _KinematicsCfgPortableMixin.dof.fget(self)

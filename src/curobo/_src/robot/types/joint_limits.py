@@ -14,11 +14,11 @@ from typing import Dict, Iterable, List, Optional, Sequence
 import torch
 
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
 from curobo._src.util.tensor_util import copy_or_clone
 
 
-@dataclass
-class JointLimits:
+class _JointLimitsPortableMixin:
     """Lower/upper position, velocity, acceleration, jerk, and effort limits.
 
     Every present tensor has shape ``[2, dof]`` and is materialized using
@@ -49,8 +49,6 @@ class JointLimits:
         self._validate_ranges()
 
     def _validate_joint_names(self) -> None:
-        if not self.joint_names:
-            raise ValueError("joint_names must not be empty")
         if any(not isinstance(name, str) or not name for name in self.joint_names):
             raise TypeError("joint_names must contain non-empty strings")
         if len(set(self.joint_names)) != len(self.joint_names):
@@ -340,6 +338,38 @@ class JointLimits:
     @property
     def jerk_upper_limits(self) -> torch.Tensor:
         return self.jerk[1]
+
+
+@dataclass
+class JointLimits(_JointLimitsPortableMixin):
+    joint_names: List[str]
+    position: torch.Tensor
+    velocity: torch.Tensor
+    acceleration: torch.Tensor
+    jerk: torch.Tensor
+    effort: Optional[torch.Tensor] = None
+    device_cfg: DeviceCfg = DeviceCfg()
+
+    @staticmethod
+    def from_data_dict(data: Dict, device_cfg: DeviceCfg = DeviceCfg()) -> JointLimits:
+        return _JointLimitsPortableMixin.from_data_dict(data, device_cfg)
+
+    def clone(self) -> JointLimits:
+        return _JointLimitsPortableMixin.clone(self)
+
+    def copy_(self, new_jl: JointLimits) -> JointLimits:
+        return _JointLimitsPortableMixin.copy_(self, new_jl)
+
+    def validate_shape(self, dof: int, check_effort: bool = True):
+        return _JointLimitsPortableMixin.validate_shape(self, dof, check_effort)
+
+    @property
+    def position_lower_limits(self) -> torch.Tensor:
+        return self.position[0]
+
+    @property
+    def position_upper_limits(self) -> torch.Tensor:
+        return self.position[1]
 
 
 __all__ = ["JointLimits"]

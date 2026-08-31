@@ -9,19 +9,23 @@ CUDA/Warp launch workspace.
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import TYPE_CHECKING, Optional
 
 import torch
 
 from curobo._src.state.state_joint import JointState
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.warp import init_warp
 
-from .portable import BaseCost, BaseCSpaceCost as _PortableBaseCSpaceCost
+from .cost_base import BaseCost
+from .portable import BaseCSpaceCost as _PortableBaseCSpaceCost
 
 if TYPE_CHECKING:
     from .cost_cspace_cfg import CSpaceCostCfg
 
 
-class BaseCSpaceCost(_PortableBaseCSpaceCost):
+class _BaseCSpaceCostPortableMixin(_PortableBaseCSpaceCost):
     """Validated C-space cost lifecycle usable on CPU and Apple Metal.
 
     Upstream allocates a CUDA-side copy of the target weight and starts that
@@ -123,6 +127,56 @@ class BaseCSpaceCost(_PortableBaseCSpaceCost):
             if bool(((idxs_target_joint_state < 0) | (idxs_target_joint_state >= targets)).any().item()):
                 raise ValueError("idxs_target_joint_state contains an out-of-range target index")
         return True
+
+
+class BaseCSpaceCost(_BaseCSpaceCostPortableMixin):
+    """Pinned C-space base declaration with portable concrete behavior.
+
+    The upstream ``forward`` is abstract because its CUDA/Warp subclasses
+    implement it.  This class keeps that declared marker, while delegating to
+    the private eager base so the public base remains instantiable for the
+    portable lifecycle callers that use it for validation and allocation.
+    """
+
+    def __init__(self, config: CSpaceCostCfg):
+        _BaseCSpaceCostPortableMixin.__init__(self, config)
+
+    def validate_input(
+        self,
+        state_batch: JointState,
+        joint_torque: Optional[torch.Tensor] = None,
+        target_joint_state: Optional[JointState] = None,
+        idxs_target_joint_state: Optional[torch.Tensor] = None,
+    ):
+        return _BaseCSpaceCostPortableMixin.validate_input(
+            self, state_batch, joint_torque, target_joint_state, idxs_target_joint_state
+        )
+
+    @abstractmethod
+    def forward(
+        self,
+        state_batch: JointState,
+        joint_torque: Optional[torch.Tensor] = None,
+        target_joint_state: Optional[JointState] = None,
+        idxs_target_joint_state: Optional[torch.Tensor] = None,
+        current_joint_state: Optional[JointState] = None,
+        idxs_current_joint_state: Optional[torch.Tensor] = None,
+    ):
+        return _BaseCSpaceCostPortableMixin.forward(
+            self,
+            state_batch,
+            joint_torque,
+            target_joint_state,
+            idxs_target_joint_state,
+            current_joint_state,
+            idxs_current_joint_state,
+        )
+
+    def enable_cspace_target(self):
+        return _BaseCSpaceCostPortableMixin.enable_cspace_target(self)
+
+    def disable_cspace_target(self):
+        return _BaseCSpaceCostPortableMixin.disable_cspace_target(self)
 
 
 __all__ = ["BaseCost", "BaseCSpaceCost", "JointState"]

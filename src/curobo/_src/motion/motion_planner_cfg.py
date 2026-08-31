@@ -98,8 +98,26 @@ def _validate_collision_cache(cache: Optional[Dict[str, int]]) -> Optional[Dict[
     return result
 
 
+class _MotionPlannerCfgPortableMixin:
+    @property
+    def robot_config(self) -> RobotCfg:
+        return self._robot_config_portable
+
+    @property
+    def requested_use_cuda_graph(self) -> bool:
+        return self._requested_use_cuda_graph_portable
+
+    def clone(self, **updates: Any) -> "MotionPlannerCfg":
+        return self._clone_portable(**updates)
+
+    copy = clone
+
+    def update(self, **updates: Any) -> "MotionPlannerCfg":
+        return self._update_portable(**updates)
+
+
 @dataclass
-class MotionPlannerCfg:
+class MotionPlannerCfg(_MotionPlannerCfgPortableMixin):
     ik_solver_config: IKSolverCfg
     trajopt_solver_config: TrajOptSolverCfg
     graph_planner_config: Optional[PRMGraphPlannerCfg] = None
@@ -181,12 +199,12 @@ class MotionPlannerCfg:
                 )
 
     @property
-    def robot_config(self) -> RobotCfg:
+    def _robot_config_portable(self) -> RobotCfg:
         """The robot configuration shared by the planner's portable solvers."""
         return self.ik_solver_config.robot_config
 
     @property
-    def requested_use_cuda_graph(self) -> bool:
+    def _requested_use_cuda_graph_portable(self) -> bool:
         """Whether the caller requested CUDA graph capture on construction.
 
         It is retained for source compatibility and diagnostics only.  The
@@ -202,7 +220,7 @@ class MotionPlannerCfg:
             )
         )
 
-    def clone(self, **updates: Any) -> "MotionPlannerCfg":
+    def _clone_portable(self, **updates: Any) -> "MotionPlannerCfg":
         """Return a validated independent configuration tree.
 
         Deep copying the complete aggregation preserves aliases between a
@@ -254,9 +272,7 @@ class MotionPlannerCfg:
         candidate.__post_init__()
         return candidate
 
-    copy = clone
-
-    def update(self, **updates: Any) -> "MotionPlannerCfg":
+    def _update_portable(self, **updates: Any) -> "MotionPlannerCfg":
         """Atomically replace fields after validating the complete configuration."""
         candidate = self.clone(**updates)
         for item in fields(self):
@@ -271,7 +287,7 @@ class MotionPlannerCfg:
         metrics_rollout: Union[str, Dict[str, Any]] = "metrics_base.yml",
         trajopt_optimizer_configs: List[Union[str, Dict[str, Any]]] = ["trajopt/lbfgs_bspline_trajopt.yml"],
         trajopt_transition_model: Union[str, Dict[str, Any]] = "trajopt/transition_bspline_trajopt.yml",
-        graph_planner_config: Union[str, Dict[str, Any], None] = "graph_planner/exact_graph_planner.yml",
+        graph_planner_config: Union[str, Dict[str, Any]] = "graph_planner/exact_graph_planner.yml",
         graph_planner_rollout: Union[str, Dict[str, Any]] = "metrics_base.yml",
         graph_planner_transition_model: Union[str, Dict[str, Any]] = "graph_planner/transition_graph_planner.yml",
         scene_model: Optional[Union[str, Dict[str, Any]]] = None,
@@ -293,7 +309,7 @@ class MotionPlannerCfg:
         max_goalset: int = 1,
         interpolation_dt: float = 0.025,
         interpolation_buffer_size: int = 1000,
-    ) -> "MotionPlannerCfg":
+    ) -> MotionPlannerCfg:
         """Compile a V2-shaped planner request into portable typed configs.
 
         ``use_cuda_graph`` is accepted so applications can retain their V2

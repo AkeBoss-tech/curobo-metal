@@ -3,8 +3,16 @@
   "format": "curobo-metal-replay-corpus",
   "inputs": [
     "collision_spheres",
-    "collision_pairs"
+    "collision_pairs",
+    "collision_matrix_spheres",
+    "collision_matrix_pairs",
+    "collision_separated_spheres",
+    "collision_pair_active"
   ],
+  "required_matrix": {
+    "cases": ["separation_sign", "tie_winner", "active_pair", "reduced_aggregation", "vjp"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "tangent_spheres",
@@ -14,6 +22,12 @@
       "case": "bad_pair_index",
       "output": "invalid_rejected"
     }
+  },
+  "tensors": {
+    "collision_matrix_spheres": {"dtype": "float32", "shape": [3, 4], "data": [[0.0, 0.0, 0.0, 0.5], [0.75, 0.0, 0.0, 0.5], [0.75, 0.0, 0.0, 0.5]]},
+    "collision_matrix_pairs": {"dtype": "int64", "shape": [2, 2], "data": [[0, 1], [0, 2]]},
+    "collision_separated_spheres": {"dtype": "float32", "shape": [2, 4], "data": [[0.0, 0.0, 0.0, 0.5], [1.5, 0.0, 0.0, 0.5]]},
+    "collision_pair_active": {"dtype": "bool", "shape": [2], "data": [true, false]}
   },
   "version": 1
 }

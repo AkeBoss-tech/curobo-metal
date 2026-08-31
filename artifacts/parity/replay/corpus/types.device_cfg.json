@@ -3,8 +3,14 @@
   "format": "curobo-metal-replay-corpus",
   "inputs": [
     "singleton",
-    "empty"
+    "empty",
+    "device_zero",
+    "device_many"
   ],
+  "required_matrix": {
+    "cases": ["zero", "one", "many", "empty", "device_roundtrip"],
+    "output": "matrix_observed"
+  },
   "required_evidence": {
     "edge": {
       "case": "empty_tensor",
@@ -14,6 +20,10 @@
       "case": "unsupported_device",
       "output": "invalid_rejected"
     }
+  },
+  "tensors": {
+    "device_zero": {"dtype": "float32", "shape": [0, 2], "data": []},
+    "device_many": {"dtype": "float32", "shape": [3, 2], "data": [[0.0, 1.0], [-2.0, 3.0], [4.5, -6.0]]}
   },
   "version": 1
 }

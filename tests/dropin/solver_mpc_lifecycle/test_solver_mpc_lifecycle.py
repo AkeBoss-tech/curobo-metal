@@ -64,6 +64,24 @@ def test_partial_reset_keeps_other_batch_queue_rows():
     assert result.next_action.position.shape == (2, solver.action_dim)
 
 
+def test_seed_update_cannot_reuse_stale_result_metadata_or_empty_manager_state():
+    solver, current = _solver()
+    first = solver.optimize_next_action(current)
+    assert first.metrics["solve_count"] == 1
+
+    seed = current.position.reshape(1, 1, -1).expand(
+        -1, solver.action_horizon, -1
+    ).clone()
+    seed[:, 1:] = seed[:, 1:] + 0.04
+    solver.update_seed_trajectory(seed)
+
+    assert solver.trajectory_execution_manager.has_valid_next_command()
+    result = solver.optimize_next_action(current)
+    assert result.metrics["solve_count"] == 2
+    assert result.metrics["command_index"] == 0
+    torch.testing.assert_close(result.next_action.position, result.action_buffer[:, 0])
+
+
 def test_failure_next_action_is_taken_from_safe_fallback_buffer(monkeypatch):
     solver, current = _solver()
     current.velocity = torch.full_like(current.position, 0.2)

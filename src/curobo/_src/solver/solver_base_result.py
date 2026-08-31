@@ -14,8 +14,15 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Any, Dict, Mapping, Optional
 
 import torch
+import torch.autograd.profiler as profiler
 
+from curobo._src.rollout.metrics import RolloutMetrics
+from curobo._src.runtime import debug as debug_mode
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_trajectory_ops import copy_joint_state_at_batch_seed_indices
+from curobo._src.state.state_robot import RobotState
+from curobo._src.util.logging import log_and_raise
+from curobo._src.util.torch_util import get_torch_jit_decorator
 from curobo._src.types.device_cfg import DeviceCfg
 
 
@@ -213,7 +220,7 @@ def _copy_object_masked(target: Any, source: Any, mask: torch.Tensor) -> None:
 
 
 @dataclass
-class BaseSolverResult:
+class _PortableBaseSolverResult:
     """Shared materialised result data for IK, TrajOpt, and MPC.
 
     Per-seed fields use the V2 ``[batch, seed, ...]`` convention; MPC also
@@ -407,6 +414,45 @@ class BaseSolverResult:
         _copy_joint_state_masked(self.js_solution, other.js_solution, mask)
         _copy_object_masked(self.solution_state, other.solution_state, mask)
         _copy_object_masked(self.metrics, other.metrics, mask)
+
+
+@dataclass
+class BaseSolverResult(_PortableBaseSolverResult):
+    """Pinned V2 declaration facade for the portable materialised result."""
+
+    success: torch.Tensor
+    solution: Optional[torch.Tensor] = None
+    js_solution: Optional[JointState] = None
+    position_error: Optional[torch.Tensor] = None
+    rotation_error: Optional[torch.Tensor] = None
+    cspace_error: Optional[torch.Tensor] = None
+    goalset_index: Optional[torch.Tensor] = None
+    solve_time: float = 0.0
+    total_time: float = 0.0
+    debug_info: Dict = field(default_factory=dict)
+    optimized_seeds: Optional[torch.Tensor] = None
+    metrics: Optional[RolloutMetrics] = None
+    position_tolerance: float = 0.0
+    orientation_tolerance: float = 0.0
+    seed_rank: Optional[torch.Tensor] = None
+    seed_cost: Optional[torch.Tensor] = None
+    batch_size: int = 0
+    num_seeds: int = 0
+    total_cost_reshaped: Optional[torch.Tensor] = None
+    solution_state: Optional[RobotState] = None
+    feasible: Optional[torch.Tensor] = None
+
+    @profiler.record_function("solver_base_result/clone")
+    @get_torch_jit_decorator(only_valid_for_compile=True, slow_to_compile=True)
+    def clone(self) -> "BaseSolverResult":
+        return _PortableBaseSolverResult.clone(self)
+
+    @profiler.record_function("solver_base_result/copy_successful_solutions")
+    def copy_successful_solutions(self, other: "BaseSolverResult") -> None:
+        _PortableBaseSolverResult.copy_successful_solutions(self, other)
+
+    def copy_at_batch_indices(self, other: "BaseSolverResult", mask: torch.Tensor) -> None:
+        _PortableBaseSolverResult.copy_at_batch_indices(self, other, mask)
 
 
 __all__ = ["BaseSolverResult"]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import torch
+from . import _trimesh_compat as trimesh
 from .types import SphereFitMetrics,SphereFitResult
 from .wp_mesh_query import WarpMeshQuery
 
@@ -8,7 +9,17 @@ def _directions(n,device):
     i=torch.arange(n,dtype=torch.float32,device=device)+.5
     z=1-2*i/n; phi=i*(np.pi*(3-np.sqrt(5)));r=torch.sqrt((1-z*z).clamp_min(0))
     return torch.stack((r*torch.cos(phi),r*torch.sin(phi),z),-1)
-def compute_sphere_fit_metrics(mesh,centers,radii,n_interior=10000,n_surface=5000,n_sphere_surface=200,device=torch.device("cpu")):
+def compute_sphere_fit_metrics(
+    mesh: trimesh.Trimesh,
+    centers: np.ndarray,
+    radii: np.ndarray,
+    n_interior: int = 10000,
+    n_surface: int = 5000,
+    n_sphere_surface: int = 200,
+    device: torch.device = torch.device("cuda", 0),
+) -> SphereFitMetrics:
+    if device.type == "cuda" and not torch.cuda.is_available():
+        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     c=torch.as_tensor(centers,dtype=torch.float32,device=device);r=torch.as_tensor(radii,dtype=torch.float32,device=device).flatten()
     if not len(c):return SphereFitMetrics(num_spheres=0,protrusion=1.,surface_gap_mean=float("inf"),surface_gap_p95=float("inf"),max_uncovered_gap=float("inf"))
     # Fixed grid gives reproducible interior coverage.
@@ -26,6 +37,22 @@ def compute_sphere_fit_metrics(mesh,centers,radii,n_interior=10000,n_surface=500
     return SphereFitMetrics(num_spheres=len(c),coverage=coverage,protrusion=float(outside.float().mean()),
         protrusion_dist_mean=float(od.mean()) if len(od) else 0.,protrusion_dist_p95=float(torch.quantile(od,.95)) if len(od) else 0.,
         surface_gap_mean=float(gaps.mean()),surface_gap_p95=float(torch.quantile(gaps,.95)),max_uncovered_gap=float(gaps.max()),volume_ratio=sphere_vol/mesh_vol)
-def populate_metrics(result:SphereFitResult,mesh,**kwargs):
-    result.metrics=compute_sphere_fit_metrics(mesh,result.centers,result.radii,**kwargs);return result.metrics
+def populate_metrics(
+    result: SphereFitResult,
+    mesh: trimesh.Trimesh,
+    n_interior: int = 10000,
+    n_surface: int = 5000,
+    n_sphere_surface: int = 200,
+    device: torch.device = torch.device("cuda", 0),
+) -> SphereFitMetrics:
+    result.metrics = compute_sphere_fit_metrics(
+        mesh,
+        result.centers,
+        result.radii,
+        n_interior,
+        n_surface,
+        n_sphere_surface,
+        device,
+    )
+    return result.metrics
 __all__=["compute_sphere_fit_metrics","populate_metrics"]

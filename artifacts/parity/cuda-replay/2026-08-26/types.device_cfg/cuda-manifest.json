@@ -1,0 +1,94 @@
+{
+  "backend": "cuda",
+  "capability": "types.device_cfg",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "empty_tensor",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "unsupported_device",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "zero",
+        "one",
+        "many",
+        "empty",
+        "device_roundtrip"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "ce3901b0e3538c8b9826a667c32cd17f1dd2aac212ed075c58cd0982e219dba9",
+  "input_tensor_count": 4,
+  "operation": "device_cfg",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "fa024bc73ecf6898b8c64b6773f499f1649fa573214817ed3ff3ba54e0dff2e5",
+    "tensors": {
+      "device_code": {
+        "dtype": "int32",
+        "shape": [
+          1
+        ]
+      },
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          5
+        ]
+      },
+      "value": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          1
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 0,
+    "rtol": 0
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

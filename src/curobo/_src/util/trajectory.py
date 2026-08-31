@@ -8,12 +8,17 @@ from typing import List, Optional, Tuple
 import numpy as np
 import torch
 import torch.autograd.profiler as profiler
+from scipy import interpolate
 
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.control_space import ControlSpace
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.util.logging import log_and_raise, log_warn
 from curobo._src.util.torch_util import get_torch_jit_decorator
+from curobo._src.util._trajectory_aliases import (
+    get_bspline_interpolation,
+    get_cuda_linear_interpolation,
+)
 
 
 class TrajInterpolationType(Enum):
@@ -188,7 +193,9 @@ def get_cpu_linear_interpolation(
     return _interpolate_state(raw_traj, traj_steps, out_traj_state, kind, interpolation_dt)
 
 
-def get_cuda_linear_interpolation(raw_traj, traj_tsteps, out_traj, interpolation_dt=None):
+def _get_cuda_linear_interpolation_portable(
+    raw_traj, traj_tsteps, out_traj, interpolation_dt=None
+):
     """Portable implementation of the historical CUDA-named interpolation entry point."""
     if interpolation_dt is None:
         interpolation_dt = torch.ones((), device=raw_traj.position.device, dtype=raw_traj.position.dtype)
@@ -369,7 +376,7 @@ def _cubic_boundary_spline(
     return evaluate(position_basis), evaluate(velocity_basis), evaluate(acceleration_basis), evaluate(jerk_basis)
 
 
-def get_bspline_interpolation(
+def _get_bspline_interpolation_portable(
     input_trajectory: Optional[JointState] = None,
     output_trajectory: Optional[JointState] = None,
     interpolation_dt: Optional[torch.Tensor] = None,

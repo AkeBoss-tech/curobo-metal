@@ -3,7 +3,7 @@
   "capability": "ik.inverse_kinematics",
   "corpus": {
     "case_file": "ik.inverse_kinematics.json",
-    "case_sha256": "003833420495da5ec4f8d5c588ec9addd5f8d5b1ddad7440f7db731d9b0b9055",
+    "case_sha256": "d3c32656291fbc9cf1f29b78be68d6b4a10dda40ccfc90ec0c653a587cf5fd40",
     "common_file": "common.json",
     "common_sha256": "6c9218cf5e92a3d257089ec8c8d940308fffb497782df1819caf4e3ed52373b6"
   },
@@ -21,9 +21,24 @@
       "executed": true,
       "output": "invalid_rejected"
     },
+    "matrix": {
+      "cases": [
+        "singleton",
+        "batch",
+        "success",
+        "infeasible",
+        "pose_cspace",
+        "multiseed_selection",
+        "status_layout",
+        "residual_vjp"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    },
     "probe_scope": "cost",
     "status": false
   },
+  "evidence_state": "metal",
   "fallback_enabled": false,
   "format": "curobo-metal-paired-replay",
   "input": {
@@ -33,7 +48,7 @@
   "operation": "inverse_kinematics",
   "output": {
     "file": "metal-outputs.npz",
-    "sha256": "e528dace87a7336ad476ecbbdc9c9d091a2e30091b59244a1c3c4b184239bf81"
+    "sha256": "b14a40da47ed594581dd09cf6e445ccc42abb93b5640fe2fb3b8b3cf21d7f80d"
   },
   "runtime": {
     "python": "3.13.9",

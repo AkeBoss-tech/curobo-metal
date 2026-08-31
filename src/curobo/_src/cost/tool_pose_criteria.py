@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 import torch
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.logging import log_and_raise
 
 
 @dataclass
@@ -38,7 +39,7 @@ class ToolPoseCriteria:
                           self.terminal_pose_convergence_tolerance.clone(),
                           self.non_terminal_pose_convergence_tolerance.clone(),
                           self.project_distance_to_goal.clone(), self.device_cfg)
-    def copy_(self, other):
+    def copy_(self, other: ToolPoseCriteria):
         if self.device_cfg != other.device_cfg: raise ValueError(f"device_cfg mismatch: {self.device_cfg} != {other.device_cfg}")
         for field in ("terminal_pose_axes_weight_factor", "non_terminal_pose_axes_weight_factor",
                       "terminal_pose_convergence_tolerance", "non_terminal_pose_convergence_tolerance",
@@ -76,11 +77,11 @@ class StackedToolPoseCriteria:
     device_cfg: DeviceCfg = DeviceCfg()
     _tool_pose_criteria: Optional[Dict[str, ToolPoseCriteria]] = None
 
-    @classmethod
-    def from_tool_pose_criteria(cls, tool_pose_criteria):
+    @staticmethod
+    def from_tool_pose_criteria(tool_pose_criteria: Dict[str, ToolPoseCriteria]):
         frames = list(tool_pose_criteria)
         values = [tool_pose_criteria[name] for name in frames]
-        return cls(
+        return StackedToolPoseCriteria(
             frames,
             torch.stack([x.terminal_pose_axes_weight_factor for x in values]),
             torch.stack([x.non_terminal_pose_axes_weight_factor for x in values]),
@@ -91,7 +92,7 @@ class StackedToolPoseCriteria:
             dict(tool_pose_criteria),
         )
 
-    def clone(self):
+    def clone(self) -> StackedToolPoseCriteria:
         return type(self)(
             self.tool_frames.copy(),
             self.terminal_pose_axes_weight_factor.clone(),
@@ -104,7 +105,9 @@ class StackedToolPoseCriteria:
             {k: v.clone() for k, v in self._tool_pose_criteria.items()},
         )
 
-    def update_tool_pose_criteria(self, tool_pose_criteria):
+    def update_tool_pose_criteria(
+        self, tool_pose_criteria: Dict[str, ToolPoseCriteria]
+    ):
         if not isinstance(tool_pose_criteria, dict):
             raise TypeError("tool_pose_criteria must be a mapping")
         for name, criteria in tool_pose_criteria.items():

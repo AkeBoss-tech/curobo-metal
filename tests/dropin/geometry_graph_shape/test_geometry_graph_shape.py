@@ -57,10 +57,11 @@ def test_portable_camera_and_quaternion_output_buffers() -> None:
     intrinsics = torch.tensor([[2.0, 0.0, 0.5], [0.0, 2.0, 0.5], [0.0, 0.0, 1.0]])
     rays = get_projection_rays(2, 2, intrinsics)
     points = project_depth_using_rays(torch.ones(2, 2), rays)
-    assert points.shape == (1, 2, 2, 3)
-    assert project_depth_to_pointcloud(torch.ones(2, 2), intrinsics).shape == points.shape
+    assert points.shape == (1, 4, 3)
+    structured = project_depth_to_pointcloud(torch.ones(2, 2), intrinsics)
+    assert structured.shape == (2, 2, 3)
     output = torch.empty(2, 2)
-    torch.testing.assert_close(extract_depth_from_structured_pointcloud(points[0], output), output)
+    torch.testing.assert_close(extract_depth_from_structured_pointcloud(structured, output), output)
 
     result_buffer = torch.empty(4)
     result = quat_multiply(torch.tensor([1.0, 0.0, 0.0, 0.0]), torch.tensor([0.0, 1.0, 0.0, 0.0]), result_buffer)

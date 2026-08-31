@@ -8,7 +8,13 @@ from copy import deepcopy
 import numpy as np
 import torch
 
+from curobo._src.curobolib.cuda_ops.dynamics import RNEAForwardFunction
+from curobo._src.curobolib.cuda_ops.tensor_checks import (
+    check_float16_tensors,
+    check_float32_tensors,
+)
 from curobo._src.state.state_joint import JointState
+from curobo._src.util.logging import log_and_raise, log_info
 from curobo_metal.ops.whole_body import (
     WholeBodyState,
     forward_dynamics,
@@ -290,7 +296,7 @@ class Dynamics:
             result = result - self._external_wrench_torque(q, flat_wrenches)
         return result.reshape(shape)
 
-    def compute_forward_dynamics(
+    def _compute_forward_dynamics(
         self, joint_state: JointState, torque: torch.Tensor
     ) -> torch.Tensor:
         """Solve generalized accelerations on CPU/MPS for portable consumers."""
@@ -312,7 +318,7 @@ class Dynamics:
         ).acceleration
         return result.reshape(shape)
 
-    def get_mass_matrix(self, joint_position: torch.Tensor) -> torch.Tensor:
+    def _get_mass_matrix(self, joint_position: torch.Tensor) -> torch.Tensor:
         """Return a differentiable mass matrix for direct portable adapters."""
         if joint_position.ndim not in (1, 2):
             raise ValueError("joint_position must have shape [dof] or [batch, dof]")
@@ -328,7 +334,7 @@ class Dynamics:
         self._sync_gravity()
         return mass_matrix(self._model, joint_position)
 
-    def rollout(
+    def _rollout(
         self, initial_state: JointState, torque: torch.Tensor, timestep: float | torch.Tensor
     ):
         """Semi-implicit Euler rollout; CUDA rollout kernels are not emulated."""
@@ -406,6 +412,16 @@ class Dynamics:
             if unexpected:
                 raise ValueError(f"unknown inertial properties: {sorted(unexpected)}")
             self.update_link_inertial(name, **values)
+
+
+# The portable extension is deliberately installed after the declaration.
+# This keeps the pinned CUDA ``Dynamics`` class shape inspectable while making
+# the additional CPU/MPS capabilities available to callers at runtime.  The
+# three helpers have no CUDA-kernel equivalent and are not part of the pinned
+# class declaration, but they are useful, differentiable portable operations.
+Dynamics.compute_forward_dynamics = Dynamics._compute_forward_dynamics
+Dynamics.get_mass_matrix = Dynamics._get_mass_matrix
+Dynamics.rollout = Dynamics._rollout
 
 
 __all__ = ["Dynamics", "_compute_threads_per_batch"]

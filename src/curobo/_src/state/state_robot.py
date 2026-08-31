@@ -18,9 +18,21 @@ import torch
 from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.pose import Pose
 from curobo._src.types.tool_pose import ToolPose
+from curobo._src.util.helpers import list_idx_if_not_none
+from curobo._src.util.logging import log_and_raise
 
 from .state_base import State
 from .state_joint import JointState
+from .state_joint_trajectory_ops import (
+    copy_joint_state_at_batch_seed_indices,
+    copy_joint_state_only_index,
+)
+
+# Importing the kinematics package here is cyclic while that package is
+# initializing through ``JointState``.  The concrete portable implementation
+# accepts its KinematicsState value object structurally; retain the upstream
+# public annotation name without forcing that CUDA-era import cycle.
+KinematicsState = Any
 
 
 def _model_tensor_fields(model_state: Any) -> tuple[str, ...]:
@@ -77,7 +89,7 @@ def _index_model_state(model_state: Any, index: Union[int, torch.Tensor]) -> Any
 
 
 @dataclass
-class RobotState(State):
+class _RobotStatePortable(State):
     """Joint, torque, and optional forward-kinematics state.
 
     ``cuda_robot_model_state`` keeps its upstream field name for source
@@ -88,7 +100,7 @@ class RobotState(State):
 
     joint_state: JointState
     joint_torque: Optional[torch.Tensor] = None
-    cuda_robot_model_state: Optional[Any] = None
+    cuda_robot_model_state: Optional[KinematicsState] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.joint_state, JointState):
@@ -318,9 +330,68 @@ class RobotState(State):
             if seed_idx is not None and not merged:
                 target_pose.position[index, seed_idx] = source_pose.position[index, seed_idx]
                 target_pose.quaternion[index, seed_idx] = source_pose.quaternion[index, seed_idx]
-            else:
+        else:
                 target_pose.position[model_index] = source_pose.position[model_index]
                 target_pose.quaternion[model_index] = source_pose.quaternion[model_index]
+
+
+@dataclass
+class RobotState(_RobotStatePortable):
+    """Pinned cuRobo state declaration backed by the portable implementation.
+
+    The concrete lifecycle helpers live on the private base class so the
+    public declaration retains the upstream callable surface while still
+    providing CPU/MPS clone, transfer, contiguity, and autograd behavior.
+    """
+
+    joint_state: JointState
+    joint_torque: Optional[torch.Tensor] = None
+    cuda_robot_model_state: Optional[KinematicsState] = None
+
+    def data_ptr(self):
+        return super().data_ptr()
+
+    def __getitem__(self, idx: Union[int, torch.Tensor]):
+        return super().__getitem__(idx)
+
+    def detach(self):
+        return super().detach()
+
+    @property
+    def robot_spheres(self) -> Optional[torch.Tensor]:
+        return super().robot_spheres
+
+    @property
+    def link_poses(self) -> Optional[ToolPose]:
+        return super().link_poses
+
+    @property
+    def tool_poses(self) -> Optional[ToolPose]:
+        return super().tool_poses
+
+    @property
+    def tool_frames(self) -> List[str]:
+        return super().tool_frames
+
+    def __len__(self):
+        return super().__len__()
+
+    def copy_at_batch_seed_indices(
+        self, other: RobotState, batch_idx: torch.Tensor, seed_idx: torch.Tensor
+    ):
+        return super().copy_at_batch_seed_indices(other, batch_idx, seed_idx)
+
+    def copy_only_index(self, other: RobotState, index: Union[int, torch.Tensor]):
+        return super().copy_only_index(other, index)
+
+    def get_link_pose(self, link_name: str) -> Pose:
+        return super().get_link_pose(link_name)
+
+    def clone(self) -> RobotState:
+        return super().clone()
+
+    def copy_(self, other: RobotState):
+        return super().copy_(other)
 
 
 __all__ = ["RobotState"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 import ast
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 import xml.etree.ElementTree as ET
@@ -441,11 +442,123 @@ def _resolve_asset(path: str, source: Path | None, asset_root: str | None) -> Pa
                 break
         if asset_root:
             bases.append(source.parent / asset_root)
+    # Parsed mappings lose the YAML file path, but cuRobo's packaged mappings
+    # still use paths rooted at ``curobo/content/assets``.  Resolve that wheel
+    # resource before ever falling back to the caller's current directory.
+    packaged_assets = Path(__file__).resolve().parents[2] / "curobo" / "content" / "assets"
+    if packaged_assets.is_dir():
+        bases.append(packaged_assets)
     for base in bases:
         resolved = (base / candidate).resolve()
         if resolved.exists():
             return resolved
     return (bases[-1] / candidate).resolve() if bases else candidate.resolve()
+
+
+def _pose_rpy(value: Any) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Convert cuRobo's ``[x, y, z, qw, qx, qy, qz]`` pose to URDF fields."""
+    pose = [float(item) for item in value]
+    if len(pose) != 7:
+        raise ValueError("extra_links.fixed_transform must contain seven values")
+    x, y, z, qw, qx, qy, qz = pose
+    norm = math.sqrt(qw * qw + qx * qx + qy * qy + qz * qz)
+    if norm == 0.0:
+        raise ValueError("extra_links.fixed_transform quaternion must be nonzero")
+    qw, qx, qy, qz = (item / norm for item in (qw, qx, qy, qz))
+    sinr_cosp = 2.0 * (qw * qx + qy * qz)
+    cosr_cosp = 1.0 - 2.0 * (qx * qx + qy * qy)
+    roll = math.atan2(sinr_cosp, cosr_cosp)
+    sinp = 2.0 * (qw * qy - qz * qx)
+    pitch = math.copysign(math.pi / 2.0, sinp) if abs(sinp) >= 1.0 else math.asin(sinp)
+    siny_cosp = 2.0 * (qw * qz + qx * qy)
+    cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
+    yaw = math.atan2(siny_cosp, cosy_cosp)
+    return (x, y, z), (roll, pitch, yaw)
+
+
+def _insert_extra_links(robot: RobotCfg, value: Any) -> None:
+    """Materialize YAML ``extra_links`` in the portable topology.
+
+    ``child_link_name`` inserts the new link between its declared parent and
+    an existing child.  This is the topology contract used for virtual-base
+    joints and is preserved by FK and URDF export.
+    """
+    if value in (None, {}):
+        return
+    if not isinstance(value, Mapping):
+        raise TypeError("extra_links must be a mapping or None")
+    type_map = {
+        "FIXED": ("fixed", (1.0, 0.0, 0.0)),
+        "X_PRISM": ("prismatic", (1.0, 0.0, 0.0)),
+        "Y_PRISM": ("prismatic", (0.0, 1.0, 0.0)),
+        "Z_PRISM": ("prismatic", (0.0, 0.0, 1.0)),
+        "X_PRISM_NEG": ("prismatic", (-1.0, 0.0, 0.0)),
+        "Y_PRISM_NEG": ("prismatic", (0.0, -1.0, 0.0)),
+        "Z_PRISM_NEG": ("prismatic", (0.0, 0.0, -1.0)),
+        "X_ROT": ("revolute", (1.0, 0.0, 0.0)),
+        "Y_ROT": ("revolute", (0.0, 1.0, 0.0)),
+        "Z_ROT": ("revolute", (0.0, 0.0, 1.0)),
+        "X_ROT_NEG": ("revolute", (-1.0, 0.0, 0.0)),
+        "Y_ROT_NEG": ("revolute", (0.0, -1.0, 0.0)),
+        "Z_ROT_NEG": ("revolute", (0.0, 0.0, -1.0)),
+    }
+    known_links = {link.name for link in robot.links}
+    known_joints = {joint.name for joint in robot.joints}
+    for key, raw in value.items():
+        if not isinstance(raw, Mapping):
+            raise TypeError("extra_links values must be mappings")
+        row = dict(raw)
+        link_name = str(row.get("link_name", key))
+        if str(key) != link_name:
+            raise ValueError("extra_links key must match link_name")
+        joint_name = str(row.get("joint_name", ""))
+        parent = row.get("parent_link_name")
+        if not joint_name or not isinstance(parent, str) or not parent:
+            raise ValueError("each extra link requires joint_name and parent_link_name")
+        if link_name in known_links or joint_name in known_joints:
+            raise ValueError(f"duplicate extra link or joint: {link_name!r}, {joint_name!r}")
+        if parent not in known_links:
+            raise ValueError(f"extra link {link_name!r} references unknown parent {parent!r}")
+        type_name = getattr(row.get("joint_type"), "name", row.get("joint_type"))
+        if type_name not in type_map:
+            raise UnsupportedConfigError(f"unsupported extra-link joint type {type_name!r}")
+        kind, default_axis = type_map[str(type_name)]
+        axis_raw = row.get("joint_axis")
+        axis = default_axis if axis_raw is None else tuple(float(item) for item in axis_raw)
+        if len(axis) != 3:
+            raise ValueError("extra_links.joint_axis must contain three values")
+        xyz, rpy = _pose_rpy(row.get("fixed_transform", [0, 0, 0, 1, 0, 0, 0]))
+        limits = row.get("joint_limits") or [-math.inf, math.inf]
+        if len(limits) != 2:
+            raise ValueError("extra_links.joint_limits must contain lower and upper")
+        velocity = row.get("joint_velocity_limits") or [-math.inf, math.inf]
+        velocity_limit = max(abs(float(item)) for item in velocity)
+        effort = row.get("joint_effort_limit") or [math.inf]
+        effort_limit = max(abs(float(item)) for item in effort)
+        child = row.get("child_link_name")
+        if child is not None:
+            matches = [joint for joint in robot.joints if joint.child == child]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"extra link {link_name!r} child {child!r} must have one parent joint"
+                )
+            matches[0].parent = link_name
+        robot.links.append(LinkConfig(
+            link_name,
+            float(row.get("link_mass", 0.01)),
+            tuple(float(item) for item in row.get("link_com", (0.0, 0.0, 0.0))),
+            tuple(float(item) for item in row.get(
+                "link_inertia", (1e-4, 1e-4, 1e-4, 0.0, 0.0, 0.0)
+            )),
+        ))
+        robot.joints.append(JointConfig(
+            joint_name, kind, parent, link_name, axis=axis, xyz=xyz, rpy=rpy,
+            limits=JointLimits(float(limits[0]), float(limits[1]), velocity_limit, effort_limit),
+            mimic_joint=row.get("mimic_joint_name"),
+        ))
+        known_links.add(link_name)
+        known_joints.add(joint_name)
+    _topological_links(robot.base_link, robot.links, robot.joints)
 
 
 def load_robot_config(
@@ -492,6 +605,7 @@ def load_robot_config(
         base_link=kinematics.get("base_link"),
         tool_frames=kinematics.get("tool_frames"),
     )
+    _insert_extra_links(result, kinematics.get("extra_links"))
     result.source_path = None if source is None else str(source)
     result.device_cfg = device_cfg
     result.metadata = {
@@ -501,12 +615,25 @@ def load_robot_config(
             "self_collision_buffer"
         }
     }
-    result.collision_link_names = list(kinematics.get("collision_link_names", []))
-    result.collision_spheres = _sphere_records(kinematics.get("collision_spheres", {}))
-    result.self_collision_ignore = deepcopy(kinematics.get("self_collision_ignore", {}))
+    result.collision_link_names = list(kinematics.get("collision_link_names") or [])
+    result.collision_spheres = _sphere_records(kinematics.get("collision_spheres") or {})
+    extra_spheres = kinematics.get("extra_collision_spheres") or {}
+    if not isinstance(extra_spheres, Mapping):
+        raise TypeError("extra_collision_spheres must be a mapping or None")
+    known_links = {link.name for link in result.links}
+    for link_name, count in extra_spheres.items():
+        if link_name not in known_links:
+            raise ValueError(f"extra collision spheres reference unknown link {link_name!r}")
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("extra_collision_spheres counts must be non-negative integers")
+        result.collision_spheres.extend(
+            CollisionSphere(str(link_name), (0.0, 0.0, 0.0), -100.0)
+            for _ in range(count)
+        )
+    result.self_collision_ignore = deepcopy(kinematics.get("self_collision_ignore") or {})
     result.self_collision_buffer = {
         str(key): float(item)
-        for key, item in kinematics.get("self_collision_buffer", {}).items()
+        for key, item in (kinematics.get("self_collision_buffer") or {}).items()
     }
 
     xrdf_path = kinematics.get("xrdf_path")

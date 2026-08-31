@@ -22,7 +22,13 @@ classifiers = [
   "Topic :: Scientific/Engineering",
 ]
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.24", "PyYAML>=6.0", "torch>=2.13"]
+dependencies = [
+  "numpy>=1.24",
+  "packaging>=23",
+  "PyYAML>=6.0",
+  "scipy>=1.10",
+  "torch>=2.13",
+]
 
 [project.urls]
 Homepage = "https://github.com/AkeBoss-tech/curobo-metal"
@@ -30,7 +36,15 @@ Repository = "https://github.com/AkeBoss-tech/curobo-metal"
 Issues = "https://github.com/AkeBoss-tech/curobo-metal/issues"
 
 [project.optional-dependencies]
-test = ["pytest>=7.4", "scipy>=1.10"]
+test = [
+  "pytest>=7.4",
+  "pytest-timeout>=2.4",
+  "setuptools-scm>=8",
+  "trimesh>=4",
+  "viser>=1",
+  "warp-lang>=1.10",
+  "yourdfpy>=0.0.60",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -44,6 +58,7 @@ curobo = [
   "content/**/*.obj",
   "content/**/*.urdf",
   "content/**/*.yml",
+  "content/**/*.xrdf",
   "content/**/LICENSE",
 ]
 

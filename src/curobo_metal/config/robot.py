@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -100,7 +101,7 @@ class RobotCfg:
 
     @property
     def joint_names(self) -> list[str]:
-        if self.cspace.joint_names:
+        if self.cspace.joint_names or self.metadata.get("cspace_configured", False):
             return self.cspace.joint_names
         return [
             joint.name for joint in self.joints
@@ -170,6 +171,7 @@ class RobotCfg:
                     "collision_spheres": spheres,
                     "self_collision_ignore": self.self_collision_ignore,
                     "self_collision_buffer": self.self_collision_buffer,
+                    "lock_joints": deepcopy(self.metadata.get("lock_joints", {})),
                 }
             }
         }

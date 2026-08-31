@@ -89,7 +89,7 @@ def test_geometry_tensor_helpers_preserve_values_and_gradients() -> None:
 
     dims, inverse = tensor_cube([1, 0, 0, 1, 0, 0, 0], [2, 3, 4], cfg)
     torch.testing.assert_close(dims, torch.tensor([2.0, 3.0, 4.0]))
-    torch.testing.assert_close(inverse, torch.tensor([-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]))
+    torch.testing.assert_close(inverse, torch.tensor([[-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]))
     batch_dims, batch_inverse = batch_tensor_cube(
         [[0, 0, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0, 0]], [[1, 1, 1], [2, 2, 2]], cfg
     )

@@ -40,6 +40,6 @@ class SDFDetectorCfg:
             raise ValueError("huber_delta and lambda_initial must be positive")
 
     @property
-    def max_distance(self) -> float:
+    def max_distance(self):
         """Pinned alias used by mesh-SDF callers."""
         return self.distance_threshold

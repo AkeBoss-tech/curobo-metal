@@ -1,9 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass,field
-from typing import Optional,Tuple
+from typing import List, Optional,Tuple
 import numpy as np
 import torch
+import torch.nn as nn
+from curobo._src.util.logging import log_info, log_warn
 from .fit_voxel import voxel_fit_mesh
+
+trimesh = None
+from .wp_mesh_query import WarpMeshQuery, WarpSphereSDFFunction
 
 @dataclass
 class MorphItLossWeights:
@@ -16,10 +21,10 @@ class MorphItConfig:
     clip_plane:Optional[Tuple[Tuple[float,float,float],float]]=None;clip_plane_buffer:float=.02;verbose_frequency:int=0
     def __post_init__(self):
         if self.max_spheres==0:self.max_spheres=max(self.num_spheres,300)
-    def get_radius_threshold(self,mesh):return self.radius_threshold_ratio*float(np.linalg.norm(np.diff(mesh.bounds,axis=0)))
-    def get_coverage_threshold(self,mesh):return self.coverage_threshold_ratio*float(np.linalg.norm(np.diff(mesh.bounds,axis=0)))
+    def get_radius_threshold(self,mesh: trimesh.Trimesh) -> float:return self.radius_threshold_ratio*float(np.linalg.norm(np.diff(mesh.bounds,axis=0)))
+    def get_coverage_threshold(self,mesh: trimesh.Trimesh) -> float:return self.coverage_threshold_ratio*float(np.linalg.norm(np.diff(mesh.bounds,axis=0)))
 
-def morphit_sphere_fit(mesh,num_spheres=None,iterations=200,max_attempts=10,loss_weights=None,device=torch.device("cpu"),init_centers=None,init_radii=None,max_spheres=0,clip_plane=None):
+def morphit_sphere_fit(mesh: trimesh.Trimesh, num_spheres: Optional[int] = None, iterations: int = 200, max_attempts: int = 10, loss_weights: Optional[MorphItLossWeights] = None, device: torch.device = torch.device("cuda", 0), init_centers: np.ndarray = None, init_radii: np.ndarray = None, max_spheres: int = 0, clip_plane: Optional[Tuple[Tuple[float, float, float], float]] = None) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[Tuple[np.ndarray, np.ndarray]]]:
     count=int(num_spheres or (len(init_centers) if init_centers is not None else 25))
     if init_centers is None: centers,radii=voxel_fit_mesh(mesh,count,device)
     else: centers,radii=np.asarray(init_centers,float),np.asarray(init_radii,float)

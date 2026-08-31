@@ -1,0 +1,130 @@
+{
+  "backend": "cuda",
+  "capability": "graph.prm_planner",
+  "device": "cuda",
+  "equivalence_claimed": false,
+  "evidence": {
+    "edge": {
+      "case": "zero_length_edge",
+      "executed": true,
+      "output": "edge_observed"
+    },
+    "invalid": {
+      "case": "blocked_endpoints",
+      "executed": true,
+      "output": "invalid_rejected"
+    },
+    "matrix": {
+      "cases": [
+        "direct",
+        "detour",
+        "infeasible",
+        "batched",
+        "reset",
+        "debug_layout"
+      ],
+      "executed": true,
+      "output": "matrix_observed"
+    }
+  },
+  "fallback_enabled": false,
+  "format": "curobo-metal-paired-replay",
+  "input_sha256": "ba55adee467ea31a470dc2d960f7b19ebaefc4af84d00d5f89c150c56d05ffca",
+  "input_tensor_count": 7,
+  "operation": "prm_planner",
+  "output": {
+    "file": "cuda-outputs.npz",
+    "sha256": "98541b8c572eb50eda17bcec77f789c5bbeb50e00105058beb8c7283a6daeadc",
+    "tensors": {
+      "batch_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "deterministic_repeat": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "edge_observed": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "endpoint_ok": {
+        "dtype": "bool",
+        "shape": [
+          6
+        ]
+      },
+      "invalid_rejected": {
+        "dtype": "int8",
+        "shape": [
+          1
+        ]
+      },
+      "matrix_observed": {
+        "dtype": "int8",
+        "shape": [
+          6
+        ]
+      },
+      "path_cost": {
+        "dtype": "float32",
+        "shape": [
+          6
+        ]
+      },
+      "point_count": {
+        "dtype": "int64",
+        "shape": [
+          6
+        ]
+      },
+      "status_code": {
+        "dtype": "int8",
+        "shape": [
+          6
+        ]
+      },
+      "success": {
+        "dtype": "bool",
+        "shape": [
+          6
+        ]
+      },
+      "swept_valid": {
+        "dtype": "bool",
+        "shape": [
+          6
+        ]
+      }
+    }
+  },
+  "runtime": {
+    "cuda_capability": [
+      8,
+      6
+    ],
+    "cuda_device_count": 1,
+    "cuda_device_index": 0,
+    "cuda_device_name": "NVIDIA GeForce RTX 3090",
+    "cuda_total_memory": 25286672384,
+    "nvidia_driver": "580.126.20",
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.10.20",
+    "torch": "2.11.0+cu128",
+    "torch_cuda": "12.8",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  },
+  "status": "complete",
+  "tolerance": {
+    "atol": 0,
+    "rtol": 0
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "version": 1
+}

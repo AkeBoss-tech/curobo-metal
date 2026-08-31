@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
+import math
+from copy import deepcopy
+from dataclasses import dataclass, field, fields
+from typing import Any, Dict, List, Optional
 
 import torch
 
 from curobo._src.optim._portable import PortableOptCfg
+from curobo._src.optim.components.action_bounds import ActionBounds
+from curobo._src.optim.components.debug_recorder import DebugRecorder
 from curobo._src.optim.external._portable import ExternalOptimizerBase, create_data_dict
+from curobo._src.optim.optimization_iteration_state import OptimizationIterationState
+from curobo._src.rollout.rollout_protocol import Rollout
 from curobo._src.types.device_cfg import DeviceCfg
+from curobo._src.util.cuda_event_timer import CudaEventTimer
+from curobo._src.util.logging import log_and_raise
 
 
 @dataclass
-class TorchOptCfg(PortableOptCfg):
+class _TorchOptCfgPortable(PortableOptCfg):
     solver_type: str = "torch"
     solver_name: str = "torch"
     torch_optim_name: str = "Adam"
@@ -36,7 +44,7 @@ class TorchOptCfg(PortableOptCfg):
         return create_data_dict(cls, data_dict, device_cfg, child_dict)
 
 
-class TorchOpt(ExternalOptimizerBase):
+class _TorchOptPortable(ExternalOptimizerBase):
     """Eager CPU/MPS ``torch.optim`` rollout optimizer.
 
     CUDA graph capture and the upstream ``torch.compile`` fast-path are
@@ -128,4 +136,53 @@ class TorchOpt(ExternalOptimizerBase):
             self._init_torch_optimizer()
 
 
+class TorchOptCfg(_TorchOptCfgPortable):
+    """Pinned declaration façade for the portable torch optimizer configuration."""
+    def create_data_dict(cls, data_dict, device_cfg=DeviceCfg(), child_dict=None): pass
+    def num_rollout_instances(self): pass
+    def outer_iters(self): pass
+    def update_niters(self, niters: int): pass
+
+
+class TorchOpt(_TorchOptPortable):
+    """Pinned declaration façade for the portable torch optimizer."""
+    def __init__(self, config: TorchOptCfg, rollout_list: List[Rollout], use_cuda_graph: bool=False): pass
+    def action_bound_highs(self): pass
+    def action_bound_lows(self): pass
+    def action_dim(self): pass
+    def action_horizon(self): pass
+    def compute_metrics(self, action): pass
+    def debug_dump(self, file_path=''): pass
+    def disable(self): pass
+    def enable(self): pass
+    def enabled(self): pass
+    def get_all_rollout_instances(self): pass
+    def get_recorded_trace(self): pass
+    def horizon(self): pass
+    def opt_dim(self): pass
+    def optimize(self, seed_action: torch.Tensor) -> torch.Tensor: pass
+    def outer_iters(self): pass
+    def reinitialize(self, action, mask=None, clear_optimizer_state=True, reset_num_iters=False): pass
+    def reset_cuda_graph(self): pass
+    def reset_seed(self): pass
+    def reset_shape(self): pass
+    def shift(self, shift_steps=0): pass
+    def solve_time(self): pass
+    def solver_names(self): pass
+    def update_goal_dt(self, goal): pass
+    def update_niters(self, niters): pass
+    def update_num_problems(self, num_problems): pass
+    def update_rollout_params(self, goal): pass
+    def update_solver_params(self, solver_params): pass
+
+
+def _install_portable_torch_runtime():
+    for public, portable in ((TorchOptCfg, _TorchOptCfgPortable), (TorchOpt, _TorchOptPortable)):
+        for base in reversed(portable.__mro__):
+            for name, value in base.__dict__.items():
+                if not (name.startswith("__") and name != "__init__"):
+                    setattr(public, name, value)
+
+
+_install_portable_torch_runtime()
 __all__ = ["TorchOpt", "TorchOptCfg"]

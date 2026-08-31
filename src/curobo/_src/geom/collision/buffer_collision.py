@@ -24,7 +24,7 @@ class CollisionBuffer:
             self.device_cfg = DeviceCfg()
 
     @classmethod
-    def from_shape(cls, shape: torch.Size, device_cfg: DeviceCfg) -> "CollisionBuffer":
+    def from_shape(cls, shape: torch.Size, device_cfg: DeviceCfg) -> CollisionBuffer:
         output = torch.Size(shape[:3])
         return cls(
             torch.zeros(output, device=device_cfg.device, dtype=device_cfg.collision_distance_dtype),
@@ -44,15 +44,15 @@ class CollisionBuffer:
                 replacement.distance, replacement.gradient, replacement.shape, replacement.device_cfg
             )
 
-    def clone(self) -> "CollisionBuffer":
+    def clone(self) -> CollisionBuffer:
         return type(self)(self.distance.clone(), self.gradient.clone(), self.shape, self.device_cfg)
 
-    def __mul__(self, scalar: float) -> "CollisionBuffer":
+    def __mul__(self, scalar: float) -> CollisionBuffer:
         self.distance *= scalar
         self.gradient *= scalar
         return self
 
-    def __add__(self, other: "CollisionBuffer") -> "CollisionBuffer":
+    def __add__(self, other: CollisionBuffer) -> CollisionBuffer:
         self.distance += other.distance
         self.gradient += other.gradient
         return self

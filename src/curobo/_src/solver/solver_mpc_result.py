@@ -152,8 +152,7 @@ def _copy_batch_robot_state(
     target.copy_only_index(source, mask)
 
 
-@dataclass
-class MPCSolverResult(BaseSolverResult):
+class _MPCSolverResultPortableMixin:
     """Result specific to the portable MPC solver.
 
     Command data use ``[batch, horizon, dof]``.  The helpers retain the batch
@@ -373,6 +372,19 @@ class MPCSolverResult(BaseSolverResult):
             raise ValueError("MPC success must have shape [batch] for action-plan merging")
         super().copy_successful_solutions(other)
         self._copy_mpc_at_batch_indices(other, other.success)
+
+
+@dataclass
+class MPCSolverResult(_MPCSolverResultPortableMixin, BaseSolverResult):
+    next_action: Optional[JointState] = None
+    action_sequence: Optional[JointState] = None
+    full_action_sequence: Optional[JointState] = None
+    robot_state_sequence: Optional[RobotState] = None
+    action_buffer: Optional[torch.Tensor] = None
+    action_dt: Optional[float] = None
+
+    def clone(self) -> MPCSolverResult:
+        return _MPCSolverResultPortableMixin.clone(self)
 
 
 __all__ = ["MPCSolverResult"]

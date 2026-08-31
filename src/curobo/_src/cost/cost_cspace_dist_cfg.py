@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from numbers import Integral
 from typing import Any, List, Type, Union
 
@@ -105,7 +106,7 @@ class CSpaceDistCostCfg(_PortableCSpaceDistCostCfg):
         self._validate_weight_pair()
         return self
 
-    def initialize_from_transition_model(self, transition_model: Any):
+    def initialize_from_transition_model(self, transition_model: RobotStateTransition):
         action_dim = getattr(transition_model, "action_dim", None)
         if isinstance(action_dim, bool) or not isinstance(action_dim, Integral) or action_dim < 0:
             raise TypeError("transition_model.action_dim must be a non-negative integer")

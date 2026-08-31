@@ -2,6 +2,23 @@
 
 
 def get_version() -> str:
-    from curobo_metal._version import __version__
+    import pathlib
 
-    return __version__
+    root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+    if (root / ".git").exists() and not (root / ".git/shallow").exists():
+        try:
+            import setuptools_scm
+
+            return setuptools_scm.get_version(
+                root=root,
+                version_scheme="no-guess-dev",
+                local_scheme="dirty-tag",
+            )
+        except (ImportError, LookupError):
+            pass
+    try:
+        from importlib.metadata import version
+
+        return version("curobo-metal")
+    except Exception:
+        return "v0.8.0-no-tag"

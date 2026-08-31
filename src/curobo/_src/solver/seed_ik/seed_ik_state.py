@@ -23,7 +23,7 @@ class SeedIKState:
             for item in fields(self)
         })
 
-    def copy_(self, other):
+    def copy_(self, other: "SeedIKState"):
         for item in fields(self):
             source = getattr(other, item.name)
             target = getattr(self, item.name)
@@ -33,7 +33,6 @@ class SeedIKState:
                 setattr(self, item.name, source.clone())
             else:
                 target.copy_(source)
-        return self
 
 
 __all__ = ["SeedIKState"]

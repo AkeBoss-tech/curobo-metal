@@ -100,13 +100,13 @@ def test_spline_mode_rejects_incomplete_or_incompatible_metadata_before_output_m
         )
 
 
-def test_execution_manager_offset_window_does_not_overread_short_state_horizon():
+def test_execution_manager_offset_window_uses_pinned_slice_semantics():
     state = JointState.from_position(torch.arange(12.0).reshape(1, 3, 4))
-    manager = TrajectoryExecutionManager(9, command_start_idx=2)
+    manager = TrajectoryExecutionManager(9, command_start_idx=2, command_end_idx=3)
     manager.update_state_action_buffers(state, torch.ones(1, 1, 4))
-    assert manager.remaining_commands == 1
-    torch.testing.assert_close(manager.get_next_command().position, state.position[:, 2])
-    assert not manager.has_valid_next_command()
+    sequence = manager.get_command_sequence()
+    assert sequence.shape == (1, 1, 4)
+    torch.testing.assert_close(sequence.position, state.position[:, 2:])
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
