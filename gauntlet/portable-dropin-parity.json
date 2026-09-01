@@ -195,6 +195,26 @@
     {
       "case_pattern": "curobo.tests._src.solver.test_solver_trajopt_result::tests._src.solver.test_solver_trajopt_result.TestTrajOptSolverResultDeviceHandling::test_cuda_tensors",
       "reason": "The TrajOpt result tensors are resident on MPS; the sole distinguishing assertion requires CUDA storage via Tensor.is_cuda."
+    },
+    {
+      "case_pattern": "curobo.tests._src.types.test_camera::tests._src.types.test_camera.TestCameraObservation::test_filter_depth_preserves_dtype",
+      "reason": "The adapted oracle directly requests float64 storage on the MPS device before exercising the copy contract; Metal cannot represent float64 tensors, while the same dtype-preservation behavior executes on supported CPU and MPS float32 inputs."
+    },
+    {
+      "case_pattern": "curobo.tests._src.util.test_cuda_stream_util::tests._src.util.test_cuda_stream_util.TestCudaStreamContext::test_cuda_stream_context_enabled",
+      "reason": "The case directly constructs torch.cuda.Stream and enters a CUDA stream context; MPS has no CUDA stream object, while the disabled portable context behavior executes separately."
+    },
+    {
+      "case_pattern": "curobo.tests._src.util.test_cuda_stream_util::tests._src.util.test_cuda_stream_util.TestSynchronizeCudaStreams::test_synchronize_enabled",
+      "reason": "The case directly constructs torch.cuda.Event objects and synchronizes CUDA streams; these runtime objects have no MPS equivalent, while portable disabled synchronization is covered independently."
+    },
+    {
+      "case_pattern": "curobo.tests._src.util.test_cuda_stream_util::tests._src.util.test_cuda_stream_util.TestCreateCudaStreamPair::test_create_pair_enabled",
+      "reason": "The asserted result is a real torch.cuda Stream/Event pair. MPS cannot supply CUDA runtime objects; the helper's portable disabled behavior executes in adjacent cases."
+    },
+    {
+      "case_pattern": "curobo.tests._src.robot.types.test_types::tests._src.robot.types.test_types.TestKinematicsParams::test_kinematics_device_cfg_placeholder",
+      "reason": "The pinned upstream test is unconditionally skipped with an explicit integration-only placeholder and contains no executable assertions on CUDA or MPS; the KinematicsParams device contract executes throughout the robot integration suite."
     }
   ]
 }
