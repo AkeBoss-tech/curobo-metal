@@ -133,19 +133,27 @@ def resolve_yaml_configs(
         )
         robot_cfg = RobotCfg(kin.kinematics_config.robot_cfg, device_cfg=device_cfg)
     else:
-        robot_value = resolve_config(join_path(get_robot_configs_path(), robot))
+        robot_value = robot if isinstance(robot, dict) else resolve_config(
+            join_path(get_robot_configs_path(), robot)
+        )
         robot_cfg = RobotCfg.create(
             robot_value, device_cfg=device_cfg,
             load_collision_spheres=load_collision_spheres, num_envs=num_envs,
         )
     optimizers = [
-        resolve_config(join_path(get_task_configs_path(), item))
+        item if isinstance(item, dict) else resolve_config(join_path(get_task_configs_path(), item))
         for item in optimizer_configs
     ]
-    metrics = resolve_config(join_path(get_task_configs_path(), metrics_rollout))
-    transition = resolve_config(join_path(get_task_configs_path(), transition_model))
-    scene = None if scene_model is None else resolve_config(
-        join_path(get_scene_configs_path(), scene_model)
+    metrics = metrics_rollout if isinstance(metrics_rollout, dict) else resolve_config(
+        join_path(get_task_configs_path(), metrics_rollout)
+    )
+    transition = transition_model if isinstance(transition_model, dict) else resolve_config(
+        join_path(get_task_configs_path(), transition_model)
+    )
+    scene = None if scene_model is None else (
+        scene_model if isinstance(scene_model, (dict, list, SceneCfg)) else resolve_config(
+            join_path(get_scene_configs_path(), scene_model)
+        )
     )
     return robot_cfg, optimizers, metrics, transition, scene
 

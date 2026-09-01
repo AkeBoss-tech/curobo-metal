@@ -77,7 +77,8 @@ class MPCSolver:
         # obey the same interpolation-window lifecycle on CPU and MPS as the
         # pinned CUDA facade, without claiming CUDA graph ownership.
         self.trajectory_execution_manager = TrajectoryExecutionManager(
-            config.interpolation_steps
+            config.interpolation_steps,
+            command_start_idx=config.interpolation_steps,
         )
         # ``TrajectoryExecutionManager`` in the CUDA implementation owns a
         # graph-resident action ring buffer.  Keep the semantic part of that
@@ -94,6 +95,7 @@ class MPCSolver:
         self._last_result: Optional[MPCSolverResult] = None
         self._setup_complete = False
         self._warm_start_available = False
+        self._mpc_initialized = False
         self._tool_pose_tracking = True
         self._joint_position_tracking = False
         # ``update_world`` was an early portable extension, not part of the
@@ -110,8 +112,18 @@ class MPCSolver:
         return self._trajopt
 
     @property
+    def _mpc_setup_complete(self):
+        """Pinned private compatibility flag backed by portable setup state."""
+        return self._setup_complete
+
+    @property
+    def _mpc_warm_start_available(self):
+        """Pinned private compatibility flag backed by the eager seed lifecycle."""
+        return self._warm_start_available
+
+    @property
     def metrics_rollout(self):
-        return None
+        return self.config.metrics_rollout_config
 
     @property
     def auxiliary_rollout(self):
@@ -259,6 +271,7 @@ class MPCSolver:
         self._action_cursor = 0
         self._solve_count = 0
         self._setup_complete = True
+        self._mpc_initialized = True
         self._warm_start_available = False
         return True
 

@@ -8,7 +8,7 @@ import math
 from typing import Any, Dict, List, Optional, Type, Union
 
 from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
-from curobo._src.solver.solver_core_cfg import SolverCoreCfg, create_solver_core_cfg, resolve_yaml_configs
+from curobo._src.solver.solver_core_cfg import SolverCoreCfg, create_scene_collision_cfg, resolve_yaml_configs
 from curobo._src.util.logging import log_and_raise
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
@@ -68,8 +68,10 @@ class MPCSolverCfg:
             )
         if self.deceleration_time is not None:
             _positive_finite("deceleration_time", self.deceleration_time)
-        if self.deceleration_profile != "exponential":
-            raise ValueError("deceleration_profile must be 'exponential'")
+        if self.deceleration_profile not in {"exponential", "linear"}:
+            raise ValueError("deceleration_profile must be 'exponential' or 'linear'")
+        if self.interpolation_steps != 4:
+            raise ValueError("Interpolation steps must be 4 for MPC")
         if not isinstance(self.multi_env, bool) or not isinstance(self.self_collision_check, bool) or not isinstance(self.use_deceleration_on_failure, bool):
             raise TypeError("MPC boolean controls must be bool")
 
@@ -148,29 +150,26 @@ class MPCSolverCfg:
     ) -> MPCSolverCfg:
         if kwargs:
             raise TypeError(f"unsupported MPC configuration fields: {sorted(kwargs)}")
-        del metrics_rollout, transition_model, collision_cache
-        del override_optimizer_num_iters, transition_model_config_instance_type, cost_manager_config_instance_type
-        if isinstance(robot, RobotCfg):
-            robot_cfg = robot
-        elif isinstance(robot, str):
-            kin = KinematicsCfg.from_robot_yaml_file(robot, device_cfg=device_cfg,
-                                                      load_collision_spheres=load_collision_spheres)
-            robot_cfg = RobotCfg(kin.kinematics_config.robot_cfg, device_cfg=device_cfg)
-        else:
-            robot_cfg = RobotCfg.create(robot, device_cfg=device_cfg,
-                                        load_collision_spheres=load_collision_spheres)
+        robot_cfg, optimizer_dicts, metrics_dict, transition_dict, scene_dict = resolve_yaml_configs(
+            robot, optimizer_configs, metrics_rollout, transition_model, scene_model,
+            device_cfg, load_collision_spheres, max_batch_size if multi_env else 1,
+        )
         if num_control_points is not None:
             _positive_int("num_control_points", num_control_points)
-        optimizer_records = deepcopy(list(optimizer_configs))
+        optimizer_records = optimizer_dicts
         if squared_l2_regularization_weight is not None:
             if len(squared_l2_regularization_weight) == 0:
                 raise ValueError("squared_l2_regularization_weight must not be empty")
             for value in squared_l2_regularization_weight:
                 if not isinstance(value, (int, float)) or not math.isfinite(value):
                     raise ValueError("squared_l2_regularization_weight values must be finite")
-        core = SolverCoreCfg(robot_cfg, device_cfg, optimizer_records,
-                             scene_collision_cfg=scene_model, use_cuda_graph=use_cuda_graph,
-                             random_seed=random_seed, store_debug=store_debug)
+        core = SolverCoreCfg(
+            robot_cfg, device_cfg, optimizer_records,
+            optimizer_rollout_configs=[deepcopy(transition_dict) for _ in optimizer_records],
+            metrics_rollout_config=deepcopy(metrics_dict),
+            scene_collision_cfg=create_scene_collision_cfg(scene_dict, collision_cache, device_cfg),
+            use_cuda_graph=use_cuda_graph, random_seed=random_seed, store_debug=store_debug,
+        )
         return MPCSolverCfg(
             core, robot_cfg, max_batch_size, multi_env, max_goalset,
             position_tolerance=position_tolerance, orientation_tolerance=orientation_tolerance,

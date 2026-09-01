@@ -50,9 +50,11 @@ class _GoalManagerPortableMixin:
 
     @staticmethod
     def _num_seeds(solve_state) -> int:
-        """Use V2's single-candidate default for a sparse generic SolveState."""
+        """Return the configured seed count required by a solver goal buffer."""
         seeds = getattr(solve_state, "num_seeds", None)
-        return 1 if seeds is None else _GoalManagerPortableMixin._require_positive_int(seeds, "solve_state.num_seeds")
+        if seeds is None:
+            raise ValueError("Number of seeds is not set")
+        return _GoalManagerPortableMixin._require_positive_int(seeds, "solve_state.num_seeds")
 
     def _validate_device(self, value, name: str) -> None:
         """Reject hidden cross-device copies at the portable solver boundary.
@@ -321,7 +323,7 @@ class _GoalManagerPortableMixin:
 
     def _require_initialized(self) -> GoalRegistry:
         if self._goal_buffer is None or self._solve_state is None:
-            raise RuntimeError("goal buffer has not been initialized")
+            raise ValueError("Goal buffer has not been initialized")
         return self._goal_buffer
 
     def update_goal_tool_poses(self, goal_tool_poses: GoalToolPose) -> GoalRegistry:
@@ -363,7 +365,8 @@ class _GoalManagerPortableMixin:
 
     @property
     def solve_state(self):
-        self._require_initialized()
+        if self._solve_state is None:
+            raise ValueError("Solve state has not been initialized")
         return self._solve_state
 
     @property
@@ -373,7 +376,7 @@ class _GoalManagerPortableMixin:
         return self._col.clone()
 
     def get_batch_size(self) -> int:
-        return 0 if self._solve_state is None else self._solve_state.get_batch_size()
+        return 0 if self._solve_state is None else self._solve_state.batch_size
 
     def get_ik_batch_size(self) -> int:
         return 0 if self._solve_state is None else self._solve_state.get_ik_batch_size()

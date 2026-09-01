@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
 from curobo._src.solver.solver_core_cfg import (
-    SolverCoreCfg, create_solver_core_cfg, resolve_yaml_configs,
+    SolverCoreCfg, create_scene_collision_cfg, resolve_yaml_configs,
 )
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
@@ -177,25 +177,16 @@ class _IKSolverCfgPortableMixin:
         portable execution uses a persistent eager cache instead of emulating
         NVIDIA CUDA Graph capture.
         """
-        del metrics_rollout, transition_model, collision_cache
-        del transition_model_config_instance_type, cost_manager_config_instance_type
-        del override_optimizer_num_iters
-        if isinstance(robot, RobotCfg):
-            robot_cfg = robot
-        elif isinstance(robot, str):
-            kin = KinematicsCfg.from_robot_yaml_file(
-                robot, device_cfg=device_cfg, load_collision_spheres=load_collision_spheres
-            )
-            robot_cfg = RobotCfg(kin.kinematics_config.robot_cfg, device_cfg=device_cfg)
-        else:
-            robot_cfg = RobotCfg.create(robot, device_cfg=device_cfg,
-                                        load_collision_spheres=load_collision_spheres,
-                                        num_envs=max_batch_size if multi_env else 1)
+        robot_cfg, optimizer_dicts, metrics_dict, transition_dict, scene_dict = resolve_yaml_configs(
+            robot, optimizer_configs, metrics_rollout, transition_model, scene_model,
+            device_cfg, load_collision_spheres,
+            max_batch_size if multi_env else 1,
+        )
         # Task YAML is an optional upstream content bundle.  Keep the supplied
         # records for inspection without requiring CUDA-only task assets, but
         # do honour the two documented regularization overrides when a caller
         # provides a structured optimizer record.
-        optimizer_records = deepcopy(list(optimizer_configs))
+        optimizer_records = optimizer_dicts
         for label, value in (("velocity_regularization_weight", velocity_regularization_weight),
                              ("acceleration_regularization_weight", acceleration_regularization_weight)):
             if value is not None:
@@ -223,9 +214,13 @@ class _IKSolverCfgPortableMixin:
                 if acceleration_regularization_weight is not None:
                     values[1] = acceleration_regularization_weight
                 cspace_cfg["squared_l2_regularization_weight"] = values
-        core = SolverCoreCfg(robot_cfg, device_cfg, optimizer_records,
-                             scene_collision_cfg=scene_model, use_cuda_graph=use_cuda_graph,
-                             random_seed=random_seed, store_debug=store_debug)
+        core = SolverCoreCfg(
+            robot_cfg, device_cfg, optimizer_records,
+            optimizer_rollout_configs=[deepcopy(transition_dict) for _ in optimizer_records],
+            metrics_rollout_config=deepcopy(metrics_dict),
+            scene_collision_cfg=create_scene_collision_cfg(scene_dict, collision_cache, device_cfg),
+            use_cuda_graph=use_cuda_graph, random_seed=random_seed, store_debug=store_debug,
+        )
         return IKSolverCfg(
             core, robot_cfg, max_batch_size, multi_env, max_goalset, num_seeds,
             position_tolerance, orientation_tolerance, optimizer_collision_activation_distance,

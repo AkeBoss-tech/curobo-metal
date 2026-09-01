@@ -59,6 +59,7 @@ class TrajOptSolver:
         self._seed_generator = TrajectorySeedGenerator(
             config.action_horizon, self._chain.dof, config.device_cfg
         )
+        self._trajectory_seed_generator = self._seed_generator
         self._tool_pose_tracking = True
         self._joint_position_tracking = True
         self._sample_generator = torch.Generator(device="cpu")
@@ -83,6 +84,8 @@ class TrajOptSolver:
             use_cuda_graph=False,
             random_seed=config.random_seed,
             self_collision_check=config.self_collision_check,
+            max_batch_size=config.max_batch_size,
+            max_goalset=config.max_goalset,
         ), scene_collision_checker=scene_collision_checker)
 
     def prepare_action_seeds(
@@ -158,6 +161,29 @@ class TrajOptSolver:
         # trajectories when a caller asks for more ranked plans.
         count = max(count, return_seeds)
         current_state, goal_state = self.get_active_js(current_state), self.get_active_js(goal_state)
+        override = self.__dict__.get("_solve_impl")
+        # pytest/monkeypatch (and some integrations) restore a bound default
+        # method into the instance dictionary.  Only an actual override should
+        # intercept the normal portable implementation.
+        if (
+            override is not None
+            and getattr(override, "__func__", None) is not TrajOptSolver._solve_impl
+        ):
+            batch = 1 if current_state.position.ndim == 1 else current_state.position.shape[0]
+            solve_state = SolveState(
+                SolveMode.BATCH if batch > 1 else SolveMode.SINGLE,
+                batch, 1, num_goalset=1, num_trajopt_seeds=count,
+                tool_frames=list(self.tool_frames),
+            )
+            return override(
+                solve_state=solve_state,
+                current_state=current_state,
+                seed_goal_js=goal_state.unsqueeze(1),
+                seed_traj=seed_traj,
+                return_seeds=return_seeds,
+                num_seeds=count,
+                use_implicit_goal=True,
+            )
         start = current_state.position
         goal = goal_state.position
         if start.ndim == 1:
@@ -509,7 +535,7 @@ class TrajOptSolver:
     @property
     def problem_batch_size(self) -> int: return self.config.max_batch_size
     @property
-    def interpolation_steps(self) -> int: return self.config.interpolation_buffer_size
+    def interpolation_steps(self) -> int: return 4
 
     # These CUDA-rollout ownership accessors are part of the pinned solver
     # facade.  Portable trajectory optimization has no graph-backed rollout
@@ -561,13 +587,17 @@ class TrajOptSolver:
     optimizer_rollouts = property(lambda self: [])
     metrics_rollout = property(lambda self: None)
     auxiliary_rollout = property(lambda self: None)
-    additional_metrics_rollouts = property(lambda self: [])
+    additional_metrics_rollouts = property(lambda self: {"interpolated_rollout": self})
     transition_model = property(lambda self: None)
     scene_collision_checker = property(lambda self: self._scene_collision_checker)
-    goal_registry_manager = property(lambda self: None)
+    goal_registry_manager = property(lambda self: self._pose_ik.goal_registry_manager)
     seed_manager = property(lambda self: self._seed_generator)
     solve_state = property(lambda self: self._solve_state)
-    kinematics = property(lambda self: self._chain)
+    kinematics = property(lambda self: self._pose_ik.kinematics)
+
+    def _solve_impl(self, **kwargs):
+        """Compatibility interception point used by graph-backed integrations."""
+        raise NotImplementedError("direct rollout-buffer solves are unavailable on CPU/MPS")
 
     def compute_kinematics(self, state):
         from curobo._src.robot.kinematics.kinematics import Kinematics

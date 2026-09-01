@@ -467,9 +467,20 @@ class IKSolver:
     def _prepare_pose_goal(self, goal_tool_poses: GoalToolPose) -> GoalToolPose:
         if not isinstance(goal_tool_poses, GoalToolPose):
             if isinstance(goal_tool_poses, Pose):
-                goal_tool_poses = GoalToolPose.from_poses(
-                    {self.tool_frames[-1]: goal_tool_poses},
-                    ordered_tool_frames=[self.tool_frames[-1]],
+                position, quaternion = goal_tool_poses.position, goal_tool_poses.quaternion
+                if position is None or quaternion is None:
+                    raise ValueError("goal pose position and quaternion must be materialized")
+                # Pose retains an optional horizon axis.  Construct the
+                # solver's canonical [batch,horizon,link,goalset,xyz/wxyz]
+                # layout directly so both [B,3] and [B,H,3] inputs are valid.
+                if position.ndim == 2:
+                    position, quaternion = position[:, None], quaternion[:, None]
+                if position.ndim != 3 or quaternion.ndim != 3:
+                    raise ValueError("goal Pose must have shape [batch,3/4] or [batch,horizon,3/4]")
+                goal_tool_poses = GoalToolPose(
+                    [self.tool_frames[-1]],
+                    position[:, :, None, None, :],
+                    quaternion[:, :, None, None, :],
                 )
             else:
                 raise TypeError("goal_tool_poses must be GoalToolPose or Pose")
