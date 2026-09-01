@@ -7,6 +7,11 @@ import numpy as np
 import torch
 
 
+def _default_device() -> torch.device:
+    """Use Apple's accelerator when present and retain CPU portability elsewhere."""
+    return torch.device("mps", 0) if torch.backends.mps.is_available() else torch.device("cpu")
+
+
 class _DeviceCfgPortableMixin:
     def to_int32_device(self, data_tensor: Any) -> torch.Tensor:
         return torch.as_tensor(data_tensor, device=self.device, dtype=torch.int32)
@@ -29,9 +34,9 @@ class _DeviceCfgPortableMixin:
 
 @dataclass(frozen=True)
 class DeviceCfg(_DeviceCfgPortableMixin):
-    """Pinned field layout with an explicitly portable CPU default."""
+    """Pinned field layout with the adapted Apple accelerator default."""
 
-    device: torch.device = torch.device("cpu")
+    device: torch.device = _default_device()
     dtype: torch.dtype = torch.float32
     collision_geometry_dtype: torch.dtype = torch.float32
     collision_gradient_dtype: torch.dtype = torch.float32
@@ -40,13 +45,10 @@ class DeviceCfg(_DeviceCfgPortableMixin):
     def __post_init__(self):
         if isinstance(self.device, str):
             object.__setattr__(self, "device", torch.device(self.device))
-        if self.device.type == "mps" and self.dtype != torch.float32:
-            raise TypeError("MPS compatibility types support only float32")
 
     @staticmethod
     def from_basic(device: str, dev_id: int):
-        index = None if device in {"cpu", "mps"} else dev_id
-        return DeviceCfg(torch.device(device, index))
+        return DeviceCfg(torch.device(device, dev_id))
 
     def to_device(self, data_tensor):
         if isinstance(data_tensor, torch.Tensor):

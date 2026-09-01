@@ -12,6 +12,7 @@ from curobo._src.util.logging import log_debug, log_info
 
 wp = None
 cuda_debug_compile = False
+_portable_initialized = False
 
 
 def _named(name, function):
@@ -39,9 +40,16 @@ def init_warp(
     print_launches=False,
     device_cfg: DeviceCfg = DeviceCfg()
 ):
-    raise NotImplementedError(
-        "NVIDIA Warp is unavailable on Metal; use curobo-metal tensor operators"
-    )
+    """Initialize the portable compatibility layer once.
+
+    High-level modules call this as a process bootstrap even when their Metal
+    implementation uses only Torch tensors.  Successful initialization does
+    not claim that raw Warp kernels or CUDA stream interop are available.
+    """
+    del quiet, verbose, lineinfo, line_directives, print_launches, device_cfg
+    global _portable_initialized
+    _portable_initialized = True
+    return True
 
 
 def _version_of(module):

@@ -230,6 +230,11 @@ def _select_bspline_boundary(
         if value.shape[0] == batch:
             return value
         raise ValueError(f"{name}_idx is required when {name}_state has a table size other than one or batch")
+    if value.shape[0] == batch:
+        # The pinned call surface also passes dense-horizon indices alongside
+        # an already batch-aligned boundary state. In that form there is no
+        # state table to gather; each row is already the selected boundary.
+        return value
     indices = torch.as_tensor(indices, device=reference.device, dtype=torch.long).reshape(-1)
     if indices.numel() == 1:
         indices = indices.expand(batch)

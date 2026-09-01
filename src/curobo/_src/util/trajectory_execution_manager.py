@@ -104,7 +104,10 @@ class TrajectoryExecutionManager:
         action_sequence = trim_joint_state_trajectory(
             self._current_joint_state_trajectory,
             start_idx=self.command_start_idx,
-            end_idx=self.command_end_idx,
+            end_idx=min(
+                self.command_end_idx,
+                self._current_joint_state_trajectory.position.shape[-2],
+            ),
         )
         return action_sequence
 

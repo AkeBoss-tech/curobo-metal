@@ -9,7 +9,9 @@ from curobo import runtime as curobo_runtime
 def create_cuda_stream_pair(
     device: torch.device, enabled: Optional[bool] = None
 ) -> tuple:
-    return {}, {}
+    if enabled is False or device.type != "cuda":
+        return None, None
+    return torch.cuda.Stream(device=device), torch.cuda.Event()
 
 
 @contextmanager

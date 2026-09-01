@@ -78,9 +78,14 @@ def _project_depth_using_rays_portable(
     projection_rays = _require_tensor(projection_rays, "projection_rays")
     if depth_image.ndim not in (2, 3):
         raise ValueError("depth_image must have shape [H,W] or [B,H,W]")
-    if projection_rays.ndim != 4 or projection_rays.shape[-1] != 3:
-        raise ValueError("projection_rays must have shape [B,H,W,3]")
+    if projection_rays.ndim not in (3, 4) or projection_rays.shape[-1] != 3:
+        raise ValueError("projection_rays must have shape [B,H*W,3] or [B,H,W,3]")
     depth = depth_image.unsqueeze(0) if depth_image.ndim == 2 else depth_image
+    if projection_rays.ndim == 3:
+        height, width = depth.shape[-2:]
+        if projection_rays.shape[-2] != height * width:
+            raise ValueError("depth_image and projection_rays spatial shapes must match")
+        projection_rays = projection_rays.reshape(projection_rays.shape[0], height, width, 3)
     if tuple(depth.shape[-2:]) != tuple(projection_rays.shape[-3:-1]):
         raise ValueError("depth_image and projection_rays spatial shapes must match")
     if projection_rays.shape[0] not in (1, depth.shape[0]):
@@ -210,9 +215,9 @@ class CameraObservation:
         so it does not require a CPU fallback or a device-to-host copy on MPS.
         """
         if require_depth and self.depth_image is None:
-            raise ValueError("depth_image is required")
+            raise ValueError("depth_image is None")
         if require_intrinsics and self.intrinsics is None:
-            raise ValueError("intrinsics is required")
+            raise ValueError("intrinsics is None")
         if require_pose and self.pose is None:
             raise ValueError("pose is required")
         if require_rgb and self.rgb_image is None:
@@ -276,15 +281,17 @@ class CameraObservation:
 
     @record_function("camera/copy_")
     def copy_(self, new_data: CameraObservation):
-        """Deep-copy observation state, allocating absent destination buffers."""
+        """Copy into materialized destination buffers without allocating new fields."""
         if not isinstance(new_data, CameraObservation):
             raise TypeError("new_data must be a CameraObservation")
         for field in _TENSOR_FIELDS:
             source, target = getattr(new_data, field), getattr(self, field)
             if source is None:
                 setattr(self, field, None)
-            elif target is None or target.shape != source.shape or target.dtype != source.dtype or target.device != source.device:
-                setattr(self, field, source.clone())
+            elif target is None:
+                continue
+            elif target.shape != source.shape or target.dtype != source.dtype or target.device != source.device:
+                raise ValueError(f"cannot copy {field} into a destination with different shape, dtype, or device")
             else:
                 target.copy_(source)
         if new_data.pose is None:
@@ -299,9 +306,16 @@ class CameraObservation:
 
     @record_function("camera/clone")
     def clone(self):
-        value = type(self)(name=self.name, resolution=None if self.resolution is None else list(self.resolution),
-                           pose=None if self.pose is None else self.pose.clone(), depth_to_meter=self.depth_to_meter)
-        return value.copy_(self)
+        return type(self)(
+            name=self.name,
+            resolution=None if self.resolution is None else list(self.resolution),
+            pose=None if self.pose is None else self.pose.clone(),
+            depth_to_meter=self.depth_to_meter,
+            **{
+                field: None if getattr(self, field) is None else getattr(self, field).clone()
+                for field in _TENSOR_FIELDS
+            },
+        )
 
     def _detach_portable(self) -> "CameraObservation":
         value = self.clone()
@@ -336,7 +350,9 @@ class CameraObservation:
         assert self.depth_image is not None and self.intrinsics is not None
         intrinsics = self.intrinsics.unsqueeze(0) if self.intrinsics.ndim == 2 else self.intrinsics
         height, width = self.depth_image.shape[-2:]
-        rays = get_projection_rays(height, width, intrinsics, self.depth_to_meter)
+        rays = get_projection_rays(height, width, intrinsics, self.depth_to_meter).reshape(
+            intrinsics.shape[0], height * width, 3
+        )
         if self.projection_rays is None or self.projection_rays.shape != rays.shape or \
                 self.projection_rays.device != rays.device or self.projection_rays.dtype != rays.dtype:
             self.projection_rays = rays

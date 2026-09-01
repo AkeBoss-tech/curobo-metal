@@ -326,7 +326,11 @@ class GoalToolPose(_GoalToolPosePortableMixin, Sequence):
         first = pose_dict[frames[0]]
         if not isinstance(first, Pose) or first.position is None or first.quaternion is None:
             raise TypeError("pose_dict values must be materialized Pose instances")
-        total_batch = first.position.shape[0]
+        if first.position.ndim not in (2, 3) or first.position.shape[-1] != 3:
+            raise ValueError("pose_dict values must have position shape [N,3] or [B,G,3]")
+        if first.quaternion.ndim != first.position.ndim or first.quaternion.shape[:-1] != first.position.shape[:-1] or first.quaternion.shape[-1] != 4:
+            raise ValueError("pose_dict values must have matching quaternion shape ending in 4")
+        total_batch = first.position.numel() // 3
         if total_batch == 0 or total_batch % num_goalset:
             raise ValueError("Pose batch size must be non-zero and divisible by num_goalset")
         batch = total_batch // num_goalset
@@ -335,8 +339,8 @@ class GoalToolPose(_GoalToolPosePortableMixin, Sequence):
             pose = pose_dict[frame]
             if not isinstance(pose, Pose) or pose.position is None or pose.quaternion is None:
                 raise TypeError(f"pose_dict[{frame!r}] must be a materialized Pose")
-            if pose.position.shape != (total_batch, 3) or pose.quaternion.shape != (total_batch, 4):
-                raise ValueError(f"pose_dict[{frame!r}] must have shapes [{total_batch},3] and [{total_batch},4]")
+            if pose.position.shape[:-1] != first.position.shape[:-1] or pose.position.shape[-1] != 3 or pose.quaternion.shape != (*pose.position.shape[:-1], 4):
+                raise ValueError(f"pose_dict[{frame!r}] must match the first pose's leading dimensions")
             if pose.position.device != first.position.device or pose.position.dtype != first.position.dtype:
                 raise ValueError("all poses must share device and dtype")
             positions.append(pose.position.reshape(batch, num_goalset, 3))

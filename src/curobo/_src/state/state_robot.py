@@ -330,7 +330,7 @@ class _RobotStatePortable(State):
             if seed_idx is not None and not merged:
                 target_pose.position[index, seed_idx] = source_pose.position[index, seed_idx]
                 target_pose.quaternion[index, seed_idx] = source_pose.quaternion[index, seed_idx]
-        else:
+            else:
                 target_pose.position[model_index] = source_pose.position[model_index]
                 target_pose.quaternion[model_index] = source_pose.quaternion[model_index]
 

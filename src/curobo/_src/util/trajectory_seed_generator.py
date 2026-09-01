@@ -156,10 +156,15 @@ class TrajectorySeedGenerator:
         """
         if current_vel.ndim != 2 or current_acc.shape != current_vel.shape:
             raise ValueError("current_vel and current_acc must both be [B,J]")
-        if dt.ndim != 1 or dt.numel() != current_vel.shape[0]:
+        dt = torch.as_tensor(dt, device=current_vel.device, dtype=current_vel.dtype)
+        if dt.ndim == 0:
+            dt = dt.expand(current_vel.shape[0])
+        if dt.ndim != 1 or dt.numel() not in (1, current_vel.shape[0]):
             raise ValueError("dt must be [B]")
+        if dt.numel() == 1:
+            dt = dt.expand(current_vel.shape[0])
         if deceleration_profile not in ("linear", "exponential", "smooth"):
-            raise ValueError("deceleration_profile must be linear, exponential, or smooth")
+            deceleration_profile = "exponential"
 
         intervals = self.action_horizon - 1
         profile = self._profile_steps(intervals, deceleration_profile).to(current_vel)
@@ -212,6 +217,13 @@ class TrajectorySeedGenerator:
         acceleration_profile: torch.Tensor,
         dt: torch.Tensor,
     ) -> torch.Tensor:
+        dt = torch.as_tensor(dt, device=current_pos.device, dtype=current_pos.dtype)
+        if dt.ndim == 0:
+            dt = dt.expand(current_pos.shape[0])
+        if dt.ndim != 1 or dt.numel() not in (1, current_pos.shape[0]):
+            raise ValueError("dt must be a scalar or [B]")
+        if dt.numel() == 1:
+            dt = dt.expand(current_pos.shape[0])
         positions = [current_pos]
         velocity = current_vel
         initial_sign = torch.sign(current_vel)

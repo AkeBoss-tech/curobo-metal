@@ -32,6 +32,7 @@ class SampleBuffer:
         self._sample_buffer = None if store_buffer is None else device_cfg.to_device(
             sequencer.random(store_buffer)
         )
+        self._index_buffer: Optional[torch.Tensor] = None
         self._int_gen = torch.Generator(device=device_cfg.device).manual_seed(sequencer.seed)
         self._initial_state = self._int_gen.get_state().clone()
 
@@ -47,9 +48,14 @@ class SampleBuffer:
     def _get_samples(self, num_samples: int):
         if self._sample_buffer is None:
             return self.device_cfg.to_device(self.sequencer.random(num_samples))
+        if self._index_buffer is None or self._index_buffer.shape != (num_samples,):
+            self._index_buffer = torch.empty(
+                (num_samples,), device=self.device_cfg.device, dtype=torch.int64
+            )
         idx = torch.randint(
             self._sample_buffer.shape[0], (num_samples,),
             generator=self._int_gen, device=self.device_cfg.device,
+            out=self._index_buffer,
         )
         return self._sample_buffer[idx]
 
