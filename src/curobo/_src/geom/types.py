@@ -760,6 +760,9 @@ class Mesh(Obstacle):
         if self.vertices is None or self.faces is None:
             raise ValueError("Mesh requires vertices and faces")
         vertices, faces = torch.as_tensor(self.vertices), torch.as_tensor(self.faces)
+        if vertices.ndim == 1 and vertices.numel() == 0:
+            vertices = vertices.reshape(0, 3).to(torch.get_default_dtype())
+            self.vertices = vertices
         if vertices.ndim != 2 or vertices.shape[-1] != 3:
             raise ValueError("vertices must have shape [N, 3]")
         if not vertices.is_floating_point():
