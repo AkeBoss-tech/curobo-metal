@@ -5,17 +5,22 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import csv
 import hashlib
 import importlib.metadata
 import json
 import os
 import platform
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +30,20 @@ from tools.gauntlet.portable_test_adapter import adapt_source
 
 ROOT = Path(__file__).resolve().parents[2]
 PINNED_REVISION = "8e734f3ced1df898990bcd92de40abce475907db"
+PYTEST_CASE_TIMEOUT_SECONDS = 300.0
+DEFAULT_MODULE_TIMEOUT_SECONDS = 330.0
+DEFAULT_TERMINATE_GRACE_SECONDS = 5.0
+
+
+@dataclass(frozen=True)
+class ModuleRun:
+    module: str
+    test_path: str
+    junit_path: Path
+    returncode: int
+    timed_out: bool
+    elapsed_seconds: float
+    junit_complete: bool
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -85,6 +104,158 @@ def selected_test_paths(execution_census: dict[str, Any], disposition: str) -> t
     return tuple(sorted(paths))
 
 
+def _module_for_path(relative: str) -> str:
+    return f"curobo.tests.{relative.removesuffix('.py').replace('/', '.')}"
+
+
+def _raw_mechanism_scopes(policy: dict[str, Any], module: str) -> frozenset[str]:
+    """Return policy-reviewed test scopes whose real CUDA/Warp gate must remain."""
+
+    scopes = set()
+    mechanism_words = ("cuda graph", "cuda stream", "cuda event", "warp")
+    for record in policy.get("mechanism_exclusions", []):
+        pattern = record.get("case_pattern", "")
+        reason = record.get("reason", "").lower()
+        if not pattern.startswith(f"{module}::") or not any(
+            word in reason for word in mechanism_words
+        ):
+            continue
+        parts = pattern.split("::")
+        test_name = parts[-1].split("[", 1)[0]
+        classname = parts[-2].rsplit(".", 1)[-1] if len(parts) >= 3 else ""
+        if classname.startswith("Test"):
+            scopes.add(classname)
+            scopes.add(f"{classname}.{test_name}")
+        else:
+            scopes.add(test_name)
+    return frozenset(scopes)
+
+
+def _terminate_worker(process: subprocess.Popen[bytes], grace_seconds: float) -> int:
+    """Terminate a pytest process group, escalating when native code ignores SIGTERM."""
+
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return process.wait()
+    try:
+        return process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        return process.wait()
+
+
+def _run_module(
+    *,
+    module: str,
+    test_path: str,
+    junit_path: Path,
+    cwd: Path,
+    environment: dict[str, str],
+    timeout_seconds: float,
+    terminate_grace_seconds: float,
+) -> ModuleRun:
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        "-o",
+        "addopts=",
+        "--import-mode=importlib",
+        "--continue-on-collection-errors",
+        f"--timeout={PYTEST_CASE_TIMEOUT_SECONDS:g}",
+        "--timeout-method=signal",
+        f"--junitxml={junit_path}",
+        test_path,
+    ]
+    started = time.monotonic()
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=environment,
+        start_new_session=True,
+    )
+    timed_out = False
+    try:
+        returncode = process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _terminate_worker(process, terminate_grace_seconds)
+        returncode = 124
+    elapsed = time.monotonic() - started
+    junit_complete = False
+    if junit_path.is_file():
+        try:
+            ET.parse(junit_path)
+            junit_complete = True
+        except ET.ParseError:
+            pass
+    return ModuleRun(
+        module=module,
+        test_path=test_path,
+        junit_path=junit_path,
+        returncode=returncode,
+        timed_out=timed_out,
+        elapsed_seconds=elapsed,
+        junit_complete=junit_complete,
+    )
+
+
+def _synthetic_case(run: ModuleRun) -> ET.Element:
+    if run.timed_out:
+        name = "<module-timeout>"
+        message = (
+            f"module exceeded outer wall-clock watchdog of {run.elapsed_seconds:.3f}s; "
+            "pytest worker was terminated"
+        )
+        error_type = "ModuleTimeout"
+    else:
+        name = "<module-crash>"
+        message = f"pytest exited {run.returncode} without complete JUnit"
+        error_type = "ModuleCrash"
+    testcase = ET.Element(
+        "testcase",
+        classname=run.module,
+        name=name,
+        time=f"{run.elapsed_seconds:.6f}",
+    )
+    ET.SubElement(testcase, "error", message=message, type=error_type).text = message
+    return testcase
+
+
+def merge_module_junit(runs: tuple[ModuleRun, ...], destination: Path) -> None:
+    """Merge every module shard and retain explicit crash/timeout census records."""
+
+    suite = ET.Element("testsuite", name="portable-upstream-module-shards")
+    for run in runs:
+        if run.junit_complete:
+            root = ET.parse(run.junit_path).getroot()
+            for testcase in root.iter("testcase"):
+                suite.append(copy.deepcopy(testcase))
+        if run.timed_out or not run.junit_complete:
+            suite.append(_synthetic_case(run))
+    tests = list(suite.iter("testcase"))
+    failures = sum(case.find("failure") is not None for case in tests)
+    errors = sum(case.find("error") is not None for case in tests)
+    skipped = sum(case.find("skipped") is not None for case in tests)
+    elapsed = sum(float(case.attrib.get("time", "0") or 0) for case in tests)
+    suite.attrib.update(
+        tests=str(len(tests)),
+        failures=str(failures),
+        errors=str(errors),
+        skipped=str(skipped),
+        time=f"{elapsed:.6f}",
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    root = ET.Element("testsuites")
+    root.append(suite)
+    ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
+
+
 def _installed_runtime(wheel: Path) -> dict[str, Any]:
     distribution = importlib.metadata.distribution("curobo-metal")
     distribution_root = Path(distribution.locate_file("")).resolve()
@@ -124,6 +295,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--junit", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
+        "--module-timeout",
+        type=float,
+        default=DEFAULT_MODULE_TIMEOUT_SECONDS,
+        help="Outer wall-clock limit for each isolated pytest module worker.",
+    )
+    parser.add_argument(
+        "--terminate-grace",
+        type=float,
+        default=DEFAULT_TERMINATE_GRACE_SECONDS,
+        help="Seconds between terminating and killing a wedged module worker.",
+    )
+    parser.add_argument(
         "--test",
         action="append",
         dest="tests",
@@ -138,6 +321,13 @@ def main(argv: list[str] | None = None) -> int:
         default=ROOT / "artifacts/api_compat/upstream-execution-census.json",
     )
     args = parser.parse_args(argv)
+    if args.module_timeout <= PYTEST_CASE_TIMEOUT_SECONDS:
+        parser.error(
+            f"--module-timeout must exceed pytest's {PYTEST_CASE_TIMEOUT_SECONDS:g}s "
+            "case timeout so pytest can emit its stack capture"
+        )
+    if args.terminate_grace < 0:
+        parser.error("--terminate-grace must be non-negative")
 
     upstream = args.upstream.resolve()
     revision = subprocess.check_output(
@@ -183,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
         adaptation_counts = {
             "device_string_replacements": conftest_adaptation.device_string_replacements,
             "availability_replacements": conftest_adaptation.availability_replacements,
+            "availability_preserved": conftest_adaptation.availability_preserved,
             "helper_import_replacements": conftest_adaptation.helper_import_replacements,
         }
         adaptation_records = {
@@ -190,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
                 "adapted_sha256": _sha256(staged_tests / "conftest.py"),
                 "device_string_replacements": conftest_adaptation.device_string_replacements,
                 "availability_replacements": conftest_adaptation.availability_replacements,
+                "availability_preserved": conftest_adaptation.availability_preserved,
                 "helper_import_replacements": conftest_adaptation.helper_import_replacements,
             }
         }
@@ -199,7 +391,11 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error(f"missing pinned test: {source}")
             destination = staged_tests / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            adaptation = adapt_source(source.read_text(encoding="utf-8"))
+            module = _module_for_path(relative)
+            adaptation = adapt_source(
+                source.read_text(encoding="utf-8"),
+                preserve_availability_scopes=_raw_mechanism_scopes(policy, module),
+            )
             destination.write_text(adaptation.source, encoding="utf-8")
             adaptation_counts["device_string_replacements"] += (
                 adaptation.device_string_replacements
@@ -207,38 +403,42 @@ def main(argv: list[str] | None = None) -> int:
             adaptation_counts["availability_replacements"] += (
                 adaptation.availability_replacements
             )
+            adaptation_counts["availability_preserved"] += adaptation.availability_preserved
             adaptation_counts["helper_import_replacements"] += (
                 adaptation.helper_import_replacements
             )
-            module = f"curobo.tests.{relative[:-3].replace('/', '.')}"
             source_hashes[module] = _sha256(source)
             adaptation_records[module] = {
                 "adapted_sha256": _sha256(destination),
                 "device_string_replacements": adaptation.device_string_replacements,
                 "availability_replacements": adaptation.availability_replacements,
+                "availability_preserved": adaptation.availability_preserved,
                 "helper_import_replacements": adaptation.helper_import_replacements,
             }
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
         environment["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
-        command = [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            "-o",
-            "addopts=",
-            "--import-mode=importlib",
-            "--continue-on-collection-errors",
-            "--timeout=300",
-            "--timeout-method=signal",
-            f"--junitxml={args.junit.resolve()}",
-            *(str(Path("tests") / relative) for relative in paths),
-        ]
-        completed = subprocess.run(command, cwd=stage, env=environment)
+        shard_root = stage / "junit-shards"
+        shard_root.mkdir()
+        runs = []
+        for index, relative in enumerate(paths):
+            module = _module_for_path(relative)
+            runs.append(
+                _run_module(
+                    module=module,
+                    test_path=str(Path("tests") / relative),
+                    junit_path=shard_root / f"{index:03d}.xml",
+                    cwd=stage,
+                    environment=environment,
+                    timeout_seconds=args.module_timeout,
+                    terminate_grace_seconds=args.terminate_grace,
+                )
+            )
+        module_runs = tuple(runs)
+        merge_module_junit(module_runs, args.junit.resolve())
 
     if not args.junit.is_file():
-        parser.error(f"pytest exited {completed.returncode} without producing JUnit: {args.junit}")
+        parser.error(f"module replay did not produce merged JUnit: {args.junit}")
 
     result = build_census(
         policy=policy,
@@ -260,7 +460,19 @@ def main(argv: list[str] | None = None) -> int:
             **adaptation_counts,
         },
     }
-    result["pytest_exit_code"] = completed.returncode
+    nonzero_codes = [run.returncode for run in module_runs if run.returncode]
+    result["pytest_exit_code"] = nonzero_codes[0] if nonzero_codes else 0
+    result["pytest_shards"] = [
+        {
+            "module": run.module,
+            "test_path": run.test_path,
+            "returncode": run.returncode,
+            "timed_out": run.timed_out,
+            "elapsed_seconds": round(run.elapsed_seconds, 6),
+            "junit_complete": run.junit_complete,
+        }
+        for run in module_runs
+    ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     summary = result["summary"]

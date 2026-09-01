@@ -28,6 +28,7 @@ def test_conftest_mode_keeps_cuda_seed_guard_but_adapts_fixture_devices() -> Non
     assert "'mps:0'" in result.source
     assert "torch.cuda.is_available()" in result.source
     assert result.availability_replacements == 0
+    assert result.availability_preserved == 0
 
 
 def test_redirects_pinned_unshipped_helper_import() -> None:
@@ -41,6 +42,93 @@ def test_redirects_pinned_unshipped_helper_import() -> None:
         "tsdf_surface_voxels_with_blocks\n"
     )
     assert result.helper_import_replacements == 1
+
+
+def test_preserves_availability_gate_for_raw_cuda_graph_case() -> None:
+    source = '''
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_graph_capture():
+    executor = GraphExecutor(device="cuda", use_cuda_graph=True)
+    executor.capture()
+'''
+    result = adapt_source(
+        source,
+        preserve_availability_scopes=frozenset({"test_graph_capture"}),
+    )
+    assert "torch.cuda.is_available()" in result.source
+    assert "device='mps'" in result.source
+    assert result.availability_replacements == 0
+    assert result.availability_preserved == 1
+
+
+def test_adapts_cuda_worded_gate_when_case_uses_only_portable_tensors() -> None:
+    source = '''
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+def test_portable_math():
+    value = torch.ones(2, device="cuda")
+    assert value.sum() == 2
+'''
+    result = adapt_source(source)
+    assert "torch.backends.mps.is_available()" in result.source
+    assert "device='mps'" in result.source
+    assert result.availability_replacements == 1
+    assert result.availability_preserved == 0
+
+
+def test_keeps_warp_case_raw_without_suppressing_adjacent_portable_case() -> None:
+    source = '''
+def test_warp_kernel():
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA required")
+    init_warp()
+
+def test_portable_kernel():
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA required")
+    torch.ones(1, device="cuda")
+'''
+    result = adapt_source(
+        source,
+        preserve_availability_scopes=frozenset({"test_warp_kernel"}),
+    )
+    assert result.source.count("torch.cuda.is_available()") == 1
+    assert result.source.count("torch.backends.mps.is_available()") == 1
+    assert result.availability_replacements == 1
+    assert result.availability_preserved == 1
+
+
+def test_multiple_availability_replacements_preserve_source_boundaries() -> None:
+    source = '''
+def test_first():
+    device = "cuda:0"
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA required")
+
+def test_second():
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA required")
+'''
+    result = adapt_source(source)
+    assert result.source.count("torch.backends.mps.is_available()") == 2
+    assert "pytest.skip" in result.source
+    assert result.availability_replacements == 2
+    compile(result.source, "<adapted>", "exec")
+
+
+def test_preserves_policy_reviewed_class_level_gate() -> None:
+    source = '''
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+class TestCudaGraph:
+    def test_capture(self):
+        capture_graph()
+'''
+    result = adapt_source(
+        source,
+        preserve_availability_scopes=frozenset({"TestCudaGraph"}),
+    )
+    assert "torch.cuda.is_available()" in result.source
+    assert result.availability_replacements == 0
+    assert result.availability_preserved == 1
 
 
 def test_policy_forbids_assertion_tolerance_and_cuda_api_rewrites() -> None:
