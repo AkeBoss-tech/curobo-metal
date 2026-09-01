@@ -119,7 +119,9 @@ class CSpaceParams:
         if tensor.numel() == 1 and scalar and dof > 1:
             tensor = tensor.expand(dof).clone()
         if tensor.numel() != dof:
-            raise ValueError(f"{name} must contain {dof} values")
+            raise ValueError(
+                f"{name} shape must be [{dof}], got {list(tensor.shape)}"
+            )
         return tensor.contiguous()
 
     @staticmethod

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
+import torch
 
 from curobo._src.robot.types.kinematics_params import KinematicsParams
 from curobo._src.robot.types import CSpaceParams, JointLimits, SelfCollisionKinematicsCfg
@@ -101,6 +102,74 @@ def _apply_locked_joints(robot: Any) -> None:
     robot.cspace.joint_names = names
 
 
+def _loader_config_from_robot(robot: Any, device_cfg: DeviceCfg) -> KinematicsLoaderCfg:
+    """Retain the normalized generator description exposed by pinned V2."""
+    values = deepcopy(robot.to_mapping()["robot_cfg"]["kinematics"])
+    values.pop("name", None)
+    values.pop("xrdf_path", None)
+    # Velocity limits belong to JointLimits, not the planning CSpaceParams
+    # record accepted by KinematicsLoaderCfg.
+    values.get("cspace", {}).pop("max_velocity", None)
+    return KinematicsLoaderCfg(device_cfg=device_cfg, **values)
+
+
+def _self_collision_from_robot(
+    robot: Any,
+    params: KinematicsParams,
+    device_cfg: DeviceCfg,
+) -> SelfCollisionKinematicsCfg:
+    """Compile the portable sphere-pair record from normalized robot data."""
+    if params.total_spheres == 0:
+        return SelfCollisionKinematicsCfg(num_spheres=0)
+    names = list(dict.fromkeys([
+        *robot.collision_link_names,
+        *(sphere.link_name for sphere in robot.collision_spheres),
+    ]))
+    link_index = {name: index for index, name in enumerate(names)}
+    per_sphere = torch.tensor(
+        [link_index[sphere.link_name] for sphere in robot.collision_spheres],
+        dtype=torch.int64,
+        device=device_cfg.device,
+    )
+    ignored = {
+        name: [item for item in values if item in link_index]
+        for name, values in robot.self_collision_ignore.items()
+        if name in link_index
+    }
+    padding = {
+        name: value
+        for name, value in robot.self_collision_buffer.items()
+        if name in link_index
+    }
+    spheres = params.link_spheres[0]
+    enabled = torch.nonzero(spheres[:, 3] >= 0, as_tuple=False).flatten()
+    if enabled.numel() == spheres.shape[0]:
+        return SelfCollisionKinematicsCfg.create_from_link_pairs(
+            names, link_index, ignored, padding, spheres, per_sphere, device_cfg
+        )
+    active = SelfCollisionKinematicsCfg.create_from_link_pairs(
+        names,
+        link_index,
+        ignored,
+        padding,
+        spheres.index_select(0, enabled),
+        per_sphere.index_select(0, enabled),
+        device_cfg,
+    )
+    pairs = active.collision_pairs
+    remapped_pairs = None if pairs is None else enabled.index_select(
+        0, pairs.reshape(-1)
+    ).reshape(-1, 2)
+    full_padding = torch.zeros((params.total_spheres,), **device_cfg.as_torch_dict())
+    if active.sphere_padding is not None:
+        full_padding.index_copy_(0, enabled, active.sphere_padding)
+    return SelfCollisionKinematicsCfg(
+        num_spheres=params.total_spheres,
+        sphere_padding=full_padding,
+        collision_pairs=remapped_pairs,
+    )
+
+
 @dataclass
 class _KinematicsCfgPortableMixin:
     device_cfg: DeviceCfg
@@ -165,12 +234,16 @@ class _KinematicsCfgPortableMixin:
         _apply_locked_joints(robot)
         if tool_frames is not None:
             robot.tool_frames = list(tool_frames)
+        params = KinematicsParams(robot)
+        generator_config = _loader_config_from_robot(robot, device_cfg)
         return KinematicsCfg(
-            device_cfg, list(robot.tool_frames), KinematicsParams(robot),
-            self_collision_config={
-                "ignore": robot.self_collision_ignore,
-                "buffer": robot.self_collision_buffer,
-            },
+            device_cfg,
+            list(robot.tool_frames),
+            params,
+            self_collision_config=_self_collision_from_robot(
+                robot, params, device_cfg
+            ),
+            generator_config=generator_config,
         )
 
     @staticmethod

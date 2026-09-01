@@ -29,26 +29,40 @@ from curobo_metal.reference.tree_kinematics import TreeRobot
 
 
 def _matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
-    """Differentiable wxyz conversion with stable branch-free normalization."""
-    m00, m11, m22 = matrix[..., 0, 0], matrix[..., 1, 1], matrix[..., 2, 2]
-    values = torch.stack(
-        (
-            1 + m00 + m11 + m22,
-            1 + m00 - m11 - m22,
-            1 - m00 + m11 - m22,
-            1 - m00 - m11 + m22,
-        ),
-        dim=-1,
-    ).clamp_min(0)
-    magnitudes = 0.5 * torch.sqrt(values)
-    w, x, y, z = magnitudes.unbind(-1)
-    x = torch.copysign(x, matrix[..., 2, 1] - matrix[..., 1, 2])
-    y = torch.copysign(y, matrix[..., 0, 2] - matrix[..., 2, 0])
-    z = torch.copysign(z, matrix[..., 1, 0] - matrix[..., 0, 1])
-    result = torch.stack((w, x, y, z), dim=-1)
-    return result / result.norm(dim=-1, keepdim=True).clamp_min(
-        torch.finfo(matrix.dtype).eps
-    )
+    """Convert rotation matrices to wxyz without a singular sign branch.
+
+    Choosing the largest quaternion component is important for poses at or
+    near pi radians.  A component-wise ``copysign`` conversion is ambiguous
+    when two off-diagonal differences are zero and made finite-difference FK
+    discontinuous for several G1 hand and ankle frames.
+    """
+    if matrix.shape[-2:] != (3, 3):
+        raise ValueError("matrix must end in shape [3, 3]")
+    m = matrix
+    q_abs = torch.sqrt(torch.clamp(torch.stack((
+        1 + m[..., 0, 0] + m[..., 1, 1] + m[..., 2, 2],
+        1 + m[..., 0, 0] - m[..., 1, 1] - m[..., 2, 2],
+        1 - m[..., 0, 0] + m[..., 1, 1] - m[..., 2, 2],
+        1 - m[..., 0, 0] - m[..., 1, 1] + m[..., 2, 2],
+    ), dim=-1), min=0.0))
+    candidates = torch.stack((
+        torch.stack((q_abs[..., 0] ** 2, m[..., 2, 1] - m[..., 1, 2],
+                     m[..., 0, 2] - m[..., 2, 0], m[..., 1, 0] - m[..., 0, 1]), dim=-1),
+        torch.stack((m[..., 2, 1] - m[..., 1, 2], q_abs[..., 1] ** 2,
+                     m[..., 1, 0] + m[..., 0, 1], m[..., 0, 2] + m[..., 2, 0]), dim=-1),
+        torch.stack((m[..., 0, 2] - m[..., 2, 0], m[..., 1, 0] + m[..., 0, 1],
+                     q_abs[..., 2] ** 2, m[..., 2, 1] + m[..., 1, 2]), dim=-1),
+        torch.stack((m[..., 1, 0] - m[..., 0, 1], m[..., 2, 0] + m[..., 0, 2],
+                     m[..., 2, 1] + m[..., 1, 2], q_abs[..., 3] ** 2), dim=-1),
+    ), dim=-2)
+    denominator = (2 * q_abs).clamp_min(torch.finfo(m.dtype).eps)[..., None]
+    choice = q_abs.argmax(dim=-1)
+    gather_row = choice[..., None, None].expand(choice.shape + (1, 4))
+    gather_denominator = choice[..., None, None].expand(choice.shape + (1, 1))
+    result = candidates.gather(-2, gather_row).squeeze(-2)
+    result = result / denominator.gather(-2, gather_denominator).squeeze(-2)
+    result = result / result.norm(dim=-1, keepdim=True).clamp_min(torch.finfo(m.dtype).eps)
+    return torch.where(result[..., :1] < 0, -result, result)
 
 
 class Kinematics:
@@ -71,7 +85,11 @@ class Kinematics:
         self._buffers: dict[str, torch.Tensor] = {}
         self.update_batch_size(1, 1, reset_buffers=True)
 
-    def _compile_model(self) -> None:
+    def _compile_model(
+        self,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> None:
         """Compile the current portable tree while retaining public config state."""
         config = self.config
         mapping = config.kinematics_config.robot_cfg._tree_mapping()
@@ -81,11 +99,23 @@ class Kinematics:
             link["inertial"]["inertia"] = [0.0] * 6
         self._model = WholeBodyModel(
             TreeRobot.from_dict(mapping),
-            device=config.device_cfg.device,
-            dtype=config.device_cfg.dtype,
+            device=config.device_cfg.device if device is None else device,
+            dtype=config.device_cfg.dtype if dtype is None else dtype,
         )
         self._link_names = self._model.link_names
         self._tool_indices = tuple(self._link_names.index(name) for name in config.tool_frames)
+        model_names = list(self._model.joint_names)
+        public_names = list(config.kinematics_config.joint_names)
+        if set(model_names) != set(public_names) or len(model_names) != len(public_names):
+            raise ValueError("compiled and public kinematics joint names do not match")
+        self._model_input_order = tuple(public_names.index(name) for name in model_names)
+        self._public_jacobian_order = tuple(model_names.index(name) for name in public_names)
+
+    def _ensure_model_for(self, value: torch.Tensor) -> None:
+        """Compile lazily for the caller's CPU/MPS device and floating dtype."""
+        if self._model.device != value.device or self._model.dtype != value.dtype:
+            self._compile_model(value.device, value.dtype)
+            self._buffers = {}
 
     @property
     def tool_frames(self) -> List[str]:
@@ -102,7 +132,7 @@ class Kinematics:
             self._batch, self._horizon = batch, horizon
             self._buffers = {
                 "idxs_env": torch.zeros(
-                    batch, dtype=torch.int32, device=self.device_cfg.device
+                    batch, dtype=torch.int32, device=self._model.device
                 )
             }
 
@@ -117,13 +147,17 @@ class Kinematics:
             )
         if joint_position.shape[-1] != self.dof:
             raise ValueError(f"q should have dof = {self.dof}, got {joint_position.shape[-1]}")
+        self._ensure_model_for(joint_position)
         if idxs_env is not None:
             if idxs_env.ndim != 1 or idxs_env.shape[0] != joint_position.shape[0]:
                 raise ValueError("idxs_env must have shape [batch]")
         batch, horizon, _ = joint_position.shape
         self.update_batch_size(batch, horizon)
         flat = joint_position.reshape(batch * horizon, self.dof)
-        fk = tree_forward_kinematics(self._model, flat)
+        input_order = torch.tensor(
+            self._model_input_order, dtype=torch.long, device=joint_position.device
+        )
+        fk = tree_forward_kinematics(self._model, flat.index_select(-1, input_order))
         transforms = fk.transforms.reshape(batch, horizon, len(self._link_names), 4, 4)
         selected = transforms[..., self._tool_indices, :, :]
         poses = ToolPose(
@@ -136,6 +170,10 @@ class Kinematics:
             jacobian = fk.geometric_jacobian.reshape(
                 batch, horizon, len(self._link_names), 6, self.dof
             )[..., self._tool_indices, :, :]
+            public_order = torch.tensor(
+                self._public_jacobian_order, dtype=torch.long, device=joint_position.device
+            )
+            jacobian = jacobian.index_select(-1, public_order)
         spheres = self._sphere_positions(transforms, idxs_env) if self.compute_spheres else None
         com = self._center_of_mass(transforms) if self.compute_com else None
         return KinematicsState(poses, jacobian, spheres, com, None)
@@ -200,15 +238,26 @@ class Kinematics:
             raise ValueError("q should be [batch_size, dof]")
         state = self._forward(q.unsqueeze(1) if q.ndim == 2 else q)
         values = state.robot_spheres.squeeze(1).detach().cpu().tolist()
+
+        def as_sphere(index: int, sphere: list[float]) -> Sphere:
+            # Pinned cuRobo exposes disabled slots with a negative-radius
+            # sentinel when filter_valid=False.  The portable geometry value
+            # validates physical radii at construction, so construct safely
+            # and restore the public sentinel afterwards.
+            radius = sphere[3]
+            result = Sphere(
+                name=f"curobo/robot_sphere_{index}",
+                pose=[*sphere[:3], 1, 0, 0, 0],
+                radius=max(radius, 0.0),
+            )
+            result.radius = radius
+            return result
+
         result = []
         for batch in values:
             result.append(
                 [
-                    Sphere(
-                        name=f"curobo/robot_sphere_{index}",
-                        pose=[*sphere[:3], 1, 0, 0, 0],
-                        radius=sphere[3],
-                    )
+                    as_sphere(index, sphere)
                     for index, sphere in enumerate(batch)
                     if not filter_valid or sphere[3] > 0
                 ]
@@ -229,8 +278,12 @@ class Kinematics:
             raise ValueError("joint_position must have rank 1, 2, or 3")
         if q.shape[-1] != self.dof:
             raise ValueError(f"q should have dof = {self.dof}, got {q.shape[-1]}")
+        self._ensure_model_for(q)
+        input_order = torch.tensor(
+            self._model_input_order, dtype=torch.long, device=q.device
+        )
         transforms = tree_forward_kinematics(
-            self._model, q.reshape(-1, self.dof)
+            self._model, q.reshape(-1, self.dof).index_select(-1, input_order)
         ).transforms.reshape(*q.shape[:2], len(self._link_names), 4, 4)
         indices = torch.tensor(
             [self._link_names.index(name) for name in query_link_names],
@@ -297,15 +350,19 @@ class Kinematics:
         locked = self.lock_jointstate
         if locked is None or not locked.joint_names:
             return joint_state
+        if locked.device_cfg != joint_state.device_cfg:
+            locked = locked.to(joint_state.device_cfg)
         return joint_state.append_joints(locked)
 
     def get_mimic_js(self, joint_state: JointState) -> JointState:
         """Expose the compiled state for chains whose mimic joints are reduced."""
-        result = self.get_full_js(joint_state)
-        for name, (source, multiplier, offset) in self.config.kinematics_config.mimic_joints.items():
-            if name in result.joint_names:
-                continue
-            source_state = result.reorder([source])
+        mimic_joints = self.config.kinematics_config.mimic_joints
+        if not mimic_joints:
+            return None
+        result = None
+        full_state = self.get_full_js(joint_state)
+        for name, (source, multiplier, offset) in mimic_joints.items():
+            source_state = full_state.reorder([source])
             mimic = JointState.from_position(
                 source_state.position * multiplier + offset,
                 joint_names=[name],
@@ -314,7 +371,7 @@ class Kinematics:
                 value = getattr(source_state, channel)
                 if value is not None:
                     setattr(mimic, channel, value * multiplier)
-            result = result.append_joints(mimic)
+            result = mimic if result is None else result.append_joints(mimic)
         return result
 
     def update_kinematics_config(self, new_kin_config: KinematicsParams):
