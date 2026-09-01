@@ -11,6 +11,11 @@ from dataclasses import dataclass
 DEVICE_STRINGS = {"cuda": "mps", "cuda:0": "mps:0"}
 CUDA_AVAILABLE = "torch.cuda.is_available()"
 MPS_AVAILABLE = "torch.backends.mps.is_available()"
+UPSTREAM_HELPER_IMPORTS = {
+    "from curobo.examples.reference.lidar_volumetric_mapping import ": (
+        "from _curobo_upstream_helpers.lidar_volumetric_mapping import "
+    )
+}
 
 
 @dataclass(frozen=True)
@@ -18,6 +23,7 @@ class Adaptation:
     source: str
     device_string_replacements: int
     availability_replacements: int
+    helper_import_replacements: int
 
 
 def adapt_source(source: str, *, adapt_availability: bool = True) -> Adaptation:
@@ -46,7 +52,12 @@ def adapt_source(source: str, *, adapt_availability: bool = True) -> Adaptation:
                 device_count += 1
         output.append(token)
     adapted = tokenize.untokenize(output)
+    helper_import_count = 0
+    for upstream_import, staged_import in UPSTREAM_HELPER_IMPORTS.items():
+        replacements = adapted.count(upstream_import)
+        adapted = adapted.replace(upstream_import, staged_import)
+        helper_import_count += replacements
     availability_count = adapted.count(CUDA_AVAILABLE) if adapt_availability else 0
     if adapt_availability:
         adapted = adapted.replace(CUDA_AVAILABLE, MPS_AVAILABLE)
-    return Adaptation(adapted, device_count, availability_count)
+    return Adaptation(adapted, device_count, availability_count, helper_import_count)

@@ -18,7 +18,8 @@
     "permitted": [
       "Replace an exact Python string literal equal to cuda with mps.",
       "Replace an exact Python string literal equal to cuda:0 with mps:0.",
-      "Replace an exact torch.cuda.is_available() gate with torch.backends.mps.is_available() in test modules."
+      "Replace an exact torch.cuda.is_available() gate with torch.backends.mps.is_available() in test modules.",
+      "Redirect an exact import of an unshipped pinned-upstream example helper to an identically sourced non-shadowing staged helper module."
     ],
     "forbidden": [
       "Changing assertions, tolerances, test parameters, or expected values.",

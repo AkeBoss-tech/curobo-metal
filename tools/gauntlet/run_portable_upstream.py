@@ -168,6 +168,13 @@ def main(argv: list[str] | None = None) -> int:
         stage = Path(raw_stage)
         staged_tests = stage / "tests"
         staged_tests.mkdir(parents=True)
+        staged_helpers = stage / "_curobo_upstream_helpers"
+        staged_helpers.mkdir()
+        (staged_helpers / "__init__.py").write_text("", encoding="utf-8")
+        lidar_helper = upstream / "curobo/examples/reference/lidar_volumetric_mapping.py"
+        if not lidar_helper.is_file():
+            parser.error(f"missing pinned upstream helper: {lidar_helper}")
+        shutil.copyfile(lidar_helper, staged_helpers / lidar_helper.name)
         conftest_source = (test_root / "conftest.py").read_text(encoding="utf-8")
         conftest_adaptation = adapt_source(conftest_source, adapt_availability=False)
         (staged_tests / "conftest.py").write_text(
@@ -176,12 +183,14 @@ def main(argv: list[str] | None = None) -> int:
         adaptation_counts = {
             "device_string_replacements": conftest_adaptation.device_string_replacements,
             "availability_replacements": conftest_adaptation.availability_replacements,
+            "helper_import_replacements": conftest_adaptation.helper_import_replacements,
         }
         adaptation_records = {
             "conftest.py": {
                 "adapted_sha256": _sha256(staged_tests / "conftest.py"),
                 "device_string_replacements": conftest_adaptation.device_string_replacements,
                 "availability_replacements": conftest_adaptation.availability_replacements,
+                "helper_import_replacements": conftest_adaptation.helper_import_replacements,
             }
         }
         for relative in paths:
@@ -198,12 +207,16 @@ def main(argv: list[str] | None = None) -> int:
             adaptation_counts["availability_replacements"] += (
                 adaptation.availability_replacements
             )
+            adaptation_counts["helper_import_replacements"] += (
+                adaptation.helper_import_replacements
+            )
             module = f"curobo.tests.{relative[:-3].replace('/', '.')}"
             source_hashes[module] = _sha256(source)
             adaptation_records[module] = {
                 "adapted_sha256": _sha256(destination),
                 "device_string_replacements": adaptation.device_string_replacements,
                 "availability_replacements": adaptation.availability_replacements,
+                "helper_import_replacements": adaptation.helper_import_replacements,
             }
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
@@ -238,7 +251,10 @@ def main(argv: list[str] | None = None) -> int:
         "conftest_sha256": _sha256(test_root / "conftest.py"),
         "modules": source_hashes,
         "portable_adapter": {
-            "scope": "exact device string literals and torch.cuda.is_available gates",
+            "scope": (
+                "exact device string literals, torch.cuda.is_available gates, and "
+                "pinned unshipped test-helper imports"
+            ),
             "source_sha256": _sha256(Path(__file__).with_name("portable_test_adapter.py")),
             "records": adaptation_records,
             **adaptation_counts,
