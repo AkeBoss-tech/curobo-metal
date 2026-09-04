@@ -366,8 +366,9 @@ class MPCSolver:
         self._require_solver_tensor(values, "seed_trajectory")
         self._seed_trajectory = values.clone()
         self._action_buffer = values[:, 0].clone() if values.ndim == 4 else values.clone()
+        action_state = JointState.from_position(self._action_buffer.clone(), self.joint_names)
         self.trajectory_execution_manager.update_state_action_buffers(
-            JointState.from_position(self._action_buffer.clone(), self.joint_names),
+            self._execution_state(action_state),
             self._action_buffer,
         )
         self._last_result = None
@@ -381,6 +382,39 @@ class MPCSolver:
             seed_config=self._goal_state.position[:, None],
         )
         self._warm_start_available = True
+
+    def _execution_state(self, action_state: JointState) -> JointState:
+        """Add the B-spline support prefix expected by command extraction."""
+        offset = self.trajectory_execution_manager.command_start_idx
+        if offset <= 0:
+            return action_state
+        position = action_state.position
+        if position.ndim != 3:
+            raise ValueError("MPC execution state must have shape [batch,horizon,dof]")
+
+        def pad_channel(value):
+            if value is None:
+                return None
+            if value.ndim >= 2 and value.shape[:2] == position.shape[:2]:
+                prefix = value[:, :1].expand(-1, offset, *value.shape[2:])
+                return torch.cat((prefix, value), dim=1)
+            return value.clone()
+
+        return JointState(
+            position=torch.cat(
+                (position[:, :1].expand(-1, offset, -1), position), dim=1
+            ),
+            velocity=pad_channel(action_state.velocity),
+            acceleration=pad_channel(action_state.acceleration),
+            joint_names=None if action_state.joint_names is None else action_state.joint_names.copy(),
+            jerk=pad_channel(action_state.jerk),
+            device_cfg=action_state.device_cfg,
+            dt=None if action_state.dt is None else action_state.dt.clone(),
+            aux_data=dict(action_state.aux_data),
+            knot=None if action_state.knot is None else action_state.knot.clone(),
+            knot_dt=None if action_state.knot_dt is None else action_state.knot_dt.clone(),
+            control_space=action_state.control_space,
+        )
 
     def _solve_impl(self, current_state: JointState, optimization_niters: int):
         if not self._setup_complete or self._goal_state is None:
@@ -423,13 +457,15 @@ class MPCSolver:
         # Compute the immediate command only after safe fallback substitution.
         # Returning an infeasible optimizer command while exposing a safe
         # action buffer is a dangerous mismatch for a control loop.
-        next_action = sequence_values[:, next_index, :]
         self._seed_trajectory = sequence_values.detach().clone()
         self._action_buffer = sequence_values.detach().clone()
         self.trajectory_execution_manager.update_state_action_buffers(
-            sequence.detach().clone(), self._action_buffer
+            self._execution_state(sequence.detach().clone()), self._action_buffer
         )
-        self._action_cursor = 0
+        # The solve result returns command zero immediately; advance the
+        # execution manager so the next public call consumes command one.
+        next_action_state = self.trajectory_execution_manager.get_next_command()
+        self._action_cursor = self._execution_command_index()
         self._solve_count += 1
         mpc_result = MPCSolverResult(
             success=result.success,
@@ -439,7 +475,7 @@ class MPCSolver:
             total_time=result.total_time,
             debug_info={"trajectory_result": result},
             feasible=result.feasible,
-            next_action=JointState.from_position(next_action, self.joint_names),
+            next_action=next_action_state,
             action_sequence=sequence,
             full_action_sequence=sequence,
             action_buffer=sequence_values,
@@ -453,6 +489,9 @@ class MPCSolver:
                 "endpoint_error": result.cspace_error,
                 "feasible": result.feasible,
                 "warm_start": self._warm_start_available,
+                "command_index": 0,
+                "reoptimized": False,
+                "solve_count": self._solve_count,
             },
         )
         self._last_result = mpc_result
@@ -466,15 +505,15 @@ class MPCSolver:
         # A cold plan initializes the portable buffer.  Subsequent calls
         # consume it exactly once per command; re-plan only after the final
         # command has been consumed, matching the upstream execution manager.
-        if (
+        needs_replan = (
             self._action_buffer is None
             or self._last_result is None
             or not self.trajectory_execution_manager.has_valid_next_command()
-        ):
+        )
+        if needs_replan:
             if not self._warm_start_available:
-                self.cold_start_solve(current_state)
-            else:
-                self.warm_start_solve(current_state)
+                return self.cold_start_solve(current_state)
+            return self.warm_start_solve(current_state)
         return self._result_from_action_buffer()
     def optimize_action_sequence(self, current_state: JointState) -> MPCSolverResult:
         if not self._setup_complete:
@@ -516,8 +555,9 @@ class MPCSolver:
             buffer = self._action_buffer.clone()
             buffer[ids] = reset[ids]
             self._action_buffer = buffer
+            action_state = JointState.from_position(buffer.clone(), self.joint_names)
             self.trajectory_execution_manager.update_state_action_buffers(
-                JointState.from_position(buffer.clone(), self.joint_names), buffer
+                self._execution_state(action_state), buffer
             )
             self._action_cursor = 0
         self._warm_start_available = self._action_buffer is not None

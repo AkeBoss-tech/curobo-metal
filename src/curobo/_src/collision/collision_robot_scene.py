@@ -84,8 +84,12 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
 
     def get_kinematics(self, joint_position: torch.Tensor) -> KinematicsState:
         """Compute kinematics through the pinned public one-argument ABI."""
-        if not isinstance(joint_position, torch.Tensor) or joint_position.ndim != 3:
-            raise ValueError("joint_position must have shape [batch,horizon,dof]")
+        if not isinstance(joint_position, torch.Tensor):
+            raise TypeError("joint_position must be a torch.Tensor")
+        if joint_position.ndim not in (1, 2, 3):
+            raise ValueError(
+                "joint_position must have shape [dof], [batch,dof], or [batch,horizon,dof]"
+            )
         return self._get_kinematics(joint_position)
 
     def _buffer(self, spheres):
@@ -194,7 +198,10 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         return value.reshape(*prefix, 1)
 
     def get_self_collision(self, x_sph: torch.Tensor) -> torch.Tensor:
-        return self.get_self_collision_distance(x_sph)
+        # The public one-shot query exposes one aggregate value per
+        # batch/horizon entry; the lower-level distance API retains the final
+        # singleton cost axis for rollout composition.
+        return self.get_self_collision_distance(x_sph).squeeze(-1)
 
     def get_collision_vector(
         self,

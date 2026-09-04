@@ -51,8 +51,7 @@ def test_portable_backend_and_explicit_native_boundaries(tmp_path: Path):
         CudaCoreKernelCache().get_or_compile_kernel([], "kernel", [], [])
     with pytest.raises(NotImplementedError, match="ESDF"):
         launch_pba3d(None, None, 1, 1, 1)
-    with pytest.raises(NotImplementedError, match="Warp"):
-        init_warp()
+    assert init_warp() is True
 
 
 def test_graph_executor_is_direct_and_shape_stable(tmp_path: Path):

@@ -61,7 +61,9 @@ def test_scene_collision_and_kinematics_aliases_use_portable_backends() -> None:
     # Franka's two locked finger joints; active joint names remain its prefix.
     assert full.joint_names[: len(kinematics.joint_names)] == kinematics.joint_names
     assert len(full.joint_names) == len(kinematics.joint_names) + 2
-    assert kinematics.get_mimic_js(active).position.shape == full.position.shape
+    # Pinned cuRobo returns None when a robot (such as Franka) has no mimic
+    # joints; full locked-joint expansion remains available through get_full_js.
+    assert kinematics.get_mimic_js(active) is None
 
     class SphereChecker:
         collision_buffer = "portable-buffer"

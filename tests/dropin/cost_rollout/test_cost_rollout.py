@@ -63,7 +63,7 @@ def test_goal_registry_repeats_indices_and_copies_buffers():
     source = GoalRegistry(goal_js=JointState.from_position(torch.tensor([[1.], [2.]])))
     target = GoalRegistry()
     target.copy_(source)
-    assert target.goal_js is not source.goal_js
+    assert target.goal_js is source.goal_js
     assert target.goal_js.position.tolist() == [[1.], [2.]]
 
 

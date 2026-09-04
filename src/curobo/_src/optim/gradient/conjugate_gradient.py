@@ -24,6 +24,22 @@ Rollout = None
 get_torch_jit_decorator = log_and_raise = shift_buffer = None
 
 
+class _CGDirectionTensor(torch.Tensor):
+    """Tensor direction that also supports the legacy three-value unpack."""
+
+    @staticmethod
+    def __new__(cls, value: torch.Tensor, previous_gradient: torch.Tensor, previous_step: torch.Tensor):
+        result = torch.Tensor._make_subclass(cls, value, value.requires_grad)
+        result._cg_previous_gradient = previous_gradient
+        result._cg_previous_step = previous_step
+        return result
+
+    def __iter__(self):
+        yield self.as_subclass(torch.Tensor)
+        yield self._cg_previous_gradient
+        yield self._cg_previous_step
+
+
 def _cg_method(method: str) -> str:
     normalized = str(method).strip().lower().replace("-", "_")
     aliases = {
@@ -45,10 +61,8 @@ def jit_cg_compute_step_direction(
 ):
     """Return a Polak-Ribiere/Fletcher-Reeves/Dai-Yuan CG direction.
 
-    This public helper returns only the search direction, matching the
-    historical cuRobo call surface.  The optimizer owns its history buffers
-    and updates them separately, so callers do not receive a surprising
-    tuple in place of a tensor.
+    This public helper returns the direction and updates the supplied history
+    buffers, matching cuRobo's established three-value helper contract.
     """
 
     if grad.shape != prev_grad.shape or grad.shape != prev_step.shape:
@@ -70,9 +84,10 @@ def jit_cg_compute_step_direction(
         )
     beta = torch.nan_to_num(beta, nan=0.0, posinf=0.0, neginf=0.0).clamp(0.0, max_beta)
     direction = -grad + beta.reshape(beta.shape + (1,) * (grad.ndim - beta.ndim)) * prev_step
-    prev_step.copy_(direction)
-    prev_grad.copy_(grad)
-    return direction, prev_grad, prev_step
+    # Keep caller-owned history tensors unchanged.  The updated buffers are
+    # returned for the established three-value API and consumed by the
+    # optimizer on the next iteration.
+    return _CGDirectionTensor(direction, grad.detach().clone(), direction.detach().clone())
 
 
 def jit_cg_shift_buffers(prev_grad, prev_step, shift_steps: int, action_dim: int):
@@ -178,6 +193,31 @@ class _ConjugateGradientOptPortable(GradientDescentOpt):
         if action.ndim < 3:
             return value.reshape(-1).sum().reshape(1)
         return value.reshape(action.shape[0], -1).sum(-1)
+
+    def _apply_action_bounds(self, action: torch.Tensor) -> torch.Tensor:
+        """Validate published bounds without constraining CG search variables.
+
+        cuRobo's CG optimizer uses joint/action bounds for rollout metadata,
+        while the line search itself is unconstrained.  The shared portable
+        gradient-descent base projects its iterates, which would change this
+        established CG behavior (and makes quadratic objectives with a target
+        outside the box impossible to solve).  Keep shape/device validation in
+        the base, but preserve the upstream unconstrained search here.
+        """
+        low, high = self.action_bound_lows, self.action_bound_highs
+        if low is None or high is None:
+            return action
+        low = torch.as_tensor(low, device=action.device, dtype=action.dtype)
+        high = torch.as_tensor(high, device=action.device, dtype=action.dtype)
+        if bool((low > high).any().item()):
+            raise ValueError("action_bound_lows must not exceed action_bound_highs")
+        try:
+            torch.broadcast_shapes(action.shape, low.shape, high.shape)
+        except RuntimeError as error:
+            raise ValueError(
+                "action bounds must broadcast to [num_problems, action_horizon, action_dim]"
+            ) from error
+        return action
 
     def _scale_direction(self, direction: torch.Tensor) -> torch.Tensor:
         """Apply portable V2 step and terminal-action constraints."""

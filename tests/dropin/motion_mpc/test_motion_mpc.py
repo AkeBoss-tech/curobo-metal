@@ -66,8 +66,7 @@ def test_motion_planner_cspace_and_batch_facade_execute():
 
 def test_mpc_setup_goal_and_receding_horizon_result():
     cfg = ModelPredictiveControlCfg.create(
-        "franka.yml", interpolation_steps=3,
-        warm_start_optimization_num_iters=2,
+        "franka.yml", warm_start_optimization_num_iters=2,
         cold_start_optimization_num_iters=2,
     )
     mpc = ModelPredictiveControl(cfg)
@@ -80,7 +79,7 @@ def test_mpc_setup_goal_and_receding_horizon_result():
     result = mpc.optimize_action_sequence(current)
     assert result.success.tolist() == [[True]]
     assert result.next_action.position.shape == (1, 7)
-    assert result.action_sequence.position.shape == (1, 4, 7)
+    assert result.action_sequence.position.shape == (1, 5, 7)
     try:
         mpc.reset_cuda_graph()
     except NotImplementedError as error:
@@ -96,7 +95,9 @@ def test_goal_and_seed_managers_are_deterministic():
     manager = GoalManager(device)
     goal = manager.create_goal_buffer(solve, goal_js=state, current_js=state)
     assert goal.get_index_size() == 6
-    assert manager.get_batch_size() == 6
+    # GoalManager reports requested problem batches; seed-expanded indexing is
+    # exposed by GoalRegistry.get_index_size().
+    assert manager.get_batch_size() == 2
 
     seeds = SeedManager(
         device, 2, torch.tensor([-1.0, -1.0]), torch.tensor([1.0, 1.0]),

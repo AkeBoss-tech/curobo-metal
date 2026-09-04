@@ -32,6 +32,7 @@ from curobo._src.rollout.rollout_robot import RobotRollout
 from curobo._src.robot.kinematics.kinematics import Kinematics, KinematicsState
 from curobo._src.state.state_joint import JointState
 from curobo._src.transition.robot_state_transition import RobotStateTransition
+from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.util.cuda_event_timer import CudaEventTimer
 from curobo._src.util.logging import log_and_raise, log_warn
 from curobo._src.util.trajectory import TrajInterpolationType, linear_smooth
@@ -60,7 +61,22 @@ class PRMGraphPlanner:
         if config.max_nodes < 2:
             raise ValueError("max_nodes must be at least two")
         self.config = config
+        # Bounds are part of the mutable public config (older callers often
+        # move them to MPS after constructing a direct config).  Treat their
+        # device as the runtime authority when it differs from the serialized
+        # DeviceCfg, otherwise helpers would allocate CPU buffers and reject
+        # otherwise valid MPS roadmap tensors.
         self.device_cfg = config.device_cfg
+        if isinstance(config.action_lower_bounds, torch.Tensor):
+            bounds_device = config.action_lower_bounds.device
+            if not self.device_cfg.is_same_torch_device(bounds_device):
+                self.device_cfg = DeviceCfg(
+                    device=bounds_device,
+                    dtype=config.action_lower_bounds.dtype,
+                    collision_geometry_dtype=config.device_cfg.collision_geometry_dtype,
+                    collision_gradient_dtype=config.device_cfg.collision_gradient_dtype,
+                    collision_distance_dtype=config.device_cfg.collision_distance_dtype,
+                )
         # Match V2 ownership: an explicitly supplied checker wins, otherwise
         # the serializable scene config owns the long-lived checker.  The
         # factory is CPU/MPS PyTorch and does not create a Warp world.
@@ -229,6 +245,9 @@ class PRMGraphPlanner:
         # shape entries without discarding the PersistentRoadmap object itself.
         self._roadmap.cache.reset()
         self._generation += 1
+        # Keep the indexed inspection graph in sync for callers that inspect
+        # ``graph_path_finder.graph`` immediately after appending nodes.
+        self._refresh_compat_graph()
 
     def _compat_candidate_pairs(self, samples: torch.Tensor) -> list[tuple[int, int]]:
         """Return stable weighted-kNN pairs for the observable PRM graph.
@@ -669,7 +688,10 @@ class PRMGraphPlanner:
         # collision callback at query time.  Retaining bounded samples here
         # avoids redundant rollout evaluation and is also correct when a
         # mutable scene invalidates a previously accepted node.
-        self._append_samples(self._random_samples(num_samples))
+        # Extension is an acceptance API: upstream only retains nodes that
+        # pass its feasibility rollout.  Filtering here also prevents an
+        # infeasible vertex from appearing in the indexed compatibility graph.
+        self._append_samples(self._feasible_random_samples(num_samples))
 
     def extend_roadmap_with_ellipsoidal_samples(
         self,
@@ -687,9 +709,7 @@ class PRMGraphPlanner:
         )
 
     def reset_cuda_graph(self):
-        # There is no captured CUDA graph on the portable backend.  Matching
-        # the upstream lifecycle means this reset is still a harmless call.
-        return None
+        raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
 
     def get_all_rollout_instances(self) -> List[RobotRollout]:
         return [rollout for rollout in (self.feasibility_rollout, self.auxiliary_rollout)
@@ -732,7 +752,14 @@ class PRMGraphPlanner:
 
     @property
     def cspace_distance_weight(self) -> torch.Tensor:
-        if self._cspace_distance_weight is None:
+        # Direct configs historically allow bounds to be moved after planner
+        # construction.  Keep the default metric aligned with that mutable
+        # bounds tensor so indexed graph validation never mixes CPU/MPS.
+        if (
+            self._cspace_distance_weight is None
+            or self._cspace_distance_weight.device != self.action_bound_lows.device
+            or self._cspace_distance_weight.dtype != self.action_bound_lows.dtype
+        ):
             self._cspace_distance_weight = torch.ones_like(self.action_bound_lows)
         return self._cspace_distance_weight
 

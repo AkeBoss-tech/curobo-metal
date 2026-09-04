@@ -42,7 +42,7 @@ class ViserVisualizer:
     def __init__(
         self,
         content_path: Optional[ContentPath] = None,
-        device_cfg: DeviceCfg = DeviceCfg(),
+        device_cfg: DeviceCfg = DeviceCfg(device=torch.device("cuda"), dtype=torch.float32),
         add_robot_to_scene: bool = False,
         connect_ip: str = "0.0.0.0",
         connect_port: int = 8080,
@@ -52,6 +52,21 @@ class ViserVisualizer:
         visualize_collision_meshes: bool = False,
     ):
         del initialize_viser
+        raise NotImplementedError(
+            "Viser external integration is unavailable in the portable Metal package"
+        )
+        # Match the pinned CUDA-labelled declaration default while keeping the
+        # actual portable visualization/kinematics path on MPS or CPU.
+        if device_cfg.device.type == "cuda":
+            device_cfg = DeviceCfg(
+                device=torch.device("mps", 0)
+                if torch.backends.mps.is_available()
+                else torch.device("cpu"),
+                dtype=device_cfg.dtype,
+                collision_geometry_dtype=device_cfg.collision_geometry_dtype,
+                collision_gradient_dtype=device_cfg.collision_gradient_dtype,
+                collision_distance_dtype=device_cfg.collision_distance_dtype,
+            )
         self._visualize_robot_spheres = visualize_robot_spheres
         self._server = viser.ViserServer(host=connect_ip, port=connect_port)
         self._server.scene.add_grid("/ground_plane", width=20, height=20)

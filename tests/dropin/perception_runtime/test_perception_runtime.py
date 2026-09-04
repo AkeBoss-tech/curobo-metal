@@ -106,8 +106,9 @@ def test_pose_estimation_utilities():
     target = source.clone()
     target[:, 2] = 0
     normals = torch.tensor(((0.0, 0.0, 1.0),) * 3)
-    delta = compute_pose_point_to_plane_cholesky(source, target, normals)
-    assert torch.isfinite(delta).all()
+    position, quaternion = compute_pose_point_to_plane_cholesky(source, target, normals)
+    assert torch.isfinite(position).all()
+    assert torch.isfinite(quaternion).all()
 
 
 def test_raw_kernel_boundaries_are_precise():

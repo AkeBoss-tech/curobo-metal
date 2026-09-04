@@ -95,7 +95,6 @@ class MotionPlanner(_MotionPlannerPortableMixin):
         # KinematicsCfg instead of constructing a second KinematicsParams.
         shared_kinematics = self.ik_solver.kinematics.config
         self.trajopt_solver.kinematics.config = shared_kinematics
-        self.trajopt_solver.kinematics.tool_frames = list(shared_kinematics.tool_frames)
         if self.graph_planner is not None and hasattr(self.graph_planner, "kinematics"):
             self.graph_planner.kinematics.config = shared_kinematics
 

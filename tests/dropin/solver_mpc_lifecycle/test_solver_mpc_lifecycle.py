@@ -14,7 +14,6 @@ def _solver(*, batch_size: int = 1):
     cfg = ModelPredictiveControlCfg.create(
         "franka.yml",
         max_batch_size=batch_size,
-        interpolation_steps=3,
         warm_start_optimization_num_iters=1,
         cold_start_optimization_num_iters=1,
     )
@@ -31,19 +30,23 @@ def _solver(*, batch_size: int = 1):
 
 def test_execution_manager_owns_portable_command_window():
     solver, current = _solver()
-    assert solver.trajectory_execution_manager.interpolation_steps == 3
+    assert solver.trajectory_execution_manager.interpolation_steps == 4
 
     first = solver.optimize_next_action(current)
     second = solver.optimize_next_action(current)
     third = solver.optimize_next_action(current)
+    fourth = solver.optimize_next_action(current)
     assert solver.debug_dump()["solve_count"] == 1
-    assert [first.metrics["command_index"], second.metrics["command_index"], third.metrics["command_index"]] == [0, 1, 2]
+    assert [
+        first.metrics["command_index"], second.metrics["command_index"],
+        third.metrics["command_index"], fourth.metrics["command_index"],
+    ] == [0, 1, 2, 3]
     torch.testing.assert_close(first.next_action.position, first.action_buffer[:, 0])
 
-    fourth = solver.optimize_next_action(current)
+    fifth = solver.optimize_next_action(current)
     assert solver.debug_dump()["solve_count"] == 2
-    assert fourth.metrics["command_index"] == 0
-    assert fourth.next_action.position.shape == (1, solver.action_dim)
+    assert fifth.metrics["command_index"] == 0
+    assert fifth.next_action.position.shape == (1, solver.action_dim)
 
 
 def test_partial_reset_keeps_other_batch_queue_rows():
@@ -124,7 +127,7 @@ def test_mpc_command_manager_stays_on_fallback_disabled_mps(monkeypatch):
 
     cfg = ModelPredictiveControlCfg.create(
         "franka.yml", device_cfg=DeviceCfg(torch.device("mps"), torch.float32),
-        interpolation_steps=3, warm_start_optimization_num_iters=1,
+        warm_start_optimization_num_iters=1,
         cold_start_optimization_num_iters=1,
     )
     solver = ModelPredictiveControl(cfg)

@@ -199,7 +199,7 @@ class _GradientDescentOptPortable(PortableOptimizer):
             raise ValueError(
                 "action bounds must broadcast to [num_problems, action_horizon, action_dim]"
             ) from error
-        return action
+        return torch.minimum(torch.maximum(action, low), high)
 
     def _should_stop(self, previous: torch.Tensor, current: torch.Tensor, iteration: int) -> bool:
         """Update V2-style per-problem convergence and decide batch exit."""

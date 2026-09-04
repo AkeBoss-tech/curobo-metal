@@ -53,7 +53,12 @@ def list_available_robots() -> List[str]:
     robot_configs = get_robot_configs_path()
     if not robot_configs.exists():
         return []
-    return sorted(f.stem for f in robot_configs.glob("*.y*ml"))
+    # Retarget-only helper configurations are loadable by exact name but are
+    # not part of the pinned public robot inventory.
+    return sorted(
+        f.stem for f in robot_configs.glob("*.y*ml")
+        if not f.stem.endswith("_retarget")
+    )
 
 
 def get_robot_path(robot_name: str) -> Path:

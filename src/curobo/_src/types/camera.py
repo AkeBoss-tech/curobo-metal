@@ -281,7 +281,7 @@ class CameraObservation:
 
     @record_function("camera/copy_")
     def copy_(self, new_data: CameraObservation):
-        """Copy into materialized destination buffers without allocating new fields."""
+        """Deep-copy every available source field into this observation."""
         if not isinstance(new_data, CameraObservation):
             raise TypeError("new_data must be a CameraObservation")
         for field in _TENSOR_FIELDS:
@@ -289,7 +289,7 @@ class CameraObservation:
             if source is None:
                 setattr(self, field, None)
             elif target is None:
-                continue
+                setattr(self, field, source.clone())
             elif target.shape != source.shape or target.dtype != source.dtype or target.device != source.device:
                 raise ValueError(f"cannot copy {field} into a destination with different shape, dtype, or device")
             else:

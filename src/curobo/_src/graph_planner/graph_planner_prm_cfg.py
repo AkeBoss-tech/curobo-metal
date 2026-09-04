@@ -323,7 +323,7 @@ class PRMGraphPlannerCfg(_PRMGraphPlannerCfgPortableMixin):
         scene_model: Optional[Union[str, Dict[str, Any]]] = None,
         collision_cache: Optional[Dict[str, int]] = None,
         self_collision_check: bool = True,
-        device_cfg: DeviceCfg = _default_device_cfg(),
+        device_cfg: DeviceCfg = DeviceCfg(),
         use_cuda_graph_for_rollout: bool = True,
         transition_model_config_instance_type: Type[RobotStateTransitionCfg] = RobotStateTransitionCfg,
         cost_manager_config_instance_type: Type[RobotCostManagerCfg] = RobotCostManagerCfg,

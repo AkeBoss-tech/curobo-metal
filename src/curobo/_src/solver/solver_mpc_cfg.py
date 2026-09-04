@@ -8,7 +8,12 @@ import math
 from typing import Any, Dict, List, Optional, Type, Union
 
 from curobo._src.rollout.cost_manager.cost_manager_robot_cfg import RobotCostManagerCfg
-from curobo._src.solver.solver_core_cfg import SolverCoreCfg, create_scene_collision_cfg, resolve_yaml_configs
+from curobo._src.solver.solver_core_cfg import (
+    SolverCoreCfg,
+    create_scene_collision_cfg,
+    create_solver_core_cfg,
+    resolve_yaml_configs,
+)
 from curobo._src.util.logging import log_and_raise
 from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg

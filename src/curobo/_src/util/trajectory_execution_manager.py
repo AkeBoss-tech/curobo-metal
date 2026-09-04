@@ -86,6 +86,8 @@ class TrajectoryExecutionManager:
         """
         if not self.has_valiaction_dim_buffer():
             log_and_raise("No valid action buffer, call update_action_trajectory first")
+        if not self.has_valid_next_command():
+            log_and_raise("No valid next command, call update_action_trajectory first")
         horizon_index = self.command_start_idx + self._current_command_idx
         next_command = get_joint_state_at_horizon_index(
             self._current_joint_state_trajectory, horizon_index
@@ -121,8 +123,11 @@ class TrajectoryExecutionManager:
             return False
         elif self._current_command_idx >= self.interpolation_steps:
             return False
+        elif self._current_joint_state_trajectory is None:
+            return False
         else:
-            return True
+            horizon = self._current_joint_state_trajectory.position.shape[-2]
+            return self.command_start_idx + self._current_command_idx < horizon
 
     def has_valiaction_dim_buffer(self) -> bool:
         """Check if the action buffer is valid.

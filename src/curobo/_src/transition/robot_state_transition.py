@@ -84,7 +84,8 @@ class RobotStateTransition(_RobotStateTransitionPortableMixin):
             return StateFromAcceleration(self.config.device_cfg, self._dt, self._dof,
                                          self.config.batch_size, self.config.horizon)
         if cs == ControlSpace.VELOCITY:
-            raise NotImplementedError("Velocity control space is not implemented")
+            return StateFromVelocity(self.config.device_cfg, self._dt, self._dof,
+                                     self.config.batch_size, self.config.horizon)
         if cs in ControlSpace.bspline_types():
             dynamics = StateFromBSplineKnot(
                 self.config.device_cfg, self._dof, self.config.batch_size,

@@ -35,6 +35,10 @@ class MotionRetargeter:
     def __init__(self, config: MotionRetargeterCfg):
         if not isinstance(config, MotionRetargeterCfg):
             raise TypeError("config must be MotionRetargeterCfg")
+        if config.use_mpc and len(config.tool_pose_criteria) != 1:
+            raise NotImplementedError(
+                "portable MPC retargeting supports exactly one tracked tool frame"
+            )
         self._config = config
         self._num_envs = config.num_envs
         self._tool_pose_criteria = dict(config.tool_pose_criteria)
@@ -400,7 +404,10 @@ class MotionRetargeter:
             cfg.robot, optimizer_configs=cfg.mpc_optimizer_configs,
             scene_model=cfg.scene_model, self_collision_check=cfg.self_collision_check,
             device_cfg=cfg.device_cfg, optimization_dt=cfg.optimization_dt,
-            interpolation_steps=max(1, cfg.steps_per_target),
+            # Pinned cuRobo's MPC B-spline execution contract requires four
+            # support steps. ``steps_per_target`` controls retargeter cadence,
+            # not the solver's interpolation support window.
+            interpolation_steps=4,
             load_collision_spheres=cfg.load_collision_spheres,
             num_control_points=cfg.num_control_points,
             optimizer_collision_activation_distance=cfg.collision_activation_distance,

@@ -16,7 +16,10 @@ from curobo._src.cost.cost_cspace_dist_cfg import CSpaceDistCostCfg
 from curobo._src.cost.cost_scene_collision_cfg import SceneCollisionCostCfg
 from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg as _PublicSelfCollisionCostCfg
 from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCostCfg
+from curobo._src.cost.portable import CSpaceCostCfg as _PortableCSpaceCostCfg
+from curobo._src.cost.portable import CSpaceDistCostCfg as _PortableCSpaceDistCostCfg
 from curobo._src.cost.portable import SelfCollisionCostCfg
+from curobo._src.cost.portable import ToolPoseCostCfg as _PortableToolPoseCostCfg
 from curobo._src.types.device_cfg import DeviceCfg
 
 if TYPE_CHECKING:
@@ -35,9 +38,19 @@ _COST_CONFIG_TYPES = {
 # The public self-collision config carries extra portable validation and does
 # not subclass the original lightweight record.  Both forms are accepted by
 # the cost implementation, so preserve that source-compatible distinction.
+# Portable base classes are accepted alongside the validated public subclasses
+# so callers can use either form without an unnecessary conversion.
 _ACCEPTED_COST_CONFIG_TYPES = {
     **_COST_CONFIG_TYPES,
+    # ``portable.CSpaceCostCfg`` is the backend-neutral base record while
+    # ``cost_cspace_cfg.CSpaceCostCfg`` is the validated public subclass.
+    # RobotCostManager accepts either form so callers can use the portable
+    # config directly without an unnecessary conversion.
+    "cspace_cfg": (CSpaceCostCfg, _PortableCSpaceCostCfg),
     "self_collision_cfg": (SelfCollisionCostCfg, _PublicSelfCollisionCostCfg),
+    "start_cspace_dist_cfg": (CSpaceDistCostCfg, _PortableCSpaceDistCostCfg),
+    "target_cspace_dist_cfg": (CSpaceDistCostCfg, _PortableCSpaceDistCostCfg),
+    "tool_pose_cfg": (ToolPoseCostCfg, _PortableToolPoseCostCfg),
 }
 
 

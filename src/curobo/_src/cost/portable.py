@@ -231,8 +231,8 @@ class BaseCSpaceCost(BaseCost):
         """Validate the portable joint-state portion of the cost contract."""
         if not isinstance(state_batch, JointState):
             raise TypeError("state_batch must be a JointState")
-        if state_batch.position.ndim != 3:
-            raise ValueError("joint state position must have shape [batch, horizon, dof]")
+        if state_batch.position.ndim not in (2, 3):
+            raise ValueError("joint state position must have shape [batch, horizon, dof] or [batch, dof]")
         if self._batch_size >= 0 and state_batch.position.shape[0] != self._batch_size:
             raise ValueError("joint state batch size does not match allocated cost buffers")
         if self._horizon >= 0 and state_batch.position.shape[1] != self._horizon:
@@ -335,6 +335,9 @@ class PositionCSpaceCost(BaseCSpaceCost):
             prior_velocity = _indexed_goal(current_joint_state.velocity, idxs_current_joint_state, q)
             implied_acceleration = (implied_velocity - prior_velocity) / dt[..., None]
             value = value + 0.5 * self.config.squared_l2_regularization_weight[1].to(q) * implied_acceleration.square()
+        # cuRobo V2 convention: reduce per-DOF costs to a single scalar per
+        # (batch, horizon) step, yielding shape [batch, horizon, 1].
+        value = value.sum(-1, keepdim=True)
         return value if self.enabled else value * 0
 
     __call__ = forward
@@ -384,6 +387,9 @@ class StateCSpaceCost(PositionCSpaceCost):
             value = value + 0.5 * self.config.squared_l2_regularization_weight[3].to(joint_torque) * joint_torque.square()
             if state_batch.velocity is not None:
                 value = value + self.config.squared_l2_regularization_weight[4].to(joint_torque) * (joint_torque * state_batch.velocity * torch.as_tensor(self._dt, device=q.device, dtype=q.dtype)[..., None]).abs()
+        # cuRobo V2 convention: reduce per-DOF costs to a single scalar per
+        # (batch, horizon) step, yielding shape [batch, horizon, 1].
+        value = value.sum(-1, keepdim=True)
         return value if self.enabled else value * 0
 
     __call__ = forward

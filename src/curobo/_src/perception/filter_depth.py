@@ -57,9 +57,10 @@ def _portable_device(device: str | torch.device) -> torch.device:
 class FilterDepth:
     """Apply the V2 batched depth-filter contract on CPU or float32 MPS.
 
-    Inputs use the source-shaped ``(B, H, W)`` layout. Matching calls reuse
-    public output buffers, while shape changes allocate temporary outputs just
-    as the source implementation does.
+    Inputs may use either the source-shaped ``(B, H, W)`` layout or a single
+    unbatched ``(H, W)`` image. Matching calls reuse public output buffers,
+    while shape changes allocate temporary outputs just as the source
+    implementation does.
     """
 
     def __init__(
@@ -145,18 +146,20 @@ class FilterDepth:
         width: int,
         depth_out: Optional[torch.Tensor],
         valid_mask_out: Optional[torch.Tensor],
+        device: Optional[torch.device] = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        device = self.device if device is None else torch.device(device)
         shape = (batch, height, width)
         if depth_out is not None:
-            self._check_output_buffer(depth_out, "depth_out", shape, self.device, torch.float32)
+            self._check_output_buffer(depth_out, "depth_out", shape, device, torch.float32)
         if valid_mask_out is not None:
-            self._check_output_buffer(valid_mask_out, "valid_mask_out", shape, self.device, torch.bool)
-        matches_preallocation = shape == tuple(self._depth_out.shape)
+            self._check_output_buffer(valid_mask_out, "valid_mask_out", shape, device, torch.bool)
+        matches_preallocation = device == self.device and shape == tuple(self._depth_out.shape)
         out_depth = depth_out if depth_out is not None else (
-            self._depth_out if matches_preallocation else torch.zeros(shape, dtype=torch.float32, device=self.device)
+            self._depth_out if matches_preallocation else torch.zeros(shape, dtype=torch.float32, device=device)
         )
         out_mask = valid_mask_out if valid_mask_out is not None else (
-            self._valid_mask_out if matches_preallocation else torch.zeros(shape, dtype=torch.bool, device=self.device)
+            self._valid_mask_out if matches_preallocation else torch.zeros(shape, dtype=torch.bool, device=device)
         )
         return out_depth, out_mask
 
@@ -210,28 +213,57 @@ class FilterDepth:
         depth_out: Optional[torch.Tensor] = None,
         valid_mask_out: Optional[torch.Tensor] = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Filter a depth batch and return ``(float32_depth, bool_valid_mask)``."""
+        """Filter a depth image/batch and return depth plus a validity mask.
+
+        A 2-D input keeps its 2-D shape on return, including when caller-owned
+        2-D output buffers are supplied.  Batched callers retain the original
+        3-D behavior and buffer-reuse contract.
+        """
 
         if not isinstance(depth_image, torch.Tensor) or depth_image.dtype != torch.float32:
             raise TypeError("depth_image must be a float32 torch.Tensor")
-        if depth_image.ndim != 3:
-            raise ValueError("FilterDepth expects a batched depth tensor of shape (B, H, W)")
-        value = depth_image
+        if depth_image.ndim not in (2, 3):
+            raise ValueError("FilterDepth expects a depth tensor of shape (H, W) or (B, H, W)")
+        unbatched = depth_image.ndim == 2
+        caller_depth_out = depth_out
+        caller_valid_mask_out = valid_mask_out
+        if unbatched:
+            if depth_out is not None:
+                if not isinstance(depth_out, torch.Tensor) or depth_out.ndim != 2:
+                    raise ValueError("depth_out must have shape (H, W) for an unbatched input")
+                depth_out = depth_out.unsqueeze(0)
+            if valid_mask_out is not None:
+                if not isinstance(valid_mask_out, torch.Tensor) or valid_mask_out.ndim != 2:
+                    raise ValueError("valid_mask_out must have shape (H, W) for an unbatched input")
+                valid_mask_out = valid_mask_out.unsqueeze(0)
+            value = depth_image.unsqueeze(0)
+        else:
+            value = depth_image
         batch, height, width = value.shape
+        # Caller-owned buffers define the destination device.  This permits a
+        # CPU image/buffer lifecycle even when the filter was constructed with
+        # its CUDA-labelled default, while preserving configured MPS reuse for
+        # ordinary calls without external buffers.
+        target_device = depth_out.device if depth_out is not None else self.device
         if (height, width) != self.image_shape and (depth_out is not None or valid_mask_out is not None):
             # Dynamic shapes are allowed, but caller buffers must still describe
             # the actual call layout; _acquire_buffers gives the precise error.
             pass
         out_depth, out_mask = self._acquire_buffers(
-            batch, height, width, depth_out, valid_mask_out
+            batch, height, width, depth_out, valid_mask_out, target_device
         )
-        value = value.to(self.device)
+        value = value.to(target_device)
         range_valid = torch.isfinite(value) & (value >= self.config.depth_minimum_distance) & (value <= self.config.depth_maximum_distance)
         valid = range_valid & ~self._flying_mask(value, range_valid)
         filtered = self._bilateral(value, range_valid)
         filtered = torch.where(valid, filtered, torch.zeros_like(filtered))
         out_depth.copy_(filtered)
         out_mask.copy_(valid)
+        if unbatched:
+            return (
+                caller_depth_out if caller_depth_out is not None else out_depth.squeeze(0),
+                caller_valid_mask_out if caller_valid_mask_out is not None else out_mask.squeeze(0),
+            )
         return out_depth, out_mask
 
     def update_config(

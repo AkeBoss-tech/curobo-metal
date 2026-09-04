@@ -49,9 +49,9 @@ def test_mpc_factory_preserves_deceleration_and_command_rate():
     assert cfg.deceleration_time == pytest.approx(0.3)
     assert cfg.requested_use_cuda_graph and not cfg.use_cuda_graph
     assert cfg.clone(cold_start_optimization_num_iters=6).cold_start_optimization_num_iters == 6
-    assert MPCSolverCfg.create("franka.yml", interpolation_steps=3).interpolation_steps == 3
-    with pytest.raises(ValueError, match="deceleration_profile"):
-        cfg.clone(deceleration_profile="linear")
+    with pytest.raises(ValueError, match="Interpolation steps must be 4"):
+        MPCSolverCfg.create("franka.yml", interpolation_steps=8)
+    assert cfg.clone(deceleration_profile="linear").deceleration_profile == "linear"
     with pytest.raises(ValueError, match="warm_start_optimization_num_iters"):
         cfg.clone(warm_start_optimization_num_iters=0)
 

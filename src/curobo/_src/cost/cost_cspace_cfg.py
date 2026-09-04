@@ -26,6 +26,7 @@ from .portable import (
     CSpaceCostType,
     PositionCSpaceCost,
     StateCSpaceCost,
+    UnsupportedCostFeature,
 )
 
 
@@ -41,12 +42,14 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
     """
 
     def __post_init__(self) -> None:
-        if self.cost_type is None:
-            raise ValueError("specify cost type for bound cost")
-        if isinstance(self.activation_distance, float):
-            raise ValueError(
-                "activation_distance must be a list or tensor for cspace cost"
+        if self.retime_weights or self.retime_regularization_weights:
+            raise UnsupportedCostFeature(
+                "retime_weights and retime_regularization_weights require CUDA/Warp"
             )
+        # Match the portable base: callers that omit cost_type get POSITION,
+        # the only backwards-compatible interpretation of a scalar weight.
+        if self.cost_type is None:
+            self.cost_type = CSpaceCostType.POSITION
         # ``bool`` is an ``int`` in Python and accepting it as a degree of
         # freedom previously produced a confusing one-DOF target buffer.
         if isinstance(self.dof, bool) or not isinstance(self.dof, Integral):

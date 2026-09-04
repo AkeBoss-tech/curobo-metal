@@ -196,7 +196,9 @@ def test_world_replacement_propagates_to_attached_rollouts_and_clears_lifecycle_
     rollout = _RolloutProbe()
     core.metrics_rollout = rollout
     state = core.default_joint_state.unsqueeze(0)
-    core.prepare_goal_buffer(SolveState(SolveMode.SINGLE, 1, 1), None, current_state=state)
+    core.prepare_goal_buffer(
+        SolveState(SolveMode.SINGLE, 1, 1, num_seeds=1), None, current_state=state
+    )
     scene = SceneCfg(sphere=[Sphere("guard", position=[2.0, 0.0, 0.0], radius=0.1)])
 
     core.update_world(scene)

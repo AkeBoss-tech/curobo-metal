@@ -54,7 +54,8 @@ def jit_lsr1_compute_step_direction(
         raise ValueError("m must be a nonnegative integer")
     if epsilon <= 0:
         raise ValueError("epsilon must be positive")
-    del stable_mode
+    if not isinstance(stable_mode, bool) or not stable_mode:
+        raise ValueError("stable_mode must be true")
     if grad.ndim < 2:
         raise ValueError("grad must have a batch dimension and event dimensions")
     batch = grad.shape[0]

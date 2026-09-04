@@ -5,12 +5,12 @@ from collections.abc import Callable
 from typing import Any, Optional, Tuple, Union
 
 import torch
-from packaging import version
 
 from curobo._src.types.device_cfg import DeviceCfg
-from curobo._src.util.logging import log_debug, log_info
+from curobo._src.util.logging import log_info
 
 wp = None
+_warp_module = None
 cuda_debug_compile = False
 _portable_initialized = False
 
@@ -40,15 +40,34 @@ def init_warp(
     print_launches=False,
     device_cfg: DeviceCfg = DeviceCfg()
 ):
-    """Initialize the portable compatibility layer once.
+    """Initialize the optional Warp runtime when a usable build is present.
 
-    High-level modules call this as a process bootstrap even when their Metal
-    implementation uses only Torch tensors.  Successful initialization does
-    not claim that raw Warp kernels or CUDA stream interop are available.
+    Warp ships a CPU backend that is useful for the upstream compatibility
+    tests and for host-side helpers.  Metal tensors still cannot be passed to
+    Warp kernels, but that limitation belongs at the stream/kernel boundary,
+    not at process initialization.  In particular, CUDA-oriented test
+    fixtures call this helper before deciding whether CUDA is available; an
+    unavailable CUDA device must therefore not turn a later, intentional
+    pytest skip into a collection error.
     """
     del quiet, verbose, lineinfo, line_directives, print_launches, device_cfg
-    global _portable_initialized
+    global _warp_module, _portable_initialized
+    if _portable_initialized and _warp_module is not None:
+        return True
+    try:
+        import warp as warp_module
+    except ImportError as error:
+        raise ImportError("Warp is not installed") from error
+    # warp.init() is idempotent and uses the devices available in this build.
+    # Do not request the caller's CUDA/MPS device here: a CPU-only Warp wheel
+    # is still a valid initialization for high-level portable code.
+    warp_module.init()
+    # Keep ``wp`` as the portable declaration sentinel.  Several compatibility
+    # modules intentionally inspect it at import time and install lightweight
+    # decorators instead of asking Warp to compile CUDA-only struct types.
+    _warp_module = warp_module
     _portable_initialized = True
+    log_info("Warp initialized for portable host-side compatibility")
     return True
 
 
@@ -70,7 +89,19 @@ def warp_support_bvh_constructor_type(wp_module=None): return False if wp_module
 def get_warp_device_stream(
     tensor_or_device: Union[torch.Tensor, torch.device],
 ) -> Tuple[wp.Device, Optional[wp.Stream]]:
+    """Return a real Warp device for CPU tensors without hiding MPS gaps."""
     device = tensor_or_device.device if isinstance(tensor_or_device, torch.Tensor) else torch.device(tensor_or_device)
-    if device.type == "cuda":
-        raise NotImplementedError("Warp CUDA stream interop is unavailable on Metal")
-    return device, None
+    if device.type == "mps":
+        raise NotImplementedError("Warp stream interop is unavailable for MPS tensors")
+    if _warp_module is None:
+        init_warp(device_cfg=DeviceCfg(device=device))
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise NotImplementedError("Warp CUDA stream interop is unavailable on this build")
+    try:
+        # Warp's Python API accepts a string identifier (``"cpu"`` or
+        # ``"cuda:0"``), not a torch.device instance.
+        return _warp_module.get_device(str(device)), None
+    except Exception as error:
+        raise NotImplementedError(
+            f"Warp does not provide a usable {device} device"
+        ) from error

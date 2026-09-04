@@ -9,6 +9,7 @@ import copy
 import csv
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 import platform
@@ -167,11 +168,17 @@ def _run_module(
         "addopts=",
         "--import-mode=importlib",
         "--continue-on-collection-errors",
-        f"--timeout={PYTEST_CASE_TIMEOUT_SECONDS:g}",
-        "--timeout-method=signal",
         f"--junitxml={junit_path}",
         test_path,
     ]
+    # The outer process-group watchdog is authoritative and works in the
+    # clean wheel environment even when the optional pytest-timeout plugin is
+    # absent. Add the finer per-case guard only when that plugin is installed.
+    if importlib.util.find_spec("pytest_timeout") is not None:
+        command[command.index(f"--junitxml={junit_path}"):command.index(f"--junitxml={junit_path}")] = [
+            f"--timeout={PYTEST_CASE_TIMEOUT_SECONDS:g}",
+            "--timeout-method=signal",
+        ]
     started = time.monotonic()
     process = subprocess.Popen(
         command,
