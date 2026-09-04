@@ -52,8 +52,14 @@ def test_camera_projection_validation_lifecycle_and_serialization(tmp_path):
         camera.depth_image.detach().unsqueeze(0) * camera.depth_to_meter,
     )
 
-    copied = CameraObservation(name="target")
-    assert copied.copy_(camera) is copied
+    copied = CameraObservation(
+        name="target",
+        rgb_image=torch.empty_like(camera.rgb_image),
+        depth_image=torch.empty_like(camera.depth_image),
+        projection_rays=torch.empty_like(camera.projection_rays),
+        pose=camera.pose.clone(),
+    )
+    assert copied.copy_(camera) is None
     assert copied.name == "target"
     assert copied.depth_image.data_ptr() != camera.depth_image.data_ptr()
     detached = camera.detach()

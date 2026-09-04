@@ -231,11 +231,15 @@ class WorldCollision:
         voxel, voxel_gradient = self._voxel_clearance(values, environments)
         clearance = torch.stack((primitive, mesh, voxel), dim=-1)
         winning_clearance, winner = clearance.min(dim=-1)
+        # MPS may report ``-1`` as the argmin sentinel when every candidate is
+        # ``inf``.  The result is masked as invalid below, but gather must still
+        # receive an in-range index to avoid an asynchronous accelerator error.
+        safe_winner = winner.clamp_min(0)
         candidate_gradient = torch.stack(
             (primitive_gradient, mesh_gradient, voxel_gradient), dim=-2
         )
         world_gradient = candidate_gradient.gather(
-            -2, winner[..., None, None].expand(*winner.shape, 1, 3)
+            -2, safe_winner[..., None, None].expand(*safe_winner.shape, 1, 3)
         ).squeeze(-2)
         cost, gradient = sphere_world_collision(
             values,

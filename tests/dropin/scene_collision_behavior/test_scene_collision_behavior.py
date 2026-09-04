@@ -45,7 +45,7 @@ def test_multi_environment_world_update_and_collision_constraint() -> None:
     )
     checker = RobotSceneCollision(config)
     state = checker.get_kinematics(
-        checker.kinematics.default_joint_position.repeat(2, 1)
+        checker.kinematics.default_joint_position.repeat(2, 1)[:, None, :]
     )
     env = torch.tensor([0, 1], device=state.robot_spheres.device)
     constraint = checker.get_collision_constraint(state, env)
@@ -69,7 +69,9 @@ def test_robot_scene_query_stays_on_mps_without_cpu_fallback(monkeypatch) -> Non
         scene_model=_scene("world", 10.0), device_cfg=DeviceCfg(device="mps")
     )
     checker = RobotSceneCollision(config)
-    state = checker.get_kinematics(checker.kinematics.default_joint_position.unsqueeze(0))
+    state = checker.get_kinematics(
+        checker.kinematics.default_joint_position.reshape(1, 1, -1)
+    )
     distance, gradient = checker.get_collision_vector(state)
     assert distance.device.type == "mps"
     assert gradient.device.type == "mps"

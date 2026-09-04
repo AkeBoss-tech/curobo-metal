@@ -67,12 +67,12 @@ def test_create_accepts_materialized_values_and_preserves_optional_filter_absenc
 
 
 def test_transition_exposes_stable_schedule_and_rebuilds_public_batch_buffer():
-    transition = RobotStateTransition(_cfg(ControlSpace.VELOCITY, horizon=1))
+    transition = RobotStateTransition(_cfg(ControlSpace.ACCELERATION, horizon=1))
     assert transition.traj_dt.shape == (1,)
     assert transition.dt == pytest.approx(0.1)
     assert transition.state_seq.position.shape == (2, 1, 7)
     assert transition.joint_limits.dof == 7
-    assert transition.action_order == 1
+    assert transition.action_order == 2
     transition.update_batch_size(5)
     assert transition.state_seq.position.shape == (5, 1, 7)
     transition.update_traj_dt(torch.tensor([0.25]))
@@ -81,19 +81,19 @@ def test_transition_exposes_stable_schedule_and_rebuilds_public_batch_buffer():
 
 
 def test_integrate_action_uses_control_order_and_has_finite_gradients():
-    velocity = RobotStateTransition(_cfg(ControlSpace.VELOCITY))
     acceleration = RobotStateTransition(_cfg(ControlSpace.ACCELERATION))
     action = torch.ones(1, 3, 7, requires_grad=True)
-    velocity_result = velocity.integrate_action(action)
     acceleration_result = acceleration.integrate_action(action)
-    torch.testing.assert_close(velocity_result[0, :, 0], torch.tensor([0.1, 0.2, 0.3]))
     torch.testing.assert_close(acceleration_result[0, :, 0], torch.tensor([0.01, 0.03, 0.06]))
-    (velocity_result.square().sum() + acceleration_result.square().sum()).backward()
+    acceleration_result.square().sum().backward()
     assert action.grad is not None and torch.isfinite(action.grad).all()
+
+    with pytest.raises(ValueError, match="Velocity control space not implemented"):
+        RobotStateTransition(_cfg(ControlSpace.VELOCITY))
 
 
 def test_transition_rejects_wrong_rank_or_config_device():
-    transition = RobotStateTransition(_cfg(ControlSpace.VELOCITY))
+    transition = RobotStateTransition(_cfg(ControlSpace.ACCELERATION))
     state = JointState.from_position(torch.zeros(1, 7), joint_names=transition.joint_names)
     with pytest.raises(ValueError, match=r"\[batch, horizon, dof\]"):
         transition.forward(state, torch.zeros(4, 7))

@@ -309,8 +309,30 @@ class BlockSparseTSDF:
         native: Optional[PerceptionMapper] = None,
     ) -> None:
         if kernels is not None:
-            raise NotImplementedError("custom Warp block-sparse kernels are unavailable on CPU/MPS")
+            if not isinstance(kernels, BlockSparseKernels):
+                raise TypeError("kernels must be a BlockSparseKernels bundle")
+            # A prebuilt portable bundle is useful for callers that specialize
+            # block geometry up front.  Validate the same owned fields as the
+            # CUDA implementation before accepting it, so mismatched bundles
+            # cannot silently corrupt coordinate interpretation.
+            expected_origin = tuple(float(v) for v in config.origin.tolist())
+            checks = (
+                ("block_size", config.block_size, kernels.block_size),
+                ("grid_shape", tuple(config.grid_shape), kernels.grid_shape),
+                ("origin_xyz", expected_origin, kernels.origin_xyz),
+                ("voxel_size", float(config.voxel_size), kernels.voxel_size),
+                ("truncation_distance", float(config.truncation_distance), kernels.truncation_distance),
+                ("feature_channels_per_thread", config.feature_channels_per_thread, kernels.feature_channels_per_thread),
+            )
+            for name, expected_value, actual_value in checks:
+                if isinstance(expected_value, float):
+                    matches = math.isclose(expected_value, float(actual_value), rel_tol=1e-6, abs_tol=1e-8)
+                else:
+                    matches = expected_value == actual_value
+                if not matches:
+                    raise AssertionError(f"prebuilt kernels {name} does not match TSDF config")
         self.config = config
+        self.kernels = kernels or make_block_sparse_kernels(config)
         if native is not None and not isinstance(native, PerceptionMapper):
             raise TypeError("native must be a PerceptionMapper")
         expected = PerceptionConfig(

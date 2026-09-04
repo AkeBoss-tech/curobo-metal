@@ -15,11 +15,16 @@ from curobo._src.transition.fns_state_transition import (
     StateFromPositionTeleport, StateFromVelocity,
 )
 from curobo._src.types.control_space import ControlSpace
-from curobo._src.util.state_filter import JointStateFilter
 from curobo._src.util.cuda_stream_util import (
-    create_cuda_stream_pair, cuda_stream_context, synchronize_cuda_streams,
+    create_cuda_stream_pair,
+    cuda_stream_context,
+    synchronize_cuda_streams,
 )
+from curobo._src.util.state_filter import JointStateFilter
 from curobo._src.util.logging import log_and_raise, log_info
+
+if TYPE_CHECKING:
+    from curobo._src.transition.robot_state_transition_cfg import RobotStateTransitionCfg
 
 
 class _RobotStateTransitionPortableMixin:
@@ -35,6 +40,8 @@ class RobotStateTransition(_RobotStateTransitionPortableMixin):
         self.config = config
         if not hasattr(config, "robot_config") or not hasattr(config, "device_cfg"):
             raise TypeError("config must be a RobotStateTransitionCfg-compatible record")
+        if config.control_space == ControlSpace.VELOCITY:
+            log_and_raise("Velocity control space not implemented for RobotStateTransition")
         self.batch_size = config.batch_size
         self.interpolation_steps = config.interpolation_steps
         self._dt = config.device_cfg.to_device(

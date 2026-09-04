@@ -39,7 +39,7 @@ def test_tool_frames_and_batched_validation_preserve_batch_horizon_axes() -> Non
 def test_empty_world_resets_reusable_collision_gradient() -> None:
     checker = _checker(with_scene=False)
     spheres = checker.get_kinematics(
-        checker.kinematics.default_joint_position.unsqueeze(0)
+        checker.kinematics.default_joint_position.unsqueeze(0).unsqueeze(1)
     ).robot_spheres
     checker.setup_batch_tensors(1, 1)
     checker.collision_buffer.gradient.fill_(3.0)
@@ -53,7 +53,7 @@ def test_empty_world_resets_reusable_collision_gradient() -> None:
 def test_point_robot_distance_handles_single_and_batched_clouds() -> None:
     checker = _checker(with_scene=False)
     q = checker.kinematics.default_joint_position.unsqueeze(0)
-    spheres = checker.get_kinematics(q).robot_spheres.squeeze(1)
+    spheres = checker.get_kinematics(q.unsqueeze(1)).robot_spheres.squeeze(1)
     center = spheres[0, 0, :3]
     radius = spheres[0, 0, 3]
     points = torch.stack((center, center + torch.tensor([2.0, 0.0, 0.0])))
@@ -79,7 +79,7 @@ def test_point_robot_distance_handles_single_and_batched_clouds() -> None:
 def test_query_input_and_environment_validation_are_explicit() -> None:
     checker = _checker()
     spheres = checker.get_kinematics(
-        checker.kinematics.default_joint_position.unsqueeze(0)
+        checker.kinematics.default_joint_position.unsqueeze(0).unsqueeze(1)
     ).robot_spheres
     with pytest.raises(ValueError, match="env_query_idx"):
         checker.get_collision_distance(spheres, torch.tensor([[0]]))
@@ -87,6 +87,8 @@ def test_query_input_and_environment_validation_are_explicit() -> None:
         checker.get_collision_distance(spheres.to(torch.int64))
     with pytest.raises(ValueError, match="joint_position dof"):
         checker.validate(torch.zeros(1, checker.kinematics.dof + 1))
+    with pytest.raises(ValueError, match="\[batch, horizon, dof\]"):
+        checker.get_kinematics(torch.zeros(1, checker.kinematics.dof))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
@@ -97,7 +99,7 @@ def test_robot_scene_point_and_empty_world_queries_stay_on_mps(monkeypatch) -> N
     points = torch.zeros((4, 3), device="mps")
     value = checker.get_point_robot_distance(points, q)
     assert value.device.type == "mps"
-    state = checker.get_kinematics(q)
+    state = checker.get_kinematics(q.unsqueeze(1))
     distance, gradient = checker.get_collision_vector(state)
     assert distance.device.type == "mps"
     assert gradient.device.type == "mps"

@@ -86,9 +86,14 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         """Compute kinematics through the pinned public one-argument ABI."""
         if not isinstance(joint_position, torch.Tensor):
             raise TypeError("joint_position must be a torch.Tensor")
-        if joint_position.ndim not in (1, 2, 3):
+        # The pinned public method accepts trajectories only.  Keep the
+        # normalization in ``_get_kinematics`` for private portable callers,
+        # but reject convenience [dof] and [batch, dof] inputs here exactly
+        # as the upstream RobotSceneCollision contract does.
+        if joint_position.ndim != 3:
             raise ValueError(
-                "joint_position must have shape [dof], [batch,dof], or [batch,horizon,dof]"
+                "joint_position must have shape [batch, horizon, dof], "
+                f"got {tuple(joint_position.shape)}"
             )
         return self._get_kinematics(joint_position)
 
@@ -370,7 +375,10 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
             raise ValueError("points and q must share a device")
         if q.dtype != points.dtype:
             raise ValueError("points and q must share a dtype")
-        spheres = self.get_kinematics(q).robot_spheres.squeeze(1)
+        # ``get_kinematics`` deliberately enforces the pinned trajectory-only
+        # public ABI.  Point-cloud distance is an internal convenience path
+        # whose q contract is [batch, dof], so use the private normalizer.
+        spheres = self._get_kinematics(q).robot_spheres.squeeze(1)
         squeeze = points.ndim == 2
         query = points.unsqueeze(0) if squeeze else points
         if spheres.shape[0] not in (1, query.shape[0]):
@@ -394,7 +402,3 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
                 self.scene_model.load_collision_model(scene, environment)
         else:
             self.scene_model.load_collision_model(scene_cfg)
-
-    @property
-    def tool_frames(self):
-        return getattr(self.kinematics, "tool_frames", None)

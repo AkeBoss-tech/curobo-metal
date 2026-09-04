@@ -25,6 +25,7 @@ class Adaptation:
     availability_replacements: int
     availability_preserved: int
     helper_import_replacements: int
+    is_cuda_assertion_replacements: int
 
 
 def _dotted_name(node: ast.AST) -> str | None:
@@ -111,16 +112,91 @@ def _replace_spans(source: str, spans: list[tuple[int, int, int, int]]) -> str:
     return source
 
 
+def _is_cuda_attribute(node: ast.AST) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == "is_cuda"
+
+
+def _is_assertion_attribute(
+    node: ast.AST, parents: dict[ast.AST, ast.AST]
+) -> bool:
+    """Return whether an ``.is_cuda`` attribute belongs to an ``assert`` test."""
+
+    parent = parents.get(node)
+    while parent is not None:
+        if isinstance(parent, ast.Assert):
+            return any(candidate is node for candidate in ast.walk(parent.test))
+        # Do not reinterpret ordinary production/test expressions merely because
+        # they happen to be nested in a function that also contains an assert.
+        if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return False
+        parent = parents.get(parent)
+    return False
+
+
+def _is_cuda_assertion_spans(
+    source: str,
+) -> list[tuple[int, int, int, int, str]]:
+    """Return exact ``.is_cuda`` spans nested in assertion expressions.
+
+    The adapter intentionally does not rewrite arbitrary CUDA predicates or
+    production code.  These are only device-residency assertions in tests whose
+    CUDA device literals and availability gates have already been substituted
+    for MPS.
+    """
+
+    tree = ast.parse(source)
+    parents: dict[ast.AST, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+    spans = []
+    for node in ast.walk(tree):
+        if not _is_cuda_attribute(node) or not _is_assertion_attribute(node, parents):
+            continue
+        segment = ast.get_source_segment(source, node)
+        if not segment or not segment.endswith(".is_cuda"):
+            raise ValueError("unexpected source span for CUDA residency assertion")
+        spans.append((node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, segment))
+    return spans
+
+
+def _replace_is_cuda_assertions(
+    source: str,
+    spans: list[tuple[int, int, int, int, str]],
+) -> str:
+    lines = source.splitlines(keepends=True)
+    offsets = []
+    running = 0
+    for line in lines:
+        offsets.append(running)
+        running += len(line)
+    replacements = []
+    for start_line, start_col, end_line, end_col, segment in spans:
+        start = offsets[start_line - 1] + start_col
+        end = offsets[end_line - 1] + end_col
+        if source[start:end] != segment or not segment.endswith(".is_cuda"):
+            raise ValueError("unexpected source span for CUDA residency assertion")
+        base = segment[: -len(".is_cuda")]
+        # Parenthesize the replacement so compound assertions such as
+        # ``assert value.is_cuda is True`` retain their original precedence.
+        replacements.append((start, end, f"({base}.device.type == 'mps')"))
+    for start, end, replacement in sorted(replacements, reverse=True):
+        source = source[:start] + replacement + source[end:]
+    return source
+
+
 def adapt_source(
     source: str,
     *,
     adapt_availability: bool = True,
     preserve_availability_scopes: frozenset[str] = frozenset(),
 ) -> Adaptation:
-    """Replace device literals and availability gates without renaming CUDA APIs.
+    """Replace portable device gates and their exact residency assertions.
 
     CUDA graph, stream, event, and Warp APIs are intentionally untouched: those
     need case-level mechanism review rather than a broad textual substitution.
+    ``adapt_availability=False`` is the conftest mode and also leaves CUDA
+    residency assertions untouched because that file's CUDA guard is intentional.
     """
 
     output = []
@@ -154,10 +230,16 @@ def adapt_source(
         availability_count = len(spans)
         availability_preserved = total - availability_count
         adapted = _replace_spans(adapted, spans)
+    is_cuda_assertion_count = 0
+    if adapt_availability:
+        is_cuda_assertion_spans = _is_cuda_assertion_spans(adapted)
+        is_cuda_assertion_count = len(is_cuda_assertion_spans)
+        adapted = _replace_is_cuda_assertions(adapted, is_cuda_assertion_spans)
     return Adaptation(
         adapted,
         device_count,
         availability_count,
         availability_preserved,
         helper_import_count,
+        is_cuda_assertion_count,
     )

@@ -359,7 +359,13 @@ def query_esdf(
     masked = torch.where(candidates, sampled.values, torch.full_like(sampled.values, torch.inf))
     distance, winner = masked.min(-1)
     valid = torch.isfinite(distance)
-    gradient = sampled.gradients.gather(-2, winner[..., None, None].expand(*winner.shape, 1, 3)).squeeze(-2)
+    # Metal may use ``-1`` as the reduction index when every candidate is
+    # infinite.  Preserve that sentinel in the public result, but gather from
+    # a safe row before masking the invalid gradient to zero.
+    safe_winner = winner.clamp_min(0)
+    gradient = sampled.gradients.gather(
+        -2, safe_winner[..., None, None].expand(*safe_winner.shape, 1, 3)
+    ).squeeze(-2)
     return ESDFQueryResult(
         torch.where(valid, distance - padding, distance),
         torch.where(valid[..., None], gradient, torch.zeros_like(gradient)),

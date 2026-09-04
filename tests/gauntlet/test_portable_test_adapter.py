@@ -29,6 +29,7 @@ def test_conftest_mode_keeps_cuda_seed_guard_but_adapts_fixture_devices() -> Non
     assert "torch.cuda.is_available()" in result.source
     assert result.availability_replacements == 0
     assert result.availability_preserved == 0
+    assert result.is_cuda_assertion_replacements == 0
 
 
 def test_redirects_pinned_unshipped_helper_import() -> None:
@@ -129,6 +130,22 @@ class TestCudaGraph:
     assert "torch.cuda.is_available()" in result.source
     assert result.availability_replacements == 0
     assert result.availability_preserved == 1
+
+
+def test_adapts_only_assertion_scoped_cuda_residency_checks() -> None:
+    source = '''
+value = tensor.is_cuda
+assert result.success.is_cuda
+assert not cloned.solution.is_cuda
+assert result.success.is_cuda, tensor.is_cuda
+'''
+    result = adapt_source(source)
+    assert "value = tensor.is_cuda" in result.source
+    assert "assert (result.success.device.type == 'mps')" in result.source
+    assert "assert not (cloned.solution.device.type == 'mps')" in result.source
+    assert "assert (result.success.device.type == 'mps'), tensor.is_cuda" in result.source
+    assert result.is_cuda_assertion_replacements == 3
+    compile(result.source, "<adapted>", "exec")
 
 
 def test_policy_forbids_assertion_tolerance_and_cuda_api_rewrites() -> None:

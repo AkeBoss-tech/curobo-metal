@@ -372,21 +372,38 @@ class StateCSpaceCost(PositionCSpaceCost):
         # State bounds are evaluated for every available state component.
         self.validate_input(state_batch)
         q = state_batch.position
+        dt = state_batch.dt
+        if dt is None:
+            dt = self._dt
+        dt = torch.as_tensor(dt, device=q.device, dtype=q.dtype)
+        while dt.ndim < q.ndim:
+            dt = dt.unsqueeze(-1)
         value = _limit_penalty(q, getattr(self.config.joint_limits, "position", None),
                                self.config.activation_distance[0], _term_weight(self.config, 0, q))
         for index, name in enumerate(("velocity", "acceleration", "jerk"), start=1):
             tensor = getattr(state_batch, name)
             if tensor is not None:
                 limit = getattr(self.config.joint_limits, name, None)
+                bound_weight = _term_weight(self.config, index, tensor)
+                regularization_weight = self.config.squared_l2_regularization_weight[
+                    index - 1
+                ].to(tensor)
+                if self.config.retime_weights:
+                    bound_weight = bound_weight * dt.pow(index)
+                if self.config.retime_regularization_weights:
+                    regularization_weight = regularization_weight * dt.pow(index)
                 value = value + _limit_penalty(tensor, limit, self.config.activation_distance[index],
-                                               _term_weight(self.config, index, tensor))
-                value = value + 0.5 * self.config.squared_l2_regularization_weight[index - 1].to(tensor) * tensor.square()
+                                               bound_weight)
+                value = value + 0.5 * regularization_weight * tensor.square()
         if joint_torque is not None:
             value = value + _limit_penalty(joint_torque, getattr(self.config.joint_limits, "effort", None),
                                            self.config.activation_distance[4], _term_weight(self.config, 4, joint_torque))
             value = value + 0.5 * self.config.squared_l2_regularization_weight[3].to(joint_torque) * joint_torque.square()
             if state_batch.velocity is not None:
-                value = value + self.config.squared_l2_regularization_weight[4].to(joint_torque) * (joint_torque * state_batch.velocity * torch.as_tensor(self._dt, device=q.device, dtype=q.dtype)[..., None]).abs()
+                power_weight = self.config.squared_l2_regularization_weight[4].to(joint_torque)
+                if self.config.retime_regularization_weights:
+                    power_weight = power_weight * dt
+                value = value + power_weight * (joint_torque * state_batch.velocity * dt).abs()
         # cuRobo V2 convention: reduce per-DOF costs to a single scalar per
         # (batch, horizon) step, yielding shape [batch, horizon, 1].
         value = value.sum(-1, keepdim=True)

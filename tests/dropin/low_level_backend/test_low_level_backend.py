@@ -54,6 +54,16 @@ def test_portable_backend_and_explicit_native_boundaries(tmp_path: Path):
     assert init_warp() is True
 
 
+def test_warp_module_preserves_pinned_logging_and_version_exports():
+    from packaging import version
+
+    from curobo._src.util import warp
+    from curobo._src.util.logging import log_debug
+
+    assert warp.log_debug is log_debug
+    assert warp.version is version
+
+
 def test_graph_executor_is_direct_and_shape_stable(tmp_path: Path):
     from curobo._src.util.cuda_graph_util import create_graph_executor
 

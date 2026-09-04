@@ -11,7 +11,6 @@ from curobo._src.cost.cost_cspace_cfg import CSpaceCostCfg
 from curobo._src.cost.cost_cspace_position import PositionCSpaceCost
 from curobo._src.cost.cost_cspace_state import StateCSpaceCost
 from curobo._src.cost.cost_cspace_type import CSpaceCostType
-from curobo._src.cost.portable import UnsupportedCostFeature
 from curobo._src.robot.types.joint_limits import JointLimits
 from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
@@ -84,12 +83,12 @@ def test_invalid_configuration_values_fail_at_construction(kwargs, message: str)
         CSpaceCostCfg(**values)
 
 
-def test_retiming_is_an_explicit_cuda_warp_boundary() -> None:
-    with pytest.raises(UnsupportedCostFeature, match="CUDA/Warp"):
-        CSpaceCostCfg(
-            weight=[1.0, 1.0], activation_distance=[0.0, 0.0],
-            cost_type=CSpaceCostType.POSITION, dof=2, retime_weights=True,
-        )
+def test_retiming_flags_match_the_pinned_configuration_contract() -> None:
+    cfg = CSpaceCostCfg(
+        weight=[1.0, 1.0], activation_distance=[0.0, 0.0],
+        cost_type=CSpaceCostType.POSITION, dof=2, retime_weights=True,
+    )
+    assert cfg.retime_weights is True
 
 
 @dataclass

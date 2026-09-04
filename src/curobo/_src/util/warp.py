@@ -5,9 +5,10 @@ from collections.abc import Callable
 from typing import Any, Optional, Tuple, Union
 
 import torch
+from packaging import version
 
 from curobo._src.types.device_cfg import DeviceCfg
-from curobo._src.util.logging import log_info
+from curobo._src.util.logging import log_debug, log_info
 
 wp = None
 _warp_module = None
@@ -67,6 +68,7 @@ def init_warp(
     # decorators instead of asking Warp to compile CUDA-only struct types.
     _warp_module = warp_module
     _portable_initialized = True
+    log_debug(f"Warp initialized - Version: {warp_module.config.version}")
     log_info("Warp initialized for portable host-side compatibility")
     return True
 
@@ -77,8 +79,7 @@ def _version_of(module):
 
 
 def _at_least(module, minimum):
-    from packaging.version import Version
-    return Version(_version_of(module)) >= Version(minimum)
+    return version.parse(_version_of(module)) >= version.parse(minimum)
 
 
 def warp_support_sdf_struct(wp_module=None): return False if wp_module is None else _at_least(wp_module, "1.0.0")

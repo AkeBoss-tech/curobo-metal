@@ -281,28 +281,35 @@ class CameraObservation:
 
     @record_function("camera/copy_")
     def copy_(self, new_data: CameraObservation):
-        """Deep-copy every available source field into this observation."""
+        """Copy source data into fields already allocated by this observation.
+
+        This intentionally follows the pinned cuRobo behavior: ``copy_`` is
+        an in-place operation over destination-owned buffers.  In particular,
+        a destination field that is ``None`` is not implicitly allocated from
+        the source, and camera intrinsics are metadata owned by the existing
+        destination rather than copied here.
+        """
         if not isinstance(new_data, CameraObservation):
             raise TypeError("new_data must be a CameraObservation")
-        for field in _TENSOR_FIELDS:
-            source, target = getattr(new_data, field), getattr(self, field)
-            if source is None:
-                setattr(self, field, None)
-            elif target is None:
-                setattr(self, field, source.clone())
-            elif target.shape != source.shape or target.dtype != source.dtype or target.device != source.device:
-                raise ValueError(f"cannot copy {field} into a destination with different shape, dtype, or device")
-            else:
-                target.copy_(source)
-        if new_data.pose is None:
-            self.pose = None
-        elif self.pose is None:
-            self.pose = new_data.pose.clone()
-        else:
+        for field in (
+            "rgb_image", "depth_image", "image_segmentation",
+            "projection_matrix", "projection_rays", "timestamp",
+        ):
+            target = getattr(self, field)
+            if target is not None:
+                source = getattr(new_data, field)
+                if source is None:
+                    target.copy_(source)
+                elif target.shape != source.shape or target.dtype != source.dtype or target.device != source.device:
+                    raise ValueError(f"cannot copy {field} into a destination with different shape, dtype, or device")
+                else:
+                    target.copy_(source)
+        if self.pose is not None:
             self.pose.copy_(new_data.pose)
+        if self.feature_grid is not None and new_data.feature_grid is not None:
+            self.feature_grid.copy_(new_data.feature_grid)
         self.depth_to_meter = new_data.depth_to_meter
-        self.resolution = None if new_data.resolution is None else list(new_data.resolution)
-        return self
+        self.resolution = new_data.resolution
 
     @record_function("camera/clone")
     def clone(self):

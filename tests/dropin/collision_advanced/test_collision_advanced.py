@@ -110,7 +110,7 @@ def test_robot_scene_config_sampling_and_queries():
     samples = collision.sample(3)
     assert samples.shape == (3, 7)
     assert collision.validate(samples).shape == (3,)
-    state = collision.get_kinematics(samples)
+    state = collision.get_kinematics(samples[:, None, :])
     assert collision.get_collision_distance(state).shape[:2] == (3, 1)
     assert collision.get_self_collision(state).shape == (3, 1)
     distance, gradient = collision.get_collision_vector(state)

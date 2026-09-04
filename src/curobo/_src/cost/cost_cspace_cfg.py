@@ -26,7 +26,6 @@ from .portable import (
     CSpaceCostType,
     PositionCSpaceCost,
     StateCSpaceCost,
-    UnsupportedCostFeature,
 )
 
 
@@ -37,15 +36,11 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
     by composed PyTorch.  A missing ``cost_type`` retains the early portable
     shim's scalar-position convenience for existing applications, but new
     callers should always choose :class:`CSpaceCostType` explicitly as the
-    pinned CUDA API requires.  CUDA/Warp weight-retiming kernels are not part
-    of the portable evaluator and requests for them fail at construction.
+    pinned CUDA API requires.  State-cost weight retiming is implemented by
+    the portable Torch evaluator using the same time-step powers as upstream.
     """
 
     def __post_init__(self) -> None:
-        if self.retime_weights or self.retime_regularization_weights:
-            raise UnsupportedCostFeature(
-                "retime_weights and retime_regularization_weights require CUDA/Warp"
-            )
         # Match the portable base: callers that omit cost_type get POSITION,
         # the only backwards-compatible interpretation of a scalar weight.
         if self.cost_type is None:

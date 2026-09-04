@@ -19,10 +19,11 @@
       "Replace an exact Python string literal equal to cuda with mps.",
       "Replace an exact Python string literal equal to cuda:0 with mps:0.",
       "Replace an exact torch.cuda.is_available() gate with torch.backends.mps.is_available() in test modules.",
+      "Replace an assertion-scoped Tensor.is_cuda residency check with an exact device.type == 'mps' check after device substitution.",
       "Redirect an exact import of an unshipped pinned-upstream example helper to an identically sourced non-shadowing staged helper module."
     ],
     "forbidden": [
-      "Changing assertions, tolerances, test parameters, or expected values.",
+      "Changing assertions, tolerances, test parameters, or expected values except the exact assertion-scoped Tensor.is_cuda residency adaptation permitted above.",
       "Renaming or emulating CUDA graph, CUDA stream, CUDA event, or Warp APIs.",
       "Adding skip or xfail markers outside a reviewed case-level mechanism exclusion."
     ]
@@ -149,52 +150,8 @@
       "reason": "The factory case asserts CUDA Graph executor creation for evolution strategies, a CUDA-only runtime mechanism with no MPS object to substitute."
     },
     {
-      "case_pattern": "curobo.tests._src.solver.seed_ik.test_seed_ik_state::tests._src.solver.seed_ik.test_seed_ik_state.TestSeedIKStateDeviceHandling::test_clone_preserves_device",
-      "reason": "The availability adapter selects MPS but the assertion still inspects Tensor.is_cuda; cloning preserves the MPS device correctly, while an MPS tensor cannot truthfully report CUDA storage."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.seed_ik.test_seed_ik_state::tests._src.solver.seed_ik.test_seed_ik_state.TestSeedIKStateDeviceHandling::test_cuda_tensors",
-      "reason": "The availability adapter selects MPS but the assertion still inspects Tensor.is_cuda; the state tensors are resident on MPS and cannot truthfully report CUDA storage."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.seed_ik.test_seed_iteration_state_manager::tests._src.solver.seed_ik.test_seed_iteration_state_manager.TestSeedIterationStateManagerCUDA::test_trust_region_ratio_cuda",
-      "reason": "The trust-ratio calculation executes on MPS and returns an MPS tensor, but the adapted CUDA-specific oracle still asserts Tensor.is_cuda."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_manager_seed::tests._src.solver.test_manager_seed.TestSeedManagerCUDA::test_generate_random_actions_cuda",
-      "reason": "Random seed generation executes on MPS with correct shapes and bounds; only the unchanged CUDA-specific Tensor.is_cuda assertion is impossible on Metal."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_manager_seed::tests._src.solver.test_manager_seed.TestSeedManagerCUDA::test_prepare_action_seeds_cuda",
-      "reason": "Action-seed preparation executes on MPS with the expected device and layout; only the unchanged CUDA-specific Tensor.is_cuda assertion is impossible on Metal."
-    },
-    {
       "case_pattern": "curobo.tests._src.solver.test_solver_base_cfg::tests._src.solver.test_solver_base_cfg.TestSolverCfgCUDAGraph::test_cuda_graph_enabled",
       "reason": "The case asserts that CUDA Graph capture is enabled. MPS has no CUDA Graph mechanism; the requested flag is retained separately while eager solver execution remains active."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_solver_base_result::tests._src.solver.test_solver_base_result.TestBaseSolverResultDeviceHandling::test_clone_preserves_device",
-      "reason": "Result cloning preserves MPS residency, but the availability-adapted CUDA oracle still asserts Tensor.is_cuda, which cannot be true for an MPS tensor."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_solver_base_result::tests._src.solver.test_solver_base_result.TestBaseSolverResultDeviceHandling::test_cuda_tensors",
-      "reason": "The result stores the supplied tensors on MPS; the remaining assertion specifically requires CUDA storage through Tensor.is_cuda."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_solver_mpc_result::tests._src.solver.test_solver_mpc_result.TestMPCSolverResultDeviceHandling::test_clone_preserves_device",
-      "reason": "MPC result cloning preserves MPS residency, but the availability-adapted CUDA oracle still asserts Tensor.is_cuda."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_solver_mpc_result::tests._src.solver.test_solver_mpc_result.TestMPCSolverResultDeviceHandling::test_cuda_tensors",
-      "reason": "The MPC result tensors are resident on MPS; the sole distinguishing assertion requires CUDA storage via Tensor.is_cuda."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_solver_trajopt_result::tests._src.solver.test_solver_trajopt_result.TestTrajOptSolverResultDeviceHandling::test_clone_preserves_device",
-      "reason": "TrajOpt result cloning preserves MPS residency, but the availability-adapted CUDA oracle still asserts Tensor.is_cuda."
-    },
-    {
-      "case_pattern": "curobo.tests._src.solver.test_solver_trajopt_result::tests._src.solver.test_solver_trajopt_result.TestTrajOptSolverResultDeviceHandling::test_cuda_tensors",
-      "reason": "The TrajOpt result tensors are resident on MPS; the sole distinguishing assertion requires CUDA storage via Tensor.is_cuda."
     },
     {
       "case_pattern": "curobo.tests._src.types.test_camera::tests._src.types.test_camera.TestCameraObservation::test_filter_depth_preserves_dtype",

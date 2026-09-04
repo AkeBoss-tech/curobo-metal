@@ -104,6 +104,24 @@ def test_voxel_esdf_routing() -> None:
     assert result.valid.item()
 
 
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_mps_all_infinite_candidates_do_not_produce_negative_gather_index() -> None:
+    device = torch.device("mps")
+    world = WorldCollision(WorldCollisionConfig(voxel_cache=VoxelCacheConfig(1)))
+    grid = VoxelGrid(
+        torch.zeros((2, 2, 2), device=device),
+        1.0,
+        torch.zeros(3, device=device),
+        torch.eye(3, device=device),
+        99.0,
+    )
+    world.voxel_cache.update(0, 0, grid)
+    spheres = torch.tensor([[100.0, 100.0, 100.0, 0.1]], device=device)
+    result = world.get_sphere_distance(spheres)
+    torch.testing.assert_close(result.distance, torch.zeros_like(result.distance))
+    torch.testing.assert_close(result.gradient, torch.zeros_like(result.gradient))
+
+
 def test_fallback_disabled_is_explicit_for_unsupported_cache_device() -> None:
     world = WorldCollision(WorldCollisionConfig(
         primitive_cache=PrimitiveCacheConfig(1), allow_cpu_fallback=False

@@ -382,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
             "availability_replacements": conftest_adaptation.availability_replacements,
             "availability_preserved": conftest_adaptation.availability_preserved,
             "helper_import_replacements": conftest_adaptation.helper_import_replacements,
+            "is_cuda_assertion_replacements": conftest_adaptation.is_cuda_assertion_replacements,
         }
         adaptation_records = {
             "conftest.py": {
@@ -390,6 +391,7 @@ def main(argv: list[str] | None = None) -> int:
                 "availability_replacements": conftest_adaptation.availability_replacements,
                 "availability_preserved": conftest_adaptation.availability_preserved,
                 "helper_import_replacements": conftest_adaptation.helper_import_replacements,
+                "is_cuda_assertion_replacements": conftest_adaptation.is_cuda_assertion_replacements,
             }
         }
         for relative in paths:
@@ -414,6 +416,9 @@ def main(argv: list[str] | None = None) -> int:
             adaptation_counts["helper_import_replacements"] += (
                 adaptation.helper_import_replacements
             )
+            adaptation_counts["is_cuda_assertion_replacements"] += (
+                adaptation.is_cuda_assertion_replacements
+            )
             source_hashes[module] = _sha256(source)
             adaptation_records[module] = {
                 "adapted_sha256": _sha256(destination),
@@ -421,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
                 "availability_replacements": adaptation.availability_replacements,
                 "availability_preserved": adaptation.availability_preserved,
                 "helper_import_replacements": adaptation.helper_import_replacements,
+                "is_cuda_assertion_replacements": adaptation.is_cuda_assertion_replacements,
             }
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
@@ -460,7 +466,8 @@ def main(argv: list[str] | None = None) -> int:
         "portable_adapter": {
             "scope": (
                 "exact device string literals, torch.cuda.is_available gates, and "
-                "pinned unshipped test-helper imports"
+                "pinned unshipped test-helper imports; assertion-scoped Tensor.is_cuda "
+                "residency checks"
             ),
             "source_sha256": _sha256(Path(__file__).with_name("portable_test_adapter.py")),
             "records": adaptation_records,

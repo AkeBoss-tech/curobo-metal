@@ -81,10 +81,8 @@ def test_transition_augments_kinematics_and_dynamics_and_commands():
 
 
 def test_velocity_facade_bounds_and_action_mean():
-    transition = _transition(ControlSpace.VELOCITY)
-    assert transition.get_init_action_mean().shape == (5, 7)
-    torch.testing.assert_close(transition.get_init_action_mean(), torch.zeros(5, 7))
-    assert transition.action_bound_highs.shape == (7,)
+    with pytest.raises(ValueError, match="[Vv]elocity.*not implemented"):
+        _transition(ControlSpace.VELOCITY)
 
 
 def test_transition_uses_joint_limit_bounds_and_keeps_command_lifecycle_separate():
@@ -106,39 +104,24 @@ def test_transition_uses_joint_limit_bounds_and_keeps_command_lifecycle_separate
 
 
 def test_transition_updates_schedule_and_validates_action_layout():
-    transition = _transition(ControlSpace.VELOCITY)
-    transition.update_traj_dt(torch.full((5,), 0.2))
-    state = JointState.from_position(torch.zeros(1, 7), joint_names=transition.joint_names)
-    action = torch.ones(1, 5, 7, requires_grad=True)
-    output = transition.forward(state, action)
-    torch.testing.assert_close(output.joint_state.position[0, 0], torch.full((7,), 0.2))
-    torch.testing.assert_close(output.joint_state.position[0, -1], torch.ones(7))
-    output.joint_state.position.sum().backward()
-    assert action.grad is not None and torch.isfinite(action.grad).all()
-    with pytest.raises(ValueError, match="same dtype"):
-        transition.forward(state, action.detach().double())
+    with pytest.raises(ValueError, match="[Vv]elocity.*not implemented"):
+        _transition(ControlSpace.VELOCITY)
 
 
 def test_filtered_multi_step_command_returns_each_command_state():
     kin = KinematicsCfg.from_robot_yaml_file("franka.yml")
     params = kin.kinematics_config
     robot = RobotCfg(params.robot_cfg)
-    transition = RobotStateTransition(RobotStateTransitionCfg(
-        robot_config=robot,
-        dt_traj_params=TimeTrajCfg(0.1, 1.0, 0.1),
-        device_cfg=DeviceCfg(),
-        batch_size=1,
-        horizon=4,
-        control_space=ControlSpace.VELOCITY,
-        state_filter_cfg=FilterCfg(FilterCoeff(), 0.1, ControlSpace.VELOCITY),
-    ))
-    state = JointState.from_position(torch.zeros(1, 7), joint_names=transition.joint_names)
-    action = torch.ones(1, 4, 7)
-    command = transition.get_robot_command(state, action, shift_steps=3)
-    # The pinned helper stacks command entries along its existing leading
-    # state axis, yielding [shift_steps, dof] for a single state row.
-    assert command.position.shape == (3, 7)
-    torch.testing.assert_close(command.position[:, 0], torch.tensor([0.1, 0.2, 0.3]))
+    with pytest.raises(ValueError, match="[Vv]elocity.*not implemented"):
+        RobotStateTransition(RobotStateTransitionCfg(
+            robot_config=robot,
+            dt_traj_params=TimeTrajCfg(0.1, 1.0, 0.1),
+            device_cfg=DeviceCfg(),
+            batch_size=1,
+            horizon=4,
+            control_space=ControlSpace.VELOCITY,
+            state_filter_cfg=FilterCfg(FilterCoeff(), 0.1, ControlSpace.VELOCITY),
+        ))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
@@ -158,21 +141,12 @@ def test_transition_facade_mps_command_and_rollout(monkeypatch):
     device = DeviceCfg(torch.device("mps"))
     kin = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=device)
     robot = RobotCfg(kin.kinematics_config)
-    transition = RobotStateTransition(RobotStateTransitionCfg(
-        robot_config=robot,
-        dt_traj_params=TimeTrajCfg(0.05, 1.0, 0.05),
-        device_cfg=device,
-        batch_size=1,
-        horizon=4,
-        control_space=ControlSpace.VELOCITY,
-    ))
-    state = JointState.from_position(
-        transition.default_joint_position.unsqueeze(0), joint_names=transition.joint_names
-    )
-    action = torch.full((2, 4, 7), 0.01, device="mps", requires_grad=True)
-    rollout = transition.forward(state, action)
-    command = transition.get_state_from_action(state, action)
-    assert rollout.joint_state.position.device.type == "mps"
-    assert command.position.device.type == "mps"
-    (rollout.joint_state.position.square().sum() + command.position.square().sum()).backward()
-    assert action.grad is not None and torch.isfinite(action.grad).all()
+    with pytest.raises(ValueError, match="[Vv]elocity.*not implemented"):
+        RobotStateTransition(RobotStateTransitionCfg(
+            robot_config=robot,
+            dt_traj_params=TimeTrajCfg(0.05, 1.0, 0.05),
+            device_cfg=device,
+            batch_size=1,
+            horizon=4,
+            control_space=ControlSpace.VELOCITY,
+        ))
