@@ -39,8 +39,63 @@ def test_mapper_validates_observation_aliases_without_mutating_state():
         mapper.integrate(camera, observation=camera)
     with pytest.raises(TypeError, match="requires a camera"):
         mapper.integrate()
-    with pytest.raises(NotImplementedError, match="LiDAR"):
+    with pytest.raises(ValueError, match="lidar_num_sensors"):
         mapper.integrate(lidar_observation=LidarObservation(range_image=torch.ones((2, 2))))
+    assert torch.equal(mapper._mapper.state.generation, generation)
+
+
+def _lidar_mapper(device="cpu"):
+    return Mapper(MapperCfg(
+        (3.0, 3.0, 1.0), voxel_size=0.1, block_size=4,
+        grid_center=torch.zeros(3), device=device,
+        lidar_num_sensors=1, lidar_image_height=1, lidar_image_width=32,
+    ))
+
+
+def _lidar(device="cpu"):
+    return LidarObservation(
+        range_image=torch.ones((1, 1, 32), device=device),
+        rgb_image=torch.full((1, 1, 32, 3), 64, dtype=torch.uint8, device=device),
+        pose=Pose(
+            position=torch.zeros((1, 3), device=device),
+            quaternion=torch.tensor([[1.0, 0.0, 0.0, 0.0]], device=device),
+        ),
+        valid_range_m=torch.tensor([[0.1, 2.0]], device=device),
+        elevation_range_rad=torch.zeros((1, 2), device=device),
+    )
+
+
+@pytest.mark.parametrize("device", [
+    "cpu",
+    pytest.param(
+        "mps", marks=pytest.mark.skipif(
+            not torch.backends.mps.is_available(), reason="MPS unavailable"
+        )
+    ),
+])
+def test_mapper_integrates_planar_lidar_into_dense_and_sparse_geometry(device):
+    mapper = _lidar_mapper(device)
+    mapper.integrate(_lidar(device))
+    stats = mapper.get_stats()
+    assert stats["frame_count"] == 1
+    assert stats["observed_voxels"] > 0
+    assert stats["active_blocks"] > 0
+    assert stats["last_lidar_integration"]["num_visible_blocks"] > 0
+    sparse = mapper._portable_sparse.data.block_data
+    assert bool((sparse[..., 1] > 0).any().item())
+    assert not mapper.is_esdf_current
+    mapper.compute_esdf()
+    assert mapper.is_esdf_current
+
+
+def test_mapper_rejects_mismatched_lidar_shape_without_mutating_state():
+    mapper = _lidar_mapper()
+    generation = mapper._mapper.state.generation.clone()
+    bad = _lidar()
+    bad.range_image = bad.range_image[..., :-1]
+    bad.rgb_image = bad.rgb_image[..., :-1, :]
+    with pytest.raises(ValueError, match="shape mismatch"):
+        mapper.integrate(bad)
     assert torch.equal(mapper._mapper.state.generation, generation)
 
 

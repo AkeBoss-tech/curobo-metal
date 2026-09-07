@@ -19,6 +19,9 @@ def test_wheel_requires_both_license_documents_and_rejects_leaks() -> None:
     wheel = Path("curobo_metal-0.1.0a1-py3-none-any.whl")
     valid = [
         "curobo/__init__.py",
+        "curobo/types/math.py",
+        "curobo/wrap/reacher/motion_gen.py",
+        "curobo_metal/ops/perception/core.py",
         "curobo_metal-0.1.0a1.dist-info/licenses/LICENSE",
         "curobo_metal-0.1.0a1.dist-info/licenses/THIRD_PARTY_NOTICES.md",
     ]

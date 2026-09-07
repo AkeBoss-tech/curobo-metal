@@ -11,6 +11,7 @@ from .core import (
     TriangleMesh,
     dense_esdf,
     integrate_depth,
+    integrate_lidar,
     extract_mesh,
     render_depth,
     sparse_blocks,
@@ -20,6 +21,6 @@ from .core import (
 __all__ = [
     "CameraObservation", "DenseMap", "PerceptionConfig", "PerceptionMapper",
     "PoseRefinementResult", "RenderResult", "SparseTSDF", "TriangleMesh",
-    "dense_esdf", "integrate_depth", "extract_mesh", "render_depth",
+    "dense_esdf", "integrate_depth", "integrate_lidar", "extract_mesh", "render_depth",
     "sparse_blocks", "voxel_centers",
 ]

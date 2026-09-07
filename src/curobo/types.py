@@ -1,5 +1,9 @@
 """Common CUDA-free data types matching pinned cuRobo's public module."""
 
+from pathlib import Path
+
+__path__ = [str(Path(__file__).with_suffix(""))]
+
 from curobo._src.state.state_joint import JointState
 from curobo._src.state.state_robot import RobotState
 from curobo._src.types.camera import CameraObservation

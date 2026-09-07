@@ -33,7 +33,7 @@ from curobo._src.types.pose import Pose
 from curobo._src.util.logging import deprecated, log_and_raise
 from curobo_metal.ops.perception import CameraObservation as NativeObservation
 from curobo_metal.ops.perception import PerceptionConfig, PerceptionMapper
-from curobo_metal.ops.perception.core import DenseMap, dense_esdf
+from curobo_metal.ops.perception.core import DenseMap, dense_esdf, integrate_lidar
 from .renderer import depth_to_colormap, normals_to_colormap
 
 # Imported lazily by the real CUDA implementation.  Keeping the names here
@@ -88,8 +88,6 @@ class Mapper:
     def __init__(self, config: MapperCfg):
         self.config = config
         _validate_dense_mapper_budget(config)
-        if config.lidar_num_sensors:
-            raise NotImplementedError("MapperCfg.lidar_num_sensors requires CUDA/Warp LiDAR integration")
         center = (0.0,0.0,0.0) if config.grid_center is None else tuple(torch.as_tensor(config.grid_center).tolist())
         native = PerceptionConfig(
             config.native_grid_shape, config.voxel_size, center,
@@ -198,9 +196,29 @@ class Mapper:
                 (config.max_blocks,), -1, device=self.device, dtype=torch.int32
             ),
         )
+        lidar_integrator = None
+        if config.lidar_num_sensors:
+            lidar_capacity = config.max_visible_blocks_per_lidar_integration or config.max_blocks
+            lidar_integrator = SimpleNamespace(
+                max_visible_blocks_per_lidar_integration=lidar_capacity,
+                max_support_pixels_per_block_lidar=config.max_support_pixels_per_block_lidar,
+                visible_count=torch.zeros(1, device=self.device, dtype=torch.int32),
+                pool_indices=torch.zeros(lidar_capacity, device=self.device, dtype=torch.int32),
+                support_counts=torch.zeros(
+                    (lidar_capacity, config.lidar_num_sensors),
+                    device=self.device, dtype=torch.int32,
+                ),
+                support_pixels=torch.zeros(
+                    (lidar_capacity, config.lidar_num_sensors,
+                     config.max_support_pixels_per_block_lidar),
+                    device=self.device, dtype=torch.int32,
+                ),
+                support_overflow_count=torch.zeros(1, device=self.device, dtype=torch.int32),
+            )
         self._tsdf_integrator = SimpleNamespace(
             config=config,
             _camera_integrator=camera_integrator,
+            _lidar_integrator=lidar_integrator,
         )
 
     @property
@@ -309,7 +327,11 @@ class Mapper:
             lidar_observation=lidar_observation,
         )
         if lidar_observation is not None:
-            raise NotImplementedError("portable Mapper LiDAR integration requires CUDA/Warp")
+            self._integrate_lidar(
+                lidar_observation, advance_frame=camera_observation is None
+            )
+            if camera_observation is None:
+                return
         obs = camera_observation
         if obs.depth_image is None or obs.intrinsics is None or obs.pose is None:
             raise ValueError("camera observation requires depth_image, intrinsics, and pose")
@@ -364,6 +386,91 @@ class Mapper:
             {"portable_depth_fusion": 0.0}
             if self.config.profile_integration_kernel_timings
             else {}
+        )
+        self._invalidate_esdf_cache()
+
+    def _integrate_lidar(
+        self, observation: LidarObservation, *, advance_frame: bool = True
+    ) -> None:
+        """Integrate a calibrated LiDAR range image through portable PyTorch."""
+        if self.config.lidar_num_sensors <= 0:
+            raise ValueError(
+                "LidarObservation was provided but lidar_num_sensors == 0; "
+                "enable LiDAR integration in MapperCfg"
+            )
+        observation.validate(
+            require_range=True, require_rgb=True, require_pose=True,
+            require_calibration=True,
+        )
+        assert observation.range_image is not None
+        assert observation.rgb_image is not None
+        assert observation.pose is not None
+        assert observation.valid_range_m is not None
+        assert observation.elevation_range_rad is not None
+        expected = (
+            self.config.lidar_num_sensors,
+            self.config.lidar_image_height,
+            self.config.lidar_image_width,
+        )
+        if tuple(observation.range_image.shape) != expected:
+            raise ValueError(
+                f"range_image shape mismatch: expected {expected}, "
+                f"got {tuple(observation.range_image.shape)}"
+            )
+        dtype = self._mapper.state.tsdf.dtype
+        ranges = observation.range_image.to(self.device, dtype=dtype)
+        valid_range = observation.valid_range_m.to(self.device, dtype=dtype)
+        elevation = observation.elevation_range_rad.to(self.device, dtype=dtype)
+        pose = observation.pose.to(device=self.device)
+        matrices = pose.get_matrix().to(self.device, dtype=dtype)
+        portable_observation = LidarObservation(
+            name=observation.name,
+            range_image=ranges,
+            rgb_image=observation.rgb_image.to(self.device),
+            feature_grid=(None if observation.feature_grid is None else
+                          observation.feature_grid.to(self.device)),
+            pose=pose,
+            valid_range_m=valid_range,
+            elevation_range_rad=elevation,
+            timestamp=(None if observation.timestamp is None else
+                       observation.timestamp.to(self.device)),
+        )
+        has_static = bool(self._static_mask.any().item())
+        if has_static:
+            self._strip_static_layer(rebuild_esdf=False)
+        self._mapper.state = integrate_lidar(
+            self._mapper.config, self._mapper.state, ranges, matrices,
+            valid_range, elevation,
+        )
+        if self.config.decay_factor < 1.0:
+            self._portable_sparse.decay_and_recycle(self.config.decay_factor)
+        visible_blocks = self._portable_sparse.integrate_lidar(
+            portable_observation,
+            visible_capacity=self.config.max_visible_blocks_per_lidar_integration,
+        )
+        if has_static:
+            self._apply_static_layer()
+        if advance_frame:
+            self._frame_count += 1
+        valid_pixels = portable_observation.valid_mask()
+        support_overflow = max(
+            0,
+            int(valid_pixels.sum().item())
+            - visible_blocks * self.config.max_support_pixels_per_block_lidar,
+        ) if visible_blocks else 0
+        lidar_integrator = self._tsdf_integrator._lidar_integrator
+        if lidar_integrator is not None:
+            lidar_integrator.visible_count.fill_(visible_blocks)
+            lidar_integrator.support_overflow_count.fill_(support_overflow)
+        self._last_lidar_integration = {
+            "num_visible_blocks": visible_blocks,
+            "support_overflow_count": support_overflow,
+            "implementation": "dense_and_sparse_pytorch",
+        }
+        self._last_integration = dict(self._last_lidar_integration)
+        self._last_integration_kernel_timings_ms = (
+            {"portable_lidar_fusion": 0.0}
+            if self.config.profile_integration_kernel_timings else {}
         )
         self._invalidate_esdf_cache()
 
@@ -672,6 +779,8 @@ class Mapper:
         self._frame_count = 0
         self._esdf_compute_count = 0
         self._last_integration.update(num_visible_blocks=0, support_overflow_count=0)
+        if hasattr(self, "_last_lidar_integration"):
+            del self._last_lidar_integration
         self._last_integration_kernel_timings_ms = {}
         self._invalidate_esdf_cache()
 
@@ -792,6 +901,8 @@ class Mapper:
             "last_integration": dict(self._last_integration),
             "last_integration_kernel_timings_ms": dict(self._last_integration_kernel_timings_ms),
         })
+        if hasattr(self, "_last_lidar_integration"):
+            stats["last_lidar_integration"] = dict(self._last_lidar_integration)
         return stats
 
     def memory_usage_mb(self) -> float:

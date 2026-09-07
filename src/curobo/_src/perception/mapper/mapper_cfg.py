@@ -11,6 +11,7 @@ from curobo._src.perception.mapper.constants import (
     _validate_feature_block_grid_size,
     _validate_feature_channels_per_thread,
     _validate_feature_grid_shape,
+    _validate_lidar_config,
 )
 from curobo._src.util.logging import log_and_raise
 
@@ -124,6 +125,21 @@ class MapperCfg:
             raise ValueError("feature and camera support capacities must be positive")
         if self.lidar_num_sensors < 0 or self.max_support_pixels_per_block_lidar <= 0:
             raise ValueError("lidar_num_sensors must be nonnegative and lidar support capacity positive")
+        _validate_lidar_config(
+            self.lidar_num_sensors, self.lidar_image_height, self.lidar_image_width,
+            self.lidar_feature_grid_height, self.lidar_feature_grid_width,
+            self.feature_dim,
+            self.lidar_linear_interpolation_max_allowable_difference_vox,
+            self.lidar_nearest_interpolation_max_allowable_dist_to_ray_vox,
+            self.max_support_pixels_per_block_lidar,
+        )
+        if self.lidar_num_sensors > 0:
+            if self.max_visible_blocks_per_lidar_integration is None:
+                self.max_visible_blocks_per_lidar_integration = self.max_blocks
+            if not 0 < self.max_visible_blocks_per_lidar_integration <= self.max_blocks:
+                raise ValueError("max_visible_blocks_per_lidar_integration must be within max_blocks")
+        elif self.max_visible_blocks_per_lidar_integration is not None:
+            raise ValueError("max_visible_blocks_per_lidar_integration requires lidar_num_sensors > 0")
         if self.extent_esdf_meters_xyz is not None:
             if len(self.extent_esdf_meters_xyz) != 3 or any(not math.isfinite(float(x)) or x <= 0 for x in self.extent_esdf_meters_xyz):
                 raise ValueError("extent_esdf_meters_xyz must contain three finite positive values")

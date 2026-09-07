@@ -1,7 +1,6 @@
 import importlib
 import inspect
 
-import pytest
 import torch
 
 
@@ -25,8 +24,10 @@ def test_public_types_are_a_module_at_the_pinned_layout() -> None:
         "ContentPath",
         "DeviceCfg",
     ]
-    with pytest.raises(ModuleNotFoundError, match="not a package"):
-        importlib.import_module("curobo.types.math")
+    legacy_math = importlib.import_module("curobo.types.math")
+    legacy_base = importlib.import_module("curobo.types.base")
+    assert legacy_math.Pose is types.Pose
+    assert legacy_base.DeviceCfg is types.DeviceCfg
 
 
 def test_internal_pinned_import_paths() -> None:

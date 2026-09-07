@@ -100,10 +100,52 @@ def _validate_lidar_config(
     lidar_nearest_interpolation_max_allowable_dist_to_ray_vox: float,
     max_support_pixels_per_block_lidar: int,
 ) -> None:
+    if not isinstance(lidar_num_sensors, int) or isinstance(lidar_num_sensors, bool):
+        log_and_raise("lidar_num_sensors must be a plain int")
     if lidar_num_sensors < 0:
         log_and_raise("lidar_num_sensors must be >= 0.")
-    if lidar_num_sensors:
-        raise NotImplementedError("lidar mapping is unavailable in the portable mapper")
+    if not isinstance(max_support_pixels_per_block_lidar, int) or isinstance(
+        max_support_pixels_per_block_lidar, bool
+    ) or max_support_pixels_per_block_lidar <= 0:
+        log_and_raise("max_support_pixels_per_block_lidar must be a positive plain int")
+    if lidar_linear_interpolation_max_allowable_difference_vox <= 0.0:
+        log_and_raise("lidar_linear_interpolation_max_allowable_difference_vox must be positive")
+    if lidar_nearest_interpolation_max_allowable_dist_to_ray_vox <= 0.0:
+        log_and_raise("lidar_nearest_interpolation_max_allowable_dist_to_ray_vox must be positive")
+    image_height_set = lidar_image_height is not None
+    image_width_set = lidar_image_width is not None
+    feature_height_set = lidar_feature_grid_height is not None
+    feature_width_set = lidar_feature_grid_width is not None
+    if lidar_num_sensors == 0:
+        if image_height_set or image_width_set:
+            log_and_raise("lidar_image_height/lidar_image_width require lidar_num_sensors > 0.")
+        if feature_height_set or feature_width_set:
+            log_and_raise("lidar feature-grid dimensions require lidar_num_sensors > 0.")
+        return
+    if image_height_set != image_width_set:
+        log_and_raise("lidar_image_height and lidar_image_width must be specified together.")
+    if not image_height_set:
+        log_and_raise("lidar_num_sensors > 0 requires lidar_image_height and lidar_image_width.")
+    if not isinstance(lidar_image_height, int) or isinstance(lidar_image_height, bool):
+        log_and_raise("lidar_image_height must be a plain int")
+    if not isinstance(lidar_image_width, int) or isinstance(lidar_image_width, bool):
+        log_and_raise("lidar_image_width must be a plain int")
+    if lidar_image_height <= 0 or lidar_image_width <= 0:
+        log_and_raise("lidar image dimensions must be positive")
+    if feature_height_set != feature_width_set:
+        log_and_raise("lidar_feature_grid_height and lidar_feature_grid_width must be specified together.")
+    if feature_dim == 0:
+        if feature_height_set:
+            log_and_raise("lidar feature-grid dimensions require feature_dim > 0.")
+        return
+    if not feature_height_set:
+        log_and_raise("feature_dim > 0 with LiDAR requires lidar feature-grid dimensions.")
+    if not isinstance(lidar_feature_grid_height, int) or isinstance(lidar_feature_grid_height, bool):
+        log_and_raise("lidar_feature_grid_height must be a plain int")
+    if not isinstance(lidar_feature_grid_width, int) or isinstance(lidar_feature_grid_width, bool):
+        log_and_raise("lidar_feature_grid_width must be a plain int")
+    if lidar_feature_grid_height <= 0 or lidar_feature_grid_width <= 0:
+        log_and_raise("lidar feature-grid dimensions must be positive")
 
 
 def _validate_feature_integration_kernel(feature_integration_kernel: str) -> None:

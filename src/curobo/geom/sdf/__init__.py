@@ -1,0 +1,2 @@
+"""Compatibility scene-collision package."""
+

@@ -1,0 +1,1455 @@
+{
+  "corpus_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "results": [
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.cost.cost_base.BaseCost",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.cost.cost_base_cfg.BaseCostCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "INTERNAL",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.geom.collision.buffer_collision.CollisionBuffer",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.geom.collision.collision_scene.create_scene_collision",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "INTERNAL"
+      ],
+      "error": null,
+      "identifier": "curobo._src.geom.sphere_fit.SphereFitType",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "INTERNAL",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.geom.sphere_fit.fit_spheres.fit_spheres_to_mesh",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "INTERNAL"
+      ],
+      "error": null,
+      "identifier": "curobo._src.geom.sphere_fit.fit_spheres_to_mesh",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "INTERNAL",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.geom.sphere_fit.types.SphereFitType",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.graph_planner.graph_planner_prm.PRMGraphPlanner",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.graph_planner.graph_planner_prm_cfg.PRMGraphPlannerCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.optim.external.scipy_opt.ScipyOpt",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.optim.external.scipy_opt.ScipyOptCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.optim.gradient.lbfgs.LBFGSOpt",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.optim.gradient.lbfgs.LBFGSOptCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.optim.multi_stage_optimizer.MultiStageOptimizer",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.optim.particle.mppi.MPPI",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.optim.particle.mppi.MPPICfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.perception.mapper.mapper.Mapper",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.perception.mapper.mapper_cfg.MapperCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.rollout.goal_registry.GoalRegistry",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.rollout.rollout_protocol.Rollout",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.rollout.rollout_robot.RobotRollout",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.rollout.rollout_rosenbrock.RosenbrockCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.rollout.rollout_rosenbrock.RosenbrockRollout",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "INTERNAL",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.runtime",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.state.state_joint.JointState",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.types.camera.CameraObservation",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "INTERNAL",
+        "PUBLIC_DOCUMENTED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.types.device_cfg.DeviceCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.types.lidar.LidarObservation",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.types.pose.Pose",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "INTERNAL",
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo._src.util.logging.log_warn",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.config_io.join_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.config_io.load_yaml",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.content.get_assets_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.content.get_robot_configs_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.cuda_robot_model.cuda_robot_model.CudaRobotModel",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.cuda_robot_model.cuda_robot_model.CudaRobotModelConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.examples.getting_started.volumetric_mapping.Sun3dDataset",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.sdf.utils.create_collision_checker",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.sdf.world.CollisionCheckerType",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.sdf.world.WorldCollisionConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.sdf.world.WorldConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.sdf.world.WorldPrimitiveCollision",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_DOCUMENTED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.sphere_fit.SphereFitType",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_DOCUMENTED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.sphere_fit.fit_spheres_to_mesh",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.transform.pose_multiply",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.transform.quaternion_to_matrix",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_DOCUMENTED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.Capsule",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.Cuboid",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.Cylinder",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.Mesh",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.Obstacle",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.Sphere",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_DOCUMENTED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.WorldCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.geom.types.WorldConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.inverse_kinematics.InverseKinematics",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.inverse_kinematics.InverseKinematicsCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.kinematics.Kinematics",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.kinematics.KinematicsCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.logging.log_warn",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.logging.setup_logger",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.model_predictive_control.ModelPredictiveControl",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.model_predictive_control.ModelPredictiveControlCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.motion_planner.MotionPlanner",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.motion_planner.MotionPlannerCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.motion_retargeter.MotionRetargeter",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.motion_retargeter.MotionRetargeterCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.motion_retargeter.RetargetResult",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.motion_retargeter.SequenceGoalToolPose",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.EvolutionStrategies",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.EvolutionStrategiesCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.LBFGSOpt",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.LBFGSOptCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.MPPI",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.MPPICfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.MultiStageOptimizer",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.ScipyOpt",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.ScipyOptCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.TorchOpt",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.optim.TorchOptCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.DetectorCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.FilterDepth",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.Mapper",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.MapperCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.PoseDetector",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.RobotMesh",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.SDFDetectorCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.perception.SDFPoseDetector",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.profiling.CudaEventTimer",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.robot_builder.RobotBuilder",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.robot_parser.UrdfRobotParser",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.RosenbrockCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.RosenbrockRollout",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.arm_base.ArmBase",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.arm_base.ArmBaseConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.arm_reacher.ArmReacher",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.arm_reacher.ArmReacherConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.bound_cost.BoundCost",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.bound_cost.BoundCostConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.bound_cost.BoundCostType",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.pose_cost.PoseCostMetric",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.primitive_collision_cost.PrimitiveCollisionCost",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.primitive_collision_cost.PrimitiveCollisionCostConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.self_collision_cost.SelfCollisionCost",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.cost.self_collision_cost.SelfCollisionCostConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.rollout_base.Goal",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.rollout_base.RolloutBase",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.rollout.rollout_base.RolloutMetrics",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED",
+        "UPSTREAM_TEST_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.runtime",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.scene.Cuboid",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.scene.Mesh",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.scene.Scene",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.scene.SceneData",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.scene.Sphere",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.scene.VoxelGrid",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.sphere_fit.SphereFitType",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.sphere_fit.estimate_sphere_count",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.sphere_fit.fit_spheres_to_mesh",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.CameraObservation",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.ContentPath",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.DeviceCfg",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.GoalToolPose",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED",
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.JointState",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.Pose",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.ToolPoseCriteria",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.base.TensorDeviceType",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.math.Pose",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.robot.JointState",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.robot.RobotConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.types.state.JointState",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.logger",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.logger.log_error",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.logger.log_warn",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.logger.setup_curobo_logger",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.logger.setup_logger",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.metrics.CuroboGroupMetrics",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.metrics.CuroboMetrics",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.save_helper.SaveHelper",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util.world_cfg_generator.get_world_config_dataloader",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_assets_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_filename",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_manip_configs_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_output_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_path_of_dir",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_robot_configs_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_robot_list",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_robot_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_task_configs_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.get_world_configs_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.join_path",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.load_json",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.load_yaml",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.write_json",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.util_file.write_yaml",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.viewer.UsdWriter",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "PUBLIC_EXAMPLE_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.viewer.ViserVisualizer",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.model.robot_world.RobotWorld",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.model.robot_world.RobotWorldConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.grasp_solver.GraspSolver",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.grasp_solver.GraspSolverConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.ik_solver.IKSolver",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.ik_solver.IKSolverConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.motion_gen.MotionGen",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.motion_gen.MotionGenConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.motion_gen.MotionGenPlanConfig",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.motion_gen.MotionGenResult",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.motion_gen.PoseCostMetric",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.types.ReacherSolveState",
+      "status": "resolved"
+    },
+    {
+      "classifications": [
+        "ECOSYSTEM_USED"
+      ],
+      "error": null,
+      "identifier": "curobo.wrap.reacher.types.ReacherSolveType",
+      "status": "resolved"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "resolved": 171,
+    "targets": 171,
+    "unresolved": 0
+  }
+}

@@ -319,6 +319,114 @@ def integrate_depth(
     return DenseMap(tsdf, weight, occupancy, esdf, gradient, generation)
 
 
+def integrate_lidar(
+    config: PerceptionConfig,
+    state: DenseMap,
+    range_image: torch.Tensor,
+    lidar_to_world: torch.Tensor,
+    valid_range_m: torch.Tensor,
+    elevation_range_rad: torch.Tensor,
+) -> DenseMap:
+    """Fuse spherical LiDAR range images into a dense TSDF on CPU or MPS.
+
+    The projection follows cuRobo's range-image convention: columns span
+    ``[-pi, pi)`` and row zero is the maximum elevation.  Nearest-pixel
+    sampling is deterministic and keeps the observable one-sided TSDF update
+    used by the CUDA implementation.
+    """
+    ranges = _float_tensor(range_image, "range_image")
+    poses = _float_tensor(lidar_to_world, "lidar_to_world")
+    valid_ranges = _float_tensor(valid_range_m, "valid_range_m")
+    elevations = _float_tensor(elevation_range_rad, "elevation_range_rad")
+    if ranges.ndim != 3:
+        raise ValueError("range_image must have shape [num_lidars,H,W]")
+    sensors, height, width = ranges.shape
+    if sensors < 1 or height < 1 or width < 1:
+        raise ValueError("range_image dimensions must be positive")
+    if poses.ndim == 2:
+        poses = poses.unsqueeze(0)
+    if tuple(poses.shape) != (sensors, 4, 4):
+        raise ValueError("lidar_to_world must have shape [num_lidars,4,4]")
+    if tuple(valid_ranges.shape) != (sensors, 2):
+        raise ValueError("valid_range_m must have shape [num_lidars,2]")
+    if tuple(elevations.shape) != (sensors, 2):
+        raise ValueError("elevation_range_rad must have shape [num_lidars,2]")
+    tensors = (poses, valid_ranges, elevations)
+    if any(value.device != ranges.device for value in tensors):
+        raise ValueError("LiDAR tensors must share a device")
+    if any(value.dtype != ranges.dtype for value in tensors):
+        raise TypeError("LiDAR tensors must share a dtype")
+    if state.tsdf.device != ranges.device or state.tsdf.dtype != ranges.dtype:
+        raise ValueError("state and LiDAR observation must share device and dtype")
+    if bool((valid_ranges[:, 0] > valid_ranges[:, 1]).any().item()):
+        raise ValueError("valid_range_m must contain [minimum, maximum]")
+    if bool((elevations[:, 0] > elevations[:, 1]).any().item()):
+        raise ValueError("elevation_range_rad must contain [minimum, maximum]")
+    if height == 1 and not bool(torch.allclose(elevations[:, 0], elevations[:, 1])):
+        raise ValueError("planar LiDAR requires equal elevation_range_rad bounds")
+
+    centers = voxel_centers(config, device=ranges.device, dtype=ranges.dtype).reshape(-1, 3)
+    voxel_count = len(centers)
+    old_weight = state.weight.reshape(config.environments, voxel_count)
+    accum = state.tsdf.reshape(config.environments, voxel_count) * old_weight
+    added_weight = torch.zeros_like(accum)
+    tiny = torch.finfo(ranges.dtype).tiny
+    for sensor in range(sensors):
+        transform = poses[sensor]
+        local = (centers - transform[:3, 3]) @ transform[:3, :3]
+        radius = torch.linalg.vector_norm(local, dim=-1)
+        xy_radius = torch.linalg.vector_norm(local[:, :2], dim=-1)
+        azimuth = torch.atan2(local[:, 1], local[:, 0])
+        u_float = (azimuth + torch.pi) * (width / (2.0 * torch.pi))
+        u = torch.round(u_float).to(torch.int64).remainder(width)
+        elevation = torch.atan2(local[:, 2], xy_radius)
+        minimum, maximum = elevations[sensor]
+        if height == 1:
+            v = torch.zeros_like(u)
+            in_elevation = (
+                (elevation - minimum).abs()
+                <= config.voxel_size / radius.clamp_min(tiny)
+            )
+        else:
+            v_float = (maximum - elevation) * ((height - 1) / (maximum - minimum))
+            v = torch.round(v_float).to(torch.int64)
+            in_elevation = (elevation >= minimum) & (elevation <= maximum)
+        linear = v.clamp(0, height - 1) * width + u
+        sampled = ranges[sensor].reshape(-1)[linear]
+        valid = (
+            torch.isfinite(sampled)
+            & (sampled >= valid_ranges[sensor, 0])
+            & (sampled <= valid_ranges[sensor, 1])
+            & in_elevation
+        )
+        sdf = sampled - radius
+        valid &= sdf >= -config.truncation_distance
+        normalized = (sdf / config.truncation_distance).clamp(-1.0, 1.0)
+        contribution = torch.where(valid, normalized, torch.zeros_like(normalized))
+        weight = valid.to(ranges.dtype)
+        accum = accum + contribution.unsqueeze(0)
+        added_weight = added_weight + weight.unsqueeze(0)
+
+    raw_weight = old_weight + added_weight
+    scale = torch.where(
+        raw_weight > config.max_weight,
+        config.max_weight / raw_weight.clamp_min(tiny),
+        torch.ones_like(raw_weight),
+    )
+    weight = (raw_weight * scale).reshape(state.weight.shape)
+    tsdf = torch.where(
+        raw_weight > 0,
+        accum * scale / (raw_weight * scale).clamp_min(tiny),
+        torch.ones_like(accum),
+    ).clamp(-1.0, 1.0).reshape(state.tsdf.shape)
+    occupancy = (weight > 0) & (tsdf <= config.occupancy_threshold)
+    esdf, gradient = dense_esdf(
+        occupancy, config.voxel_size, config.unobserved_esdf, dtype=ranges.dtype
+    )
+    generation = state.generation + (added_weight.sum(-1) > 0).to(torch.int64)
+    return DenseMap(tsdf, weight, occupancy, esdf, gradient, generation)
+
+
 def sparse_blocks(state: DenseMap, block_size: int = 8) -> SparseTSDF:
     """Pack observed blocks in lexicographic order with deterministic padding."""
     if not isinstance(block_size, int) or block_size < 1:

@@ -6,9 +6,12 @@ on:
 
 jobs:
   api-inventory:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - name: Check pinned cuRobo API inventory
         run: |
           upstream_dir="$(mktemp -d)/curobo"
@@ -35,7 +38,7 @@ jobs:
             --require-exact-exports
 
   cpu:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     strategy:
       fail-fast: false
       matrix:
@@ -50,6 +53,12 @@ jobs:
           enable-cache: true
       - run: uv sync --python "${{ matrix.python-version }}" --extra test
       - run: PYTHONPATH=.:src PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
+      - name: Require the real-world API corpus to resolve
+        if: matrix.python-version == '3.13'
+        run: |
+          PYTHONPATH=src .venv/bin/python tools/api_compat/ecosystem_gate.py \
+            --corpus artifacts/api_compat/ecosystem-api.json \
+            --output "$RUNNER_TEMP/ecosystem-gate.json"
       - name: Test installed wheel namespace and assets
         run: |
           uv build --wheel --out-dir dist
@@ -74,7 +83,7 @@ jobs:
             --output "$RUNNER_TEMP/application-compat-cpu"
 
   macos:
-    runs-on: macos-14
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal, mps]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -118,7 +127,7 @@ jobs:
           path: ${{ runner.temp }}/application-compat-mps
 
   distributions:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

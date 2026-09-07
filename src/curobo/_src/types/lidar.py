@@ -194,7 +194,7 @@ class LidarObservation(_LidarObservationPortableMixin):
         else:
             interpolation = torch.linspace(0.0, 1.0, height, device=self.range_image.device,
                                            dtype=self.range_image.dtype)[None]
-            elevation = self.elevation_range_rad[:, :1] + interpolation * (
+            elevation = self.elevation_range_rad[:, 1:] - interpolation * (
                 self.elevation_range_rad[:, 1:] - self.elevation_range_rad[:, :1]
             )
         cos_elevation = torch.cos(elevation)[:, :, None]

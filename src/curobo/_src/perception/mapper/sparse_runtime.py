@@ -300,6 +300,7 @@ class PortableSparseTSDF:
         *,
         visible_capacity: int | None = None,
         depth_observation: Any | None = None,
+        lidar_observation: Any | None = None,
     ) -> int:
         """Allocate candidate blocks and fuse compact geometry/appearance grids."""
         new: list[int] = []
@@ -329,14 +330,16 @@ class PortableSparseTSDF:
                 f"num_visible_blocks={len(touched)} exceeds "
                 f"max_visible_blocks_per_integration={visible_capacity}"
             )
-        if depth_observation is None:
+        if depth_observation is not None:
+            self._integrate_depth_values(index, depth_observation)
+        elif lidar_observation is not None:
+            self._integrate_lidar_values(index, lidar_observation)
+        else:
             values = self.data.block_data[index]
             values[..., 0] += 0.5
             values[..., 1] += 1.0
             values.clamp_(max=float(self.config.accumulator_w_max))
             self.data.block_data[index] = values
-        else:
-            self._integrate_depth_values(index, depth_observation)
 
         if rgb is not None:
             samples = rgb.detach().to(device="cpu", dtype=torch.float32)
@@ -463,6 +466,85 @@ class PortableSparseTSDF:
             depth_observation=observation,
         )
 
+    def _integrate_lidar_values(self, pool_indices: torch.Tensor, observation: Any) -> None:
+        """Fuse spherical LiDAR ranges into selected sparse block voxels."""
+        pools = pool_indices.detach().to("cpu", dtype=torch.long)
+        block_coords = self.data.block_coords.view(-1, 3)[pools].to("cpu", torch.float32)
+        block_size = int(self.config.block_size)
+        voxel_size = float(self.config.voxel_size)
+        local_axis = (torch.arange(block_size, dtype=torch.float32) + 0.5) * voxel_size
+        local = torch.stack(
+            torch.meshgrid(local_axis, local_axis, local_axis, indexing="ij"), dim=-1
+        ).reshape(-1, 3)
+        blocks = torch.tensor(
+            [math.ceil(int(self.config.grid_shape[2]) / block_size),
+             math.ceil(int(self.config.grid_shape[1]) / block_size),
+             math.ceil(int(self.config.grid_shape[0]) / block_size)], dtype=torch.float32
+        )
+        block_offset = torch.floor(blocks * 0.5)
+        grid_xyz = torch.tensor(
+            [int(self.config.grid_shape[2]), int(self.config.grid_shape[1]),
+             int(self.config.grid_shape[0])], dtype=torch.float32
+        )
+        map_lower = self.data.origin.detach().to("cpu", torch.float32) - grid_xyz * voxel_size * 0.5
+        base = map_lower + (block_coords + block_offset) * (block_size * voxel_size)
+        world = base[:, None, :] + local[None, :, :]
+
+        ranges = observation.range_image.detach().to("cpu", torch.float32)
+        valid_ranges = observation.valid_range_m.detach().to("cpu", torch.float32)
+        elevations = observation.elevation_range_rad.detach().to("cpu", torch.float32)
+        matrices = observation.pose.get_matrix().detach().to("cpu", torch.float32)
+        if matrices.ndim == 2:
+            matrices = matrices.unsqueeze(0)
+        added_sum = torch.zeros(world.shape[:-1], dtype=torch.float32)
+        added_weight = torch.zeros_like(added_sum)
+        height, width = ranges.shape[-2:]
+        for sensor in range(ranges.shape[0]):
+            matrix = matrices[sensor]
+            local_points = (world - matrix[:3, 3]) @ matrix[:3, :3]
+            radius = torch.linalg.vector_norm(local_points, dim=-1)
+            xy_radius = torch.linalg.vector_norm(local_points[..., :2], dim=-1)
+            azimuth = torch.atan2(local_points[..., 1], local_points[..., 0])
+            px = torch.round((azimuth + math.pi) * (width / (2.0 * math.pi))).long().remainder(width)
+            elevation = torch.atan2(local_points[..., 2], xy_radius)
+            minimum, maximum = elevations[sensor]
+            if height == 1:
+                py = torch.zeros_like(px)
+                in_elevation = (
+                    (elevation - minimum).abs()
+                    <= voxel_size / radius.clamp_min(torch.finfo(torch.float32).tiny)
+                )
+            else:
+                py = torch.round(
+                    (maximum - elevation) * ((height - 1) / (maximum - minimum))
+                ).long()
+                in_elevation = (elevation >= minimum) & (elevation <= maximum)
+            sampled = ranges[sensor].reshape(-1)[py.clamp(0, height - 1) * width + px]
+            valid = (
+                torch.isfinite(sampled)
+                & (sampled >= valid_ranges[sensor, 0])
+                & (sampled <= valid_ranges[sensor, 1])
+                & in_elevation
+            )
+            sdf = sampled - radius
+            valid &= sdf >= -float(self.config.truncation_distance)
+            normalized = (sdf / float(self.config.truncation_distance)).clamp(-1.0, 1.0)
+            added_sum += torch.where(valid, normalized, torch.zeros_like(normalized))
+            added_weight += valid.to(torch.float32)
+
+        current = self.data.block_data[pool_indices].float()
+        total_sum = current[..., 0] + added_sum.to(self.device)
+        total_weight = current[..., 1] + added_weight.to(self.device)
+        maximum_weight = float(self.config.accumulator_w_max)
+        scale = torch.where(
+            total_weight > maximum_weight,
+            maximum_weight / total_weight.clamp_min(torch.finfo(torch.float32).tiny),
+            torch.ones_like(total_weight),
+        )
+        current[..., 0] = total_sum * scale
+        current[..., 1] = total_weight * scale
+        self.data.block_data[pool_indices] = current.to(self.data.block_data.dtype)
+
     def integrate_lidar(self, observation: Any, *, visible_capacity: int | None = None) -> int:
         ranges = observation.range_image.detach().to(device="cpu", dtype=torch.float32)
         if ranges.ndim == 2:
@@ -491,7 +573,7 @@ class PortableSparseTSDF:
             if image.shape[0] == 1:
                 angle = torch.full_like(azimuth, float(elevation[sensor, 0]))
             else:
-                angle = elevation[sensor, 0] + (
+                angle = elevation[sensor, 1] - (
                     elevation[sensor, 1] - elevation[sensor, 0]
                 ) * row.float() / (image.shape[0] - 1)
             cos_e = torch.cos(angle)
@@ -513,6 +595,7 @@ class PortableSparseTSDF:
             observation.rgb_image,
             getattr(observation, "feature_grid", None),
             visible_capacity=visible_capacity,
+            lidar_observation=observation,
         )
 
     def decay_and_recycle(self, factor: float) -> int:

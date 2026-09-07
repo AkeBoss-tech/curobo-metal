@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +39,7 @@ jobs:
   publish-testpypi:
     if: github.event_name == 'workflow_dispatch'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     environment: testpypi
     permissions:
       id-token: write
@@ -57,7 +57,7 @@ jobs:
   publish-pypi:
     if: github.event_name == 'release'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     environment: pypi
     permissions:
       id-token: write

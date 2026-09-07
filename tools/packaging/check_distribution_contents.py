@@ -49,6 +49,15 @@ def validate_members(path: Path, members: list[str]) -> list[str]:
         forbidden_roots = {"artifacts", "benchmarks", "contracts", "docs", "examples", "tests", "tools"}
         leaked = sorted(p.as_posix() for p in paths if p.parts and p.parts[0] in forbidden_roots)
         errors.extend(f"non-runtime tree leaked into wheel: {name}" for name in leaked)
+        packaged_tests = sorted(p.as_posix() for p in paths if p.parts[:2] == ("curobo", "tests"))
+        errors.extend(f"test corpus leaked into wheel: {name}" for name in packaged_tests)
+        required_runtime_paths = {
+            "curobo/types/math.py",
+            "curobo/wrap/reacher/motion_gen.py",
+            "curobo_metal/ops/perception/core.py",
+        }
+        missing = sorted(required_runtime_paths.difference(p.as_posix() for p in paths))
+        errors.extend(f"wheel is missing compatibility runtime: {name}" for name in missing)
     else:
         roots = {p.parts[0] for p in paths if p.parts}
         if len(roots) != 1:

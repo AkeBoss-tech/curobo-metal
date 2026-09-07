@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import sys
+import json
 from pathlib import Path
 from typing import Any, Dict, List, TypeVar, Union
 
@@ -64,9 +65,40 @@ def load_yaml(file_path: Union[str, Dict]) -> Dict:
     return resolve_config(file_path)
 
 
+def load_json(file_path: Union[str, Dict]) -> Dict:
+    if isinstance(file_path, dict):
+        return file_path
+    with open(file_path, encoding="utf-8") as file_p:
+        return json.load(file_p)
+
+
 def write_yaml(data: Dict, file_path: str):
     with open(file_path, "w") as file:
         yaml.dump(data, file)
+
+
+def write_json(data: Dict, file_path: str):
+    with open(file_path, "w", encoding="utf-8") as file_p:
+        json.dump(data, file_p, indent=2)
+        file_p.write("\n")
+
+
+def get_world_configs_path() -> str:
+    return str(get_scene_configs_path())
+
+
+def get_manip_configs_path() -> str:
+    return str(get_task_configs_path())
+
+
+def get_robot_list():
+    return list_available_robots()
+
+
+def get_output_path() -> str:
+    path = Path.cwd() / "output"
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def copy_file_to_path(source_file: str, destination_path: str) -> str:
