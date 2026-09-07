@@ -113,7 +113,19 @@ class Kinematics:
 
     def _ensure_model_for(self, value: torch.Tensor) -> None:
         """Compile lazily for the caller's CPU/MPS device and floating dtype."""
-        if self._model.device != value.device or self._model.dtype != value.dtype:
+        # ``resolve_device`` intentionally canonicalizes ``mps:0`` to ``mps``
+        # because this backend has one logical Metal device.  PyTorch's
+        # ``torch.device`` equality does not make those spellings equivalent,
+        # though, so comparing them directly causes every MPS call to rebuild
+        # the model.  Apart from being needlessly expensive, repeated MPS
+        # materialization can trigger an asynchronous ``scatter: index -1``
+        # failure while compiling otherwise valid link origins.
+        same_device = (
+            self._model.device.type == value.device.type
+            and self._model.device.index in (None, 0)
+            and value.device.index in (None, 0)
+        )
+        if not same_device or self._model.dtype != value.dtype:
             self._compile_model(value.device, value.dtype)
             self._buffers = {}
 

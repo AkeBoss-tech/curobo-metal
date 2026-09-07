@@ -82,7 +82,7 @@ def test_cspace_position_and_state_bounds_targets_are_differentiable() -> None:
         cspace_non_terminal_weight_factor=0.25,
     )
     value = PositionCSpaceCost(cfg)(state, target_joint_state=target)
-    assert value.shape == (1, 2, 1)
+    assert value.shape == (1, 2, 2)
     value.sum().backward()
     assert q.grad is not None and torch.isfinite(q.grad).all() and q.grad[0, 0, 0] > 0
 
@@ -94,7 +94,7 @@ def test_cspace_position_and_state_bounds_targets_are_differentiable() -> None:
     )
     state_value = StateCSpaceCost(state_cfg)(state2, joint_torque=torch.ones_like(q2) * 7)
     state_value.sum().backward()
-    assert state_value.shape == (1, 2, 1)
+    assert state_value.shape == (1, 2, 2)
     assert torch.isfinite(q2.grad).all()
 
 

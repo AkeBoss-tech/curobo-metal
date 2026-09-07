@@ -356,18 +356,36 @@ def query_esdf(
         validate_tensor_device(grid_active, expected=sampled.values.device)
         active = grid_active
     candidates = sampled.valid & active[env, None, :]
-    masked = torch.where(candidates, sampled.values, torch.full_like(sampled.values, torch.inf))
+    # Reducing an all-``inf`` row with ``min`` on MPS can produce a ``-1``
+    # winner, and autograd then uses that invalid index in the reduction's
+    # scatter backward.  Use the largest finite value for the internal
+    # reduction and restore the public infinity sentinel after selection.
+    finite_sentinel = torch.finfo(sampled.values.dtype).max
+    masked = torch.where(
+        candidates,
+        sampled.values,
+        torch.full_like(sampled.values, finite_sentinel),
+    )
     distance, winner = masked.min(-1)
-    valid = torch.isfinite(distance)
+    valid = candidates.any(-1)
     # Metal may use ``-1`` as the reduction index when every candidate is
     # infinite.  Preserve that sentinel in the public result, but gather from
     # a safe row before masking the invalid gradient to zero.
     safe_winner = winner.clamp_min(0)
-    gradient = sampled.gradients.gather(
-        -2, safe_winner[..., None, None].expand(*safe_winner.shape, 1, 3)
-    ).squeeze(-2)
+    # Avoid differentiating through ``gather`` here.  MPS may retain the
+    # reduction's ``-1`` sentinel in gather's backward metadata even though
+    # the forward index was clamped, which later raises an asynchronous
+    # out-of-bounds scatter.  A one-hot weighted selection has the identical
+    # value and gradient while keeping the invalid case maskable below.
+    selector = (
+        torch.arange(g, device=sampled.values.device)
+        .view(*(1 for _ in safe_winner.shape), g)
+        .eq(safe_winner[..., None])
+        .to(sampled.gradients.dtype)
+    )
+    gradient = (sampled.gradients * selector[..., None]).sum(dim=-2)
     return ESDFQueryResult(
-        torch.where(valid, distance - padding, distance),
+        torch.where(valid, distance - padding, torch.full_like(distance, torch.inf)),
         torch.where(valid[..., None], gradient, torch.zeros_like(gradient)),
         torch.where(valid, winner, torch.full_like(winner, -1)),
         valid,

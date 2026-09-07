@@ -6134,10 +6134,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 0,
         "path": "curobo/_src/cost/wp_tool_pose.py",
-        "resolved_symbols": 10,
-        "status": "partial"
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo._src.cost.wp_tool_pose",
       "path": "curobo/_src/cost/wp_tool_pose.py",
@@ -22972,10 +22972,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 0,
         "path": "curobo/_src/geom/types.py",
-        "resolved_symbols": 28,
-        "status": "partial"
+        "resolved_symbols": 40,
+        "status": "resolved"
       },
       "name": "curobo._src.geom.types",
       "path": "curobo/_src/geom/types.py",
@@ -26805,10 +26805,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
+        "missing_symbols": 0,
         "path": "curobo/_src/graph_planner/graph_planner_prm.py",
-        "resolved_symbols": 13,
-        "status": "partial"
+        "resolved_symbols": 30,
+        "status": "resolved"
       },
       "name": "curobo._src.graph_planner.graph_planner_prm",
       "path": "curobo/_src/graph_planner/graph_planner_prm.py",
@@ -31781,10 +31781,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/components/gaussian_distribution.py",
-        "resolved_symbols": 5,
-        "status": "partial"
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.components.gaussian_distribution",
       "path": "curobo/_src/optim/components/gaussian_distribution.py",
@@ -32322,10 +32322,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/components/gradient_opt_core.py",
-        "resolved_symbols": 7,
-        "status": "partial"
+        "resolved_symbols": 25,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.components.gradient_opt_core",
       "path": "curobo/_src/optim/components/gradient_opt_core.py",
@@ -33177,10 +33177,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/components/particle_opt_core.py",
-        "resolved_symbols": 19,
-        "status": "partial"
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.components.particle_opt_core",
       "path": "curobo/_src/optim/components/particle_opt_core.py",
@@ -34385,10 +34385,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/external/scipy_opt.py",
-        "resolved_symbols": 10,
-        "status": "partial"
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.external.scipy_opt",
       "path": "curobo/_src/optim/external/scipy_opt.py",
@@ -35368,10 +35368,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/external/torch_opt.py",
-        "resolved_symbols": 9,
-        "status": "partial"
+        "resolved_symbols": 20,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.external.torch_opt",
       "path": "curobo/_src/optim/external/torch_opt.py",
@@ -38514,10 +38514,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/gradient/lbfgs.py",
-        "resolved_symbols": 11,
-        "status": "partial"
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.gradient.lbfgs",
       "path": "curobo/_src/optim/gradient/lbfgs.py",
@@ -40370,10 +40370,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/gradient/line_search_strategy.py",
-        "resolved_symbols": 15,
-        "status": "partial"
+        "resolved_symbols": 27,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.gradient.line_search_strategy",
       "path": "curobo/_src/optim/gradient/line_search_strategy.py",
@@ -42607,10 +42607,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/optim_factory.py",
-        "resolved_symbols": 17,
-        "status": "partial"
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.optim_factory",
       "path": "curobo/_src/optim/optim_factory.py",
@@ -43458,10 +43458,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/particle/evolution_strategies.py",
-        "resolved_symbols": 12,
-        "status": "partial"
+        "resolved_symbols": 31,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.particle.evolution_strategies",
       "path": "curobo/_src/optim/particle/evolution_strategies.py",
@@ -45113,10 +45113,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 0,
         "path": "curobo/_src/optim/particle/mppi.py",
-        "resolved_symbols": 23,
-        "status": "partial"
+        "resolved_symbols": 36,
+        "status": "resolved"
       },
       "name": "curobo._src.optim.particle.mppi",
       "path": "curobo/_src/optim/particle/mppi.py",
@@ -49188,10 +49188,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/checkpoint_blocks.py",
-        "resolved_symbols": 48,
-        "status": "partial"
+        "resolved_symbols": 51,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.checkpoint_blocks",
       "path": "curobo/_src/perception/mapper/checkpoint_blocks.py",
@@ -50656,10 +50656,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/esdf/edt_jump_flooding.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.esdf.edt_jump_flooding",
       "path": "curobo/_src/perception/mapper/esdf/edt_jump_flooding.py",
@@ -50814,10 +50814,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/esdf/edt_parallel_banding.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.esdf.edt_parallel_banding",
       "path": "curobo/_src/perception/mapper/esdf/edt_parallel_banding.py",
@@ -50943,10 +50943,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/esdf/kernel/wp_esdf_distance.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.esdf.kernel.wp_esdf_distance",
       "path": "curobo/_src/perception/mapper/esdf/kernel/wp_esdf_distance.py",
@@ -51051,10 +51051,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/esdf/kernel/wp_esdf_seed.py",
-        "resolved_symbols": 2,
-        "status": "partial"
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.esdf.kernel.wp_esdf_seed",
       "path": "curobo/_src/perception/mapper/esdf/kernel/wp_esdf_seed.py",
@@ -51194,10 +51194,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/esdf/kernel/wp_jfa.py",
-        "resolved_symbols": 11,
-        "status": "partial"
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.esdf.kernel.wp_jfa",
       "path": "curobo/_src/perception/mapper/esdf/kernel/wp_jfa.py",
@@ -51639,10 +51639,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/integrator_esdf.py",
-        "resolved_symbols": 12,
-        "status": "partial"
+        "resolved_symbols": 34,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.integrator_esdf",
       "path": "curobo/_src/perception/mapper/integrator_esdf.py",
@@ -52829,10 +52829,10 @@
     },
     {
       "local": {
-        "missing_symbols": 28,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/integrator_tsdf.py",
-        "resolved_symbols": 13,
-        "status": "partial"
+        "resolved_symbols": 41,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.integrator_tsdf",
       "path": "curobo/_src/perception/mapper/integrator_tsdf.py",
@@ -53946,10 +53946,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_block_sparse_kernel.py",
-        "resolved_symbols": 3,
-        "status": "partial"
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_block_sparse_kernel",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_block_sparse_kernel.py",
@@ -54819,10 +54819,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_camera_integrate.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_camera_integrate",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_camera_integrate.py",
@@ -55105,10 +55105,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_decay.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_decay",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_decay.py",
@@ -55208,10 +55208,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_esdf.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_esdf",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_esdf.py",
@@ -55332,10 +55332,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_hash.py",
-        "resolved_symbols": 3,
-        "status": "partial"
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_hash",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_hash.py",
@@ -55436,10 +55436,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_lidar_integrate.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_lidar_integrate",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_lidar_integrate.py",
@@ -55629,10 +55629,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_mesh.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_mesh",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_mesh.py",
@@ -55930,10 +55930,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/builder/builder_stamp.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.builder.builder_stamp",
       "path": "curobo/_src/perception/mapper/kernel/builder/builder_stamp.py",
@@ -56297,10 +56297,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/wp_decay.py",
-        "resolved_symbols": 5,
-        "status": "partial"
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.wp_decay",
       "path": "curobo/_src/perception/mapper/kernel/wp_decay.py",
@@ -56870,10 +56870,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/wp_integrate_camera_project.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.wp_integrate_camera_project",
       "path": "curobo/_src/perception/mapper/kernel/wp_integrate_camera_project.py",
@@ -57305,10 +57305,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/wp_integrate_lidar_project.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.wp_integrate_lidar_project",
       "path": "curobo/_src/perception/mapper/kernel/wp_integrate_lidar_project.py",
@@ -57538,10 +57538,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/wp_raycast_pose_refine.py",
-        "resolved_symbols": 3,
-        "status": "partial"
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.wp_raycast_pose_refine",
       "path": "curobo/_src/perception/mapper/kernel/wp_raycast_pose_refine.py",
@@ -57643,10 +57643,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/wp_stamp_obstacles.py",
-        "resolved_symbols": 4,
-        "status": "partial"
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.wp_stamp_obstacles",
       "path": "curobo/_src/perception/mapper/kernel/wp_stamp_obstacles.py",
@@ -58054,10 +58054,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/kernel/wp_voxel_extraction.py",
-        "resolved_symbols": 3,
-        "status": "partial"
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.kernel.wp_voxel_extraction",
       "path": "curobo/_src/perception/mapper/kernel/wp_voxel_extraction.py",
@@ -58230,10 +58230,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/mapper.py",
-        "resolved_symbols": 19,
-        "status": "partial"
+        "resolved_symbols": 29,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.mapper",
       "path": "curobo/_src/perception/mapper/mapper.py",
@@ -59801,10 +59801,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/marching_cubes/kernel/wp_mc_common.py",
-        "resolved_symbols": 10,
-        "status": "partial"
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.marching_cubes.kernel.wp_mc_common",
       "path": "curobo/_src/perception/mapper/marching_cubes/kernel/wp_mc_common.py",
@@ -60667,10 +60667,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/pose_refiner.py",
-        "resolved_symbols": 8,
-        "status": "partial"
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.pose_refiner",
       "path": "curobo/_src/perception/mapper/pose_refiner.py",
@@ -61475,10 +61475,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/renderer.py",
-        "resolved_symbols": 5,
-        "status": "partial"
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.renderer",
       "path": "curobo/_src/perception/mapper/renderer.py",
@@ -61947,10 +61947,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/mapper/storage.py",
-        "resolved_symbols": 12,
-        "status": "partial"
+        "resolved_symbols": 29,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.mapper.storage",
       "path": "curobo/_src/perception/mapper/storage.py",
@@ -63486,10 +63486,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/optim_pose_lm.py",
-        "resolved_symbols": 4,
-        "status": "partial"
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.optim_pose_lm",
       "path": "curobo/_src/perception/optim_pose_lm.py",
@@ -64921,10 +64921,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector.py",
-        "resolved_symbols": 11,
-        "status": "partial"
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.pose_estimation.sdf_pose_detector",
       "path": "curobo/_src/perception/pose_estimation/sdf_pose_detector.py",
@@ -65438,10 +65438,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
+        "missing_symbols": 0,
         "path": "curobo/_src/perception/pose_estimation/util.py",
-        "resolved_symbols": 8,
-        "status": "partial"
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo._src.perception.pose_estimation.util",
       "path": "curobo/_src/perception/pose_estimation/util.py",
@@ -69466,10 +69466,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/robot/loader/kinematics_loader.py",
-        "resolved_symbols": 17,
-        "status": "partial"
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo._src.robot.loader.kinematics_loader",
       "path": "curobo/_src/robot/loader/kinematics_loader.py",
@@ -73030,10 +73030,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 0,
         "path": "curobo/_src/rollout/cost_manager/cost_manager_robot.py",
-        "resolved_symbols": 14,
-        "status": "partial"
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo._src.rollout.cost_manager.cost_manager_robot",
       "path": "curobo/_src/rollout/cost_manager/cost_manager_robot.py",
@@ -73581,10 +73581,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
+        "missing_symbols": 0,
         "path": "curobo/_src/rollout/cost_manager/cost_manager_robot_cfg.py",
-        "resolved_symbols": 5,
-        "status": "partial"
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo._src.rollout.cost_manager.cost_manager_robot_cfg",
       "path": "curobo/_src/rollout/cost_manager/cost_manager_robot_cfg.py",
@@ -74258,10 +74258,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
+        "missing_symbols": 0,
         "path": "curobo/_src/rollout/metrics.py",
-        "resolved_symbols": 16,
-        "status": "partial"
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo._src.rollout.metrics",
       "path": "curobo/_src/rollout/metrics.py",
@@ -78817,10 +78817,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 0,
         "path": "curobo/_src/solver/seed_ik/seed_ik_solver.py",
-        "resolved_symbols": 14,
-        "status": "partial"
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo._src.solver.seed_ik.seed_ik_solver",
       "path": "curobo/_src/solver/seed_ik/seed_ik_solver.py",
@@ -81890,10 +81890,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
+        "missing_symbols": 0,
         "path": "curobo/_src/solver/solver_ik.py",
-        "resolved_symbols": 14,
-        "status": "partial"
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo._src.solver.solver_ik",
       "path": "curobo/_src/solver/solver_ik.py",
@@ -83608,10 +83608,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/solver/solver_mpc.py",
-        "resolved_symbols": 17,
-        "status": "partial"
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo._src.solver.solver_mpc",
       "path": "curobo/_src/solver/solver_mpc.py",
@@ -90941,10 +90941,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
+        "missing_symbols": 0,
         "path": "curobo/_src/transition/fns_state_transition.py",
-        "resolved_symbols": 10,
-        "status": "partial"
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo._src.transition.fns_state_transition",
       "path": "curobo/_src/transition/fns_state_transition.py",
@@ -102186,10 +102186,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/usd_scene_parser.py",
-        "resolved_symbols": 6,
-        "status": "partial"
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo._src.util.usd_scene_parser",
       "path": "curobo/_src/util/usd_scene_parser.py",
@@ -102764,10 +102764,10 @@
     },
     {
       "local": {
-        "missing_symbols": 36,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/usd_writer.py",
-        "resolved_symbols": 12,
-        "status": "partial"
+        "resolved_symbols": 48,
+        "status": "resolved"
       },
       "name": "curobo._src.util.usd_writer",
       "path": "curobo/_src/util/usd_writer.py",
@@ -104692,10 +104692,10 @@
     },
     {
       "local": {
-        "missing_symbols": 20,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/viser_visualizer.py",
-        "resolved_symbols": 1,
-        "status": "partial"
+        "resolved_symbols": 21,
+        "status": "resolved"
       },
       "name": "curobo._src.util.viser_visualizer",
       "path": "curobo/_src/util/viser_visualizer.py",
@@ -105378,10 +105378,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
+        "missing_symbols": 0,
         "path": "curobo/_src/util/warp.py",
-        "resolved_symbols": 14,
-        "status": "partial"
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo._src.util.warp",
       "path": "curobo/_src/util/warp.py",
@@ -111870,9 +111870,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests",
       "path": "curobo/tests/__init__.py",
@@ -111883,9 +111883,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src",
       "path": "curobo/tests/_src/__init__.py",
@@ -111896,9 +111896,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/collision/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.collision",
       "path": "curobo/tests/_src/collision/__init__.py",
@@ -111908,10 +111908,10 @@
     },
     {
       "local": {
-        "missing_symbols": 30,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/collision/test_attachment_manager.py",
+        "resolved_symbols": 30,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.collision.test_attachment_manager",
       "path": "curobo/tests/_src/collision/test_attachment_manager.py",
@@ -112952,10 +112952,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/collision/test_collision_robot_scene.py",
+        "resolved_symbols": 6,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.collision.test_collision_robot_scene",
       "path": "curobo/tests/_src/collision/test_collision_robot_scene.py",
@@ -113345,10 +113345,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/collision/test_mesh_collision_sdf.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.collision.test_mesh_collision_sdf",
       "path": "curobo/tests/_src/collision/test_mesh_collision_sdf.py",
@@ -113419,9 +113419,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/cost/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost",
       "path": "curobo/tests/_src/cost/__init__.py",
@@ -113431,10 +113431,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/cost/test_cost_base.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost.test_cost_base",
       "path": "curobo/tests/_src/cost/test_cost_base.py",
@@ -114088,10 +114088,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/cost/test_cost_cspace.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost.test_cost_cspace",
       "path": "curobo/tests/_src/cost/test_cost_cspace.py",
@@ -115144,10 +115144,10 @@
     },
     {
       "local": {
-        "missing_symbols": 27,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/cost/test_cost_scene_collision.py",
+        "resolved_symbols": 27,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost.test_cost_scene_collision",
       "path": "curobo/tests/_src/cost/test_cost_scene_collision.py",
@@ -115978,10 +115978,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/cost/test_cost_self_collision.py",
+        "resolved_symbols": 21,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost.test_cost_self_collision",
       "path": "curobo/tests/_src/cost/test_cost_self_collision.py",
@@ -116797,10 +116797,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/cost/test_cost_support_polygon.py",
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost.test_cost_support_polygon",
       "path": "curobo/tests/_src/cost/test_cost_support_polygon.py",
@@ -117382,10 +117382,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/cost/test_cost_tool_pose.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost.test_cost_tool_pose",
       "path": "curobo/tests/_src/cost/test_cost_tool_pose.py",
@@ -117872,10 +117872,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/cost/test_cost_types.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.cost.test_cost_types",
       "path": "curobo/tests/_src/cost/test_cost_types.py",
@@ -118283,9 +118283,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/curobolib/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.curobolib",
       "path": "curobo/tests/_src/curobolib/__init__.py",
@@ -118296,9 +118296,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/curobolib/cuda_ops/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.curobolib.cuda_ops",
       "path": "curobo/tests/_src/curobolib/cuda_ops/__init__.py",
@@ -118308,10 +118308,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/curobolib/cuda_ops/test_tensor_checks.py",
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.curobolib.cuda_ops.test_tensor_checks",
       "path": "curobo/tests/_src/curobolib/cuda_ops/test_tensor_checks.py",
@@ -118815,9 +118815,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/geom/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom",
       "path": "curobo/tests/_src/geom/__init__.py",
@@ -118828,9 +118828,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/geom/sdf/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.sdf",
       "path": "curobo/tests/_src/geom/sdf/__init__.py",
@@ -118840,10 +118840,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/sdf/test_sdf_grid.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.sdf.test_sdf_grid",
       "path": "curobo/tests/_src/geom/sdf/test_sdf_grid.py",
@@ -119223,10 +119223,10 @@
     },
     {
       "local": {
-        "missing_symbols": 28,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/sdf/test_voxel_collision.py",
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.sdf.test_voxel_collision",
       "path": "curobo/tests/_src/geom/sdf/test_voxel_collision.py",
@@ -120379,10 +120379,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_convex_polygon_helper.py",
+        "resolved_symbols": 6,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_convex_polygon_helper",
       "path": "curobo/tests/_src/geom/test_convex_polygon_helper.py",
@@ -120673,10 +120673,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_cv.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_cv",
       "path": "curobo/tests/_src/geom/test_cv.py",
@@ -121180,10 +121180,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_data_scene.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_data_scene",
       "path": "curobo/tests/_src/geom/test_data_scene.py",
@@ -121224,10 +121224,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_geom_types.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_geom_types",
       "path": "curobo/tests/_src/geom/test_geom_types.py",
@@ -121297,10 +121297,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_mesh_triangulation.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_mesh_triangulation",
       "path": "curobo/tests/_src/geom/test_mesh_triangulation.py",
@@ -121386,10 +121386,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_pose.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_pose",
       "path": "curobo/tests/_src/geom/test_pose.py",
@@ -121578,10 +121578,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_quaternion.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_quaternion",
       "path": "curobo/tests/_src/geom/test_quaternion.py",
@@ -121798,10 +121798,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_sphere_fit.py",
+        "resolved_symbols": 21,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_sphere_fit",
       "path": "curobo/tests/_src/geom/test_sphere_fit.py",
@@ -122807,10 +122807,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_transform.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_transform",
       "path": "curobo/tests/_src/geom/test_transform.py",
@@ -123182,10 +123182,10 @@
     },
     {
       "local": {
-        "missing_symbols": 34,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/geom/test_types.py",
+        "resolved_symbols": 34,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.geom.test_types",
       "path": "curobo/tests/_src/geom/test_types.py",
@@ -124474,9 +124474,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/graph_planner/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.graph_planner",
       "path": "curobo/tests/_src/graph_planner/__init__.py",
@@ -124486,10 +124486,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/graph_planner/test_constructor.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.graph_planner.test_constructor",
       "path": "curobo/tests/_src/graph_planner/test_constructor.py",
@@ -125290,10 +125290,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/graph_planner/test_graph_planner_batch_seed.py",
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.graph_planner.test_graph_planner_batch_seed",
       "path": "curobo/tests/_src/graph_planner/test_graph_planner_batch_seed.py",
@@ -125478,10 +125478,10 @@
     },
     {
       "local": {
-        "missing_symbols": 40,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/graph_planner/test_graph_planner_prm.py",
+        "resolved_symbols": 39,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.graph_planner.test_graph_planner_prm",
       "path": "curobo/tests/_src/graph_planner/test_graph_planner_prm.py",
@@ -125867,10 +125867,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/graph_planner/test_node_manager.py",
+        "resolved_symbols": 21,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.graph_planner.test_node_manager",
       "path": "curobo/tests/_src/graph_planner/test_node_manager.py",
@@ -126896,10 +126896,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/graph_planner/test_node_sampling_strategy.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.graph_planner.test_node_sampling_strategy",
       "path": "curobo/tests/_src/graph_planner/test_node_sampling_strategy.py",
@@ -128050,10 +128050,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/graph_planner/test_path_finder_networkx.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.graph_planner.test_path_finder_networkx",
       "path": "curobo/tests/_src/graph_planner/test_path_finder_networkx.py",
@@ -128699,9 +128699,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/motion/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion",
       "path": "curobo/tests/_src/motion/__init__.py",
@@ -128711,10 +128711,10 @@
     },
     {
       "local": {
-        "missing_symbols": 40,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner.py",
+        "resolved_symbols": 40,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner",
       "path": "curobo/tests/_src/motion/test_motion_planner.py",
@@ -131390,10 +131390,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner_batch.py",
+        "resolved_symbols": 17,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner_batch",
       "path": "curobo/tests/_src/motion/test_motion_planner_batch.py",
@@ -131995,10 +131995,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner_cfg.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner_cfg",
       "path": "curobo/tests/_src/motion/test_motion_planner_cfg.py",
@@ -132867,10 +132867,10 @@
     },
     {
       "local": {
-        "missing_symbols": 31,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner_esdf.py",
+        "resolved_symbols": 31,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner_esdf",
       "path": "curobo/tests/_src/motion/test_motion_planner_esdf.py",
@@ -134308,10 +134308,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner_grasp_goalset.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner_grasp_goalset",
       "path": "curobo/tests/_src/motion/test_motion_planner_grasp_goalset.py",
@@ -134467,10 +134467,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner_num_envs.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner_num_envs",
       "path": "curobo/tests/_src/motion/test_motion_planner_num_envs.py",
@@ -134695,10 +134695,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner_result.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner_result",
       "path": "curobo/tests/_src/motion/test_motion_planner_result.py",
@@ -135191,10 +135191,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_planner_shared_kinematics.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_planner_shared_kinematics",
       "path": "curobo/tests/_src/motion/test_motion_planner_shared_kinematics.py",
@@ -135388,10 +135388,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_retargeter.py",
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_retargeter",
       "path": "curobo/tests/_src/motion/test_motion_retargeter.py",
@@ -135803,10 +135803,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_retargeter_cfg.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_retargeter_cfg",
       "path": "curobo/tests/_src/motion/test_motion_retargeter_cfg.py",
@@ -135997,10 +135997,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/motion/test_motion_retargeter_lock_joints.py",
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.motion.test_motion_retargeter_lock_joints",
       "path": "curobo/tests/_src/motion/test_motion_retargeter_lock_joints.py",
@@ -136204,9 +136204,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/optim/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim",
       "path": "curobo/tests/_src/optim/__init__.py",
@@ -136217,9 +136217,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/optim/external/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.external",
       "path": "curobo/tests/_src/optim/external/__init__.py",
@@ -136229,10 +136229,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/external/test_scipy_opt.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.external.test_scipy_opt",
       "path": "curobo/tests/_src/optim/external/test_scipy_opt.py",
@@ -137513,10 +137513,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/external/test_torch_opt.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.external.test_torch_opt",
       "path": "curobo/tests/_src/optim/external/test_torch_opt.py",
@@ -138790,10 +138790,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/gradient/test_conjugate_gradient.py",
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.gradient.test_conjugate_gradient",
       "path": "curobo/tests/_src/optim/gradient/test_conjugate_gradient.py",
@@ -140082,10 +140082,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/gradient/test_lbfgs.py",
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.gradient.test_lbfgs",
       "path": "curobo/tests/_src/optim/gradient/test_lbfgs.py",
@@ -140938,10 +140938,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/gradient/test_lsr1.py",
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.gradient.test_lsr1",
       "path": "curobo/tests/_src/optim/gradient/test_lsr1.py",
@@ -142122,9 +142122,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/optim/particle/sample_strategies/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.sample_strategies",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/__init__.py",
@@ -142134,10 +142134,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/particle/sample_strategies/test_particle_sampler.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_particle_sampler.py",
@@ -143716,10 +143716,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/particle/sample_strategies/test_particle_sampler_cfg.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_particle_sampler_cfg.py",
@@ -144212,10 +144212,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_knot.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_processor_knot",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_knot.py",
@@ -144837,10 +144837,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_standard.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_processor_standard",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_standard.py",
@@ -145383,10 +145383,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_stomp.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.sample_strategies.test_processor_stomp",
       "path": "curobo/tests/_src/optim/particle/sample_strategies/test_processor_stomp.py",
@@ -146113,10 +146113,10 @@
     },
     {
       "local": {
-        "missing_symbols": 38,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/particle/test_mppi.py",
+        "resolved_symbols": 38,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.test_mppi",
       "path": "curobo/tests/_src/optim/particle/test_mppi.py",
@@ -148030,10 +148030,10 @@
     },
     {
       "local": {
-        "missing_symbols": 40,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/particle/test_parallel_optimizers.py",
+        "resolved_symbols": 40,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.particle.test_parallel_optimizers",
       "path": "curobo/tests/_src/optim/particle/test_parallel_optimizers.py",
@@ -150020,10 +150020,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/test_multi_stage_optimizer.py",
+        "resolved_symbols": 21,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.test_multi_stage_optimizer",
       "path": "curobo/tests/_src/optim/test_multi_stage_optimizer.py",
@@ -151150,10 +151150,10 @@
     },
     {
       "local": {
-        "missing_symbols": 36,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/test_optim_factory.py",
+        "resolved_symbols": 36,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.test_optim_factory",
       "path": "curobo/tests/_src/optim/test_optim_factory.py",
@@ -152641,10 +152641,10 @@
     },
     {
       "local": {
-        "missing_symbols": 25,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/optim/test_optimizer_cuda_graph.py",
+        "resolved_symbols": 25,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.optim.test_optimizer_cuda_graph",
       "path": "curobo/tests/_src/optim/test_optimizer_cuda_graph.py",
@@ -153730,9 +153730,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/perception/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception",
       "path": "curobo/tests/_src/perception/__init__.py",
@@ -153743,9 +153743,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/perception/mapper/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper",
       "path": "curobo/tests/_src/perception/mapper/__init__.py",
@@ -153755,10 +153755,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/conftest.py",
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.conftest",
       "path": "curobo/tests/_src/perception/mapper/conftest.py",
@@ -153840,10 +153840,10 @@
     },
     {
       "local": {
-        "missing_symbols": 41,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_block_checkpoint.py",
+        "resolved_symbols": 41,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_block_checkpoint",
       "path": "curobo/tests/_src/perception/mapper/test_block_checkpoint.py",
@@ -154315,10 +154315,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_block_decay.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_block_decay",
       "path": "curobo/tests/_src/perception/mapper/test_block_decay.py",
@@ -154667,10 +154667,10 @@
     },
     {
       "local": {
-        "missing_symbols": 32,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_block_hash.py",
+        "resolved_symbols": 32,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_block_hash",
       "path": "curobo/tests/_src/perception/mapper/test_block_hash.py",
@@ -155558,10 +155558,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_block_integrate.py",
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_block_integrate",
       "path": "curobo/tests/_src/perception/mapper/test_block_integrate.py",
@@ -156010,10 +156010,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_block_marching_cubes.py",
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_block_marching_cubes",
       "path": "curobo/tests/_src/perception/mapper/test_block_marching_cubes.py",
@@ -156414,10 +156414,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_builder.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_builder",
       "path": "curobo/tests/_src/perception/mapper/test_builder.py",
@@ -157036,10 +157036,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_comparison.py",
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_comparison",
       "path": "curobo/tests/_src/perception/mapper/test_comparison.py",
@@ -157349,10 +157349,10 @@
     },
     {
       "local": {
-        "missing_symbols": 20,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_feature_grid.py",
+        "resolved_symbols": 20,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_feature_grid",
       "path": "curobo/tests/_src/perception/mapper/test_feature_grid.py",
@@ -157596,10 +157596,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_feature_matching.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_feature_matching",
       "path": "curobo/tests/_src/perception/mapper/test_feature_matching.py",
@@ -158256,10 +158256,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_generated_observation_correctness.py",
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_generated_observation_correctness",
       "path": "curobo/tests/_src/perception/mapper/test_generated_observation_correctness.py",
@@ -158650,10 +158650,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_integrator.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_integrator",
       "path": "curobo/tests/_src/perception/mapper/test_integrator.py",
@@ -159175,10 +159175,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_lidar_projection.py",
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_lidar_projection",
       "path": "curobo/tests/_src/perception/mapper/test_lidar_projection.py",
@@ -159343,10 +159343,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_multi_camera.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_multi_camera",
       "path": "curobo/tests/_src/perception/mapper/test_multi_camera.py",
@@ -159898,10 +159898,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_occupied_voxel_texture.py",
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_occupied_voxel_texture",
       "path": "curobo/tests/_src/perception/mapper/test_occupied_voxel_texture.py",
@@ -160072,10 +160072,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_renderer.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_renderer",
       "path": "curobo/tests/_src/perception/mapper/test_renderer.py",
@@ -160328,10 +160328,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/mapper/test_texture_visibility.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.mapper.test_texture_visibility",
       "path": "curobo/tests/_src/perception/mapper/test_texture_visibility.py",
@@ -160481,10 +160481,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_detection_result.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_detection_result",
       "path": "curobo/tests/_src/perception/test_detection_result.py",
@@ -160818,10 +160818,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_filter_depth.py",
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_filter_depth",
       "path": "curobo/tests/_src/perception/test_filter_depth.py",
@@ -161871,10 +161871,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_geometry.py",
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_geometry",
       "path": "curobo/tests/_src/perception/test_geometry.py",
@@ -162881,10 +162881,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_mesh_robot.py",
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_mesh_robot",
       "path": "curobo/tests/_src/perception/test_mesh_robot.py",
@@ -163925,10 +163925,10 @@
     },
     {
       "local": {
-        "missing_symbols": 31,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_pose_detector.py",
+        "resolved_symbols": 31,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_pose_detector",
       "path": "curobo/tests/_src/perception/test_pose_detector.py",
@@ -164898,10 +164898,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_pose_detector_cfg.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_pose_detector_cfg",
       "path": "curobo/tests/_src/perception/test_pose_detector_cfg.py",
@@ -165372,10 +165372,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_sdf_cuda_graph.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_sdf_cuda_graph",
       "path": "curobo/tests/_src/perception/test_sdf_cuda_graph.py",
@@ -165599,10 +165599,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_sdf_pose_detector.py",
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_sdf_pose_detector",
       "path": "curobo/tests/_src/perception/test_sdf_pose_detector.py",
@@ -166183,10 +166183,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_util.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_util",
       "path": "curobo/tests/_src/perception/test_util.py",
@@ -167169,10 +167169,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/perception/test_wp_mesh_sdf_alignment.py",
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment",
       "path": "curobo/tests/_src/perception/test_wp_mesh_sdf_alignment.py",
@@ -167706,9 +167706,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/robot/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot",
       "path": "curobo/tests/_src/robot/__init__.py",
@@ -167719,9 +167719,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/robot/builder/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.builder",
       "path": "curobo/tests/_src/robot/builder/__init__.py",
@@ -167731,10 +167731,10 @@
     },
     {
       "local": {
-        "missing_symbols": 30,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/builder/test_builder_robot.py",
+        "resolved_symbols": 30,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.builder.test_builder_robot",
       "path": "curobo/tests/_src/robot/builder/test_builder_robot.py",
@@ -169338,10 +169338,10 @@
     },
     {
       "local": {
-        "missing_symbols": 20,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/builder/test_debugger_robot.py",
+        "resolved_symbols": 20,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.builder.test_debugger_robot",
       "path": "curobo/tests/_src/robot/builder/test_debugger_robot.py",
@@ -170597,9 +170597,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/robot/dynamics/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.dynamics",
       "path": "curobo/tests/_src/robot/dynamics/__init__.py",
@@ -170609,10 +170609,10 @@
     },
     {
       "local": {
-        "missing_symbols": 27,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/dynamics/rnea_numpy_reference.py",
+        "resolved_symbols": 27,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.dynamics.rnea_numpy_reference",
       "path": "curobo/tests/_src/robot/dynamics/rnea_numpy_reference.py",
@@ -171281,10 +171281,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/dynamics/test_rnea_cuda.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.dynamics.test_rnea_cuda",
       "path": "curobo/tests/_src/robot/dynamics/test_rnea_cuda.py",
@@ -171711,10 +171711,10 @@
     },
     {
       "local": {
-        "missing_symbols": 23,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/dynamics/test_rnea_reference.py",
+        "resolved_symbols": 23,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.dynamics.test_rnea_reference",
       "path": "curobo/tests/_src/robot/dynamics/test_rnea_reference.py",
@@ -172612,9 +172612,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/robot/kinematics/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics",
       "path": "curobo/tests/_src/robot/kinematics/__init__.py",
@@ -172624,10 +172624,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_extra_links_insert.py",
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_extra_links_insert",
       "path": "curobo/tests/_src/robot/kinematics/test_extra_links_insert.py",
@@ -172715,10 +172715,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_jacobian_gradcheck.py",
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_jacobian_gradcheck",
       "path": "curobo/tests/_src/robot/kinematics/test_jacobian_gradcheck.py",
@@ -172855,10 +172855,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_kinematics.py",
+        "resolved_symbols": 21,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_kinematics",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics.py",
@@ -173039,10 +173039,10 @@
     },
     {
       "local": {
-        "missing_symbols": 20,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_kinematics_cfg.py",
+        "resolved_symbols": 20,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_cfg",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_cfg.py",
@@ -173275,10 +173275,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_kinematics_com.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_com",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_com.py",
@@ -173372,10 +173372,10 @@
     },
     {
       "local": {
-        "missing_symbols": 55,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_kinematics_extended.py",
+        "resolved_symbols": 55,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_extended",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_extended.py",
@@ -174311,10 +174311,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_kinematics_multi_env_spheres.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_multi_env_spheres",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_multi_env_spheres.py",
@@ -174511,10 +174511,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_kinematics_reducer.py",
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_reducer",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_reducer.py",
@@ -174742,10 +174742,10 @@
     },
     {
       "local": {
-        "missing_symbols": 20,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_kinematics_state.py",
+        "resolved_symbols": 20,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_kinematics_state",
       "path": "curobo/tests/_src/robot/kinematics/test_kinematics_state.py",
@@ -174972,10 +174972,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/kinematics/test_mimic_joint.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.kinematics.test_mimic_joint",
       "path": "curobo/tests/_src/robot/kinematics/test_mimic_joint.py",
@@ -175012,9 +175012,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/robot/loader/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.loader",
       "path": "curobo/tests/_src/robot/loader/__init__.py",
@@ -175024,10 +175024,10 @@
     },
     {
       "local": {
-        "missing_symbols": 22,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/loader/test_kinematics_loader.py",
+        "resolved_symbols": 22,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.loader.test_kinematics_loader",
       "path": "curobo/tests/_src/robot/loader/test_kinematics_loader.py",
@@ -175215,10 +175215,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/loader/test_util.py",
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.loader.test_util",
       "path": "curobo/tests/_src/robot/loader/test_util.py",
@@ -175401,9 +175401,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/robot/parser/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.parser",
       "path": "curobo/tests/_src/robot/parser/__init__.py",
@@ -175413,10 +175413,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/parser/test_parser_urdf.py",
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.parser.test_parser_urdf",
       "path": "curobo/tests/_src/robot/parser/test_parser_urdf.py",
@@ -176520,9 +176520,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/robot/types/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.types",
       "path": "curobo/tests/_src/robot/types/__init__.py",
@@ -176532,10 +176532,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/types/test_joint_limits.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.types.test_joint_limits",
       "path": "curobo/tests/_src/robot/types/test_joint_limits.py",
@@ -176817,10 +176817,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/types/test_kinematics_params.py",
+        "resolved_symbols": 17,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.types.test_kinematics_params",
       "path": "curobo/tests/_src/robot/types/test_kinematics_params.py",
@@ -177816,10 +177816,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/robot/types/test_types.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.robot.types.test_types",
       "path": "curobo/tests/_src/robot/types/test_types.py",
@@ -179235,9 +179235,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/rollout/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout",
       "path": "curobo/tests/_src/rollout/__init__.py",
@@ -179248,9 +179248,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/rollout/cost_manager/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.cost_manager",
       "path": "curobo/tests/_src/rollout/cost_manager/__init__.py",
@@ -179260,10 +179260,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_integration.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.cost_manager.test_cost_manager_integration",
       "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_integration.py",
@@ -179524,10 +179524,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_robot.py",
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot",
       "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_robot.py",
@@ -180611,10 +180611,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_robot_cfg.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot_cfg",
       "path": "curobo/tests/_src/rollout/cost_manager/test_cost_manager_robot_cfg.py",
@@ -181162,10 +181162,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/cost_manager/test_multi_env_idxs_env.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.cost_manager.test_multi_env_idxs_env",
       "path": "curobo/tests/_src/rollout/cost_manager/test_multi_env_idxs_env.py",
@@ -181340,10 +181340,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/test_goal_registry.py",
+        "resolved_symbols": 21,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.test_goal_registry",
       "path": "curobo/tests/_src/rollout/test_goal_registry.py",
@@ -182934,10 +182934,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/test_metrics.py",
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.test_metrics",
       "path": "curobo/tests/_src/rollout/test_metrics.py",
@@ -184159,10 +184159,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/test_rollout_protocol.py",
+        "resolved_symbols": 17,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.test_rollout_protocol",
       "path": "curobo/tests/_src/rollout/test_rollout_protocol.py",
@@ -184618,10 +184618,10 @@
     },
     {
       "local": {
-        "missing_symbols": 32,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/test_rollout_robot.py",
+        "resolved_symbols": 32,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.test_rollout_robot",
       "path": "curobo/tests/_src/rollout/test_rollout_robot.py",
@@ -186088,10 +186088,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/test_rollout_robot_cfg.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.test_rollout_robot_cfg",
       "path": "curobo/tests/_src/rollout/test_rollout_robot_cfg.py",
@@ -186693,10 +186693,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/rollout/test_rollout_rosenbrock.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.rollout.test_rollout_rosenbrock",
       "path": "curobo/tests/_src/rollout/test_rollout_rosenbrock.py",
@@ -187464,9 +187464,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/solver/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver",
       "path": "curobo/tests/_src/solver/__init__.py",
@@ -187477,9 +187477,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/solver/seed_ik/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.seed_ik",
       "path": "curobo/tests/_src/solver/seed_ik/__init__.py",
@@ -187489,10 +187489,10 @@
     },
     {
       "local": {
-        "missing_symbols": 28,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_solver.py",
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.seed_ik.test_seed_ik_solver",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_solver.py",
@@ -189178,10 +189178,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_solver_cfg.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.seed_ik.test_seed_ik_solver_cfg",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_solver_cfg.py",
@@ -189978,10 +189978,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_state.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.seed_ik.test_seed_ik_state",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_ik_state.py",
@@ -190701,10 +190701,10 @@
     },
     {
       "local": {
-        "missing_symbols": 14,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/seed_ik/test_seed_iteration_state_manager.py",
+        "resolved_symbols": 14,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.seed_ik.test_seed_iteration_state_manager",
       "path": "curobo/tests/_src/solver/seed_ik/test_seed_iteration_state_manager.py",
@@ -191340,10 +191340,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_copy_at_batch_indices.py",
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_copy_at_batch_indices",
       "path": "curobo/tests/_src/solver/test_copy_at_batch_indices.py",
@@ -191522,10 +191522,10 @@
     },
     {
       "local": {
-        "missing_symbols": 28,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_manager_goal.py",
+        "resolved_symbols": 28,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_manager_goal",
       "path": "curobo/tests/_src/solver/test_manager_goal.py",
@@ -193085,10 +193085,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_manager_seed.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_manager_seed",
       "path": "curobo/tests/_src/solver/test_manager_seed.py",
@@ -193859,10 +193859,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solve_mode.py",
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solve_mode",
       "path": "curobo/tests/_src/solver/test_solve_mode.py",
@@ -194259,10 +194259,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solve_state.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solve_state",
       "path": "curobo/tests/_src/solver/test_solve_state.py",
@@ -194768,10 +194768,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_base_cfg.py",
+        "resolved_symbols": 17,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_base_cfg",
       "path": "curobo/tests/_src/solver/test_solver_base_cfg.py",
@@ -195387,10 +195387,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_base_result.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_base_result",
       "path": "curobo/tests/_src/solver/test_solver_base_result.py",
@@ -195800,10 +195800,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_ik.py",
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_ik",
       "path": "curobo/tests/_src/solver/test_solver_ik.py",
@@ -196921,10 +196921,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_ik_cfg.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_ik_cfg",
       "path": "curobo/tests/_src/solver/test_solver_ik_cfg.py",
@@ -197714,10 +197714,10 @@
     },
     {
       "local": {
-        "missing_symbols": 27,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_mpc.py",
+        "resolved_symbols": 27,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_mpc",
       "path": "curobo/tests/_src/solver/test_solver_mpc.py",
@@ -199155,10 +199155,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_mpc_cfg.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_mpc_cfg",
       "path": "curobo/tests/_src/solver/test_solver_mpc_cfg.py",
@@ -199998,10 +199998,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_mpc_result.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_mpc_result",
       "path": "curobo/tests/_src/solver/test_solver_mpc_result.py",
@@ -200656,10 +200656,10 @@
     },
     {
       "local": {
-        "missing_symbols": 30,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_trajopt.py",
+        "resolved_symbols": 30,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_trajopt",
       "path": "curobo/tests/_src/solver/test_solver_trajopt.py",
@@ -202345,10 +202345,10 @@
     },
     {
       "local": {
-        "missing_symbols": 18,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_trajopt_cfg.py",
+        "resolved_symbols": 18,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_trajopt_cfg",
       "path": "curobo/tests/_src/solver/test_solver_trajopt_cfg.py",
@@ -203205,10 +203205,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/solver/test_solver_trajopt_result.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.solver.test_solver_trajopt_result",
       "path": "curobo/tests/_src/solver/test_solver_trajopt_result.py",
@@ -203859,9 +203859,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/state/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.state",
       "path": "curobo/tests/_src/state/__init__.py",
@@ -203871,10 +203871,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/state/test_filter_coeff.py",
+        "resolved_symbols": 2,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.state.test_filter_coeff",
       "path": "curobo/tests/_src/state/test_filter_coeff.py",
@@ -204004,10 +204004,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/state/test_state_base.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.state.test_state_base",
       "path": "curobo/tests/_src/state/test_state_base.py",
@@ -204074,10 +204074,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/state/test_state_joint.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.state.test_state_joint",
       "path": "curobo/tests/_src/state/test_state_joint.py",
@@ -206866,10 +206866,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/state/test_state_robot.py",
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.state.test_state_robot",
       "path": "curobo/tests/_src/state/test_state_robot.py",
@@ -207577,10 +207577,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/state/test_state_robot_extended.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.state.test_state_robot_extended",
       "path": "curobo/tests/_src/state/test_state_robot_extended.py",
@@ -208127,9 +208127,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/transition/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.transition",
       "path": "curobo/tests/_src/transition/__init__.py",
@@ -208139,10 +208139,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/transition/test_fns_state_transition.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.transition.test_fns_state_transition",
       "path": "curobo/tests/_src/transition/test_fns_state_transition.py",
@@ -208816,10 +208816,10 @@
     },
     {
       "local": {
-        "missing_symbols": 53,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/transition/test_robot_state_transition.py",
+        "resolved_symbols": 53,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.transition.test_robot_state_transition",
       "path": "curobo/tests/_src/transition/test_robot_state_transition.py",
@@ -211486,10 +211486,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/transition/test_robot_state_transition_cfg.py",
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.transition.test_robot_state_transition_cfg",
       "path": "curobo/tests/_src/transition/test_robot_state_transition_cfg.py",
@@ -212320,10 +212320,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/transition/test_transition_error_handling.py",
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.transition.test_transition_error_handling",
       "path": "curobo/tests/_src/transition/test_transition_error_handling.py",
@@ -213260,10 +213260,10 @@
     },
     {
       "local": {
-        "missing_symbols": 34,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/transition/test_transition_gradients.py",
+        "resolved_symbols": 34,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.transition.test_transition_gradients",
       "path": "curobo/tests/_src/transition/test_transition_gradients.py",
@@ -214212,9 +214212,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/types/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types",
       "path": "curobo/tests/_src/types/__init__.py",
@@ -214224,10 +214224,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_camera.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_camera",
       "path": "curobo/tests/_src/types/test_camera.py",
@@ -215161,10 +215161,10 @@
     },
     {
       "local": {
-        "missing_symbols": 7,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_content_path.py",
+        "resolved_symbols": 7,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_content_path",
       "path": "curobo/tests/_src/types/test_content_path.py",
@@ -215659,10 +215659,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_control_space.py",
+        "resolved_symbols": 2,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_control_space",
       "path": "curobo/tests/_src/types/test_control_space.py",
@@ -216013,10 +216013,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_device_cfg.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_device_cfg",
       "path": "curobo/tests/_src/types/test_device_cfg.py",
@@ -216354,10 +216354,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_pose.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_pose",
       "path": "curobo/tests/_src/types/test_pose.py",
@@ -218276,10 +218276,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_robot_config.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_robot_config",
       "path": "curobo/tests/_src/types/test_robot_config.py",
@@ -218614,10 +218614,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_sequence_tool_pose.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_sequence_tool_pose",
       "path": "curobo/tests/_src/types/test_sequence_tool_pose.py",
@@ -218881,10 +218881,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/types/test_tool_pose.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.types.test_tool_pose",
       "path": "curobo/tests/_src/types/test_tool_pose.py",
@@ -220556,9 +220556,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/util/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util",
       "path": "curobo/tests/_src/util/__init__.py",
@@ -220569,9 +220569,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/tests/_src/util/sampling/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.sampling",
       "path": "curobo/tests/_src/util/sampling/__init__.py",
@@ -220581,10 +220581,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/sampling/test_sample_buffer.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.sampling.test_sample_buffer",
       "path": "curobo/tests/_src/util/sampling/test_sample_buffer.py",
@@ -221523,10 +221523,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/sampling/test_sequencer_base.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.sampling.test_sequencer_base",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_base.py",
@@ -221817,10 +221817,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/sampling/test_sequencer_halton.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.sampling.test_sequencer_halton",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_halton.py",
@@ -222125,10 +222125,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/sampling/test_sequencer_random.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.sampling.test_sequencer_random",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_random.py",
@@ -222467,10 +222467,10 @@
     },
     {
       "local": {
-        "missing_symbols": 4,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/sampling/test_sequencer_roberts.py",
+        "resolved_symbols": 4,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.sampling.test_sequencer_roberts",
       "path": "curobo/tests/_src/util/sampling/test_sequencer_roberts.py",
@@ -222923,10 +222923,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_benchmark_metrics.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_benchmark_metrics",
       "path": "curobo/tests/_src/util/test_benchmark_metrics.py",
@@ -223044,10 +223044,10 @@
     },
     {
       "local": {
-        "missing_symbols": 26,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_config_io.py",
+        "resolved_symbols": 26,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_config_io",
       "path": "curobo/tests/_src/util/test_config_io.py",
@@ -223743,10 +223743,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_cuda_graph_util.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_cuda_graph_util",
       "path": "curobo/tests/_src/util/test_cuda_graph_util.py",
@@ -224445,10 +224445,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_cuda_stream_util.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_cuda_stream_util",
       "path": "curobo/tests/_src/util/test_cuda_stream_util.py",
@@ -224948,10 +224948,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_error_metrics.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_error_metrics",
       "path": "curobo/tests/_src/util/test_error_metrics.py",
@@ -225137,10 +225137,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_helpers.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_helpers",
       "path": "curobo/tests/_src/util/test_helpers.py",
@@ -225416,10 +225416,10 @@
     },
     {
       "local": {
-        "missing_symbols": 6,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_interpolation.py",
+        "resolved_symbols": 6,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_interpolation",
       "path": "curobo/tests/_src/util/test_interpolation.py",
@@ -225465,10 +225465,10 @@
     },
     {
       "local": {
-        "missing_symbols": 12,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_logging.py",
+        "resolved_symbols": 12,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_logging",
       "path": "curobo/tests/_src/util/test_logging.py",
@@ -225811,10 +225811,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_python_util.py",
+        "resolved_symbols": 2,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_python_util",
       "path": "curobo/tests/_src/util/test_python_util.py",
@@ -225910,10 +225910,10 @@
     },
     {
       "local": {
-        "missing_symbols": 9,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_state_filter.py",
+        "resolved_symbols": 9,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_state_filter",
       "path": "curobo/tests/_src/util/test_state_filter.py",
@@ -226320,10 +226320,10 @@
     },
     {
       "local": {
-        "missing_symbols": 31,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_tensor_util.py",
+        "resolved_symbols": 31,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_tensor_util",
       "path": "curobo/tests/_src/util/test_tensor_util.py",
@@ -227063,10 +227063,10 @@
     },
     {
       "local": {
-        "missing_symbols": 15,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_torch_util.py",
+        "resolved_symbols": 15,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_torch_util",
       "path": "curobo/tests/_src/util/test_torch_util.py",
@@ -227606,10 +227606,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_trajectory.py",
+        "resolved_symbols": 24,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_trajectory",
       "path": "curobo/tests/_src/util/test_trajectory.py",
@@ -229122,10 +229122,10 @@
     },
     {
       "local": {
-        "missing_symbols": 16,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_trajectory_execution_manager.py",
+        "resolved_symbols": 16,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_trajectory_execution_manager",
       "path": "curobo/tests/_src/util/test_trajectory_execution_manager.py",
@@ -230049,10 +230049,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_trajectory_seed_generator.py",
+        "resolved_symbols": 19,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_trajectory_seed_generator",
       "path": "curobo/tests/_src/util/test_trajectory_seed_generator.py",
@@ -231377,10 +231377,10 @@
     },
     {
       "local": {
-        "missing_symbols": 8,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_usd_scene_parser.py",
+        "resolved_symbols": 8,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_usd_scene_parser",
       "path": "curobo/tests/_src/util/test_usd_scene_parser.py",
@@ -232006,10 +232006,10 @@
     },
     {
       "local": {
-        "missing_symbols": 68,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_usd_writer.py",
+        "resolved_symbols": 68,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_usd_writer",
       "path": "curobo/tests/_src/util/test_usd_writer.py",
@@ -235214,10 +235214,10 @@
     },
     {
       "local": {
-        "missing_symbols": 25,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_usd_writer_robot.py",
+        "resolved_symbols": 25,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_usd_writer_robot",
       "path": "curobo/tests/_src/util/test_usd_writer_robot.py",
@@ -236379,10 +236379,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_version.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_version",
       "path": "curobo/tests/_src/util/test_version.py",
@@ -236531,10 +236531,10 @@
     },
     {
       "local": {
-        "missing_symbols": 13,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_viser_visualizer.py",
+        "resolved_symbols": 13,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_viser_visualizer",
       "path": "curobo/tests/_src/util/test_viser_visualizer.py",
@@ -237054,10 +237054,10 @@
     },
     {
       "local": {
-        "missing_symbols": 3,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_warp.py",
+        "resolved_symbols": 3,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_warp",
       "path": "curobo/tests/_src/util/test_warp.py",
@@ -237209,10 +237209,10 @@
     },
     {
       "local": {
-        "missing_symbols": 10,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/_src/util/test_xrdf_util.py",
+        "resolved_symbols": 10,
+        "status": "resolved"
       },
       "name": "curobo.tests._src.util.test_xrdf_util",
       "path": "curobo/tests/_src/util/test_xrdf_util.py",
@@ -238208,10 +238208,10 @@
     },
     {
       "local": {
-        "missing_symbols": 11,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/conftest.py",
+        "resolved_symbols": 11,
+        "status": "resolved"
       },
       "name": "curobo.tests.conftest",
       "path": "curobo/tests/conftest.py",
@@ -238347,10 +238347,10 @@
     },
     {
       "local": {
-        "missing_symbols": 2,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/test_curobo_version.py",
+        "resolved_symbols": 2,
+        "status": "resolved"
       },
       "name": "curobo.tests.test_curobo_version",
       "path": "curobo/tests/test_curobo_version.py",
@@ -238376,10 +238376,10 @@
     },
     {
       "local": {
-        "missing_symbols": 5,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 0,
+        "path": "curobo/tests/test_examples.py",
+        "resolved_symbols": 5,
+        "status": "resolved"
       },
       "name": "curobo.tests.test_examples",
       "path": "curobo/tests/test_examples.py",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 55,
-    "resolved_modules": 306,
+    "partial_modules": 0,
+    "resolved_modules": 361,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
-    "missing_modules": 225,
+    "missing_modules": 14,
     "modules": 586,
-    "partial_modules": 55,
-    "resolved_modules": 306,
+    "partial_modules": 0,
+    "resolved_modules": 572,
     "symbols": 7182
   },
   "upstream": {

@@ -335,9 +335,6 @@ class PositionCSpaceCost(BaseCSpaceCost):
             prior_velocity = _indexed_goal(current_joint_state.velocity, idxs_current_joint_state, q)
             implied_acceleration = (implied_velocity - prior_velocity) / dt[..., None]
             value = value + 0.5 * self.config.squared_l2_regularization_weight[1].to(q) * implied_acceleration.square()
-        # cuRobo V2 convention: reduce per-DOF costs to a single scalar per
-        # (batch, horizon) step, yielding shape [batch, horizon, 1].
-        value = value.sum(-1, keepdim=True)
         return value if self.enabled else value * 0
 
     __call__ = forward
@@ -404,9 +401,6 @@ class StateCSpaceCost(PositionCSpaceCost):
                 if self.config.retime_regularization_weights:
                     power_weight = power_weight * dt
                 value = value + power_weight * (joint_torque * state_batch.velocity * dt).abs()
-        # cuRobo V2 convention: reduce per-DOF costs to a single scalar per
-        # (batch, horizon) step, yielding shape [batch, horizon, 1].
-        value = value.sum(-1, keepdim=True)
         return value if self.enabled else value * 0
 
     __call__ = forward

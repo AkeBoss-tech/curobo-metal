@@ -24,8 +24,9 @@ else:
 try:
     import viser
     from viser.extras import ViserUrdf
-except ImportError as error:
-    raise ImportError("Viser not installed. Install with: pip install viser") from error
+except ImportError:  # Optional visualization dependency.
+    viser = None
+    ViserUrdf = None
 
 from curobo._src.geom.types import SceneCfg, Sphere
 from curobo._src.robot.kinematics.kinematics import Kinematics, KinematicsCfg

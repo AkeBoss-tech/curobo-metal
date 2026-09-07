@@ -8,6 +8,7 @@ from curobo._src.cost.cost_cspace_dist import CSpaceDistCost
 from curobo._src.cost.cost_cspace_dist_cfg import CSpaceDistCostCfg
 from curobo._src.cost.cost_cspace_position import PositionCSpaceCost
 from curobo._src.cost.cost_cspace_cfg import CSpaceCostCfg
+from curobo._src.cost.cost_cspace_type import CSpaceCostType
 from curobo._src.cost.cost_scene_collision import SceneCollisionCost
 from curobo._src.cost.cost_scene_collision_cfg import SceneCollisionCostCfg
 from curobo._src.cost.cost_support_polygon import ConvexPolygon2DHelper
@@ -25,7 +26,14 @@ from curobo._src.types.device_cfg import DeviceCfg
 def test_cspace_cost_lifecycle_and_l2_helper_are_differentiable() -> None:
     q = torch.tensor([[0.2, -0.4]], requires_grad=True)
     state = JointState.from_position(q, joint_names=["a", "b"])
-    position = PositionCSpaceCost(CSpaceCostCfg(weight=1.0, dof=2))
+    position = PositionCSpaceCost(
+        CSpaceCostCfg(
+            weight=[1.0, 1.0],
+            activation_distance=[0.0, 0.0],
+            cost_type=CSpaceCostType.POSITION,
+            dof=2,
+        )
+    )
     assert position.validate_input(state)
     assert position.setup_batch_tensors(1, 1)
 

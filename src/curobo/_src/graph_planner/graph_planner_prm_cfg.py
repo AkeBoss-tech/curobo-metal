@@ -42,6 +42,7 @@ _BUNDLED_DEFAULTS = frozenset(
     }
 )
 _ELLIPSOID_METHODS = frozenset({"svd", "householder", "approximate"})
+_CREATE_DEFAULT_DEVICE_CFG: Optional[DeviceCfg] = None
 
 
 def _default_device_cfg() -> DeviceCfg:
@@ -337,6 +338,12 @@ class PRMGraphPlannerCfg(_PRMGraphPlannerCfgPortableMixin):
         installed.  CUDA graph settings are retained for API compatibility but
         are represented by ordinary persistent CPU/MPS execution state.
         """
+        # The pinned factory's ``DeviceCfg()`` default denotes its accelerator
+        # (CUDA).  Preserve the exact public signature while mapping only that
+        # captured default object to Metal; an explicitly supplied CPU config
+        # remains CPU.
+        if device_cfg is _CREATE_DEFAULT_DEVICE_CFG:
+            device_cfg = _default_device_cfg()
         device_cfg = resolve_device_cfg(device_cfg)
         if not isinstance(self_collision_check, bool):
             raise TypeError("self_collision_check must be bool")
@@ -407,6 +414,9 @@ class PRMGraphPlannerCfg(_PRMGraphPlannerCfgPortableMixin):
             use_cuda_graph_for_rollout=use_cuda_graph_for_rollout,
             graph_path_finder_seed=graph_path_finder_seed,
         )
+
+
+_CREATE_DEFAULT_DEVICE_CFG = PRMGraphPlannerCfg.create.__defaults__[6]
 
 
 __all__ = ["PRMGraphPlannerCfg"]

@@ -108,6 +108,15 @@ class RobotCostManagerCfg:
                             raise TypeError(f"{name}.device_cfg must be a DeviceCfg")
                         if not device_cfg.is_same_torch_device(declared_device_cfg.device):
                             raise ValueError(f"{name}.device_cfg does not match device_cfg")
+                    # The original portable shim allowed the compact
+                    # ``{"weight": ...}`` c-space mapping and inferred a
+                    # position cost.  Keep that mapping form working at the
+                    # serialization boundary while supplying the explicit
+                    # fields required by the validated public config (the
+                    # pinned upstream contract requires cost_type).
+                    if name == "cspace_cfg" and "cost_type" not in payload:
+                        payload["cost_type"] = "POSITION"
+                        payload.setdefault("activation_distance", [0.0, 0.0])
                     values[name] = kind(device_cfg=device_cfg, **payload)
                 else:
                     raise TypeError(f"{name} must be a dict or {kind.__name__}")

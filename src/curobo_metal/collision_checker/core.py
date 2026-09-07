@@ -230,28 +230,35 @@ class WorldCollision:
         mesh, mesh_gradient = self._mesh_clearance(values, environments)
         voxel, voxel_gradient = self._voxel_clearance(values, environments)
         clearance = torch.stack((primitive, mesh, voxel), dim=-1)
-        winning_clearance, winner = clearance.min(dim=-1)
-        # MPS may report ``-1`` as the argmin sentinel when every candidate is
-        # ``inf``.  The result is masked as invalid below, but gather must still
-        # receive an in-range index to avoid an asynchronous accelerator error.
-        safe_winner = winner.clamp_min(0)
+        candidate_valid = torch.isfinite(clearance)
+        finite_sentinel = torch.finfo(clearance.dtype).max
+        reduced_clearance = torch.where(
+            candidate_valid,
+            clearance,
+            torch.full_like(clearance, finite_sentinel),
+        )
+        winning_clearance, winner = reduced_clearance.min(dim=-1)
+        valid = candidate_valid.any(dim=-1)
         candidate_gradient = torch.stack(
             (primitive_gradient, mesh_gradient, voxel_gradient), dim=-2
         )
-        world_gradient = candidate_gradient.gather(
-            -2, safe_winner[..., None, None].expand(*safe_winner.shape, 1, 3)
-        ).squeeze(-2)
+        selector = (
+            torch.arange(3, device=values.device)
+            .view(*(1 for _ in winner.shape), 3)
+            .eq(winner[..., None])
+            .to(candidate_gradient.dtype)
+        )
+        world_gradient = (candidate_gradient * selector[..., None]).sum(dim=-2)
         cost, gradient = sphere_world_collision(
             values,
             torch.where(
-                torch.isfinite(winning_clearance),
+                valid,
                 winning_clearance + values[..., 3],
                 torch.full_like(winning_clearance, torch.finfo(values.dtype).max / 4),
             ),
             world_gradient,
             activation_distance=self.config.activation_distance,
         )
-        valid = torch.isfinite(winning_clearance)
         return CollisionQueryResult(
             torch.where(valid, cost, torch.zeros_like(cost)),
             torch.where(valid[..., None], gradient, torch.zeros_like(gradient)),

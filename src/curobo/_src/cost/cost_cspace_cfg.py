@@ -33,18 +33,18 @@ class CSpaceCostCfg(_PortableCSpaceCostCfg):
     """Validated public configuration for ``PositionCSpaceCost``/``StateCSpaceCost``.
 
     The common CPU/MPS position and state bound/target costs are implemented
-    by composed PyTorch.  A missing ``cost_type`` retains the early portable
-    shim's scalar-position convenience for existing applications, but new
-    callers should always choose :class:`CSpaceCostType` explicitly as the
-    pinned CUDA API requires.  State-cost weight retiming is implemented by
-    the portable Torch evaluator using the same time-step powers as upstream.
+    by composed PyTorch.  ``cost_type`` and the activation-distance vector are
+    required explicitly here, matching the pinned CUDA API; the legacy compact
+    mapping form remains supported by ``RobotCostManagerCfg.create`` and the
+    backend-neutral portable config.  State-cost weight retiming is implemented
+    by the portable Torch evaluator using the same time-step powers as upstream.
     """
 
     def __post_init__(self) -> None:
-        # Match the portable base: callers that omit cost_type get POSITION,
-        # the only backwards-compatible interpretation of a scalar weight.
         if self.cost_type is None:
-            self.cost_type = CSpaceCostType.POSITION
+            raise ValueError("cost_type must be specified")
+        if isinstance(self.activation_distance, (float, int)):
+            raise ValueError("activation_distance must be a sequence or tensor")
         # ``bool`` is an ``int`` in Python and accepting it as a degree of
         # freedom previously produced a confusing one-DOF target buffer.
         if isinstance(self.dof, bool) or not isinstance(self.dof, Integral):
