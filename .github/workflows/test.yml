@@ -9,9 +9,8 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.13
       - name: Check pinned cuRobo API inventory
         run: |
           upstream_dir="$(mktemp -d)/curobo"
@@ -19,19 +18,19 @@ jobs:
             https://github.com/NVlabs/curobo.git "$upstream_dir"
           git -C "$upstream_dir" checkout \
             8e734f3ced1df898990bcd92de40abce475907db
-          python tools/api_compat/generate.py \
+          uv run --no-project --python 3.13 python tools/api_compat/generate.py \
             --source "$upstream_dir" \
             --local-root src \
             --output artifacts/api_compat/upstream-api.json \
             --check
       - name: Validate upstream test and example census
         run: |
-          python tools/api_compat/upstream_execution_census.py \
+          uv run --no-project --python 3.13 python tools/api_compat/upstream_execution_census.py \
             --inventory artifacts/api_compat/upstream-api.json \
             --census artifacts/api_compat/upstream-execution-census.json
       - name: Require exact documented public facades for alpha
         run: |
-          python tools/api_compat/surface_gate.py \
+          uv run --no-project --python 3.13 python tools/api_compat/surface_gate.py \
             --inventory artifacts/api_compat/upstream-api.json \
             --local-root src \
             --public-facades-only \
@@ -45,12 +44,10 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+      - run: uv python install "${{ matrix.python-version }}"
       - run: uv sync --python "${{ matrix.python-version }}" --extra test
       - run: PYTHONPATH=.:src PYTORCH_ENABLE_MPS_FALLBACK=0 uv run pytest -q
       - name: Require the real-world API corpus to resolve
@@ -86,12 +83,10 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, curobo-metal, mps]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+      - run: uv python install 3.13
       - run: uv sync --extra test
       # Hosted Apple runners can report MPS as available while retaining a
       # near-zero shared-pool ceiling.  Keep fallback disabled, but remove
@@ -130,18 +125,17 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+      - run: uv python install 3.13
       - name: Build wheel and source distribution
         run: uv build --wheel --sdist --out-dir dist
       - name: Validate distribution metadata
         run: |
           uvx twine check dist/*
-          python tools/packaging/check_distribution_contents.py dist/*
+          uv run --no-project --python 3.13 python \
+            tools/packaging/check_distribution_contents.py dist/*
       - name: Install and test wheel in a clean environment
         run: |
           uv venv /tmp/curobo-metal-wheel
