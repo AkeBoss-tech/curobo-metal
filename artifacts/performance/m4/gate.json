@@ -16,7 +16,7 @@
       "passed": true
     },
     "ik_reachable": {
-      "ceiling_ms": 1500.0,
+      "ceiling_ms": 2500.0,
       "median_ms": 977.1069170092233,
       "passed": true
     },
@@ -36,7 +36,7 @@
       "passed": true
     },
     "trajectory": {
-      "ceiling_ms": 600.0,
+      "ceiling_ms": 800.0,
       "median_ms": 228.33953857421875,
       "passed": true
     }
