@@ -23,8 +23,9 @@ the same environment because both own `curobo`.
 - The release's strict public-facade gate is exact for 24 modules, 122 exports,
   and 10 comparable callable signatures. The broader generated inventory
   resolves 571/586 audited modules; 15 remain partial (two perception internals
-  and 13 bundled example workflows that include integration-specific CLI state). Static inventory coverage is not a claim
-  that every upstream internal or example workflow is implemented.
+  and 13 bundled example workflows that include integration-specific CLI
+  state). Static inventory coverage is not a claim that every upstream internal
+  or example workflow is implemented.
 - The real-world API corpus resolves all 171 documented, example-used, and
   downstream-used compatibility targets collected from 545 symbols across
   upstream and 73 downstream source files.

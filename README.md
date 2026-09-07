@@ -1,7 +1,7 @@
 # cuRobo Metal
 
-An Apple-Silicon compute backend being developed into a drop-in Python
-replacement for pinned [cuRoboV2](https://github.com/NVlabs/curobo).
+An Apple Silicon drop-in Python implementation of the portable API in pinned
+[cuRoboV2](https://github.com/NVlabs/curobo).
 
 The project currently provides:
 
@@ -11,8 +11,8 @@ The project currently provides:
   trajectory optimization;
 - runtime-compiled Metal kernels for fused serial-chain kinematics and primitive
   collision queries;
-- deterministic geometric-planning, mesh, voxel/SDF, ESDF, and whole-body work
-  progressing behind explicit contracts;
+- deterministic geometric planning, mesh, voxel/SDF, ESDF, and whole-body
+  implementations behind explicit contracts;
 - reproducible correctness, profiling, and benchmark artifacts.
 
 The target distribution is installed as `curobo-metal` and exposes the original
