@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from curobo.types import DeviceCfg
+
 import pytest
 import torch
 
@@ -21,6 +23,7 @@ def _cfg(*, feasible=None, new_nodes: int = 0, max_nodes: int = 32) -> PRMGraphP
         sample_rejection_ratio=2,
         use_cuda_graph_for_rollout=False,
         check_feasibility_fn=feasible,
+        device_cfg=DeviceCfg("cpu"),
     )
 
 

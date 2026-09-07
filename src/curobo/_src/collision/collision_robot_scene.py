@@ -163,7 +163,9 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
         x_sph = self._spheres(x_sph)
         if self.scene_model is None or self.collision_constraint is None:
             return self._zero_scene_distance(x_sph)
-        value = self.scene_model.get_sphere_distance_raw(
+        query = getattr(self.scene_model, "_get_sphere_constraint_raw",
+                        self.scene_model.get_sphere_distance_raw)
+        value = query(
             x_sph,
             self._buffer(x_sph),
             self.collision_constraint.weight,
@@ -171,7 +173,9 @@ class RobotSceneCollision(RobotSceneCollisionCfg):
             env_query_idx,
             False,
         )
-        return (-value).clamp_min(0)
+        # Constraint queries normalize native penalties and analytic clearance.
+        # Negating their result would erase colliding queries.
+        return value
 
     def get_self_collision_distance(self, x_sph: torch.Tensor) -> torch.Tensor:
         x_sph = self._spheres(x_sph)

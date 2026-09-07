@@ -33,7 +33,7 @@ def _goals(*, device="cpu", dtype=torch.float32, batch=1, horizon=1):
 def test_interleaved_goalset_weighted_cost_and_broadcast_horizon() -> None:
     current = _current()
     goals = _goals(horizon=1)
-    cfg = ToolPoseCostCfg(weight=[2.0, 3.0], tool_frames=["tool"])
+    cfg = ToolPoseCostCfg(weight=[2.0, 3.0], tool_frames=["tool"], device_cfg=DeviceCfg("cpu"))
     cost = ToolPoseCost(cfg)
     assert cost.setup_batch_tensors(1, 3)
     output, position_distance, rotation_distance, indices = cost(current, goals)
@@ -63,7 +63,7 @@ def test_batch_goal_indices_criteria_and_lie_group_orientation() -> None:
         torch.tensor([[[[[0.0, 0.0, 0.0]]]], [[[[2.0, 0.0, 0.0]]]]], requires_grad=True),
         torch.tensor([[[[[1.0, 0.0, 0.0, 0.0]]]], [[[[0.0, 0.0, 0.0, 1.0]]]]], requires_grad=True),
     )
-    cfg = ToolPoseCostCfg(weight=[1.0, 1.0], tool_frames=["tool"], use_lie_group=True)
+    cfg = ToolPoseCostCfg(weight=[1.0, 1.0], tool_frames=["tool"], use_lie_group=True, device_cfg=DeviceCfg("cpu"))
     cfg.tool_pose_criteria["tool"] = ToolPoseCriteria.track_position_and_orientation(
         xyz=[1.0, 0.0, 0.0], rpy=[0.0, 0.0, 1.0], non_terminal_scale=1.0
     )
@@ -80,9 +80,9 @@ def test_batch_goal_indices_criteria_and_lie_group_orientation() -> None:
 
 def test_tolerance_updates_and_input_validation() -> None:
     current, goals = _current(horizon=1), _goals(horizon=1)
-    cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["tool"])
+    cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["tool"], device_cfg=DeviceCfg("cpu"))
     cost = ToolPoseCost(cfg)
-    cost.update_tool_pose_criteria({"tool": ToolPoseCriteria(terminal_pose_convergence_tolerance=[1.0, 1.0])})
+    cost.update_tool_pose_criteria({"tool": ToolPoseCriteria(terminal_pose_convergence_tolerance=[1.0, 1.0], device_cfg=DeviceCfg("cpu"))})
     output, *_ = cost(current, goals)
     assert torch.equal(output, torch.zeros_like(output))
     with pytest.raises(IndexError, match="out-of-range"):

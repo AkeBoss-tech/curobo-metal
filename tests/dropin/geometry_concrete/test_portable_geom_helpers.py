@@ -78,7 +78,7 @@ def test_pose_helpers_follow_warp_xyzw_convention() -> None:
 
 
 def test_geometry_tensor_helpers_preserve_values_and_gradients() -> None:
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     point = torch.tensor([1.0, 2.0, 3.0], requires_grad=True)
     sphere = tensor_sphere(point, 0.4, device_cfg=cfg)
     capsule = tensor_capsule(point, point + 1, 0.2, device_cfg=cfg)
@@ -97,18 +97,18 @@ def test_geometry_tensor_helpers_preserve_values_and_gradients() -> None:
 
 
 def test_portable_primitive_meshes_are_closed_and_tessellated() -> None:
-    sphere = Sphere("sphere", pose=[1, 2, 3, 1, 0, 0, 0], radius=0.4).get_mesh()
+    sphere = Sphere("sphere", pose=[1, 2, 3, 1, 0, 0, 0], radius=0.4, device_cfg=DeviceCfg("cpu")).get_mesh()
     sphere_vertices = torch.as_tensor(sphere.vertices)
     sphere_faces = torch.as_tensor(sphere.faces)
     assert sphere_vertices.shape[0] > 100 and sphere_faces.shape[0] > 200
     torch.testing.assert_close(torch.linalg.vector_norm(sphere_vertices, dim=-1), torch.full((sphere_vertices.shape[0],), 0.4, dtype=sphere_vertices.dtype))
 
-    cylinder = Cylinder("cylinder", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.2, height=0.6).get_mesh()
+    cylinder = Cylinder("cylinder", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.2, height=0.6, device_cfg=DeviceCfg("cpu")).get_mesh()
     cylinder_vertices = torch.as_tensor(cylinder.vertices)
     assert torch.isclose(cylinder_vertices[:, 2].abs().max(), torch.tensor(0.3, dtype=cylinder_vertices.dtype))
     assert torch.as_tensor(cylinder.faces).shape[0] == 64
 
-    capsule = Capsule("capsule", pose=[0, 0, 0, 1, 0, 0, 0], base=[0, 0, 0], tip=[0, 0, 1], radius=0.2).get_mesh()
+    capsule = Capsule("capsule", pose=[0, 0, 0, 1, 0, 0, 0], base=[0, 0, 0], tip=[0, 0, 1], radius=0.2, device_cfg=DeviceCfg("cpu")).get_mesh()
     capsule_vertices = torch.as_tensor(capsule.vertices)
     assert capsule_vertices.shape[0] > 100
     torch.testing.assert_close(capsule_vertices[:, 2].amin(), torch.tensor(-0.2, dtype=capsule_vertices.dtype))
@@ -122,6 +122,7 @@ def test_mesh_polygon_pointcloud_and_scene_export_are_deterministic(tmp_path) ->
         [0, 1, 2, 3, 0, 2, 4],
         [4, 3],
         scale=[2.0, 1.0, 1.0],
+        device_cfg=DeviceCfg("cpu"),
     )
     assert torch.as_tensor(mesh.faces).shape == (3, 3)
     torch.testing.assert_close(torch.as_tensor(mesh.vertices)[1], torch.tensor([2.0, 0.0, 0.0]))
@@ -129,10 +130,10 @@ def test_mesh_polygon_pointcloud_and_scene_export_are_deterministic(tmp_path) ->
     cloud_mesh = Mesh.from_pointcloud(torch.tensor([[0.0, 0.0, 0.0]]), pitch=0.1)
     assert torch.as_tensor(cloud_mesh.vertices).shape == (24, 3)
     assert torch.as_tensor(cloud_mesh.faces).shape == (12, 3)
-    point_cloud = PointCloud("points", pose=[0, 0, 1, 1, 0, 0, 0], points=[[0, 0, 0], [0.05, 0, 0]])
+    point_cloud = PointCloud("points", pose=[0, 0, 1, 1, 0, 0, 0], points=[[0, 0, 0], [0.05, 0, 0]], device_cfg=DeviceCfg("cpu"))
     assert point_cloud.get_mesh().pose[:3] == [0, 0, 1]
 
-    world = SceneCfg(cuboid=[Cuboid("box", pose=[1, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1])], sphere=[Sphere("ball", position=[0, 0, 0], radius=0.2)])
+    world = SceneCfg(cuboid=[Cuboid("box", pose=[1, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1], device_cfg=DeviceCfg("cpu"))], sphere=[Sphere("ball", position=[0, 0, 0], radius=0.2, device_cfg=DeviceCfg("cpu"))])
     destination = tmp_path / "world.obj"
     world.save_scene_as_mesh(str(destination))
     contents = destination.read_text(encoding="utf-8")

@@ -1,0 +1,37 @@
+........................................................................ [  5%]
+........................................................................ [ 10%]
+........................................................................ [ 15%]
+........................................................................ [ 20%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 36%]
+........................................................................ [ 41%]
+........................................................................ [ 46%]
+........................................................................ [ 51%]
+........................................................................ [ 57%]
+........................................................................ [ 62%]
+........................................................................ [ 67%]
+........................................................................ [ 72%]
+........................................................................ [ 77%]
+........................................................................ [ 82%]
+...................F.................................................... [ 88%]
+........................................................................ [ 93%]
+........................................................................ [ 98%]
+.....................                                                    [100%]
+=================================== FAILURES ===================================
+_______________ test_import_does_not_initialize_or_require_cuda ________________
+
+    def test_import_does_not_initialize_or_require_cuda() -> None:
+        from curobo.types import DeviceCfg
+    
+>       assert DeviceCfg().device == torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+E       AssertionError: assert device(type='mps', index=0) == device(type='mps')
+E        +  where device(type='mps', index=0) = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32).device
+E        +    where DeviceCfg(device=device(type='mps', index=0), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32) = <class 'curobo._src.types.device_cfg.DeviceCfg'>()
+E        +  and   device(type='mps') = <class 'torch.device'>('mps')
+E        +    where <class 'torch.device'> = torch.device
+
+tests/dropin/types/test_imports_and_signatures.py:53: AssertionError
+=========================== short test summary info ============================
+FAILED tests/dropin/types/test_imports_and_signatures.py::test_import_does_not_initialize_or_require_cuda
+1 failed, 1388 passed in 91.74s (0:01:31)

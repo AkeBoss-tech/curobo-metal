@@ -1,3 +1,5 @@
+
+from curobo.types import DeviceCfg
 import torch
 from types import SimpleNamespace
 
@@ -31,7 +33,7 @@ def test_sparse_depth_fusion_extracts_curved_sphere_zero_crossing():
         depth_image=depth,
         rgb_image=torch.full((height, width, 3), 180, dtype=torch.uint8),
         intrinsics=intrinsics,
-        pose=Pose.from_list([0, 0, 0, 1, 0, 0, 0]),
+        pose=Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")),
         depth_to_meter=1.0,
     )
     integrator = BlockSparseTSDFIntegrator(

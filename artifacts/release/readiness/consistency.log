@@ -1,0 +1,56 @@
+........................................................................ [ 11%]
+........................................................................ [ 23%]
+......................................................F...........F..... [ 35%]
+........................................................................ [ 46%]
+........................................................................ [ 58%]
+........................................................................ [ 70%]
+........................................................................ [ 81%]
+........................................................................ [ 93%]
+.......................................                                  [100%]
+=================================== FAILURES ===================================
+_ test_every_runtime_module_matches_static_upstream_surface[curobo._src.perception.mapper.mesh_extractor] _
+
+row = {'name': 'curobo._src.perception.mapper.mesh_extractor', 'module': 'present', 'exports': {'expected': 7, 'present': 4,...t_warp_device_stream', 'wp']}, 'callables': {'compared': 1, 'matching': 0, 'different': ['extract_mesh_block_sparse']}}
+
+    @pytest.mark.parametrize("row", SURFACE_REPORT["modules"], ids=_runtime_id)
+    def test_every_runtime_module_matches_static_upstream_surface(row: dict[str, Any]) -> None:
+        """Require every module's exports and declared callables to match upstream."""
+        problems: list[str] = []
+        if row["module"] != "present":
+            problems.append("module is missing")
+        missing = row["exports"]["missing"]
+        if missing:
+            problems.append(f"missing exports ({len(missing)}): {missing}")
+        different = row["callables"]["different"]
+        if different:
+            problems.append(f"different callable shapes ({len(different)}): {different}")
+>       assert not problems, "; ".join(problems)
+E       AssertionError: missing exports (3): ['MCLookupTables', 'get_warp_device_stream', 'wp']; different callable shapes (1): ['extract_mesh_block_sparse']
+E       assert not ["missing exports (3): ['MCLookupTables', 'get_warp_device_stream', 'wp']", "different callable shapes (1): ['extract_mesh_block_sparse']"]
+
+consistency_tests/test_full_curobo_consistency.py:70: AssertionError
+_ test_every_runtime_module_matches_static_upstream_surface[curobo._src.perception.pose_estimation.mesh_robot] _
+
+row = {'name': 'curobo._src.perception.pose_estimation.mesh_robot', 'module': 'present', 'exports': {'expected': 13, 'present': 11, 'missing': ['trimesh', 'wp']}, 'callables': {'compared': 2, 'matching': 2, 'different': []}}
+
+    @pytest.mark.parametrize("row", SURFACE_REPORT["modules"], ids=_runtime_id)
+    def test_every_runtime_module_matches_static_upstream_surface(row: dict[str, Any]) -> None:
+        """Require every module's exports and declared callables to match upstream."""
+        problems: list[str] = []
+        if row["module"] != "present":
+            problems.append("module is missing")
+        missing = row["exports"]["missing"]
+        if missing:
+            problems.append(f"missing exports ({len(missing)}): {missing}")
+        different = row["callables"]["different"]
+        if different:
+            problems.append(f"different callable shapes ({len(different)}): {different}")
+>       assert not problems, "; ".join(problems)
+E       AssertionError: missing exports (2): ['trimesh', 'wp']
+E       assert not ["missing exports (2): ['trimesh', 'wp']"]
+
+consistency_tests/test_full_curobo_consistency.py:70: AssertionError
+=========================== short test summary info ============================
+FAILED consistency_tests/test_full_curobo_consistency.py::test_every_runtime_module_matches_static_upstream_surface[curobo._src.perception.mapper.mesh_extractor]
+FAILED consistency_tests/test_full_curobo_consistency.py::test_every_runtime_module_matches_static_upstream_surface[curobo._src.perception.pose_estimation.mesh_robot]
+2 failed, 613 passed in 0.75s

@@ -18,6 +18,20 @@ def _solver(**kwargs) -> IKSolver:
     ))
 
 
+def test_humanoid_without_locked_joints_preserves_active_state():
+    from curobo.kinematics import Kinematics, KinematicsCfg
+    from curobo.types import DeviceCfg, JointState
+
+    kin = Kinematics(KinematicsCfg.from_robot_yaml_file(
+        "unitree_g1_29dof_retarget.yml", device_cfg=DeviceCfg("cpu")
+    ))
+    assert kin.lock_jointstate is None
+    state = JointState.from_position(torch.zeros(1, len(kin.joint_names)), kin.joint_names)
+    full = kin.get_full_js(state)
+    assert full.joint_names == state.joint_names
+    torch.testing.assert_close(full.position, state.position)
+
+
 def _two_goal_pose(solver: IKSolver, exact_index: int) -> GoalToolPose:
     state = solver.compute_kinematics(solver.default_joint_state)
     position = state.tool_poses.position[:, 0]
@@ -42,7 +56,12 @@ def test_metrics_only_goalset_selects_the_lowest_cost_candidate():
     assert result.success.tolist() == [[True]]
     assert result.goalset_index.tolist() == [[[1]]]
     torch.testing.assert_close(result.solution[0, 0], current.position)
-    torch.testing.assert_close(result.js_solution.velocity, torch.zeros_like(result.solution))
+    torch.testing.assert_close(result.js_solution.velocity, torch.zeros_like(result.js_solution.position))
+    locked = solver.kinematics.lock_jointstate
+    assert result.js_solution.joint_names == solver.joint_names + locked.joint_names
+    torch.testing.assert_close(result.js_solution.reorder(solver.joint_names).position, result.solution)
+    locked_result = result.js_solution.reorder(locked.joint_names).position
+    torch.testing.assert_close(locked_result, locked.position.expand_as(locked_result))
     assert result.metrics["position_error_per_link"].shape == (1, 1, 1)
     assert result.metrics["world_clearance"].isinf().all()
 

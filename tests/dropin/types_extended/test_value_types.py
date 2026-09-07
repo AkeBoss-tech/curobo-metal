@@ -1,3 +1,5 @@
+
+from curobo.types import DeviceCfg
 import inspect
 
 import pytest
@@ -67,14 +69,14 @@ def test_observation_clone_copy_device_projection_and_errors():
 
 def test_criteria_robot_state_and_high_use_pose_joint_methods():
     criteria = ToolPoseCriteria.track_position_and_orientation()
-    assert criteria.terminal_pose_axes_weight_factor.device.type == "cpu"
+    assert criteria.terminal_pose_axes_weight_factor.device.type == ("mps" if torch.backends.mps.is_available() else "cpu")
     assert criteria.project_distance_to_goal.dtype == torch.uint8
     with pytest.raises(ValueError, match="6 floats"):
-        ToolPoseCriteria(terminal_pose_axes_weight_factor=[1.])
+        ToolPoseCriteria(terminal_pose_axes_weight_factor=[1.], device_cfg=DeviceCfg("cpu"))
 
-    pose = Pose.from_list([1, 0, 0, 1, 0, 0, 0])
+    pose = Pose.from_list([1, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu"))
     output_position = torch.empty_like(pose.position)
-    result = pose.multiply(Pose.from_list([0, 2, 0, 1, 0, 0, 0]), output_position)
+    result = pose.multiply(Pose.from_list([0, 2, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")), output_position)
     assert result.position.data_ptr() == output_position.data_ptr()
     assert torch.allclose(result.linear_distance(pose), torch.tensor([2.]))
     points = torch.zeros(1, 2, 3)

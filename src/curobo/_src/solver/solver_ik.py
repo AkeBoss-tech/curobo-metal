@@ -708,7 +708,11 @@ class IKSolver:
         if current.shape[0] != result.solution.shape[0]:
             raise ValueError("current_state batch dimension must match goal batch")
         dt = current.new_full((current.shape[0], 1, 1), self.config.optimization_dt)
-        result.js_solution.velocity = (result.solution - current[:, None]) / dt
+        active_velocity = (result.solution - current[:, None]) / dt
+        full_velocity = torch.zeros_like(result.js_solution.position)
+        active_indices = [result.js_solution.joint_names.index(name) for name in self.joint_names]
+        full_velocity[..., active_indices] = active_velocity
+        result.js_solution.velocity = full_velocity
 
     def _seed_with_lm(
         self,
@@ -820,7 +824,7 @@ class IKSolver:
         success = success & feasible if self.config.success_requires_convergence else feasible
         selected_goal = torch.gather(goal_index, 1, take)
         result = IKSolverResult(
-            success, solution, JointState(solution, joint_names=self.joint_names),
+            success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
             pe, re, solve_time=time.monotonic() - started, total_time=time.monotonic() - started,
             optimized_seeds=q, seed_rank=take, seed_cost=torch.gather(cost, 1, take),
             goalset_index=selected_goal[..., None].expand(-1, -1, len(self.tool_frames)),

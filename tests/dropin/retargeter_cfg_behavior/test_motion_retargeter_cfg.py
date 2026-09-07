@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from dataclasses import replace
 
 import pytest
 import torch
@@ -15,8 +16,8 @@ from curobo._src.types.device_cfg import DeviceCfg
 def _criteria():
     return OrderedDict(
         [
-            ("tool_a", ToolPoseCriteria.track_position()),
-            ("tool_b", ToolPoseCriteria.track_orientation()),
+            ("tool_a", replace(ToolPoseCriteria.track_position(), device_cfg=DeviceCfg("cpu"), project_distance_to_goal=False)),
+            ("tool_b", replace(ToolPoseCriteria.track_orientation(), device_cfg=DeviceCfg("cpu"), project_distance_to_goal=False)),
         ]
     )
 

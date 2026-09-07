@@ -69,7 +69,7 @@ def test_protocol_annotations_and_lifecycle_signatures_match_pinned_surface():
 
 
 def test_rosenbrock_protocol_evaluates_and_resets_on_cpu():
-    rollout = RosenbrockRollout(RosenbrockCfg(DeviceCfg(), dimensions=3, time_action_horizon=2))
+    rollout = RosenbrockRollout(RosenbrockCfg(DeviceCfg("cpu"), dimensions=3, time_action_horizon=2))
     action = torch.zeros((2, 2, 3), requires_grad=True)
     result = rollout.evaluate_action(action)
     metrics = rollout.compute_metrics_from_action(action)

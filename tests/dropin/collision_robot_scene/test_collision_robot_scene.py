@@ -103,3 +103,31 @@ def test_robot_scene_point_and_empty_world_queries_stay_on_mps(monkeypatch) -> N
     distance, gradient = checker.get_collision_vector(state)
     assert distance.device.type == "mps"
     assert gradient.device.type == "mps"
+
+
+@pytest.mark.parametrize("device", ["cpu"] + (["mps"] if torch.backends.mps.is_available() else []))
+@pytest.mark.parametrize("geometry", ["cuboid", "sphere", "capsule", "cylinder", "mixed"])
+def test_collision_constraint_retains_penetration_after_world_update(device, geometry):
+    from curobo.types import DeviceCfg
+    from curobo.scene import Capsule, Cuboid, Cylinder, Scene, Sphere
+
+    def scene(x):
+        return Scene(
+            cuboid=[Cuboid(name="box", pose=[x, 0, 0, 1, 0, 0, 0], dims=[0.4, 0.4, 0.4])] if geometry in {"cuboid", "mixed"} else [],
+            sphere=[Sphere(name="ball", pose=[x, 0, 0, 1, 0, 0, 0], radius=0.2)] if geometry in {"sphere", "mixed"} else [],
+            capsule=[Capsule(name="capsule", pose=[x, 0, 0, 1, 0, 0, 0], radius=0.2, base=[0, 0, -1], tip=[0, 0, 1])] if geometry == "capsule" else [],
+            cylinder=[Cylinder(name="cylinder", pose=[x, 0, 0, 1, 0, 0, 0], radius=0.2, height=0.4)] if geometry == "cylinder" else [],
+        )
+
+    checker = RobotSceneCollision(RobotSceneCollisionCfg.load_from_config(
+        scene_model=scene(3.0), device_cfg=DeviceCfg(device)))
+    sphere = torch.tensor([[[[0.05, 0, 0, 0.05]]]], device=device, requires_grad=True)
+    far = checker.get_collision_constraint(sphere).clone()
+    checker.update_world(scene(0.0))
+    near = checker.get_collision_constraint(sphere)
+    torch.testing.assert_close(far, torch.zeros_like(far))
+    torch.testing.assert_close(near, torch.full_like(near, 0.2))
+    near.sum().backward()
+    assert sphere.grad[..., 0].abs().min().item() > 0.5
+    checker.update_world(scene(3.0))
+    torch.testing.assert_close(checker.get_collision_constraint(sphere), far)

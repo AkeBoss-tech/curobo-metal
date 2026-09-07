@@ -1,0 +1,170 @@
+................................                                         [100%]
+32 passed in 59.08s
+.............                                                            [100%]
+=============================== warnings summary ===============================
+tests/_src/motion/test_motion_retargeter.py::TestMotionRetargeterMPC::test_solve_frame_mpc_first_frame
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/_pytest/fixtures.py:1313: PytestRemovedIn10Warning: Class-scoped fixture defined as instance method is deprecated.
+  Instance attributes set in this fixture will NOT be visible to test methods,
+  as each test gets a new instance while the fixture runs only once per class.
+  Use @classmethod decorator and set attributes on cls instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
+    fixturefunc = resolve_fixture_function(fixturedef, request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 1 warning in 240.87s (0:04:00)
+{
+  "areas": {
+    "motion": {
+      "cases": 13,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 13
+      },
+      "portable_failed": 0,
+      "portable_passed": 13,
+      "pytest": {
+        "passed": 13
+      }
+    },
+    "solver": {
+      "cases": 32,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 32
+      },
+      "portable_failed": 0,
+      "portable_passed": 32,
+      "pytest": {
+        "passed": 32
+      }
+    }
+  },
+  "cases": 45,
+  "covered_test_modules": 2,
+  "excluded_raw_failures": 0,
+  "implementation_parity_complete": false,
+  "missing_test_modules": [
+    "curobo.tests._src.collision.test_collision_robot_scene",
+    "curobo.tests._src.collision.test_mesh_collision_sdf",
+    "curobo.tests._src.cost.test_cost_base",
+    "curobo.tests._src.cost.test_cost_cspace",
+    "curobo.tests._src.cost.test_cost_scene_collision",
+    "curobo.tests._src.cost.test_cost_self_collision",
+    "curobo.tests._src.cost.test_cost_support_polygon",
+    "curobo.tests._src.cost.test_cost_tool_pose",
+    "curobo.tests._src.geom.sdf.test_voxel_collision",
+    "curobo.tests._src.geom.test_pose",
+    "curobo.tests._src.geom.test_quaternion",
+    "curobo.tests._src.geom.test_transform",
+    "curobo.tests._src.graph_planner.test_constructor",
+    "curobo.tests._src.graph_planner.test_graph_planner_batch_seed",
+    "curobo.tests._src.graph_planner.test_graph_planner_prm",
+    "curobo.tests._src.graph_planner.test_node_sampling_strategy",
+    "curobo.tests._src.motion.test_motion_planner",
+    "curobo.tests._src.motion.test_motion_planner_batch",
+    "curobo.tests._src.motion.test_motion_planner_cfg",
+    "curobo.tests._src.motion.test_motion_planner_esdf",
+    "curobo.tests._src.motion.test_motion_planner_grasp_goalset",
+    "curobo.tests._src.motion.test_motion_planner_num_envs",
+    "curobo.tests._src.motion.test_motion_planner_result",
+    "curobo.tests._src.motion.test_motion_planner_shared_kinematics",
+    "curobo.tests._src.motion.test_motion_retargeter_lock_joints",
+    "curobo.tests._src.optim.external.test_scipy_opt",
+    "curobo.tests._src.optim.external.test_torch_opt",
+    "curobo.tests._src.optim.gradient.test_conjugate_gradient",
+    "curobo.tests._src.optim.gradient.test_lbfgs",
+    "curobo.tests._src.optim.gradient.test_lsr1",
+    "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg",
+    "curobo.tests._src.optim.particle.sample_strategies.test_processor_knot",
+    "curobo.tests._src.optim.particle.sample_strategies.test_processor_standard",
+    "curobo.tests._src.optim.particle.sample_strategies.test_processor_stomp",
+    "curobo.tests._src.optim.particle.test_mppi",
+    "curobo.tests._src.optim.particle.test_parallel_optimizers",
+    "curobo.tests._src.optim.test_multi_stage_optimizer",
+    "curobo.tests._src.optim.test_optim_factory",
+    "curobo.tests._src.optim.test_optimizer_cuda_graph",
+    "curobo.tests._src.perception.mapper.test_block_checkpoint",
+    "curobo.tests._src.perception.mapper.test_block_decay",
+    "curobo.tests._src.perception.mapper.test_block_hash",
+    "curobo.tests._src.perception.mapper.test_block_integrate",
+    "curobo.tests._src.perception.mapper.test_block_marching_cubes",
+    "curobo.tests._src.perception.mapper.test_builder",
+    "curobo.tests._src.perception.mapper.test_comparison",
+    "curobo.tests._src.perception.mapper.test_feature_grid",
+    "curobo.tests._src.perception.mapper.test_feature_matching",
+    "curobo.tests._src.perception.mapper.test_generated_observation_correctness",
+    "curobo.tests._src.perception.mapper.test_integrator",
+    "curobo.tests._src.perception.mapper.test_lidar_projection",
+    "curobo.tests._src.perception.mapper.test_multi_camera",
+    "curobo.tests._src.perception.mapper.test_renderer",
+    "curobo.tests._src.perception.test_filter_depth",
+    "curobo.tests._src.perception.test_mesh_robot",
+    "curobo.tests._src.perception.test_sdf_cuda_graph",
+    "curobo.tests._src.perception.test_sdf_pose_detector",
+    "curobo.tests._src.perception.test_util",
+    "curobo.tests._src.perception.test_wp_mesh_sdf_alignment",
+    "curobo.tests._src.robot.kinematics.test_jacobian_gradcheck",
+    "curobo.tests._src.robot.kinematics.test_kinematics_cfg",
+    "curobo.tests._src.robot.kinematics.test_kinematics_extended",
+    "curobo.tests._src.robot.kinematics.test_kinematics_multi_env_spheres",
+    "curobo.tests._src.robot.kinematics.test_kinematics_reducer",
+    "curobo.tests._src.robot.kinematics.test_kinematics_state",
+    "curobo.tests._src.robot.types.test_joint_limits",
+    "curobo.tests._src.robot.types.test_types",
+    "curobo.tests._src.rollout.cost_manager.test_cost_manager_integration",
+    "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot",
+    "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot_cfg",
+    "curobo.tests._src.rollout.cost_manager.test_multi_env_idxs_env",
+    "curobo.tests._src.rollout.test_goal_registry",
+    "curobo.tests._src.rollout.test_metrics",
+    "curobo.tests._src.rollout.test_rollout_protocol",
+    "curobo.tests._src.rollout.test_rollout_robot",
+    "curobo.tests._src.rollout.test_rollout_robot_cfg",
+    "curobo.tests._src.rollout.test_rollout_rosenbrock",
+    "curobo.tests._src.solver.seed_ik.test_seed_ik_solver",
+    "curobo.tests._src.solver.seed_ik.test_seed_ik_solver_cfg",
+    "curobo.tests._src.solver.seed_ik.test_seed_ik_state",
+    "curobo.tests._src.solver.seed_ik.test_seed_iteration_state_manager",
+    "curobo.tests._src.solver.test_manager_goal",
+    "curobo.tests._src.solver.test_manager_seed",
+    "curobo.tests._src.solver.test_solver_base_cfg",
+    "curobo.tests._src.solver.test_solver_base_result",
+    "curobo.tests._src.solver.test_solver_ik_cfg",
+    "curobo.tests._src.solver.test_solver_mpc",
+    "curobo.tests._src.solver.test_solver_mpc_cfg",
+    "curobo.tests._src.solver.test_solver_mpc_result",
+    "curobo.tests._src.solver.test_solver_trajopt",
+    "curobo.tests._src.solver.test_solver_trajopt_cfg",
+    "curobo.tests._src.solver.test_solver_trajopt_result",
+    "curobo.tests._src.state.test_state_robot_extended",
+    "curobo.tests._src.transition.test_fns_state_transition",
+    "curobo.tests._src.transition.test_robot_state_transition",
+    "curobo.tests._src.transition.test_transition_error_handling",
+    "curobo.tests._src.transition.test_transition_gradients",
+    "curobo.tests._src.types.test_camera",
+    "curobo.tests._src.types.test_device_cfg",
+    "curobo.tests._src.types.test_pose",
+    "curobo.tests._src.types.test_sequence_tool_pose",
+    "curobo.tests._src.types.test_tool_pose",
+    "curobo.tests._src.util.sampling.test_sample_buffer",
+    "curobo.tests._src.util.test_cuda_graph_util",
+    "curobo.tests._src.util.test_cuda_stream_util",
+    "curobo.tests._src.util.test_state_filter",
+    "curobo.tests._src.util.test_trajectory",
+    "curobo.tests._src.util.test_trajectory_execution_manager",
+    "curobo.tests._src.util.test_trajectory_seed_generator",
+    "curobo.tests._src.util.test_viser_visualizer",
+    "curobo.tests._src.util.test_warp",
+    "curobo.tests.test_examples"
+  ],
+  "parity": {
+    "portable_executed": 45
+  },
+  "portable_failed": 0,
+  "portable_passed": 45,
+  "pytest": {
+    "passed": 45
+  },
+  "substituted_test_modules": 114,
+  "test_definition_complete": false
+}

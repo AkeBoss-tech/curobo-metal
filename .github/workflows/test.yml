@@ -65,6 +65,14 @@ jobs:
             --inventory "$GITHUB_WORKSPACE/artifacts/api_compat/upstream-api.json" \
             --require-installed-wheel
 
+      - name: Verify unchanged portable applications on CPU
+        run: |
+          .venv/bin/python tools/application_compat/run.py run \
+            --python "$GITHUB_WORKSPACE/.venv/bin/python" \
+            --backend metal --expect-device cpu \
+            --wheel "$GITHUB_WORKSPACE"/dist/*.whl \
+            --output "$RUNNER_TEMP/application-compat-cpu"
+
   macos:
     runs-on: macos-14
     steps:
@@ -94,6 +102,20 @@ jobs:
             "$GITHUB_WORKSPACE/tools/api_compat/runtime_imports.py" \
             --inventory "$GITHUB_WORKSPACE/artifacts/api_compat/upstream-api.json" \
             --require-installed-wheel
+
+      - name: Verify unchanged portable applications on MPS
+        run: |
+          PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 .venv/bin/python tools/application_compat/run.py run \
+            --python "$GITHUB_WORKSPACE/.venv/bin/python" \
+            --backend metal --expect-device mps \
+            --wheel "$GITHUB_WORKSPACE"/dist/*.whl \
+            --output "$RUNNER_TEMP/application-compat-mps"
+      - name: Preserve MPS application evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-compat-mps
+          path: ${{ runner.temp }}/application-compat-mps
 
   distributions:
     runs-on: ubuntu-latest

@@ -19,7 +19,7 @@ def test_cspace_distance_is_differentiable():
     from curobo._src.cost.cost_cspace_dist_cfg import CSpaceDistCostCfg
     value = torch.tensor([[[0., 0.], [1., 2.]]], requires_grad=True)
     goal = torch.tensor([[1., 1.]])
-    cost = CSpaceDistCost(CSpaceDistCostCfg(weight=2., device_cfg=DeviceCfg()))(value, goal)
+    cost = CSpaceDistCost(CSpaceDistCostCfg(weight=2., device_cfg=DeviceCfg("cpu")))(value, goal)
     cost.sum().backward()
     assert cost.shape == value.shape
     assert value.grad is not None and torch.isfinite(value.grad).all()
@@ -30,13 +30,13 @@ def test_cost_collection_and_goal_registry():
     values = CostCollection(); values.add(torch.ones(2, 3, 1), "one")
     assert values.get_sum(False).shape == (2, 3)
     assert CostsAndConstraints(costs=values).get_sum_cost(True).tolist() == [[3.], [3.]]
-    goal = GoalRegistry.create_idx(2, True, 3, DeviceCfg())
+    goal = GoalRegistry.create_idx(2, True, 3, DeviceCfg("cpu"))
     assert goal.get_index_size() == 6
     assert goal.idxs_env.tolist() == [[0], [0], [0], [1], [1], [1]]
 
 def test_public_rosenbrock_rollout_matches_formula_and_autograd():
     from curobo.rollout import RosenbrockCfg, RosenbrockRollout
-    rollout = RosenbrockRollout(RosenbrockCfg(DeviceCfg(), a=1., b=100.))
+    rollout = RosenbrockRollout(RosenbrockCfg(DeviceCfg("cpu"), a=1., b=100.))
     action = torch.tensor([[[0., 0.], [1., 1.]]], requires_grad=True)
     result = rollout.evaluate_action(action)
     cost = result.costs_and_constraints.get_sum_cost()
@@ -55,7 +55,7 @@ def test_goal_registry_repeats_indices_and_copies_buffers():
     from curobo._src.rollout.goal_registry import GoalRegistry
     from curobo._src.state.state_joint import JointState
 
-    registry = GoalRegistry.create_idx(2, True, 3, DeviceCfg())
+    registry = GoalRegistry.create_idx(2, True, 3, DeviceCfg("cpu"))
     assert registry.idxs_goal_js.squeeze(-1).tolist() == [0, 0, 0, 1, 1, 1]
     assert registry.idxs_env.squeeze(-1).tolist() == [0, 0, 0, 1, 1, 1]
     assert registry.get_index_size() == 6
@@ -75,9 +75,9 @@ def test_cost_manager_runs_cspace_and_convergence_with_autograd():
     from curobo._src.state.state_joint import JointState
     from curobo._src.state.state_robot import RobotState
 
-    manager = RobotCostManager(DeviceCfg())
+    manager = RobotCostManager(DeviceCfg("cpu"))
     manager.initialize_from_config(RobotCostManagerCfg(
-        target_cspace_dist_cfg=CSpaceDistCostCfg(weight=2.0, device_cfg=DeviceCfg())
+        target_cspace_dist_cfg=CSpaceDistCostCfg(weight=2.0, device_cfg=DeviceCfg("cpu"))
     ))
     position = torch.tensor([[[0.0, 1.0], [1.0, 2.0]]], requires_grad=True)
     state = RobotState(JointState.from_position(position))
@@ -92,7 +92,7 @@ def test_cost_manager_runs_cspace_and_convergence_with_autograd():
 def test_cost_manager_missing_component_and_cuda_graph_boundaries():
     from curobo._src.rollout.cost_manager.cost_manager_robot import RobotCostManager
     from curobo._src.rollout.rollout_robot import RobotRollout
-    manager = RobotCostManager(DeviceCfg())
+    manager = RobotCostManager(DeviceCfg("cpu"))
     try:
         manager.enable_cost_component("missing")
     except ValueError as error:

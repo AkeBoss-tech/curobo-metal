@@ -43,12 +43,12 @@ class _RecorderCost:
 
 
 def test_failed_reconfiguration_preserves_last_valid_manager():
-    manager = RobotCostManager()
-    good = RobotCostManagerCfg(start_cspace_dist_cfg=CSpaceDistCostCfg(weight=1.0))
+    manager = RobotCostManager(device_cfg=DeviceCfg("cpu"))
+    good = RobotCostManagerCfg(start_cspace_dist_cfg=CSpaceDistCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu")))
     manager.initialize_from_config(good)
     original_cost = manager.get_cost("start_cspace_dist")
 
-    bad = RobotCostManagerCfg(tool_pose_cfg=ToolPoseCostCfg(weight=[1.0, 1.0]))
+    bad = RobotCostManagerCfg(tool_pose_cfg=ToolPoseCostCfg(weight=[1.0, 1.0], device_cfg=DeviceCfg("cpu")))
     with pytest.raises(ValueError, match="tool_frames"):
         manager.initialize_from_config(bad)
 
@@ -58,7 +58,7 @@ def test_failed_reconfiguration_preserves_last_valid_manager():
 
 
 def test_batch_reset_and_dt_lifecycle_validate_inputs_and_forward_calls():
-    manager = RobotCostManager()
+    manager = RobotCostManager(device_cfg=DeviceCfg("cpu"))
     recorder = _RecorderCost()
     manager.register_cost("recorder", recorder)
 
@@ -77,23 +77,23 @@ def test_batch_reset_and_dt_lifecycle_validate_inputs_and_forward_calls():
 
 
 def test_cfg_factory_accepts_configs_and_mutable_weights_are_shape_safe():
-    direct = CSpaceDistCostCfg(weight=[1.0, 2.0])
-    cfg = RobotCostManagerCfg.create({"start_cspace_dist_cfg": direct})
+    direct = CSpaceDistCostCfg(weight=[1.0, 2.0], device_cfg=DeviceCfg("cpu"))
+    cfg = RobotCostManagerCfg.create({"start_cspace_dist_cfg": direct}, device_cfg=DeviceCfg("cpu"))
     assert cfg.start_cspace_dist_cfg is direct
     cfg.update_regularization_weight(distance_weight=[3.0, 4.0])
     torch.testing.assert_close(direct.weight, torch.tensor([3.0, 4.0]))
 
     with pytest.raises(TypeError, match="dict"):
-        RobotCostManagerCfg.create([])
+        RobotCostManagerCfg.create([], device_cfg=DeviceCfg("cpu"))
     with pytest.raises(TypeError, match="dict or"):
-        RobotCostManagerCfg.create({"start_cspace_dist_cfg": 1.0})
+        RobotCostManagerCfg.create({"start_cspace_dist_cfg": 1.0}, device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="distance_weight"):
         cfg.update_regularization_weight(distance_weight=[1.0, 2.0, 3.0])
 
 
 def test_enabled_tool_pose_cost_requires_robot_kinematics_state():
-    cfg = RobotCostManagerCfg(tool_pose_cfg=ToolPoseCostCfg(weight=[1.0, 1.0], tool_frames=["ee"]))
-    manager = RobotCostManager().initialize_from_config(cfg)
+    cfg = RobotCostManagerCfg(tool_pose_cfg=ToolPoseCostCfg(weight=[1.0, 1.0], tool_frames=["ee"], device_cfg=DeviceCfg("cpu")))
+    manager = RobotCostManager(device_cfg=DeviceCfg("cpu")).initialize_from_config(cfg)
     state = RobotState(JointState.from_position(torch.zeros(1, 2, 1)))
     goal = GoalRegistry(
         link_goal_poses=GoalToolPose(
@@ -108,9 +108,9 @@ def test_enabled_tool_pose_cost_requires_robot_kinematics_state():
 
 def test_update_params_rejects_non_mapping_tool_pose_criteria():
     cfg = RobotCostManagerCfg(
-        tool_pose_cfg=ToolPoseCostCfg(weight=[1.0, 1.0], tool_frames=["ee"])
+        tool_pose_cfg=ToolPoseCostCfg(weight=[1.0, 1.0], tool_frames=["ee"], device_cfg=DeviceCfg("cpu"))
     )
-    manager = RobotCostManager().initialize_from_config(cfg)
+    manager = RobotCostManager(device_cfg=DeviceCfg("cpu")).initialize_from_config(cfg)
 
     with pytest.raises(ValueError, match="must be a dict"):
         manager.update_params(tool_pose_criteria="invalid")
@@ -122,7 +122,7 @@ def test_joint_torque_must_match_joint_trajectory_shape_and_device():
         joint_torque=torch.zeros(1, 2, 1),
     )
     with pytest.raises(ValueError, match="joint_torque must match"):
-        RobotCostManager().initialize_from_config(RobotCostManagerCfg()).compute_costs(state)
+        RobotCostManager(device_cfg=DeviceCfg("cpu")).initialize_from_config(RobotCostManagerCfg()).compute_costs(state)
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS is unavailable")
@@ -130,7 +130,7 @@ def test_mps_cost_manager_rejects_cpu_config_before_allocating_buffers():
     manager = RobotCostManager(DeviceCfg(torch.device("mps")))
     with pytest.raises(ValueError, match="not cost manager device"):
         manager.initialize_from_config(
-            RobotCostManagerCfg(start_cspace_dist_cfg=CSpaceDistCostCfg(weight=1.0))
+            RobotCostManagerCfg(start_cspace_dist_cfg=CSpaceDistCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu")))
         )
     assert manager.costs == {}
     assert manager._initialized is False

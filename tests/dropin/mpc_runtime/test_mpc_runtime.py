@@ -1,4 +1,5 @@
 import pytest
+from curobo.types import DeviceCfg
 import torch
 
 from curobo._src.geom.types import Cuboid, SceneCfg
@@ -12,6 +13,7 @@ def _mpc():
     cfg = ModelPredictiveControlCfg.create(
         "franka.yml", warm_start_optimization_num_iters=1,
         cold_start_optimization_num_iters=1,
+        device_cfg=DeviceCfg("cpu"),
     )
     solver = ModelPredictiveControl(cfg)
     current = solver.default_joint_state
@@ -28,6 +30,7 @@ def test_pose_goal_scene_lifecycle_and_seed_validation():
     world = SceneCfg(cuboid=[Cuboid(
         name="table", pose=[0.0, 0.0, -0.1, 1.0, 0.0, 0.0, 0.0],
         dims=[2.0, 2.0, 0.1],
+        device_cfg=DeviceCfg("cpu"),
     )])
     mpc.update_world(world)
     assert mpc.scene_collision_checker.check_obstacle_exists("table")
@@ -75,6 +78,7 @@ def test_safe_deceleration_uses_velocity_and_supports_mixed_batch():
     cfg = ModelPredictiveControlCfg.create(
         "franka.yml", max_batch_size=2, warm_start_optimization_num_iters=1,
         cold_start_optimization_num_iters=1,
+        device_cfg=DeviceCfg("cpu"),
     )
     mpc = ModelPredictiveControl(cfg)
     position = mpc.default_joint_state.position.repeat(2, 1)

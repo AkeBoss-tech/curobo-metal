@@ -1,0 +1,170 @@
+{
+  "checked_at_utc": "2026-09-07T16:42:27.486296+00:00",
+  "version": "0.1.0a1",
+  "ready_to_publish": false,
+  "archives": {
+    "curobo_metal-0.1.0a1-py3-none-any.whl": "ca7b888d0a311e91d1f42d164fc2be5c51ad0acdf178e84d0b0300f0d7f1f32f",
+    "curobo_metal-0.1.0a1.tar.gz": "4d280a69e076739e0fcbe462d5f562e54d66c8cb5cde9e8897d5c30a7e248dc3"
+  },
+  "checks": {
+    "twine_metadata": "passed for wheel and sdist",
+    "distribution_contents": "passed for wheel and sdist",
+    "clean_sdist_install_and_smoke": "passed",
+    "dependency_consistency": "passed",
+    "python_application_matrix": {
+      "3.10": {
+        "passed": true,
+        "cases": 8,
+        "runtime_python": "3.10.20 (main, Mar 25 2026, 03:21:46) [Clang 22.1.1 ]",
+        "torch": "2.14.0",
+        "report": "artifacts/application_compat/python310-release/report.json",
+        "report_sha256": "64a973cf491f80243090c15ffa6e942b2a3c46e0c08a3cd4932ee200a793a8d2",
+        "wheel_sha256": "ca7b888d0a311e91d1f42d164fc2be5c51ad0acdf178e84d0b0300f0d7f1f32f"
+      },
+      "3.11": {
+        "passed": true,
+        "cases": 8,
+        "runtime_python": "3.11.15 (main, Mar 25 2026, 02:58:47) [Clang 22.1.1 ]",
+        "torch": "2.14.0",
+        "report": "artifacts/application_compat/python311-release/report.json",
+        "report_sha256": "17ecc909faef3549f39b0a64fa77d6e32e40e9140574fd8197d606573edb9b6f",
+        "wheel_sha256": "ca7b888d0a311e91d1f42d164fc2be5c51ad0acdf178e84d0b0300f0d7f1f32f"
+      },
+      "3.12": {
+        "passed": true,
+        "cases": 8,
+        "runtime_python": "3.12.13 (main, Mar 25 2026, 03:16:06) [Clang 22.1.1 ]",
+        "torch": "2.14.0",
+        "report": "artifacts/application_compat/python312-release/report.json",
+        "report_sha256": "52b383f852fbbb1653d5ac326eae115755d086c38efd1f6914b101660483ddeb",
+        "wheel_sha256": "ca7b888d0a311e91d1f42d164fc2be5c51ad0acdf178e84d0b0300f0d7f1f32f"
+      },
+      "3.13": {
+        "passed": true,
+        "cases": 8,
+        "runtime_python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:11:29) [Clang 20.1.8 ]",
+        "torch": "2.14.0",
+        "report": "artifacts/application_compat/python313-release/report.json",
+        "report_sha256": "77356e1bd5ee23bbd9da6f6956cbb166f991ac0dbedb8df0c8c4c3caf098cd9a",
+        "wheel_sha256": "ca7b888d0a311e91d1f42d164fc2be5c51ad0acdf178e84d0b0300f0d7f1f32f"
+      }
+    },
+    "stable_target_consistency_suite": {
+      "initial_result": {
+        "passed": 611,
+        "failed": 4
+      },
+      "scope": "Broader stable-target suite; private dependency re-exports are outside the bounded alpha contract",
+      "remaining_failures": [
+        "Two private perception dependency re-export inventories remain incomplete"
+      ],
+      "corrected_checks": "Replaced stale hardcoded census counts with exact module-set equality against pinned execution census; all five behavioral evidence checks pass",
+      "log": "artifacts/release/readiness/consistency.log",
+      "final_result": {
+        "passed": 613,
+        "failed": 2
+      }
+    },
+    "fresh_installed_wheel_upstream_gauntlet": {
+      "status": "completed before mps:0 fix; failures repaired and targeted rerun passed",
+      "report": "artifacts/release/readiness/portable-case-census.json",
+      "portable_passed": 2747,
+      "portable_failed": 2,
+      "mechanism_exclusions": 103,
+      "scope": "114 modules on preceding candidate wheel; retained as original evidence",
+      "fix": "Automatic MPS device uses index 0 to match allocated tensors",
+      "targeted_rerun": {
+        "report": "artifacts/release/readiness/device-fix-case-census.json",
+        "modules": 2,
+        "portable_passed": 64,
+        "portable_failed": 0,
+        "mechanism_exclusions": 1,
+        "scope": "Targeted report intentionally does not claim full census coverage"
+      }
+    },
+    "source_regression_suite": {
+      "passed": 1390,
+      "failed": 0,
+      "log": "artifacts/release/readiness/source-tests-final.log"
+    },
+    "final_upstream_ik_retargeter": {
+      "status": "passed for the two selected modules",
+      "portable_passed": 45,
+      "portable_failed": 0,
+      "report": "artifacts/release/readiness/ik-retargeter-final-case-census.json",
+      "scope": "Targeted upstream IK and humanoid retargeting; not a new full 114-module census"
+    },
+    "public_api_gate": {
+      "passed": true,
+      "report": "artifacts/release/readiness/public-api-gate.json"
+    }
+  },
+  "nvidia_applications": {
+    "passed": true,
+    "cases": 8,
+    "report": "artifacts/release/readiness/cuda-results-final/report.json",
+    "host": "omen-3080",
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "driver": "580.178.04",
+    "runtime": {
+      "cuda_available": true,
+      "direct_url": {
+        "dir_info": {},
+        "url": "file:///common/home/ad2046/curobo-metal-cuda-replay/upstream"
+      },
+      "mps_available": false,
+      "owners": [
+        "nvidia-curobo"
+      ],
+      "package_root": "/home/omen/akash/curobo-application-replay-20260907/.venv/lib/python3.12/site-packages/curobo",
+      "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+      "source_attestation": {
+        "python_files_verified": 586,
+        "revision": "8e734f3ced1df898990bcd92de40abce475907db"
+      },
+      "torch": "2.7.1+cu126",
+      "version": "0.0.post1.dev1",
+      "wheel_files_verified": 0
+    },
+    "comparison": "artifacts/release/readiness/cuda-metal-comparison.json",
+    "comparison_passed": true,
+    "comparison_differences": 0
+  },
+  "connection_attempts": {
+    "ilab": "Authenticated shared SSH connection confirmed; ~/.ssh/curobo-ilab-control",
+    "omen_alias": "not configured",
+    "robo": "Authenticated using shared SSH master on ilab; RTX 3090 execution complete",
+    "amarel": "hostnames unresolved on current network"
+  },
+  "publishing": {
+    "performed": false,
+    "version_tag_present": false,
+    "github_environments": [],
+    "pypi_project_lookup": "HTTP 404; no published project found",
+    "trusted_publisher_configuration": "not verified"
+  },
+  "remaining": [
+    "Publication step only: review and commit the worktree, create the version tag, and configure/verify PyPI trusted publishing before upload"
+  ],
+  "remote_preparation": {
+    "host": "ilab1.cs.rutgers.edu",
+    "bundle": "/common/home/ad2046/curobo-metal-cuda-replay/applications-20260907",
+    "python": "/common/home/ad2046/curobo-metal-cuda-replay/.venv/bin/python",
+    "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+    "installed_python_files_verified": 586,
+    "dependency_check": "passed",
+    "application_source_hashes": "verified",
+    "scheduler": "scontrol ping reports DOWN; controller TCP port 6817 refuses connection",
+    "batch_script": "artifacts/release/readiness/run-cuda-applications.sbatch"
+  },
+  "cuda_validation_fixes": [
+    "IK js_solution now includes locked joints; solution remains active joints",
+    "Retargeter selects active-joint velocities from expanded IK result",
+    "Portable pose program initializes robot context through public Kinematics API",
+    "Portable IK program reorders full joint state before FK and reports joint names",
+    "Configurations with null or empty lock_joints correctly return no locked joint state"
+  ],
+  "verified_replay_bundle": "artifacts/release/readiness/release-application-bundle",
+  "validation_complete": true,
+  "validated_release_scope": "0.1.0a1 bounded alpha: eight byte-identical portable V2 applications on CUDA and MPS, supported Python matrix, local regressions and targeted upstream regressions"
+}

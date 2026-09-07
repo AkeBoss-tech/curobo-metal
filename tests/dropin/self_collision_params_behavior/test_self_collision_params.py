@@ -50,7 +50,7 @@ def test_link_pair_compilation_is_symmetric_and_does_not_mutate_inputs() -> None
             link_padding,
             spheres,
             sphere_link_ids,
-            DeviceCfg(),
+            DeviceCfg("cpu"),
         )
     )
 
@@ -65,7 +65,7 @@ def test_link_pair_compilation_is_symmetric_and_does_not_mutate_inputs() -> None
     torch.testing.assert_close(distances, distances.T)
 
     cfg = SelfCollisionKinematicsCfg.create_from_link_pairs(
-        links, link_ids, ignores, link_padding, spheres, sphere_link_ids, DeviceCfg()
+        links, link_ids, ignores, link_padding, spheres, sphere_link_ids, DeviceCfg("cpu")
     )
     assert cfg.collision_pairs.tolist() == [[0, 3], [1, 3], [2, 3]]
 
@@ -100,7 +100,7 @@ def test_rejects_device_and_link_mapping_errors_without_building_cpu_buffers() -
         )
     with pytest.raises(ValueError, match="map every collision link"):
         SelfCollisionKinematicsCfg.compute_sphere_pair_distance_with_link_pair_ignores(
-            ["a"], {"a": 0, "b": 1}, {}, {}, spheres, torch.zeros(2, dtype=torch.long), DeviceCfg()
+            ["a"], {"a": 0, "b": 1}, {}, {}, spheres, torch.zeros(2, dtype=torch.long), DeviceCfg("cpu")
         )
 
 

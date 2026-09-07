@@ -29,7 +29,7 @@ def _state(device, value=0.0):
 
 
 def test_goal_buffer_value_update_reuses_reference_and_copies_payloads():
-    manager = GoalManager(DeviceCfg())
+    manager = GoalManager(DeviceCfg("cpu"))
     solve = _solve()
     first, changed = manager.update_goal_buffer(
         solve, goal_tool_poses=_poses("cpu"), current_js=_state("cpu"), goal_js=_state("cpu", 2.0)
@@ -47,7 +47,7 @@ def test_goal_buffer_value_update_reuses_reference_and_copies_payloads():
 
 
 def test_smaller_goalset_pads_and_reuses_larger_cache():
-    manager = GoalManager(DeviceCfg())
+    manager = GoalManager(DeviceCfg("cpu"))
     first, changed = manager.update_goal_buffer(_solve(3), goal_tool_poses=_poses("cpu", 3))
     assert changed
     second, changed = manager.update_goal_buffer(_solve(1), goal_tool_poses=_poses("cpu", 1, offset=9.0))
@@ -59,7 +59,7 @@ def test_smaller_goalset_pads_and_reuses_larger_cache():
 
 
 def test_registry_install_copies_values_without_replacing_reference():
-    manager = GoalManager(DeviceCfg())
+    manager = GoalManager(DeviceCfg("cpu"))
     solve = _solve(goalset=1)
     source = GoalRegistry(
         goal_js=_state("cpu", 1.0), current_js=_state("cpu", 2.0),
@@ -79,7 +79,7 @@ def test_registry_install_copies_values_without_replacing_reference():
 
 
 def test_shape_frame_and_cross_device_fail_explicitly():
-    manager = GoalManager(DeviceCfg())
+    manager = GoalManager(DeviceCfg("cpu"))
     manager.update_goal_buffer(_solve(1), goal_tool_poses=_poses("cpu", 1), current_js=_state("cpu"))
     with pytest.raises(ValueError, match="goal link poses"):
         pose = _poses("cpu", 1)

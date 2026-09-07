@@ -1,0 +1,381 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="portable-upstream-module-shards" tests="45" failures="8" errors="0" skipped="0" time="164.879000"><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverCfgCreate" name="test_create_creates_config" time="0.156" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverCfgCreate" name="test_create_sets_num_seeds" time="0.046" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverCfgCreate" name="test_create_sets_tolerances" time="0.046" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverCfgCreate" name="test_create_default_lm_ik" time="0.044" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverCfgCreate" name="test_create_batch_config" time="0.042" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverInitialization" name="test_init_with_config" time="0.068" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverInitialization" name="test_init_creates_components" time="0.023" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverInitialization" name="test_init_without_lm_ik" time="0.067" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverInitialization" name="test_multi_link_ik_uses_additional_lm_seeds" time="0.145" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverProperties" name="test_action_dim_property" time="0.023" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverProperties" name="test_kinematics_property" time="0.000" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverProperties" name="test_default_joint_position_property" time="0.000" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverProperties" name="test_default_joint_state_property" time="0.000" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverProperties" name="test_joint_names_property" time="0.000" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePose" name="test_solve_pose_returns_result" time="4.058" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePose" name="test_solve_pose_result_fields" time="3.502" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePose" name="test_solve_pose_multiple_return_seeds" time="2.340" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePose" name="test_solve_pose_with_tool_pose_input" time="3.031" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePose" name="test_solve_pose_timing" time="2.569" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePose" name="test_solve_pose_js_solution" time="3.975" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePose" name="test_solve_pose_run_optimizer_false" time="0.010" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePoseBatch" name="test_solve_pose_batch" time="4.211" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePoseBatch" name="test_solve_pose_batch_run_optimizer_false" time="0.092" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePoseBatchEnv" name="test_solve_pose_multi_env" time="4.406" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverVariableBatchSize" name="test_solve_pose_fewer_than_max" time="4.404" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverVariableBatchSize" name="test_solve_pose_single_problem_ibatch_size_solver" time="4.243" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePoseGoalset" name="test_solve_pose_goalset" time="3.616" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverSolvePoseGoalset" name="test_solve_pose_goalset_with_return_seeds" time="1.969" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverResetSeed" name="test_reset_seed_no_error" time="0.000" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverGetUniqueSolution" name="test_get_unique_solution" time="3.451" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverProblemBatchSize" name="test_problem_batch_size_after_solve" time="3.143" /><testcase classname="tests._src.solver.test_solver_ik.TestIKSolverUpdateWorld" name="test_update_world_method_exists" time="0.000" /><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_joint_names" time="1.130" /><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_solve_frame_first_call" time="13.777"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK object at 0x11ba0cf50&gt;
+retargeter_ik = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x1081857f0&gt;
+
+    def test_solve_frame_first_call(self, retargeter_ik):
+        """First call should use global IK and return a result."""
+        retargeter_ik.reset()
+        seq = _make_sequence(1, 1, len(TOOL_FRAMES), 'mps:0')
+        tp = seq.get_frame(0)
+&gt;       result = retargeter_ik.solve_frame(tp)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/motion/test_motion_retargeter.py:81: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_solve_frame_subsequent_call" time="13.372"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK object at 0x11b8c9cd0&gt;
+retargeter_ik = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x1081857f0&gt;
+
+    def test_solve_frame_subsequent_call(self, retargeter_ik):
+        """Second call should use local IK (warm-started)."""
+        retargeter_ik.reset()
+        seq = _make_sequence(2, 1, len(TOOL_FRAMES), 'mps:0')
+&gt;       retargeter_ik.solve_frame(seq.get_frame(0))
+
+tests/_src/motion/test_motion_retargeter.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_solve_sequence" time="13.444"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK object at 0x11b8c9f30&gt;
+retargeter_ik = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x1081857f0&gt;
+
+    def test_solve_sequence(self, retargeter_ik):
+        num_frames = 5
+        seq = _make_sequence(num_frames, 1, len(TOOL_FRAMES), 'mps:0')
+&gt;       result = retargeter_ik.solve_sequence(seq)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/motion/test_motion_retargeter.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:237: in solve_sequence
+    result = self.solve_frame(tool_poses.get_frame(index))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_solve_sequence_resets_state" time="13.545"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK object at 0x11b873410&gt;
+retargeter_ik = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x1081857f0&gt;
+
+    def test_solve_sequence_resets_state(self, retargeter_ik):
+        """solve_sequence should call reset internally so each call starts fresh."""
+        seq = _make_sequence(3, 1, len(TOOL_FRAMES), 'mps:0')
+&gt;       retargeter_ik.solve_sequence(seq)
+
+tests/_src/motion/test_motion_retargeter.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:237: in solve_sequence
+    result = self.solve_frame(tool_poses.get_frame(index))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_batch_size_mismatch_raises" time="0.000" /><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_sequence_batch_mismatch_raises" time="0.000" /><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK" name="test_reset_clears_state" time="15.584"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK object at 0x11ba44750&gt;
+retargeter_ik = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x1081857f0&gt;
+
+    def test_reset_clears_state(self, retargeter_ik):
+        """After reset, next solve_frame should use global IK again."""
+        seq = _make_sequence(2, 1, len(TOOL_FRAMES), 'mps:0')
+        retargeter_ik.reset()
+&gt;       retargeter_ik.solve_frame(seq.get_frame(0))
+
+tests/_src/motion/test_motion_retargeter.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC" name="test_solve_frame_mpc_first_frame" time="17.655"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC object at 0x11ba0ce10&gt;
+retargeter_mpc = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x11bafb4d0&gt;
+
+    def test_solve_frame_mpc_first_frame(self, retargeter_mpc):
+        """First frame should still use global IK even in MPC mode."""
+        retargeter_mpc.reset()
+        seq = _make_sequence(1, 1, len(TOOL_FRAMES), 'mps:0')
+&gt;       result = retargeter_mpc.solve_frame(seq.get_frame(0))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/motion/test_motion_retargeter.py:152: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC" name="test_solve_frame_mpc_returns_trajectory" time="13.394"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC object at 0x11ba0d090&gt;
+retargeter_mpc = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x11bafb4d0&gt;
+
+    def test_solve_frame_mpc_returns_trajectory(self, retargeter_mpc):
+        """MPC subsequent frames should return a trajectory."""
+        retargeter_mpc.reset()
+        seq = _make_sequence(2, 1, len(TOOL_FRAMES), 'mps:0')
+&gt;       retargeter_mpc.solve_frame(seq.get_frame(0))
+
+tests/_src/motion/test_motion_retargeter.py:160: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC" name="test_solve_sequence_mpc" time="13.298"><failure message="AttributeError: 'NoneType' object has no attribute 'values'">self = &lt;tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC object at 0x11b8c9e00&gt;
+retargeter_mpc = &lt;curobo._src.motion.motion_retargeter.MotionRetargeter object at 0x11bafb4d0&gt;
+
+    def test_solve_sequence_mpc(self, retargeter_mpc):
+        num_frames = 4
+        seq = _make_sequence(num_frames, 1, len(TOOL_FRAMES), 'mps:0')
+&gt;       result = retargeter_mpc.solve_sequence(seq)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/motion/test_motion_retargeter.py:169: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:237: in solve_sequence
+    result = self.solve_frame(tool_poses.get_frame(index))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:219: in solve_frame
+    return self._solve_global_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/motion/motion_retargeter.py:251: in _solve_global_ik
+    result = self._global_ik_solver.solve_pose(goal_tool_poses, return_seeds=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:955: in solve_pose
+    result = self._solve_impl(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:881: in _solve_impl
+    return self._solve_pose_portable(
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/solver/solver_ik.py:827: in _solve_pose_portable
+    success, solution, self._kinematics.get_full_js(JointState(solution, joint_names=self.joint_names)),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:362: in get_full_js
+    locked = self.lock_jointstate
+             ^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/kinematics/kinematics.py:343: in lock_jointstate
+    return self.config.kinematics_config.lock_jointstate
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _KinematicsParamsPortable(robot_cfg=RobotCfg(name='g1_29dof_rev_1_0', base_link='base_link', tool_frames=['pelvis', 't...03,  1.2931e-02,  1.9613e-02],
+         [-5.5443e-03,  6.0438e-04,  4.4494e-02,  1.7936e-02]]],
+       device='mps:0'))
+
+    @property
+    def lock_jointstate(self) -&gt; JointState:
+        locked = self.robot_cfg.metadata.get("lock_joints", {})
+        return JointState.from_position(
+&gt;           self.robot_cfg.device_cfg.to_device(list(locked.values())),
+                                                     ^^^^^^^^^^^^^
+            joint_names=list(locked),
+        )
+E       AttributeError: 'NoneType' object has no attribute 'values'
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/robot/types/kinematics_params.py:544: AttributeError</failure></testcase><testcase classname="tests._src.motion.test_motion_retargeter.TestRetargetResult" name="test_ik_result_no_trajectory" time="0.000" /><testcase classname="tests._src.motion.test_motion_retargeter.TestRetargetResult" name="test_mpc_result_with_trajectory" time="0.000" /></testsuite></testsuites>

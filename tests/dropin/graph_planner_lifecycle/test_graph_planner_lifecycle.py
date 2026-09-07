@@ -38,7 +38,7 @@ class _Transition:
 
 
 def _planner(*, feasible=None, rollout=False, scene_collision_cfg=None) -> PRMGraphPlanner:
-    device = DeviceCfg()
+    device = DeviceCfg("cpu")
     rollout_cfg = None
     if rollout:
         rollout_cfg = RobotRolloutCfg(
@@ -76,8 +76,8 @@ def test_valid_query_means_valid_endpoints_not_universal_path_success() -> None:
 
 def test_configured_rollouts_and_scene_checker_are_owned_without_cuda_graphs() -> None:
     scene = SceneCollisionCfg(
-        scene_model=SceneCfg(cuboid=[Cuboid("wall", [4, 0, 0, 1, 0, 0, 0], [1, 1, 1])])
-    )
+        scene_model=SceneCfg(cuboid=[Cuboid("wall", [4, 0, 0, 1, 0, 0, 0], [1, 1, 1], device_cfg=DeviceCfg("cpu"))])
+    , device_cfg=DeviceCfg("cpu"))
     owned = _planner(rollout=True, scene_collision_cfg=scene)
     assert owned.scene_collision_checker is not None
     assert owned.scene_collision_checker.check_obstacle_exists("wall")

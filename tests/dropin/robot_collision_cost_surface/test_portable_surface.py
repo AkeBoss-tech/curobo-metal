@@ -32,12 +32,13 @@ def test_cspace_cost_lifecycle_and_l2_helper_are_differentiable() -> None:
             activation_distance=[0.0, 0.0],
             cost_type=CSpaceCostType.POSITION,
             dof=2,
+            device_cfg=DeviceCfg("cpu"),
         )
     )
     assert position.validate_input(state)
     assert position.setup_batch_tensors(1, 1)
 
-    distance = CSpaceDistCost(CSpaceDistCostCfg(weight=1.0))
+    distance = CSpaceDistCost(CSpaceDistCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu")))
     assert distance.validate_input(q, torch.zeros_like(q))
     value = distance.jit_squared_cost_to_l2(distance(q, torch.zeros_like(q))).sum()
     value.backward()
@@ -59,7 +60,7 @@ def test_portable_pose_helpers_preserve_quaternion_and_autograd_contract() -> No
 
 
 def test_scene_collision_and_kinematics_aliases_use_portable_backends() -> None:
-    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg())
+    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu"))
     kinematics = Kinematics(cfg, compute_spheres=True)
     active = JointState.from_position(
         kinematics.default_joint_position, joint_names=kinematics.joint_names
@@ -82,7 +83,7 @@ def test_scene_collision_and_kinematics_aliases_use_portable_backends() -> None:
             return torch.ones(spheres.shape[:-1], dtype=spheres.dtype, device=spheres.device)
 
     state = kinematics.compute_kinematics(active)
-    settings = SceneCollisionCostCfg(weight=1.0)
+    settings = SceneCollisionCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu"))
     settings.scene_collision_checker = SphereChecker()
     cost = SceneCollisionCost(settings)
     assert cost.validate_input(state)

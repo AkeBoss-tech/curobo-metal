@@ -33,11 +33,11 @@ from curobo._src.types.tool_pose import GoalToolPose, ToolPose
 
 def _limits() -> JointLimits:
     pair = torch.tensor([[-1.0, -1.0], [1.0, 1.0]])
-    return JointLimits(["a", "b"], pair, pair * 2, pair * 3, pair * 4, pair * 5)
+    return JointLimits(["a", "b"], pair, pair * 2, pair * 3, pair * 4, pair * 5, device_cfg=DeviceCfg("cpu"))
 
 
 def test_cost_enable_disable_preserves_reusable_config() -> None:
-    config = BaseCostCfg(weight=[2.0])
+    config = BaseCostCfg(weight=[2.0], device_cfg=DeviceCfg("cpu"))
     from curobo._src.cost.cost_base import BaseCost
 
     cost = BaseCost(config)
@@ -54,6 +54,7 @@ def test_derived_cost_config_clone_keeps_type_and_independent_tensor_state() -> 
         weight=[1.0, 2.0], dof=2, cost_type=CSpaceCostType.POSITION,
         activation_distance=[0.0, 0.1], joint_limits=_limits(),
         cspace_target_weight=3.0, cspace_target_dof_weight=[4.0, 5.0],
+        device_cfg=DeviceCfg("cpu"),
     )
     copied = cfg.clone()
     assert isinstance(copied, CSpaceCostCfg)
@@ -80,6 +81,7 @@ def test_cspace_position_and_state_bounds_targets_are_differentiable() -> None:
         activation_distance=[0.1, 0.0], joint_limits=_limits(),
         cspace_target_weight=1.0, cspace_target_dof_weight=[1.0, 2.0],
         cspace_non_terminal_weight_factor=0.25,
+        device_cfg=DeviceCfg("cpu"),
     )
     value = PositionCSpaceCost(cfg)(state, target_joint_state=target)
     assert value.shape == (1, 2, 2)
@@ -87,10 +89,11 @@ def test_cspace_position_and_state_bounds_targets_are_differentiable() -> None:
     assert q.grad is not None and torch.isfinite(q.grad).all() and q.grad[0, 0, 0] > 0
 
     q2 = q.detach().clone().requires_grad_()
-    state2 = JointState(q2, torch.ones_like(q2) * 3, torch.zeros_like(q2), jerk=torch.zeros_like(q2))
+    state2 = JointState(q2, torch.ones_like(q2) * 3, torch.zeros_like(q2), jerk=torch.zeros_like(q2), device_cfg=DeviceCfg("cpu"))
     state_cfg = CSpaceCostCfg(
         weight=[1.0] * 5, dof=2, cost_type="state", activation_distance=[0.0] * 5,
         joint_limits=_limits(), squared_l2_regularization_weight=[.1] * 5,
+        device_cfg=DeviceCfg("cpu"),
     )
     state_value = StateCSpaceCost(state_cfg)(state2, joint_torque=torch.ones_like(q2) * 7)
     state_value.sum().backward()
@@ -101,7 +104,7 @@ def test_cspace_position_and_state_bounds_targets_are_differentiable() -> None:
 def test_cspace_distance_goal_indices_terminal_weight_and_distance_output() -> None:
     q = torch.tensor([[[1.0, 2.0], [3.0, 4.0]], [[2.0, 1.0], [4.0, 3.0]]], requires_grad=True)
     goal = torch.tensor([[0.0, 0.0], [1.0, 1.0]])
-    cfg = CSpaceDistCostCfg(weight=2.0, dof=2, only_terminal_cost=True)
+    cfg = CSpaceDistCostCfg(weight=2.0, dof=2, only_terminal_cost=True, device_cfg=DeviceCfg("cpu"))
     cfg.update_terminal_dof_weight([2.0, 3.0])
     cost = CSpaceDistCost(cfg)
     result, distance = cost.forward_out_distance(q, goal, torch.tensor([0, 1]))
@@ -120,7 +123,7 @@ def test_tool_pose_goalset_criteria_and_gradient() -> None:
         torch.tensor([[[[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]], [[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]]]]),
         torch.tensor([[[[[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]], [[[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]]]]),
     )
-    cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["tool"])
+    cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["tool"], device_cfg=DeviceCfg("cpu"))
     output, linear, angular, idx = ToolPoseCost(cfg)(current, goals)
     assert output.shape == (1, 2, 2)
     assert linear.shape == angular.shape == idx.shape == (1, 2, 1)
@@ -141,24 +144,26 @@ def test_tool_pose_criteria_partial_updates_tolerance_and_goal_frame_projection(
         torch.zeros((1, 1, 2, 1, 3)),
         torch.tensor([[[[[half, 0.0, 0.0, half]], [[1.0, 0.0, 0.0, 0.0]]]]]),
     )
-    cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["a", "b"])
+    cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["a", "b"], device_cfg=DeviceCfg("cpu"))
     cfg.tool_pose_criteria["a"] = ToolPoseCriteria(
         terminal_pose_axes_weight_factor=[0, 1, 0, 0, 0, 0],
         non_terminal_pose_axes_weight_factor=[0, 1, 0, 0, 0, 0],
         project_distance_to_goal=True,
+        device_cfg=DeviceCfg("cpu"),
     )
     cost = ToolPoseCost(cfg)
     initial, _, _, _ = cost(current, goals)
     assert initial[0, 0, 0] > 0  # x-world is y in the rotated goal frame.
     before_b = cost._stacked_tool_pose_criteria.terminal_pose_axes_weight_factor[1].clone()
-    cost.update_tool_pose_criteria({"a": ToolPoseCriteria.disabled()})
+    cost.update_tool_pose_criteria({"a": ToolPoseCriteria([0.] * 6, [0.] * 6, device_cfg=DeviceCfg("cpu"))})
     assert torch.equal(cost._stacked_tool_pose_criteria.terminal_pose_axes_weight_factor[1], before_b)
     disabled, _, _, _ = cost(current, goals)
     assert disabled[0, 0, 0].item() == 0.0
 
-    tolerance_cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["a"])
+    tolerance_cfg = ToolPoseCostCfg(weight=1.0, tool_frames=["a"], device_cfg=DeviceCfg("cpu"))
     tolerance_cfg.tool_pose_criteria["a"] = ToolPoseCriteria(
         terminal_pose_convergence_tolerance=[1.0, 0.0],
+        device_cfg=DeviceCfg("cpu"),
     )
     tolerance_cost = ToolPoseCost(tolerance_cfg)
     single = ToolPose(["a"], position[:, :, :1], quat[:, :, :1])
@@ -202,17 +207,18 @@ def test_scene_and_self_collision_reductions_and_support_polygon() -> None:
         activation_distance=.1,
         sum_distance=False,
         _scene_collision_checker=_Checker(),
+        device_cfg=DeviceCfg("cpu"),
     ))
     scene_value = scene(spheres)
     assert scene_value.shape == (1, 1, 3) and bool((scene_value > 0).any())
 
-    self_cost = SelfCollisionCost(SelfCollisionCostCfg(weight=1.0, self_collision_kin_config=_SelfConfig(), store_pair_distance=True))
+    self_cost = SelfCollisionCost(SelfCollisionCostCfg(weight=1.0, self_collision_kin_config=_SelfConfig(), store_pair_distance=True, device_cfg=DeviceCfg("cpu")))
     self_value = self_cost(spheres)
     assert self_value.shape == (1, 1, 1) and self_cost._pair_distance.shape == (1, 1, 1)
     (scene_value.sum() + self_value.sum()).backward()
     assert torch.isfinite(spheres.grad).all()
 
-    support = CostSupportPolygon(CostSupportPolygonCfg(weight=1.0, foot_sphere_indices=torch.tensor([0, 1, 2])))
+    support = CostSupportPolygon(CostSupportPolygonCfg(weight=1.0, foot_sphere_indices=torch.tensor([0, 1, 2]), device_cfg=DeviceCfg("cpu")))
     com = torch.tensor([[[2.0, 0.0, 0.0]]])
     support_value = support(com, spheres.detach())
     assert support_value.shape == (1, 1) and support_value.item() > 0
@@ -225,6 +231,7 @@ def test_scene_swept_cost_forwards_speed_metric_and_validates_lifecycle() -> Non
     cost = SceneCollisionCost(SceneCollisionCostCfg(
         weight=1.0, num_spheres=1, use_sweep=True, use_speed_metric=True,
         _scene_collision_checker=checker,
+        device_cfg=DeviceCfg("cpu"),
     ))
     cost.setup_batch_tensors(1, 3)
     result = cost(state, trajectory_dt=torch.tensor([0.1]))

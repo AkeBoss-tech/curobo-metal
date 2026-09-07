@@ -10,7 +10,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 
 
 def test_goal_registry_seed_indices_copy_and_kernel_contract():
-    device_cfg = DeviceCfg()
+    device_cfg = DeviceCfg("cpu")
     seed = JointState.from_position(torch.zeros(2, 2, 3))
     registry = GoalRegistry.create_idx(2, True, 3, device_cfg, seed_goal_state=seed)
     assert registry.idxs_link_pose.squeeze(-1).tolist() == [0, 0, 0, 1, 1, 1]
@@ -27,7 +27,7 @@ def test_goal_registry_seed_indices_copy_and_kernel_contract():
 
 
 def test_rosenbrock_generalized_cost_autograd_and_graph_executor():
-    rollout = RosenbrockRollout(RosenbrockCfg(DeviceCfg(), dimensions=3, time_horizon=2, time_action_horizon=2), use_cuda_graph=True)
+    rollout = RosenbrockRollout(RosenbrockCfg(DeviceCfg("cpu"), dimensions=3, time_horizon=2, time_action_horizon=2), use_cuda_graph=True)
     action = torch.tensor([[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]], requires_grad=True)
     metrics = rollout.compute_metrics_from_action(action)
     assert metrics.costs_and_constraints.costs.names == ["rosenbrock"]
@@ -40,7 +40,7 @@ def test_rosenbrock_generalized_cost_autograd_and_graph_executor():
 
 
 def test_rosenbrock_sampling_is_seeded_for_any_horizon_and_validates_shapes():
-    cfg = RosenbrockCfg(DeviceCfg(), dimensions=2, time_horizon=3, time_action_horizon=3, sampler_seed=19)
+    cfg = RosenbrockCfg(DeviceCfg("cpu"), dimensions=2, time_horizon=3, time_action_horizon=3, sampler_seed=19)
     rollout = RosenbrockRollout(cfg)
     first = rollout.get_initial_action()
     assert first.shape == (1, 3, 2)
@@ -54,7 +54,7 @@ def test_rosenbrock_sampling_is_seeded_for_any_horizon_and_validates_shapes():
     with pytest.raises(ValueError, match="shape"):
         rollout.evaluate_action(torch.zeros(1, 2))
     with pytest.raises(ValueError, match="at least 2"):
-        RosenbrockCfg(DeviceCfg(), dimensions=1)
+        RosenbrockCfg(DeviceCfg("cpu"), dimensions=1)
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

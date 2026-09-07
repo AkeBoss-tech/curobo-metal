@@ -9,7 +9,7 @@ from curobo._src.robot.types import JointLimits, SelfCollisionKinematicsCfg
 from curobo._src.types.device_cfg import DeviceCfg
 
 
-def _limits(device_cfg: DeviceCfg = DeviceCfg()) -> JointLimits:
+def _limits(device_cfg: DeviceCfg = DeviceCfg("cpu")) -> JointLimits:
     pair = torch.tensor([[-2.0, -1.0, -0.5], [2.0, 1.0, 0.5]])
     return JointLimits(["a", "b", "c"], pair, pair * 2, pair * 3, pair * 4, pair * 5, device_cfg)
 
@@ -66,7 +66,7 @@ def test_collision_config_to_and_shape_changing_copy_are_explicit() -> None:
 
 
 def test_joint_limits_safe_index_copy_and_query_lifecycle() -> None:
-    value = _limits()
+    value = _limits(device_cfg=DeviceCfg("cpu"))
     buffer = value.position
     reordered = value.reindex(["c", "a", "b"])
     assert value.copy_(reordered) is value
@@ -92,7 +92,7 @@ def test_joint_limits_safe_index_copy_and_query_lifecycle() -> None:
 
 
 def test_joint_limit_margin_is_validated_and_differentiable() -> None:
-    value = _limits()
+    value = _limits(device_cfg=DeviceCfg("cpu"))
     margin = torch.tensor([0.1, 0.2, 0.1], requires_grad=True)
     shrunk = value.with_position_margin(margin)
     torch.testing.assert_close(shrunk.position, torch.tensor([[-1.9, -0.8, -0.4], [1.9, 0.8, 0.4]]))

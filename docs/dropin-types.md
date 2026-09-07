@@ -23,7 +23,7 @@ submodule is invented.
 ## Device policy
 
 Importing the slice has no CUDA, Warp, Isaac, or Omniverse dependency.
-`DeviceCfg()` deliberately defaults to CPU in curobo-metal, the one documented
+`DeviceCfg()` selects MPS when available, otherwise CPU, a documented
 deviation from the pinned CUDA default. An explicitly requested CUDA or MPS
 device is passed to PyTorch unchanged; an unavailable device raises instead of
 falling back to CPU.

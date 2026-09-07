@@ -8,7 +8,7 @@ from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
 
 
-def _manager(device_cfg=DeviceCfg(), horizon=4):
+def _manager(device_cfg=DeviceCfg("cpu"), horizon=4):
     return SeedManager(
         device_cfg,
         2,
@@ -20,7 +20,7 @@ def _manager(device_cfg=DeviceCfg(), horizon=4):
 
 
 def test_action_seeds_normalize_layout_pad_and_reset_deterministically():
-    manager = _manager()
+    manager = _manager(device_cfg=DeviceCfg("cpu"))
     # V2 accepts seed-major [N, B, J] action configurations as well as the
     # native batch-major representation.  The one user seed is retained and
     # the remaining two are deterministic Halton samples.
@@ -37,7 +37,7 @@ def test_action_seeds_normalize_layout_pad_and_reset_deterministically():
 
 
 def test_trajectory_precedence_interpolation_and_deceleration_layout():
-    manager = _manager(horizon=5)
+    manager = _manager(horizon=5, device_cfg=DeviceCfg("cpu"))
     state = JointState.from_position(
         torch.tensor([[0.0, 0.0], [0.5, -0.5]])
     )
@@ -61,16 +61,16 @@ def test_trajectory_precedence_interpolation_and_deceleration_layout():
 
 
 def test_seed_shapes_and_horizon_boundaries_are_explicit():
-    one_step = _manager(horizon=1)
+    one_step = _manager(horizon=1, device_cfg=DeviceCfg("cpu"))
     current = JointState.from_position(torch.zeros(1, 2))
     with pytest.raises(ValueError, match="action_horizon is one"):
         one_step.prepare_trajectory_seeds(1, 1, current)
     with pytest.raises(ValueError, match="Insufficient seed configs"):
-        _manager().prepare_trajectory_seeds(
+        _manager(device_cfg=DeviceCfg("cpu")).prepare_trajectory_seeds(
             1, 2, current, seed_config=torch.zeros(1, 1, 2)
         )
     with pytest.raises(ValueError, match="seed_config must have shape"):
-        _manager().prepare_action_seeds(1, 1, seed_config=torch.zeros(1, 2, 1))
+        _manager(device_cfg=DeviceCfg("cpu")).prepare_action_seeds(1, 1, seed_config=torch.zeros(1, 2, 1))
     assert one_step.generate_random_actions(2, 0).shape == (2, 1, 2)
 
 

@@ -16,7 +16,7 @@ from curobo._src.state.state_joint import JointState
 from curobo._src.types.device_cfg import DeviceCfg
 
 
-def _limits(dof: int = 2, device_cfg: DeviceCfg = DeviceCfg()) -> JointLimits:
+def _limits(dof: int = 2, device_cfg: DeviceCfg = DeviceCfg("cpu")) -> JointLimits:
     def pair(scale: float) -> torch.Tensor:
         return device_cfg.to_device([[-scale] * dof, [scale] * dof])
 
@@ -33,10 +33,11 @@ def test_state_configuration_normalizes_values_and_selects_runtime_cost() -> Non
         squared_l2_regularization_weight=[0.2] * 5,
         cost_type="state",
         dof=2,
-        joint_limits=_limits(),
+        joint_limits=_limits(device_cfg=DeviceCfg("cpu")),
         cspace_target_weight=0.5,
         cspace_non_terminal_weight_factor=0.25,
         cspace_target_dof_weight=[2.0, 3.0],
+        device_cfg=DeviceCfg("cpu"),
     )
     assert cfg.cost_type is CSpaceCostType.STATE
     assert cfg.class_type is StateCSpaceCost
@@ -46,13 +47,14 @@ def test_state_configuration_normalizes_values_and_selects_runtime_cost() -> Non
 
 
 def test_bounds_are_cloned_and_teleport_conversion_uses_position_terms() -> None:
-    original = _limits()
+    original = _limits(device_cfg=DeviceCfg("cpu"))
     cfg = CSpaceCostCfg(
         weight=[1.0, 2.0, 3.0, 4.0, 5.0],
         activation_distance=[0.0, 0.1, 0.2, 0.3, 0.4],
         squared_l2_regularization_weight=[.1, .2, .3, .4, .5],
         cost_type=CSpaceCostType.STATE,
         dof=2,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert cfg.set_bounds(original, teleport_mode=True) is cfg
     assert cfg.cost_type is CSpaceCostType.POSITION
@@ -87,6 +89,7 @@ def test_retiming_flags_match_the_pinned_configuration_contract() -> None:
     cfg = CSpaceCostCfg(
         weight=[1.0, 1.0], activation_distance=[0.0, 0.0],
         cost_type=CSpaceCostType.POSITION, dof=2, retime_weights=True,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert cfg.retime_weights is True
 
@@ -105,14 +108,15 @@ def test_transition_initialization_validates_action_dimension_and_bounds() -> No
     cfg = CSpaceCostCfg(
         weight=[1.0] * 5, activation_distance=[0.0] * 5,
         cost_type=CSpaceCostType.STATE,
+        device_cfg=DeviceCfg("cpu"),
     )
-    cfg.initialize_from_transition_model(_Transition(2, _limits(), teleport_mode=True))
+    cfg.initialize_from_transition_model(_Transition(2, _limits(device_cfg=DeviceCfg("cpu")), teleport_mode=True))
     assert cfg.dof == 2
     assert cfg.cost_type is CSpaceCostType.POSITION
     assert cfg.class_type is PositionCSpaceCost
 
     with pytest.raises(TypeError, match="action_dim"):
-        cfg.initialize_from_transition_model(_Transition(True, _limits()))
+        cfg.initialize_from_transition_model(_Transition(True, _limits(device_cfg=DeviceCfg("cpu"))))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple Metal")

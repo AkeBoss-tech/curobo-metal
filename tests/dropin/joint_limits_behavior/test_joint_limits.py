@@ -9,7 +9,7 @@ from curobo._src.robot.types import JointLimits
 from curobo._src.types.device_cfg import DeviceCfg
 
 
-def _limits(device_cfg: DeviceCfg = DeviceCfg(), names: list[str] | None = None) -> JointLimits:
+def _limits(device_cfg: DeviceCfg = DeviceCfg("cpu"), names: list[str] | None = None) -> JointLimits:
     names = ["shoulder", "elbow"] if names is None else names
     dof = len(names)
     base = torch.arange(1, dof + 1, dtype=torch.float32)
@@ -33,17 +33,17 @@ def test_data_device_validation_and_clone_are_explicit() -> None:
     clone.position[0, 0] = -0.5
     assert value.position[0, 0].item() == -1.0
     with pytest.raises(ValueError, match="joint_names must be unique"):
-        _limits(names=["a", "a"])
+        _limits(names=["a", "a"], device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="must not contain NaN"):
         JointLimits(["a"], torch.tensor([[float("nan")], [1.0]]), *[torch.tensor([[-1.0], [1.0]])] * 3)
     with pytest.raises(KeyError, match="velocity"):
-        JointLimits.from_data_dict({"joint_names": ["a"], "position": [[-1.0], [1.0]]})
+        JointLimits.from_data_dict({"joint_names": ["a"], "position": [[-1.0], [1.0]]}, device_cfg=DeviceCfg("cpu"))
 
 
 def test_copy_reindex_and_merge_preserve_named_limit_safety() -> None:
-    value = _limits()
+    value = _limits(device_cfg=DeviceCfg("cpu"))
     position_buffer = value.position
-    source = _limits(names=["elbow", "shoulder"])
+    source = _limits(names=["elbow", "shoulder"], device_cfg=DeviceCfg("cpu"))
     source.position = source.position[:, [1, 0]].contiguous()
     source.velocity = source.velocity[:, [1, 0]].contiguous()
     source.acceleration = source.acceleration[:, [1, 0]].contiguous()
@@ -61,12 +61,12 @@ def test_copy_reindex_and_merge_preserve_named_limit_safety() -> None:
         value.inplace_reindex(["elbow", "missing"])
     assert value.joint_names == previous_names
     torch.testing.assert_close(value.position, previous_position)
-    arm = _limits(names=["arm"])
-    gripper = _limits(names=["gripper"])
+    arm = _limits(names=["arm"], device_cfg=DeviceCfg("cpu"))
+    gripper = _limits(names=["gripper"], device_cfg=DeviceCfg("cpu"))
     combined = arm.merge(gripper)
     assert combined.joint_names == ["arm", "gripper"]
     torch.testing.assert_close(combined.position, torch.tensor([[-1.0, -1.0], [1.0, 1.0]]))
-    conflicting = _limits(names=["arm"])
+    conflicting = _limits(names=["arm"], device_cfg=DeviceCfg("cpu"))
     conflicting.position = torch.tensor([[-2.0], [2.0]])
     with pytest.raises(ValueError, match="conflicting"):
         arm.merge(conflicting)
@@ -75,12 +75,12 @@ def test_copy_reindex_and_merge_preserve_named_limit_safety() -> None:
 
 
 def test_optional_effort_copy_and_mixed_effort_merge_boundary() -> None:
-    with_effort = _limits(names=["a"])
-    without_effort = JointLimits(["a"], with_effort.position, with_effort.velocity, with_effort.acceleration, with_effort.jerk)
+    with_effort = _limits(names=["a"], device_cfg=DeviceCfg("cpu"))
+    without_effort = JointLimits(["a"], with_effort.position, with_effort.velocity, with_effort.acceleration, with_effort.jerk, device_cfg=DeviceCfg("cpu"))
     target_effort = with_effort.effort
     assert with_effort.copy_(without_effort) is with_effort
     assert with_effort.effort is target_effort
-    empty_effort = JointLimits(["b"], without_effort.position, without_effort.velocity, without_effort.acceleration, without_effort.jerk)
+    empty_effort = JointLimits(["b"], without_effort.position, without_effort.velocity, without_effort.acceleration, without_effort.jerk, device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="effort is defined for only some"):
         with_effort.merge(empty_effort)
 

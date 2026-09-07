@@ -1,0 +1,2960 @@
+..............                                                           [100%]
+=============================== warnings summary ===============================
+tests/_src/collision/test_collision_robot_scene.py::TestRobotSceneCollision::test_get_kinematics
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/_pytest/fixtures.py:1313: PytestRemovedIn10Warning: Class-scoped fixture defined as instance method is deprecated.
+  Instance attributes set in this fixture will NOT be visible to test methods,
+  as each test gets a new instance while the fixture runs only once per class.
+  Use @classmethod decorator and set attributes on cls instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
+    fixturefunc = resolve_fixture_function(fixturedef, request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+14 passed, 1 warning in 16.88s
+.                                                                        [100%]
+1 passed in 0.30s
+..................................................                       [100%]
+50 passed in 0.12s
+...............................                                          [100%]
+=============================== warnings summary ===============================
+tests/_src/cost/test_cost_cspace.py::TestCSpaceCostGradients::test_position_cspace_cost_gradcheck[mps:0]
+tests/_src/cost/test_cost_cspace.py::TestCSpaceCostGradients::test_state_cspace_cost_gradcheck[mps:0]
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/torch/autograd/gradcheck.py:2124: UserWarning: Input #0 requires gradient and is not a double precision floating point or complex. This check will likely fail if all the inputs are not of double precision floating point or complex. 
+    _check_inputs(tupled_inputs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+31 passed, 2 warnings in 1.83s
+....................                                                     [100%]
+20 passed in 2.89s
+.....................                                                    [100%]
+21 passed in 0.82s
+....................                                                     [100%]
+=============================== warnings summary ===============================
+tests/_src/cost/test_cost_support_polygon.py::TestCostSupportPolygonGradients::test_support_polygon_gradcheck
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/torch/autograd/gradcheck.py:2124: UserWarning: Input #0 requires gradient and is not a double precision floating point or complex. This check will likely fail if all the inputs are not of double precision floating point or complex. 
+    _check_inputs(tupled_inputs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+20 passed, 1 warning in 0.27s
+...............                                                          [100%]
+15 passed in 0.41s
+....sssssssssssssssssssssssssssssssss                                    [100%]
+4 passed, 33 skipped in 0.30s
+.........F......                                                         [100%]
+=================================== FAILURES ===================================
+____________________________ test_get_matrix[mps:0] ____________________________
+
+cpu_cuda_device_cfg = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32)
+
+    def test_get_matrix(cpu_cuda_device_cfg):
+        """Test conversion to transformation matrix"""
+        test_pose = get_test_pose(cpu_cuda_device_cfg)
+    
+        matrix = test_pose.get_matrix()
+>       expected_shape = torch.tensor(np.eye(4), device=test_pose.position.device).unsqueeze(0).shape
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/geom/test_pose.py:36: TypeError
+=============================== warnings summary ===============================
+tests/_src/geom/test_pose.py::test_pose_transform_point_grad[cpu]
+tests/_src/geom/test_pose.py::test_pose_transform_point_grad[mps:0]
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/torch/autograd/gradcheck.py:2124: UserWarning: Input #0 requires gradient and is not a double precision floating point or complex. This check will likely fail if all the inputs are not of double precision floating point or complex. 
+    _check_inputs(tupled_inputs)
+
+tests/_src/geom/test_pose.py::test_pose_transform_point_grad[cpu]
+tests/_src/geom/test_pose.py::test_pose_transform_point_grad[mps:0]
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/torch/autograd/gradcheck.py:2124: UserWarning: Input #1 requires gradient and is not a double precision floating point or complex. This check will likely fail if all the inputs are not of double precision floating point or complex. 
+    _check_inputs(tupled_inputs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/_src/geom/test_pose.py::test_get_matrix[mps:0] - TypeError: Cann...
+1 failed, 15 passed, 4 warnings in 0.40s
+........F.F.F...F.                                                       [100%]
+=================================== FAILURES ===================================
+_____________________ test_angular_distance_gradcheck[mps] _____________________
+
+device = 'mps'
+
+    def test_angular_distance_gradcheck(device):
+        """Test gradient accuracy for angular_distance_phi3 using gradcheck."""
+        # Create test quaternions with double precision
+>       q1 = torch.tensor([[1.0, 0.1, 0.2, 0.3]], device=device, dtype=torch.double, requires_grad=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/geom/test_quaternion.py:101: TypeError
+______________________ test_quat_multiply_gradcheck[mps] _______________________
+
+device = 'mps'
+
+    def test_quat_multiply_gradcheck(device):
+        """Test gradient accuracy for quaternion multiplication using gradcheck."""
+        # Create test quaternions with double precision
+>       q1 = torch.tensor([[1.0, 0.1, 0.2, 0.3]], device=device, dtype=torch.double, requires_grad=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/geom/test_quaternion.py:115: TypeError
+___________________ test_normalize_quaternion_gradcheck[mps] ___________________
+
+device = 'mps'
+
+    def test_normalize_quaternion_gradcheck(device):
+        """Test gradient accuracy for quaternion normalization using gradcheck."""
+        # Create a test quaternion with double precision
+>       q = torch.tensor([[2.0, 1.0, 1.0, 1.0]], device=device, dtype=torch.double, requires_grad=True)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/geom/test_quaternion.py:133: TypeError
+_____________________ test_axis_angle_error_gradcheck[mps] _____________________
+
+device = 'mps'
+
+    def test_axis_angle_error_gradcheck(device):
+        """Test gradient accuracy for axis_angle_error using gradcheck."""
+        # Create test quaternions with double precision for better numerical accuracy
+>       q1 = torch.tensor([[1.0, 0.1, 0.2, 0.3]], device=device, dtype=torch.double, requires_grad=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/geom/test_quaternion.py:163: TypeError
+=========================== short test summary info ============================
+FAILED tests/_src/geom/test_quaternion.py::test_angular_distance_gradcheck[mps]
+FAILED tests/_src/geom/test_quaternion.py::test_quat_multiply_gradcheck[mps]
+FAILED tests/_src/geom/test_quaternion.py::test_normalize_quaternion_gradcheck[mps]
+FAILED tests/_src/geom/test_quaternion.py::test_axis_angle_error_gradcheck[mps]
+4 failed, 14 passed in 0.22s
+............                                                             [100%]
+12 passed in 0.21s
+.......................                                                  [100%]
+23 passed in 144.22s (0:02:24)
+.....                                                                    [100%]
+5 passed in 74.04s (0:01:14)
+.................................                                        [100%]
+33 passed in 199.47s (0:03:19)
+..................................                                       [100%]
+34 passed in 1.16s
+........................................................................ [ 96%]
+...                                                                      [100%]
+=============================== warnings summary ===============================
+tests/_src/motion/test_motion_planner.py::TestMotionPlannerGoalsetWarmupAndPlanning::test_plan_pose_after_goalset_warmup
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/_pytest/fixtures.py:1313: PytestRemovedIn10Warning: Class-scoped fixture defined as instance method is deprecated.
+  Instance attributes set in this fixture will NOT be visible to test methods,
+  as each test gets a new instance while the fixture runs only once per class.
+  Use @classmethod decorator and set attributes on cls instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
+    fixturefunc = resolve_fixture_function(fixturedef, request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+75 passed, 1 warning in 138.03s (0:02:18)
+..................                                                       [100%]
+18 passed in 19.59s
+..................................                                       [100%]
+34 passed in 1.58s
+...................................                                      [100%]
+=============================== warnings summary ===============================
+tests/_src/motion/test_motion_planner_esdf.py::TestMotionPlannerEsdfGoalsetWarmup::test_plan_pose_after_goalset_warmup
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/_pytest/fixtures.py:1313: PytestRemovedIn10Warning: Class-scoped fixture defined as instance method is deprecated.
+  Instance attributes set in this fixture will NOT be visible to test methods,
+  as each test gets a new instance while the fixture runs only once per class.
+  Use @classmethod decorator and set attributes on cls instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
+    fixturefunc = resolve_fixture_function(fixturedef, request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+35 passed, 1 warning in 325.36s (0:05:25)
+..                                                                       [100%]
+2 passed in 10.54s
+......                                                                   [100%]
+6 passed in 1.99s
+........................                                                 [100%]
+24 passed in 0.75s
+.....                                                                    [100%]
+5 passed in 1.19s
+.............                                                            [100%]
+=============================== warnings summary ===============================
+tests/_src/motion/test_motion_retargeter.py::TestMotionRetargeterMPC::test_solve_frame_mpc_first_frame
+  /tmp/curobo-release-gauntlet/lib/python3.13/site-packages/_pytest/fixtures.py:1313: PytestRemovedIn10Warning: Class-scoped fixture defined as instance method is deprecated.
+  Instance attributes set in this fixture will NOT be visible to test methods,
+  as each test gets a new instance while the fixture runs only once per class.
+  Use @classmethod decorator and set attributes on cls instead.
+  See https://docs.pytest.org/en/stable/deprecations.html#class-scoped-fixture-as-instance-method
+    fixturefunc = resolve_fixture_function(fixturedef, request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 1 warning in 239.66s (0:03:59)
+.....                                                                    [100%]
+5 passed in 13.30s
+...........sss                                                           [100%]
+11 passed, 3 skipped in 0.82s
+................                                                         [100%]
+16 passed in 2.05s
+......................                                                   [100%]
+22 passed in 1.39s
+..............F                                                          [100%]
+=================================== FAILURES ===================================
+_________________________ test_convergence_comparison __________________________
+
+optimizer_setup = {'device': 'mps', 'dtype': torch.float32, 'num_dof': 7, 'action_horizon': 28, ...}
+
+    def test_convergence_comparison(optimizer_setup):
+        """Compare convergence speed and final solution quality between CUDA and non-CUDA implementations.
+    
+        Args:
+            optimizer_setup: pytest fixture providing test setup.
+        """
+        # Create two optimizers with more iterations for thorough convergence
+        config_cuda = LBFGSOptCfg(
+            num_problems=optimizer_setup["batch_size"],
+            num_iters=100,
+            history=15,
+            step_scale=optimizer_setup["step_scale"],
+            use_cuda_kernel_step_direction=True,
+            use_cuda_kernel_shared_buffers=True,
+            stable_mode=True,
+            solver_type="lbfgs",
+        )
+    
+        config_no_cuda = LBFGSOptCfg(
+            num_problems=optimizer_setup["batch_size"],
+            num_iters=100,
+            history=15,
+            step_scale=optimizer_setup["step_scale"],
+            use_cuda_kernel_step_direction=False,
+            use_cuda_kernel_shared_buffers=True,
+            stable_mode=True,
+            solver_type="lbfgs",
+        )
+    
+        rollout_fn = optimizer_setup["rollout_fn"]
+        optimizer_with_cuda = LBFGSOpt(config_cuda, [rollout_fn, rollout_fn])
+        optimizer_without_cuda = LBFGSOpt(config_no_cuda, [rollout_fn, rollout_fn])
+        optimizer_with_cuda.update_num_problems(optimizer_setup["batch_size"])
+        optimizer_without_cuda.update_num_problems(optimizer_setup["batch_size"])
+    
+        # Create a random but more challenging starting point
+        # Using a larger magnitude makes the optimization problem harder
+        initial_action = (
+            torch.randn(
+                optimizer_setup["batch_size"],
+                optimizer_setup["action_horizon"],
+                optimizer_setup["num_dof"],
+                device=optimizer_setup["device"],
+                dtype=optimizer_setup["dtype"],
+            )
+            * 10.0
+        )
+    
+        # Create copies of the initial action for both optimizers
+        action_cuda = initial_action.clone()
+        action_no_cuda = initial_action.clone()
+    
+        # Run optimization with CUDA kernel and measure time
+        optimizer_with_cuda.reinitialize(action_cuda)
+>       start_time_cuda = torch.cuda.Event(enable_timing=True)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/optim/gradient/test_lbfgs.py:545: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/torch/cuda/streams.py:186: in __new__
+    return super().__new__(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+obj = <class 'torch.cuda.streams.Event'>, args = ()
+kwargs = {'enable_timing': True, 'blocking': False, 'interprocess': False, 'external': False}
+
+    def err_fn(obj, *args, **kwargs):
+        if is_init:
+            class_name = obj.__class__.__name__
+        else:
+            class_name = obj.__name__
+>       raise RuntimeError(f"Tried to instantiate dummy base class {class_name}")
+E       RuntimeError: Tried to instantiate dummy base class Event
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/torch/_utils.py:1043: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/_src/optim/gradient/test_lbfgs.py::test_convergence_comparison
+1 failed, 14 passed in 1.56s
+................                                                         [100%]
+16 passed in 1.72s
+..............F....                                                      [100%]
+=================================== FAILURES ===================================
+_______ TestParticleSamplerCfg.test_tensor_args_device_dtype_consistency _______
+
+self = <tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg.TestParticleSamplerCfg object at 0x139bcfc50>
+
+    def test_tensor_args_device_dtype_consistency(self):
+        """Test device_cfg with different devices and dtypes."""
+        devices = [torch.device("cpu")]
+        dtypes = [torch.float32, torch.float64]
+    
+        # Add CUDA device if available
+        if torch.backends.mps.is_available():
+            devices.append(torch.device('mps:0'))
+    
+        for device in devices:
+            for dtype in dtypes:
+>               device_cfg = DeviceCfg(device=device, dtype=dtype)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/optim/particle/sample_strategies/test_particle_sampler_cfg.py:213: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+<string>:8: in __init__
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float64, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32)
+
+    def __post_init__(self):
+        if isinstance(self.device, str):
+            object.__setattr__(self, "device", torch.device(self.device))
+        if self.device.type == "mps" and self.dtype != torch.float32:
+>           raise TypeError("MPS compatibility types support only float32")
+E           TypeError: MPS compatibility types support only float32
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/types/device_cfg.py:46: TypeError
+=========================== short test summary info ============================
+FAILED tests/_src/optim/particle/sample_strategies/test_particle_sampler_cfg.py::TestParticleSamplerCfg::test_tensor_args_device_dtype_consistency
+1 failed, 18 passed in 0.89s
+........................                                                 [100%]
+24 passed in 0.89s
+...................                                                      [100%]
+19 passed in 0.98s
+...........................                                              [100%]
+27 passed in 0.99s
+...........................                                              [100%]
+27 passed in 1.20s
+................................................                         [100%]
+48 passed in 1.63s
+................                                                         [100%]
+16 passed in 1.06s
+...........................................                              [100%]
+43 passed in 1.65s
+..ssssssssssss                                                           [100%]
+2 passed, 12 skipped in 0.73s
+.............s                                                           [100%]
+13 passed, 1 skipped in 0.23s
+.....                                                                    [100%]
+5 passed in 0.84s
+.FFFF...FFF....FFFFFFFFF                                                 [100%]
+=================================== FAILURES ===================================
+_____________ TestBlockKeyEncoding.test_roundtrip_positive_coords ______________
+
+self = <tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding object at 0x10c9ee350>
+warp_init = True, device = 'mps:0'
+
+    def test_roundtrip_positive_coords(self, warp_init, device):
+        """Test pack/unpack roundtrip with positive coordinates."""
+        coords = torch.tensor(
+            [[0, 0, 0], [1, 2, 3], [100, 200, 300], [1000, 2000, 3000]],
+            dtype=torch.int32,
+            device=device,
+        )
+        n = coords.shape[0]
+        coords_out = torch.zeros_like(coords)
+        keys = torch.zeros(n, dtype=torch.int64, device=device)
+    
+        wp.launch(
+            _kernel_pack_unpack,
+            dim=n,
+            inputs=[
+>               wp.from_torch(coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(coords_out, dtype=wp.int32),
+                wp.from_torch(keys, dtype=wp.int64),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:251: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+---------------------------- Captured stdout setup -----------------------------
+Warp 1.17.0 initialized:
+   CUDA not enabled in this build
+   Devices:
+     "cpu"      : "arm"
+   Kernel cache:
+     /Users/family/Library/Caches/warp/1.17.0
+_____________ TestBlockKeyEncoding.test_roundtrip_negative_coords ______________
+
+self = <tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding object at 0x10c9b3ce0>
+warp_init = True, device = 'mps:0'
+
+    def test_roundtrip_negative_coords(self, warp_init, device):
+        """Test pack/unpack roundtrip with negative coordinates."""
+        coords = torch.tensor(
+            [[-1, -1, -1], [-100, -200, -300], [-2000, -1500, -1000]],
+            dtype=torch.int32,
+            device=device,
+        )
+        n = coords.shape[0]
+        coords_out = torch.zeros_like(coords)
+        keys = torch.zeros(n, dtype=torch.int64, device=device)
+    
+        wp.launch(
+            _kernel_pack_unpack,
+            dim=n,
+            inputs=[
+>               wp.from_torch(coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(coords_out, dtype=wp.int32),
+                wp.from_torch(keys, dtype=wp.int64),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:274: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_______________ TestBlockKeyEncoding.test_roundtrip_mixed_coords _______________
+
+self = <tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding object at 0x10cc04050>
+warp_init = True, device = 'mps:0'
+
+    def test_roundtrip_mixed_coords(self, warp_init, device):
+        """Test pack/unpack roundtrip with mixed coordinates."""
+        coords = torch.tensor(
+            [[-1, 0, 1], [100, -200, 300], [-2000, 2000, 0]],
+            dtype=torch.int32,
+            device=device,
+        )
+        n = coords.shape[0]
+        coords_out = torch.zeros_like(coords)
+        keys = torch.zeros(n, dtype=torch.int64, device=device)
+    
+        wp.launch(
+            _kernel_pack_unpack,
+            dim=n,
+            inputs=[
+>               wp.from_torch(coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(coords_out, dtype=wp.int32),
+                wp.from_torch(keys, dtype=wp.int64),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:297: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_______________ TestBlockKeyEncoding.test_roundtrip_coord_limits _______________
+
+self = <tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding object at 0x10c9a68d0>
+warp_init = True, device = 'mps:0'
+
+    def test_roundtrip_coord_limits(self, warp_init, device):
+        """Round-trip inclusive signed coordinate limits."""
+        coords = torch.tensor(
+            [[-4096, -4096, -4096], [4095, 4095, 4095]],
+            dtype=torch.int32,
+            device=device,
+        )
+        coords_out = torch.zeros_like(coords)
+        keys = torch.zeros(coords.shape[0], dtype=torch.int64, device=device)
+    
+        wp.launch(
+            _kernel_pack_unpack,
+            dim=coords.shape[0],
+            inputs=[
+>               wp.from_torch(coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(coords_out, dtype=wp.int32),
+                wp.from_torch(keys, dtype=wp.int64),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:319: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+____________________ TestBlockKeyEncoding.test_unique_keys _____________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding object at 0x10cbf4350>
+warp_init = True, device = 'mps:0'
+
+    def test_unique_keys(self, warp_init, device):
+        """Test that different coordinates produce different keys."""
+        coords = torch.tensor(
+            [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]],
+            dtype=torch.int32,
+            device=device,
+        )
+        n = coords.shape[0]
+        coords_out = torch.zeros_like(coords)
+        keys = torch.zeros(n, dtype=torch.int64, device=device)
+    
+        wp.launch(
+            _kernel_pack_unpack,
+            dim=n,
+            inputs=[
+>               wp.from_torch(coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(coords_out, dtype=wp.int32),
+                wp.from_torch(keys, dtype=wp.int64),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:362: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+______________________ TestSpatialHash.test_hash_in_range ______________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestSpatialHash object at 0x10c9ee0d0>
+warp_init = True, device = 'mps:0'
+
+    def test_hash_in_range(self, warp_init, device):
+        """Test that hash values are within capacity."""
+        capacity = 1000
+        coords = torch.tensor(
+            [[0, 0, 0], [1, 2, 3], [-100, 200, -300], [999, 999, 999]],
+            dtype=torch.int32,
+            device=device,
+        )
+        n = coords.shape[0]
+        slots = torch.zeros(n, dtype=torch.int32, device=device)
+    
+        wp.launch(
+            _kernel_spatial_hash,
+            dim=n,
+            inputs=[
+>               wp.from_torch(coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                capacity,
+                wp.from_torch(slots, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:390: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+___________________ TestSpatialHash.test_hash_deterministic ____________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestSpatialHash object at 0x10c9ee210>
+warp_init = True, device = 'mps:0'
+
+    def test_hash_deterministic(self, warp_init, device):
+        """Test that hash is deterministic."""
+        capacity = 1000
+        coords = torch.tensor([[123, 456, 789]], dtype=torch.int32, device=device)
+        slots1 = torch.zeros(1, dtype=torch.int32, device=device)
+        slots2 = torch.zeros(1, dtype=torch.int32, device=device)
+    
+        wp.launch(
+            _kernel_spatial_hash,
+            dim=1,
+            inputs=[
+>               wp.from_torch(coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                capacity,
+                wp.from_torch(slots1, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:410: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+__________________ TestBlockSparseTSDF.test_warp_data_caching __________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestBlockSparseTSDF object at 0x10c9a7890>
+block_sparse_tsdf = <curobo._src.perception.mapper.storage.BlockSparseTSDF object at 0x10cc05cd0>
+
+    def test_warp_data_caching(self, block_sparse_tsdf):
+        """Test that Warp struct is cached."""
+        tsdf = block_sparse_tsdf
+    
+>       warp1 = tsdf.get_warp_data()
+                ^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/perception/mapper/test_block_hash.py:487: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <curobo._src.perception.mapper.storage.BlockSparseTSDF object at 0x10cc05cd0>
+
+    def get_warp_data(self) -> BlockSparseTSDFWarp:
+>       raise NotImplementedError("raw Warp BlockSparseTSDF storage is unavailable on CPU/MPS")
+E       NotImplementedError: raw Warp BlockSparseTSDF storage is unavailable on CPU/MPS
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/perception/mapper/storage.py:582: NotImplementedError
+__________________ TestFindOrInsert.test_insert_single_block ___________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestFindOrInsert object at 0x10c9ee710>
+warp_init = True, device = 'mps:0'
+
+    def test_insert_single_block(self, warp_init, device):
+        """Test inserting a single block."""
+        config = BlockSparseTSDFCfg(
+            max_blocks=100,
+            hash_capacity=200,
+            device=device,
+            grid_shape=(128, 128, 128),
+        )
+        tsdf = BlockSparseTSDF(config)
+    
+        query = torch.tensor([[5, 10, 15]], dtype=torch.int32, device=device)
+        results = torch.full((1,), -999, dtype=torch.int32, device=device)
+    
+        wp.launch(
+            _kernel_find_or_insert,
+            dim=1,
+            inputs=[
+>               wp.from_torch(tsdf.data.hash_table, dtype=wp.int64),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(tsdf.data.block_coords, dtype=wp.int32),
+                wp.from_torch(tsdf.data.block_to_hash_slot, dtype=wp.int32),
+                wp.from_torch(tsdf.data.free_list, dtype=wp.int32),
+                wp.from_torch(tsdf.data.free_count, dtype=wp.int32),
+                wp.from_torch(tsdf.data.num_allocated, dtype=wp.int32),
+                wp.from_torch(tsdf.data.allocation_failures, dtype=wp.int32),
+                wp.from_torch(tsdf.data.new_blocks, dtype=wp.int32),
+                wp.from_torch(tsdf.data.new_block_count, dtype=wp.int32),
+                wp.from_torch(query, dtype=wp.int32),
+                config.hash_capacity,
+                config.max_blocks,
+                wp.from_torch(results, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:518: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+________________ TestFindOrInsert.test_insert_same_block_twice _________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestFindOrInsert object at 0x10c9ee850>
+warp_init = True, device = 'mps:0'
+
+    def test_insert_same_block_twice(self, warp_init, device):
+        """Test that inserting same block twice returns same pool_idx."""
+        config = BlockSparseTSDFCfg(
+            max_blocks=100,
+            hash_capacity=200,
+            device=device,
+            grid_shape=(128, 128, 128),
+        )
+        tsdf = BlockSparseTSDF(config)
+    
+        # Insert same coords twice (sequential)
+        query = torch.tensor([[5, 10, 15]], dtype=torch.int32, device=device)
+        results1 = torch.full((1,), -999, dtype=torch.int32, device=device)
+        results2 = torch.full((1,), -999, dtype=torch.int32, device=device)
+    
+        for results in [results1, results2]:
+            wp.launch(
+                _kernel_find_or_insert,
+                dim=1,
+                inputs=[
+>                   wp.from_torch(tsdf.data.hash_table, dtype=wp.int64),
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    wp.from_torch(tsdf.data.block_coords, dtype=wp.int32),
+                    wp.from_torch(tsdf.data.block_to_hash_slot, dtype=wp.int32),
+                    wp.from_torch(tsdf.data.free_list, dtype=wp.int32),
+                    wp.from_torch(tsdf.data.free_count, dtype=wp.int32),
+                    wp.from_torch(tsdf.data.num_allocated, dtype=wp.int32),
+                    wp.from_torch(tsdf.data.allocation_failures, dtype=wp.int32),
+                    wp.from_torch(tsdf.data.new_blocks, dtype=wp.int32),
+                    wp.from_torch(tsdf.data.new_block_count, dtype=wp.int32),
+                    wp.from_torch(query, dtype=wp.int32),
+                    config.hash_capacity,
+                    config.max_blocks,
+                    wp.from_torch(results, dtype=wp.int32),
+                ],
+            )
+
+tests/_src/perception/mapper/test_block_hash.py:559: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+________________ TestFindOrInsert.test_insert_different_blocks _________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestFindOrInsert object at 0x10cc04180>
+warp_init = True, device = 'mps:0'
+
+    def test_insert_different_blocks(self, warp_init, device):
+        """Test inserting different blocks."""
+        config = BlockSparseTSDFCfg(
+            max_blocks=100,
+            hash_capacity=200,
+            device=device,
+            grid_shape=(128, 128, 128),
+        )
+        tsdf = BlockSparseTSDF(config)
+    
+        query = torch.tensor(
+            [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            dtype=torch.int32,
+            device=device,
+        )
+        n = query.shape[0]
+        results = torch.full((n,), -999, dtype=torch.int32, device=device)
+    
+        wp.launch(
+            _kernel_find_or_insert,
+            dim=n,
+            inputs=[
+>               wp.from_torch(tsdf.data.hash_table, dtype=wp.int64),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(tsdf.data.block_coords, dtype=wp.int32),
+                wp.from_torch(tsdf.data.block_to_hash_slot, dtype=wp.int32),
+                wp.from_torch(tsdf.data.free_list, dtype=wp.int32),
+                wp.from_torch(tsdf.data.free_count, dtype=wp.int32),
+                wp.from_torch(tsdf.data.num_allocated, dtype=wp.int32),
+                wp.from_torch(tsdf.data.allocation_failures, dtype=wp.int32),
+                wp.from_torch(tsdf.data.new_blocks, dtype=wp.int32),
+                wp.from_torch(tsdf.data.new_block_count, dtype=wp.int32),
+                wp.from_torch(query, dtype=wp.int32),
+                config.hash_capacity,
+                config.max_blocks,
+                wp.from_torch(results, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:602: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+____________________ TestHashLookup.test_lookup_nonexistent ____________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestHashLookup object at 0x10c9ee990>
+warp_init = True, device = 'mps:0'
+
+    def test_lookup_nonexistent(self, warp_init, device):
+        """Test looking up non-existent block returns -1."""
+        config = BlockSparseTSDFCfg(
+            max_blocks=100,
+            hash_capacity=200,
+            device=device,
+            grid_shape=(128, 128, 128),
+        )
+        tsdf = BlockSparseTSDF(config)
+    
+        query = torch.tensor([[5, 10, 15]], dtype=torch.int32, device=device)
+        results = torch.full((1,), -999, dtype=torch.int32, device=device)
+    
+        wp.launch(
+            _kernel_hash_lookup,
+            dim=1,
+            inputs=[
+>               wp.from_torch(tsdf.data.hash_table, dtype=wp.int64),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(query, dtype=wp.int32),
+                config.hash_capacity,
+                wp.from_torch(results, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:646: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+___________________ TestHashLookup.test_lookup_after_insert ____________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestHashLookup object at 0x10c9eead0>
+warp_init = True, device = 'mps:0'
+
+    def test_lookup_after_insert(self, warp_init, device):
+        """Test lookup after insertion."""
+        config = BlockSparseTSDFCfg(
+            max_blocks=100,
+            hash_capacity=200,
+            device=device,
+            grid_shape=(128, 128, 128),
+        )
+        tsdf = BlockSparseTSDF(config)
+    
+        query = torch.tensor([[5, 10, 15]], dtype=torch.int32, device=device)
+        insert_results = torch.full((1,), -999, dtype=torch.int32, device=device)
+        lookup_results = torch.full((1,), -999, dtype=torch.int32, device=device)
+    
+        # Insert
+        wp.launch(
+            _kernel_find_or_insert,
+            dim=1,
+            inputs=[
+>               wp.from_torch(tsdf.data.hash_table, dtype=wp.int64),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(tsdf.data.block_coords, dtype=wp.int32),
+                wp.from_torch(tsdf.data.block_to_hash_slot, dtype=wp.int32),
+                wp.from_torch(tsdf.data.free_list, dtype=wp.int32),
+                wp.from_torch(tsdf.data.free_count, dtype=wp.int32),
+                wp.from_torch(tsdf.data.num_allocated, dtype=wp.int32),
+                wp.from_torch(tsdf.data.allocation_failures, dtype=wp.int32),
+                wp.from_torch(tsdf.data.new_blocks, dtype=wp.int32),
+                wp.from_torch(tsdf.data.new_block_count, dtype=wp.int32),
+                wp.from_torch(query, dtype=wp.int32),
+                config.hash_capacity,
+                config.max_blocks,
+                wp.from_torch(insert_results, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:674: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____________ TestCoordinateConversion.test_world_to_block_coords ______________
+
+self = <tests._src.perception.mapper.test_block_hash.TestCoordinateConversion object at 0x10c9eec10>
+warp_init = True, device = 'mps:0'
+
+    def test_world_to_block_coords(self, warp_init, device):
+        """Test world to block coordinate conversion."""
+        voxel_size = 0.002  # 2mm
+        block_size = 8
+        # World positions that should map to specific blocks
+        # Block size in world units = 8 * 0.002 = 0.016m
+        # With center-origin convention, (0,0,0) world maps to center of grid
+        world_pos = torch.tensor(
+            [
+                [0.0, 0.0, 0.0],  # Center of grid
+                [0.015, 0.015, 0.015],  # Slightly offset
+                [0.016, 0.0, 0.0],  # One block in +X
+                [-0.016, 0.0, 0.0],  # One block in -X
+            ],
+            dtype=torch.float32,
+            device=device,
+        )
+        n = world_pos.shape[0]
+        block_coords = torch.zeros((n, 3), dtype=torch.int32, device=device)
+    
+        wp.launch(
+            _kernel_world_to_block,
+            dim=n,
+            inputs=[
+>               wp.from_torch(world_pos, dtype=wp.float32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(block_coords, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:734: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____________ TestCoordinateConversion.test_local_index_roundtrip ______________
+
+self = <tests._src.perception.mapper.test_block_hash.TestCoordinateConversion object at 0x10c9eed50>
+warp_init = True, device = 'mps:0'
+
+    def test_local_index_roundtrip(self, warp_init, device):
+        """Test local coords <-> linear index roundtrip."""
+        # All valid local coords for 8x8x8 block
+        coords = []
+        for lz in range(8):
+            for ly in range(8):
+                for lx in range(8):
+                    coords.append([lx, ly, lz])
+        local_coords = torch.tensor(coords, dtype=torch.int32, device=device)
+        n = local_coords.shape[0]
+    
+        linear_indices = torch.zeros(n, dtype=torch.int32, device=device)
+        coords_out = torch.zeros_like(local_coords)
+    
+        wp.launch(
+            _kernel_local_index,
+            dim=n,
+            inputs=[
+>               wp.from_torch(local_coords, dtype=wp.int32),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(linear_indices, dtype=wp.int32),
+                wp.from_torch(coords_out, dtype=wp.int32),
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:770: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____________________ TestClearNewBlocks.test_clear_blocks _____________________
+
+self = <tests._src.perception.mapper.test_block_hash.TestClearNewBlocks object at 0x10c9eee90>
+warp_init = True, device = 'mps:0'
+
+    def test_clear_blocks(self, warp_init, device):
+        """Test that new blocks are cleared."""
+        config = BlockSparseTSDFCfg(
+            max_blocks=100,
+            hash_capacity=200,
+            device=device,
+            grid_shape=(128, 128, 128),
+        )
+        tsdf = BlockSparseTSDF(config)
+    
+        # Simulate having allocated 2 new blocks
+        tsdf.data.new_blocks[0] = 0
+        tsdf.data.new_blocks[1] = 5
+        tsdf.data.new_block_count.fill_(2)
+    
+        # Put garbage in those blocks
+        # block_data is (max_blocks, 512, 2) - 3D layout
+        tsdf.data.block_data[0, :, :].fill_(1.0)  # Block 0
+        tsdf.data.block_data[5, :, :].fill_(2.0)  # Block 5
+        # block_grid_rgb is (max_blocks, color_grid_size**3, 4) RGBW sums.
+        tsdf.data.block_grid_rgb[0, :, :].fill_(100.0)
+        tsdf.data.block_grid_rgb[5, :, :].fill_(128.0)
+    
+        # Run clear kernel
+        wp.launch(
+            clear_new_blocks_kernel,
+            dim=(config.max_blocks, config.block_size**3),
+            inputs=[
+>               wp.from_torch(tsdf.data.block_data, dtype=wp.float16),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                wp.from_torch(tsdf.data.new_blocks, dtype=wp.int32),
+                wp.from_torch(tsdf.data.new_block_count, dtype=wp.int32),
+                config.max_blocks,
+            ],
+        )
+
+tests/_src/perception/mapper/test_block_hash.py:816: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestBlockKeyEncoding::test_roundtrip_positive_coords
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestBlockKeyEncoding::test_roundtrip_negative_coords
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestBlockKeyEncoding::test_roundtrip_mixed_coords
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestBlockKeyEncoding::test_roundtrip_coord_limits
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestBlockKeyEncoding::test_unique_keys
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestSpatialHash::test_hash_in_range
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestSpatialHash::test_hash_deterministic
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestBlockSparseTSDF::test_warp_data_caching
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestFindOrInsert::test_insert_single_block
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestFindOrInsert::test_insert_same_block_twice
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestFindOrInsert::test_insert_different_blocks
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestHashLookup::test_lookup_nonexistent
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestHashLookup::test_lookup_after_insert
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestCoordinateConversion::test_world_to_block_coords
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestCoordinateConversion::test_local_index_roundtrip
+FAILED tests/_src/perception/mapper/test_block_hash.py::TestClearNewBlocks::test_clear_blocks
+16 failed, 8 passed in 0.39s
+........                                                                 [100%]
+8 passed in 1.19s
+.......                                                                  [100%]
+7 passed in 7.98s
+................................                                         [100%]
+32 passed in 0.64s
+.....                                                                    [100%]
+5 passed in 13.32s
+............                                                             [100%]
+12 passed in 0.70s
+..................                                                       [100%]
+18 passed in 0.83s
+..............                                                           [100%]
+14 passed in 15.40s
+................                                                         [100%]
+16 passed in 2.35s
+..........                                                               [100%]
+10 passed in 1.30s
+..........                                                               [100%]
+10 passed in 1.66s
+...........                                                              [100%]
+11 passed in 0.63s
+..............................                                           [100%]
+30 passed in 0.26s
+............................FFF...                                       [100%]
+=================================== FAILURES ===================================
+________ TestSurfacePointValidity.test_sampled_points_on_surface_rigid _________
+
+self = <tests._src.perception.test_mesh_robot.TestSurfacePointValidity object at 0x113d75bd0>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_sampled_points_on_surface_rigid(self, simple_box_mesh):
+        """Test that sampled points have near-zero SDF for rigid mesh."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        n_samples = 100
+        points, _ = robot_mesh.sample_surface_points(n_samples)
+    
+        # Query SDF using Warp kernel
+>       points_wp = wp.from_torch(points, dtype=wp.vec3)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/perception/test_mesh_robot.py:465: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____ TestSurfacePointValidity.test_sampled_points_on_surface_articulated ______
+
+self = <tests._src.perception.test_mesh_robot.TestSurfacePointValidity object at 0x113fc0050>
+franka_kinematics = <curobo._src.robot.kinematics.kinematics.Kinematics object at 0x113fc52b0>
+
+    def test_sampled_points_on_surface_articulated(self, franka_kinematics):
+        """Test that sampled points have near-zero SDF for articulated mesh."""
+        robot_mesh = RobotMesh.from_kinematics(franka_kinematics, device='mps:0')
+    
+        n_samples = 500
+        points, _ = robot_mesh.sample_surface_points(n_samples)
+    
+        # Query SDF using Warp kernel
+>       points_wp = wp.from_torch(points, dtype=wp.vec3)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/perception/test_mesh_robot.py:493: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____ TestSurfacePointValidity.test_sampled_points_on_surface_after_update _____
+
+self = <tests._src.perception.test_mesh_robot.TestSurfacePointValidity object at 0x113ef9f30>
+franka_kinematics = <curobo._src.robot.kinematics.kinematics.Kinematics object at 0x113fc52b0>
+
+    def test_sampled_points_on_surface_after_update(self, franka_kinematics):
+        """Test that sampled points remain on surface after update."""
+        robot_mesh = RobotMesh.from_kinematics(franka_kinematics, device='mps:0')
+    
+        # Update to new configuration
+        robot_mesh.update(torch.tensor([0.5, -0.5, 0.3, -1.5, 0.2, 1.0, 0.5], device='mps:0'))
+    
+        n_samples = 500
+        points, _ = robot_mesh.sample_surface_points(n_samples)
+    
+        # Query SDF using Warp kernel
+>       points_wp = wp.from_torch(points, dtype=wp.vec3)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/perception/test_mesh_robot.py:524: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/_src/perception/test_mesh_robot.py::TestSurfacePointValidity::test_sampled_points_on_surface_rigid
+FAILED tests/_src/perception/test_mesh_robot.py::TestSurfacePointValidity::test_sampled_points_on_surface_articulated
+FAILED tests/_src/perception/test_mesh_robot.py::TestSurfacePointValidity::test_sampled_points_on_surface_after_update
+3 failed, 31 passed in 1.99s
+....                                                                     [100%]
+4 passed in 1.00s
+..............                                                           [100%]
+14 passed in 1.93s
+................................                                         [100%]
+32 passed in 1.07s
+FFFFFFFFFFFFF                                                            [100%]
+=================================== FAILURES ===================================
+__________________ TestIdentityPose.test_residuals_near_zero ___________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestIdentityPose object at 0x10ca00410>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_residuals_near_zero(self, simple_box_mesh):
+        """Test that residuals are near zero when points are near surface."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        # Sample points on surface and perturb slightly off
+        # Kernel rejects points with dist <= 1e-8 for numerical stability
+        points, normals = robot_mesh.sample_surface_points(500)
+        points = perturb_surface_points(points, normals, offset=1e-4)
+    
+        # Identity pose
+        position = torch.zeros(3)
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])  # wxyz identity
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:184: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____________________ TestIdentityPose.test_jtr_near_zero ______________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestIdentityPose object at 0x116567110>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_jtr_near_zero(self, simple_box_mesh):
+        """Test that J^T @ r is small at near-optimal pose."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        # Sample points on surface and perturb slightly
+        # With 1e-4 offset, Jtr will be small but not exactly zero
+        points, normals = robot_mesh.sample_surface_points(500)
+        points = perturb_surface_points(points, normals, offset=1e-4)
+    
+        # Identity pose
+        position = torch.zeros(3)
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:208: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_______________ TestPerturbedPose.test_translation_perturbation ________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestPerturbedPose object at 0x116567390>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_translation_perturbation(self, simple_box_mesh):
+        """Test residuals with translation perturbation."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        # Sample points on surface
+        points, _ = robot_mesh.sample_surface_points(500)
+    
+        # Perturbed pose (translate by 1cm)
+        position = torch.tensor([0.01, 0.0, 0.0])
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:235: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_________________ TestPerturbedPose.test_rotation_perturbation _________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestPerturbedPose object at 0x116567250>
+sphere_mesh = <trimesh.Trimesh(vertices.shape=(642, 3), faces.shape=(1280, 3))>
+
+    def test_rotation_perturbation(self, sphere_mesh):
+        """Test residuals with rotation perturbation."""
+        robot_mesh = RobotMesh.from_trimesh(sphere_mesh, device='mps:0')
+    
+        # Sample points on surface
+        points, _ = robot_mesh.sample_surface_points(500)
+    
+        # Small rotation (5 degrees around z-axis)
+        angle = 0.087  # ~5 degrees in radians
+        quaternion = torch.tensor([np.cos(angle / 2), 0.0, 0.0, np.sin(angle / 2)])
+        position = torch.zeros(3)
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:261: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+___________________ TestJtJProperties.test_jtj_is_symmetric ____________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestJtJProperties object at 0x1165674d0>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_jtj_is_symmetric(self, simple_box_mesh):
+        """Test that J^T @ J is symmetric."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        # Sample points with perturbation to get non-trivial Jacobian
+        points, _ = robot_mesh.sample_surface_points(500)
+    
+        position = torch.tensor([0.01, 0.005, -0.01])
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:287: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____________ TestJtJProperties.test_jtj_is_positive_semidefinite ______________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestJtJProperties object at 0x116567610>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_jtj_is_positive_semidefinite(self, simple_box_mesh):
+        """Test that J^T @ J is positive semi-definite."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        points, _ = robot_mesh.sample_surface_points(500)
+    
+        position = torch.tensor([0.01, 0.005, -0.01])
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:306: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_________________ TestJtJProperties.test_jtj_diagonal_positive _________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestJtJProperties object at 0x1165fd940>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_jtj_diagonal_positive(self, simple_box_mesh):
+        """Test that J^T @ J diagonal is positive."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        points, _ = robot_mesh.sample_surface_points(500)
+    
+        position = torch.tensor([0.01, 0.005, -0.01])
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:325: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+______________ TestHuberLoss.test_huber_reduces_outlier_influence ______________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestHuberLoss object at 0x116567750>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_huber_reduces_outlier_influence(self, simple_box_mesh):
+        """Test that Huber loss reduces influence of outliers."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        # Sample points and add an outlier
+        points, _ = robot_mesh.sample_surface_points(100)
+    
+        # Large pose error to create large residuals
+        position = torch.tensor([0.05, 0.0, 0.0])  # 5cm translation
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+        # Without Huber
+>       JtJ_no_huber, Jtr_no_huber, sum_sq_no_huber, _ = run_alignment_kernel(
+            robot_mesh,
+            points,
+            position,
+            quaternion,
+            use_huber=False,
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:355: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_____________________ TestDifferentMeshes.test_sphere_mesh _____________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestDifferentMeshes object at 0x116567890>
+sphere_mesh = <trimesh.Trimesh(vertices.shape=(642, 3), faces.shape=(1280, 3))>
+
+    def test_sphere_mesh(self, sphere_mesh):
+        """Test with sphere mesh."""
+        robot_mesh = RobotMesh.from_trimesh(sphere_mesh, device='mps:0')
+    
+        points, normals = robot_mesh.sample_surface_points(500)
+        points = perturb_surface_points(points, normals, offset=1e-4)
+        position = torch.zeros(3)
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:395: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+____________________ TestDifferentMeshes.test_cylinder_mesh ____________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestDifferentMeshes object at 0x1165679d0>
+
+    def test_cylinder_mesh(self):
+        """Test with cylinder mesh."""
+        cylinder = trimesh.creation.cylinder(radius=0.05, height=0.2)
+        robot_mesh = RobotMesh.from_trimesh(cylinder, device='mps:0')
+    
+        points, normals = robot_mesh.sample_surface_points(500)
+        points = perturb_surface_points(points, normals, offset=1e-4)
+        position = torch.zeros(3)
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:413: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_______________________ TestEdgeCases.test_single_point ________________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestEdgeCases object at 0x116567b10>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_single_point(self, simple_box_mesh):
+        """Test with single point."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        points, normals = robot_mesh.sample_surface_points(1)
+        points = perturb_surface_points(points, normals, offset=1e-4)
+        position = torch.zeros(3)
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:439: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+________________________ TestEdgeCases.test_many_points ________________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestEdgeCases object at 0x116567c50>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_many_points(self, simple_box_mesh):
+        """Test with many points."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        points, normals = robot_mesh.sample_surface_points(10000)
+        points = perturb_surface_points(points, normals, offset=1e-4)
+        position = torch.zeros(3)
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh, points, position, quaternion
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:454: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+_________________ TestEdgeCases.test_points_outside_threshold __________________
+
+self = <tests._src.perception.test_wp_mesh_sdf_alignment.TestEdgeCases object at 0x1165fda70>
+simple_box_mesh = <trimesh.Trimesh(vertices.shape=(8, 3), faces.shape=(12, 3))>
+
+    def test_points_outside_threshold(self, simple_box_mesh):
+        """Test that points far from surface are rejected."""
+        robot_mesh = RobotMesh.from_trimesh(simple_box_mesh, device='mps:0')
+    
+        # Create points far from surface
+        points = torch.tensor(
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            dtype=torch.float32,
+            device='mps:0',
+        )
+        position = torch.zeros(3)
+        quaternion = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    
+>       JtJ, Jtr, sum_sq, valid_count = run_alignment_kernel(
+            robot_mesh,
+            points,
+            position,
+            quaternion,
+            distance_threshold=0.1,  # 10cm threshold, points are 90cm away
+        )
+
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:473: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/_src/perception/test_wp_mesh_sdf_alignment.py:123: in run_alignment_kernel
+    wp.from_torch(points, dtype=wp.vec3),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:313: in from_torch
+    device=device_from_torch(t.device),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+torch_device = device(type='mps', index=0)
+
+    def device_from_torch(torch_device: torch.device | str) -> warp.Device:
+        """Return the Warp device corresponding to a Torch device.
+    
+        Args:
+            torch_device: Torch device identifier
+    
+        Raises:
+            RuntimeError: Torch device does not have a corresponding Warp device
+        """
+        if type(torch_device) is str:
+            warp_device = warp._src.context.runtime.device_map.get(torch_device)
+            if warp_device is not None:
+                return warp_device
+            elif torch_device == "cuda":
+                return warp._src.context.runtime.get_current_cuda_device()
+            else:
+                raise RuntimeError(f"Unsupported Torch device {torch_device}")
+        else:
+            try:
+                if torch_device.type == "cuda":
+                    return warp._src.context.runtime.cuda_devices[torch_device.index]
+                elif torch_device.type == "cpu":
+                    return warp._src.context.runtime.cpu_device
+                else:
+>                   raise RuntimeError(f"Unsupported Torch device type {torch_device.type}")
+E                   RuntimeError: Unsupported Torch device type mps
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/warp/_src/torch.py:43: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestIdentityPose::test_residuals_near_zero
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestIdentityPose::test_jtr_near_zero
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestPerturbedPose::test_translation_perturbation
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestPerturbedPose::test_rotation_perturbation
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestJtJProperties::test_jtj_is_symmetric
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestJtJProperties::test_jtj_is_positive_semidefinite
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestJtJProperties::test_jtj_diagonal_positive
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestHuberLoss::test_huber_reduces_outlier_influence
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestDifferentMeshes::test_sphere_mesh
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestDifferentMeshes::test_cylinder_mesh
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestEdgeCases::test_single_point
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestEdgeCases::test_many_points
+FAILED tests/_src/perception/test_wp_mesh_sdf_alignment.py::TestEdgeCases::test_points_outside_threshold
+13 failed in 0.80s
+...                                                                      [100%]
+3 passed in 146.37s (0:02:26)
+...............                                                          [100%]
+15 passed in 1.18s
+......F...............F.........................                         [100%]
+=================================== FAILURES ===================================
+_________________ test_cuda_robot_model_default_joint_position _________________
+
+franka_cfg = KinematicsCfg(device_cfg=DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.floa... 1., 1., 1.], device='mps:0'), position_limit_clip=0.0), load_meshes=False, use_global_cumul=True, format_version=2.0))
+
+    def test_cuda_robot_model_default_joint_position(franka_cfg):
+        """Test default joint position."""
+        robot_model = Kinematics(franka_cfg)
+    
+        default_position = robot_model.default_joint_position
+    
+        assert isinstance(default_position, torch.Tensor)
+        assert default_position.shape[0] == robot_model.get_dof()
+>       assert default_position.device == franka_cfg.device_cfg.device
+E       AssertionError: assert device(type='mps', index=0) == device(type='mps')
+E        +  where device(type='mps', index=0) = tensor([ 0.0000, -1.3000,  0.0000, -2.5000,  0.0000,  1.5000,  0.8000],\n       device='mps:0').device
+E        +  and   device(type='mps') = DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32).device
+E        +    where DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32) = KinematicsCfg(device_cfg=DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.floa... 1., 1., 1.], device='mps:0'), position_limit_clip=0.0), load_meshes=False, use_global_cumul=True, format_version=2.0)).device_cfg
+
+tests/_src/robot/kinematics/test_kinematics_extended.py:148: AssertionError
+____________________ test_cuda_robot_model_cuda_device_cfg _____________________
+
+franka_cfg = KinematicsCfg(device_cfg=DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.floa... 1., 1., 1.], device='mps:0'), position_limit_clip=0.0), load_meshes=False, use_global_cumul=True, format_version=2.0))
+
+    def test_cuda_robot_model_cuda_device_cfg(franka_cfg):
+        """Test that model respects tensor device configuration."""
+        robot_model = Kinematics(franka_cfg)
+    
+        assert robot_model.device_cfg == franka_cfg.device_cfg
+    
+        # Create input on correct device
+        q = torch.zeros(1, 7, **(franka_cfg.device_cfg.as_torch_dict()))
+        state = robot_model.compute_kinematics(JointState.from_position(q, joint_names=robot_model.joint_names))
+    
+        # Output should be on same device
+>       assert state.robot_spheres.device == franka_cfg.device_cfg.device
+E       AssertionError: assert device(type='mps', index=0) == device(type='mps')
+E        +  where device(type='mps', index=0) = tensor([[[[ 0.0000e+00,  0.0000e+00,  8.5000e-02,  3.0000e-02],\n          [-1.0000e-01,  0.0000e+00,  8.5000e-02,  3.0...3,  9.2600e-01, -1.0000e+02],\n          [ 8.8000e-02, -7.1490e-13,  9.2600e-01, -1.0000e+02]]]],\n       device='mps:0').device
+E        +    where tensor([[[[ 0.0000e+00,  0.0000e+00,  8.5000e-02,  3.0000e-02],\n          [-1.0000e-01,  0.0000e+00,  8.5000e-02,  3.0...3,  9.2600e-01, -1.0000e+02],\n          [ 8.8000e-02, -7.1490e-13,  9.2600e-01, -1.0000e+02]]]],\n       device='mps:0') = KinematicsState(tool_poses=ToolPose(tool_frames=['panda_hand'], position=tensor([[[[ 8.8000e-02, -7.1490e-13,  9.2600e...e-02, -7.1490e-13,  9.2600e-01, -1.0000e+02]]]],\n       device='mps:0'), robot_com=None, robot_collision_geometry=None).robot_spheres
+E        +  and   device(type='mps') = DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32).device
+E        +    where DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32) = KinematicsCfg(device_cfg=DeviceCfg(device=device(type='mps'), dtype=torch.float32, collision_geometry_dtype=torch.floa... 1., 1., 1.], device='mps:0'), position_limit_clip=0.0), load_meshes=False, use_global_cumul=True, format_version=2.0)).device_cfg
+
+tests/_src/robot/kinematics/test_kinematics_extended.py:352: AssertionError
+=========================== short test summary info ============================
+FAILED tests/_src/robot/kinematics/test_kinematics_extended.py::test_cuda_robot_model_default_joint_position
+FAILED tests/_src/robot/kinematics/test_kinematics_extended.py::test_cuda_robot_model_cuda_device_cfg
+2 failed, 46 passed in 2.41s
+.....                                                                    [100%]
+5 passed in 0.87s
+.........                                                                [100%]
+9 passed in 1.69s
+...........                                                              [100%]
+11 passed in 0.90s
+.........                                                                [100%]
+9 passed in 0.10s
+......................s..................................                [100%]
+56 passed, 1 skipped in 0.30s
+...                                                                      [100%]
+3 passed in 1.03s
+...........................                                              [100%]
+27 passed in 2.39s
+.....................                                                    [100%]
+21 passed in 0.72s
+.                                                                        [100%]
+1 passed in 0.86s
+........................................................                 [100%]
+56 passed in 0.87s
+.............................................                            [100%]
+45 passed in 0.80s
+..............                                                           [100%]
+14 passed in 0.74s
+.........................................                                [100%]
+41 passed in 3.90s
+...................                                                      [100%]
+19 passed in 0.72s
+...........................                                              [100%]
+27 passed in 0.80s
+................................................                         [100%]
+48 passed in 3.13s
+..........................                                               [100%]
+26 passed in 1.93s
+..............................                                           [100%]
+30 passed in 0.76s
+.....................                                                    [100%]
+21 passed in 0.81s
+..........................................                               [100%]
+42 passed in 0.81s
+......................                                                   [100%]
+22 passed in 0.85s
+............s.....                                                       [100%]
+17 passed, 1 skipped in 1.48s
+................                                                         [100%]
+16 passed in 0.77s
+................................                                         [100%]
+32 passed in 46.68s
+.........................                                                [100%]
+25 passed in 1.93s
+...........................................                              [100%]
+43 passed in 4.85s
+...........................                                              [100%]
+27 passed in 2.01s
+............................                                             [100%]
+28 passed in 0.77s
+.............................................                            [100%]
+45 passed in 6.42s
+...........................                                              [100%]
+27 passed in 2.00s
+...........................                                              [100%]
+27 passed in 0.77s
+...............                                                          [100%]
+15 passed in 0.86s
+....................                                                     [100%]
+20 passed in 0.54s
+.......................................................................  [100%]
+71 passed in 2.55s
+....................                                                     [100%]
+20 passed in 0.62s
+..sss..FsFF.s...                                                         [100%]
+=================================== FAILURES ===================================
+________________ TestTeleportGradcheck.test_gradcheck_teleport _________________
+
+self = <tests._src.transition.test_transition_gradients.TestTeleportGradcheck object at 0x1369d4190>
+teleport_transition = <curobo._src.transition.robot_state_transition.RobotStateTransition object at 0x13692ef90>
+float32_device_cfg = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32)
+
+    def test_gradcheck_teleport(self, teleport_transition, float32_device_cfg):
+        """Test gradient accuracy with gradcheck."""
+        transition = teleport_transition
+        batch_size = 2
+    
+        start_state = JointState.zeros((1, transition.num_dof), float32_device_cfg)
+    
+        # Small input for numerical stability
+>       act_seq = torch.randn(
+            batch_size, transition.action_horizon, transition.action_dim,
+            device=float32_device_cfg.device, dtype=torch.float64,  # gradcheck needs float64
+            requires_grad=True
+        ) * 0.1
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/transition/test_transition_gradients.py:456: TypeError
+__________________ TestCliqueGradcheck.test_gradcheck_clique ___________________
+
+self = <tests._src.transition.test_transition_gradients.TestCliqueGradcheck object at 0x1369d4410>
+clique_transition = <curobo._src.transition.robot_state_transition.RobotStateTransition object at 0x1369d6ad0>
+float32_device_cfg = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32)
+
+    def test_gradcheck_clique(self, clique_transition, float32_device_cfg):
+        """Test gradient accuracy with gradcheck."""
+        transition = clique_transition
+        batch_size = 2
+        horizon = transition.horizon
+    
+        start_state = create_joint_state_with_grad(
+            (1, transition.num_dof), float32_device_cfg
+        )
+        start_state_idx = torch.zeros(
+            batch_size, device=float32_device_cfg.device, dtype=torch.int32
+        )
+    
+        goal_state = create_joint_state_with_grad(
+            (1, horizon, transition.num_dof), float32_device_cfg
+        )
+        goal_state.dt = torch.ones(
+            1, horizon, device=float32_device_cfg.device, dtype=float32_device_cfg.dtype
+        )
+        goal_state_idx = torch.zeros(
+            batch_size, device=float32_device_cfg.device, dtype=torch.int32
+        )
+        use_implicit_goal_state = torch.zeros(
+            1, horizon, device=float32_device_cfg.device, dtype=torch.uint8
+        )
+    
+>       act_seq = torch.randn(
+            batch_size, transition.action_horizon, transition.action_dim,
+            device=float32_device_cfg.device, dtype=torch.float64,
+            requires_grad=True
+        ) * 0.1
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/transition/test_transition_gradients.py:552: TypeError
+_________________ TestBSplineGradcheck.test_gradcheck_bspline __________________
+
+self = <tests._src.transition.test_transition_gradients.TestBSplineGradcheck object at 0x1369d4550>
+bspline_transition = <curobo._src.transition.robot_state_transition.RobotStateTransition object at 0x1369d7250>
+float32_device_cfg = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32)
+
+    def test_gradcheck_bspline(self, bspline_transition, float32_device_cfg):
+        """Test gradient accuracy with gradcheck."""
+        transition = bspline_transition
+        batch_size = 2
+        horizon = transition.horizon
+    
+        start_state = create_joint_state_with_grad(
+            (1, transition.num_dof), float32_device_cfg
+        )
+        start_state_idx = torch.zeros(
+            batch_size, device=float32_device_cfg.device, dtype=torch.int32
+        )
+    
+        goal_state = create_joint_state_with_grad(
+            (1, horizon, transition.num_dof), float32_device_cfg
+        )
+        goal_state.dt = torch.ones(
+            1, horizon, device=float32_device_cfg.device, dtype=float32_device_cfg.dtype
+        )
+        goal_state_idx = torch.zeros(
+            batch_size, device=float32_device_cfg.device, dtype=torch.int32
+        )
+        use_implicit_goal_state = torch.zeros(
+            1, horizon, device=float32_device_cfg.device, dtype=torch.uint8
+        )
+    
+>       act_seq = torch.randn(
+            batch_size, transition.n_knots, transition.action_dim,
+            device=float32_device_cfg.device, dtype=torch.float64,
+            requires_grad=True
+        ) * 0.1
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/transition/test_transition_gradients.py:607: TypeError
+=========================== short test summary info ============================
+FAILED tests/_src/transition/test_transition_gradients.py::TestTeleportGradcheck::test_gradcheck_teleport
+FAILED tests/_src/transition/test_transition_gradients.py::TestCliqueGradcheck::test_gradcheck_clique
+FAILED tests/_src/transition/test_transition_gradients.py::TestBSplineGradcheck::test_gradcheck_bspline
+3 failed, 8 passed, 5 skipped in 0.79s
+..................................F....                                  [100%]
+=================================== FAILURES ===================================
+___________ TestCameraObservation.test_filter_depth_preserves_dtype ____________
+
+self = <tests._src.types.test_camera.TestCameraObservation object at 0x10a7dc7d0>
+cuda_device_cfg = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float32, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32)
+
+    def test_filter_depth_preserves_dtype(self, cuda_device_cfg):
+        """Test that filter_depth preserves the dtype."""
+>       depth = torch.tensor(
+            [[0.005, 0.02], [0.03, 0.015]], dtype=torch.float64, device=cuda_device_cfg.device
+        )
+E       TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+
+tests/_src/types/test_camera.py:492: TypeError
+=========================== short test summary info ============================
+FAILED tests/_src/types/test_camera.py::TestCameraObservation::test_filter_depth_preserves_dtype
+1 failed, 38 passed in 0.23s
+...........F.....                                                        [100%]
+=================================== FAILURES ===================================
+____________________________ TestDeviceCfg.test_cpu ____________________________
+
+self = <tests._src.types.test_device_cfg.TestDeviceCfg object at 0x10b8565f0>
+
+    def test_cpu(self):
+        """Test creating CPU version of DeviceCfg."""
+>       cfg = DeviceCfg(device=torch.device('mps', 0), dtype=torch.float64)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/_src/types/test_device_cfg.py:99: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+<string>:8: in __init__
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = DeviceCfg(device=device(type='mps', index=0), dtype=torch.float64, collision_geometry_dtype=torch.float32, collision_gradient_dtype=torch.float32, collision_distance_dtype=torch.float32)
+
+    def __post_init__(self):
+        if isinstance(self.device, str):
+            object.__setattr__(self, "device", torch.device(self.device))
+        if self.device.type == "mps" and self.dtype != torch.float32:
+>           raise TypeError("MPS compatibility types support only float32")
+E           TypeError: MPS compatibility types support only float32
+
+/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/_src/types/device_cfg.py:46: TypeError
+=========================== short test summary info ============================
+FAILED tests/_src/types/test_device_cfg.py::TestDeviceCfg::test_cpu - TypeErr...
+1 failed, 16 passed in 0.04s
+........................................................................ [ 45%]
+........................................................................ [ 90%]
+................                                                         [100%]
+160 passed in 0.32s
+..................                                                       [100%]
+18 passed in 0.08s
+........................................................................ [ 52%]
+..................................................................       [100%]
+138 passed in 0.21s
+........................................................................ [100%]
+72 passed in 0.87s
+......................                                                   [100%]
+22 passed in 0.10s
+.s..s..s....                                                             [100%]
+9 passed, 3 skipped in 0.08s
+.................                                                        [100%]
+17 passed in 0.19s
+.......................................                                  [100%]
+39 passed in 0.47s
+......................                                                   [100%]
+22 passed in 0.70s
+.............................                                            [100%]
+29 passed in 0.52s
+.........................                                                [100%]
+25 passed in 1.74s
+.......                                                                  [100%]
+7 passed in 0.10s
+.....                                                                    [100%]
+5 passed in 8.65s
+{
+  "areas": {
+    "collision": {
+      "cases": 15,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 15
+      },
+      "portable_failed": 0,
+      "portable_passed": 15,
+      "pytest": {
+        "passed": 15
+      }
+    },
+    "cost": {
+      "cases": 157,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 157
+      },
+      "portable_failed": 0,
+      "portable_passed": 157,
+      "pytest": {
+        "passed": 157
+      }
+    },
+    "geom": {
+      "cases": 83,
+      "excluded_raw_failures": 5,
+      "parity": {
+        "mechanism_only_excluded": 38,
+        "portable_executed": 45
+      },
+      "portable_failed": 0,
+      "portable_passed": 45,
+      "pytest": {
+        "failed": 5,
+        "passed": 45,
+        "skipped": 33
+      }
+    },
+    "graph_planner": {
+      "cases": 95,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 95
+      },
+      "portable_failed": 0,
+      "portable_passed": 95,
+      "pytest": {
+        "passed": 95
+      }
+    },
+    "motion": {
+      "cases": 217,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 217
+      },
+      "portable_failed": 0,
+      "portable_passed": 217,
+      "pytest": {
+        "passed": 217
+      }
+    },
+    "optim": {
+      "cases": 320,
+      "excluded_raw_failures": 2,
+      "parity": {
+        "mechanism_only_excluded": 17,
+        "portable_executed": 303
+      },
+      "portable_failed": 0,
+      "portable_passed": 303,
+      "pytest": {
+        "failed": 2,
+        "passed": 303,
+        "skipped": 15
+      }
+    },
+    "perception": {
+      "cases": 313,
+      "excluded_raw_failures": 32,
+      "parity": {
+        "mechanism_only_excluded": 33,
+        "portable_executed": 280
+      },
+      "portable_failed": 0,
+      "portable_passed": 280,
+      "pytest": {
+        "failed": 32,
+        "passed": 280,
+        "skipped": 1
+      }
+    },
+    "robot": {
+      "cases": 157,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "mechanism_only_excluded": 1,
+        "portable_executed": 156
+      },
+      "portable_failed": 2,
+      "portable_passed": 154,
+      "pytest": {
+        "failed": 2,
+        "passed": 154,
+        "skipped": 1
+      }
+    },
+    "rollout": {
+      "cases": 254,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 254
+      },
+      "portable_failed": 0,
+      "portable_passed": 254,
+      "pytest": {
+        "passed": 254
+      }
+    },
+    "solver": {
+      "cases": 477,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "mechanism_only_excluded": 1,
+        "portable_executed": 476
+      },
+      "portable_failed": 0,
+      "portable_passed": 476,
+      "pytest": {
+        "passed": 476,
+        "skipped": 1
+      }
+    },
+    "state": {
+      "cases": 15,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 15
+      },
+      "portable_failed": 0,
+      "portable_passed": 15,
+      "pytest": {
+        "passed": 15
+      }
+    },
+    "test_examples": {
+      "cases": 5,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "portable_executed": 5
+      },
+      "portable_failed": 0,
+      "portable_passed": 5,
+      "pytest": {
+        "passed": 5
+      }
+    },
+    "transition": {
+      "cases": 127,
+      "excluded_raw_failures": 3,
+      "parity": {
+        "mechanism_only_excluded": 8,
+        "portable_executed": 119
+      },
+      "portable_failed": 0,
+      "portable_passed": 119,
+      "pytest": {
+        "failed": 3,
+        "passed": 119,
+        "skipped": 5
+      }
+    },
+    "types": {
+      "cases": 372,
+      "excluded_raw_failures": 2,
+      "parity": {
+        "mechanism_only_excluded": 2,
+        "portable_executed": 370
+      },
+      "portable_failed": 0,
+      "portable_passed": 370,
+      "pytest": {
+        "failed": 2,
+        "passed": 370
+      }
+    },
+    "util": {
+      "cases": 245,
+      "excluded_raw_failures": 0,
+      "parity": {
+        "mechanism_only_excluded": 3,
+        "portable_executed": 242
+      },
+      "portable_failed": 0,
+      "portable_passed": 242,
+      "pytest": {
+        "passed": 242,
+        "skipped": 3
+      }
+    }
+  },
+  "cases": 2852,
+  "covered_test_modules": 114,
+  "excluded_raw_failures": 44,
+  "implementation_parity_complete": false,
+  "missing_test_modules": [],
+  "parity": {
+    "mechanism_only_excluded": 103,
+    "portable_executed": 2749
+  },
+  "portable_failed": 2,
+  "portable_passed": 2747,
+  "pytest": {
+    "failed": 46,
+    "passed": 2747,
+    "skipped": 59
+  },
+  "substituted_test_modules": 114,
+  "test_definition_complete": true
+}

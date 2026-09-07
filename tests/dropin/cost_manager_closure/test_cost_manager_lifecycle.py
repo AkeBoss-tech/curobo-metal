@@ -15,7 +15,7 @@ from curobo._src.state.state_robot import RobotState
 from curobo._src.types.device_cfg import DeviceCfg
 
 
-def _cspace_config(device_cfg: DeviceCfg = DeviceCfg()) -> RobotCostManagerCfg:
+def _cspace_config(device_cfg: DeviceCfg = DeviceCfg("cpu")) -> RobotCostManagerCfg:
     return RobotCostManagerCfg(
         cspace_cfg=CSpaceCostCfg(
             weight=1.0,
@@ -31,10 +31,10 @@ def test_per_batch_current_dt_is_expanded_over_horizon_and_keeps_autograd() -> N
         [[[1.0], [2.0], [3.0]], [[4.0], [5.0], [6.0]]], requires_grad=True
     )
     state = RobotState(JointState.from_position(position))
-    current = JointState(torch.zeros(2, 1), velocity=torch.zeros(2, 1))
+    current = JointState(torch.zeros(2, 1), velocity=torch.zeros(2, 1), device_cfg=DeviceCfg("cpu"))
     goal = GoalRegistry(current_js=current, current_state_dt=torch.tensor([0.5, 0.25]))
 
-    manager = RobotCostManager().initialize_from_config(_cspace_config())
+    manager = RobotCostManager(device_cfg=DeviceCfg("cpu")).initialize_from_config(_cspace_config(device_cfg=DeviceCfg("cpu")))
     values = manager.compute_costs(state, goal=goal)
     assert values.names == ["cspace"]
     assert values.values[0].shape == (2, 3, 1)
@@ -46,7 +46,7 @@ def test_per_batch_current_dt_is_expanded_over_horizon_and_keeps_autograd() -> N
 
 def test_goal_index_and_time_layouts_fail_before_cost_evaluation() -> None:
     state = RobotState(JointState.from_position(torch.zeros(2, 3, 1)))
-    manager = RobotCostManager().initialize_from_config(_cspace_config())
+    manager = RobotCostManager(device_cfg=DeviceCfg("cpu")).initialize_from_config(_cspace_config(device_cfg=DeviceCfg("cpu")))
 
     bad_index = GoalRegistry(idxs_goal_js=torch.tensor([0.0, 1.0]))
     with pytest.raises(TypeError, match="idxs_goal_js"):
@@ -63,10 +63,10 @@ def test_config_factory_and_mutable_updates_never_hide_cross_device_tensors() ->
 
     cfg = RobotCostManagerCfg.create(
         {"cspace_cfg": {"weight": 1.0, "device_cfg": DeviceCfg("cpu")}}, DeviceCfg("cpu")
-    )
+    , device_cfg=DeviceCfg("cpu"))
     assert cfg.cspace_cfg is not None
-    public_self = SelfCollisionCostCfg(weight=1.0)
-    assert RobotCostManagerCfg.create({"self_collision_cfg": public_self}).self_collision_cfg is public_self
+    public_self = SelfCollisionCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu"))
+    assert RobotCostManagerCfg.create({"self_collision_cfg": public_self}, device_cfg=DeviceCfg("cpu")).self_collision_cfg is public_self
 
     if not torch.backends.mps.is_available():
         pytest.skip("MPS is unavailable")

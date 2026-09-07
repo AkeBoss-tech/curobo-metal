@@ -23,7 +23,7 @@ class _QuadraticRollout:
         return (actions - 0.4).square().sum(dim=(-1, -2))
 
 
-def _optimizer(*, fixed_samples: bool, device_cfg: DeviceCfg = DeviceCfg()) -> EvolutionStrategies:
+def _optimizer(*, fixed_samples: bool, device_cfg: DeviceCfg = DeviceCfg("cpu")) -> EvolutionStrategies:
     sampler = ParticleSamplerCfg(device_cfg=device_cfg, fixed_samples=fixed_samples, seed=31)
     config = EvolutionStrategiesCfg(
         device_cfg=device_cfg,
@@ -39,7 +39,7 @@ def _optimizer(*, fixed_samples: bool, device_cfg: DeviceCfg = DeviceCfg()) -> E
 
 
 def test_es_population_preserves_shared_particle_order_and_fixed_sample_schedule():
-    optimizer = _optimizer(fixed_samples=True)
+    optimizer = _optimizer(fixed_samples=True, device_cfg=DeviceCfg("cpu"))
     seed = torch.full((2, 3, 2), 0.6)
     optimizer.update_seed(seed)
     first = optimizer._population(2, 3, 2, device=seed.device, dtype=seed.dtype, iteration=0)
@@ -57,8 +57,8 @@ def test_es_population_preserves_shared_particle_order_and_fixed_sample_schedule
 
 
 def test_es_nonfixed_schedule_advances_deterministically_per_iteration():
-    first = _optimizer(fixed_samples=False)
-    second = _optimizer(fixed_samples=False)
+    first = _optimizer(fixed_samples=False, device_cfg=DeviceCfg("cpu"))
+    second = _optimizer(fixed_samples=False, device_cfg=DeviceCfg("cpu"))
     seed = torch.zeros(2, 3, 2)
     first.update_seed(seed)
     second.update_seed(seed)
@@ -75,7 +75,7 @@ def test_es_nonfixed_schedule_advances_deterministically_per_iteration():
 
 
 def test_es_sample_query_is_one_per_problem_and_does_not_reset_warm_start():
-    optimizer = _optimizer(fixed_samples=False)
+    optimizer = _optimizer(fixed_samples=False, device_cfg=DeviceCfg("cpu"))
     seed = torch.zeros(2, 3, 2)
     optimizer.optimize(seed)
     mean_before = optimizer.mean_action.clone()
@@ -96,7 +96,7 @@ def test_es_sample_query_is_one_per_problem_and_does_not_reset_warm_start():
 @pytest.mark.parametrize("learning_rate", [True, float("inf"), float("nan"), "0.1"])
 def test_es_rejects_nonfinite_or_nonreal_learning_rate(learning_rate):
     with pytest.raises(ValueError, match="finite positive real"):
-        EvolutionStrategiesCfg(learning_rate=learning_rate)
+        EvolutionStrategiesCfg(learning_rate=learning_rate, device_cfg=DeviceCfg("cpu"))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS hardware")

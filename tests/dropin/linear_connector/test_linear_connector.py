@@ -17,7 +17,7 @@ def _connector(device: str = "cpu", *, step: float = 0.25, capacity: int = 16):
         steer_buffer_size=capacity,
         device_cfg=device_cfg,
     )
-    connector = LinearConnector(config)
+    connector = LinearConnector(config, device_cfg=config.device_cfg)
     connector.set_dependencies(
         2,
         torch.tensor([2.0, 1.0], **device_cfg.as_torch_dict()),
@@ -61,12 +61,12 @@ def test_all_feasible_first_infeasible_empty_and_buffer_contract() -> None:
 
 
 def test_dependency_and_callback_contracts_are_explicit() -> None:
-    config = PRMGraphPlannerCfg(cspace_similarity_threshold=0.1, steer_buffer_size=8)
-    connector = LinearConnector(config)
+    config = PRMGraphPlannerCfg(cspace_similarity_threshold=0.1, steer_buffer_size=8, device_cfg=DeviceCfg("cpu"))
+    connector = LinearConnector(config, device_cfg=config.device_cfg)
     with pytest.raises(RuntimeError, match="set_dependencies"):
         connector.steer_until_infeasible(torch.zeros(1, 3), torch.zeros(1, 3))
     with pytest.raises(ValueError, match="finite positive"):
-        LinearConnector(PRMGraphPlannerCfg(cspace_similarity_threshold=0.0, steer_buffer_size=8))
+        LinearConnector(PRMGraphPlannerCfg(cspace_similarity_threshold=0.0, steer_buffer_size=8, device_cfg=DeviceCfg("cpu")), device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="nonnegative"):
         connector.set_dependencies(2, torch.tensor([-1.0, 1.0]), lambda x: x[:, 0].bool(), torch.arange(8))
     connector.set_dependencies(2, torch.ones(2), lambda rows: torch.ones(rows.shape[0], dtype=torch.int64), torch.arange(8))

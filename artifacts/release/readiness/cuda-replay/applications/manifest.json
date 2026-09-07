@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "provenance": "Project-authored portable V2 programs; not unmodified NVIDIA tutorials. Identical application files are used on Metal and CUDA.",
+  "files": {
+    "01_device_state.py": "2b2ef59bb496fdd71d6009386dc304e6e6b4f4679b0c3f1c3fefa740a0370fca",
+    "02_pose.py": "c6b1552e3461550e0c581f5adfb7331a21260e455ba1ca38bb1ce1f51b42c182",
+    "03_fk_franka.py": "863a8401020aad0e86692859c4fca45509ae60d3963207bb63764bef3c2733f3",
+    "04_fk_ur10.py": "9712673da8c5154fa2c05ac05419f89b6f0cf9b58946cd74b3706d1c9edc1d41",
+    "05_fk_gradient.py": "caa40ac6f17d1a747120702fc2f77b7cf545997c3c712667d261e80438be3ea6",
+    "06_collision_mutation.py": "dd4ea3aede52bd5413f16638472f21a09c9c2302223589e61c345e839b485eeb",
+    "07_ik.py": "736160b71e77eda6e35d27471161135426b9b40edb5fc33299a5c0837ad67b83",
+    "08_motion.py": "67b014b4260ec5c8d847343888e9464d96aac99b4d5742cede421c8d2ccc87be",
+    "application_support.py": "d8b6e6c6ae8d01994ab602627abe74cee8c3ba8115d214900f6d5c6cde38b155"
+  },
+  "cases": [
+    {
+      "file": "01_device_state.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "02_pose.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "03_fk_franka.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "04_fk_ur10.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "05_fk_gradient.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "06_collision_mutation.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "07_ik.py",
+      "atol": 0.005,
+      "rtol": 0.001
+    },
+    {
+      "file": "08_motion.py",
+      "atol": 0.05,
+      "rtol": 0.001
+    }
+  ]
+}

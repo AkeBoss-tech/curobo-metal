@@ -10,7 +10,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.tool_pose import GoalToolPose
 
 
-def _solver(device_cfg=DeviceCfg(), **kwargs):
+def _solver(device_cfg=DeviceCfg("cpu"), **kwargs):
     return SeedIKSolver(
         SeedIKSolverCfg.create(
             "franka.yml",
@@ -30,7 +30,7 @@ def _goal_at_default(solver):
 
 
 def test_error_calculator_criteria_control_residual_axes_and_workspace_lifecycle():
-    solver = _solver()
+    solver = _solver(device_cfg=DeviceCfg("cpu"))
     calculator = solver.error_calculator
     calculator.setup_batch_tensors(1)
     first_workspace = calculator._cost_shape
@@ -45,20 +45,20 @@ def test_error_calculator_criteria_control_residual_axes_and_workspace_lifecycle
     )
     q = solver.default_joint_position.view(1, -1)
     calculator.update_tool_pose_criteria(
-        {"panda_hand": ToolPoseCriteria.track_position([1.0, 0.0, 0.0])}
+        {"panda_hand": ToolPoseCriteria([1., 0., 0., 0., 0., 0.], [1., 0., 0., 0., 0., 0.], device_cfg=DeviceCfg("cpu"))}
     )
     masked = calculator.compute_error_and_jacobian(q, y_only_offset, torch.tensor([0]))
     torch.testing.assert_close(masked.position_errors, torch.zeros_like(masked.position_errors))
     torch.testing.assert_close(masked.jTerror, torch.zeros_like(masked.jTerror), atol=1e-6, rtol=0)
 
-    calculator.update_tool_pose_criteria({"panda_hand": ToolPoseCriteria.disabled()})
+    calculator.update_tool_pose_criteria({"panda_hand": ToolPoseCriteria([0.] * 6, [0.] * 6, device_cfg=DeviceCfg("cpu"))})
     disabled = calculator.compute_error_and_jacobian(q, goal, torch.tensor([0]))
     torch.testing.assert_close(disabled.jacobian[:, :6], torch.zeros_like(disabled.jacobian[:, :6]))
     torch.testing.assert_close(disabled.error_norm, torch.zeros_like(disabled.error_norm), atol=1e-6, rtol=0)
 
 
 def test_error_calculator_omits_disabled_limit_rows_and_has_physical_accel_gradient():
-    solver = _solver(joint_limit_weight=0.0, velocity_weight=4.0, acceleration_weight=9.0)
+    solver = _solver(joint_limit_weight=0.0, velocity_weight=4.0, acceleration_weight=9.0, device_cfg=DeviceCfg("cpu"))
     solver._setup_batch_size(1, 1)
     goal = _goal_at_default(solver)
     q = solver.default_joint_position.view(1, -1)
@@ -78,7 +78,7 @@ def test_error_calculator_omits_disabled_limit_rows_and_has_physical_accel_gradi
 
 
 def test_error_calculator_rejects_nonfinite_goal_and_wrong_problem_batch():
-    solver = _solver()
+    solver = _solver(device_cfg=DeviceCfg("cpu"))
     solver._setup_batch_size(1, 1)
     goal = _goal_at_default(solver)
     bad_goal = GoalToolPose(goal.tool_frames, torch.full_like(goal.position, float("nan")), goal.quaternion)

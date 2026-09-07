@@ -13,7 +13,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.tool_pose import GoalToolPose
 
 
-def _planner(*, batch_size=2, multi_env=False, device_cfg=DeviceCfg()):
+def _planner(*, batch_size=2, multi_env=False, device_cfg=DeviceCfg("cpu")):
     cfg = MotionPlannerCfg.create(
         "franka.yml", max_batch_size=batch_size, multi_env=multi_env,
         num_ik_seeds=2, num_trajopt_seeds=1, device_cfg=device_cfg,
@@ -38,7 +38,7 @@ def _trajectory_result(success, marker, names):
 
 
 def test_batch_cspace_keeps_first_success_result_rows(monkeypatch):
-    planner = _planner()
+    planner = _planner(device_cfg=DeviceCfg("cpu"))
     names = planner.joint_names
     start = JointState.from_position(planner.default_joint_state.position.repeat(2, 1), names)
     goal = JointState.from_position(start.position + 0.01, names)
@@ -58,7 +58,7 @@ def test_batch_cspace_keeps_first_success_result_rows(monkeypatch):
 
 
 def test_batch_pose_forwards_trajectory_options_and_goalset(monkeypatch):
-    planner = _planner()
+    planner = _planner(device_cfg=DeviceCfg("cpu"))
     names = planner.joint_names
     start = JointState.from_position(planner.default_joint_state.position.repeat(2, 1), names)
     position = torch.zeros((2, 1, len(planner.tool_frames), 1, 3))
@@ -98,7 +98,7 @@ def test_batch_pose_forwards_trajectory_options_and_goalset(monkeypatch):
 
 
 def test_batch_pose_executes_a_real_two_problem_fk_goal():
-    planner = _planner()
+    planner = _planner(device_cfg=DeviceCfg("cpu"))
     start = JointState.from_position(planner.default_joint_state.position.repeat(2, 1), planner.joint_names)
     tool_poses = planner.compute_kinematics(start).tool_poses
     goal = GoalToolPose(
@@ -110,7 +110,7 @@ def test_batch_pose_executes_a_real_two_problem_fk_goal():
 
 
 def test_batch_pose_maps_implicit_goal_to_selected_ik_endpoint(monkeypatch):
-    planner = _planner()
+    planner = _planner(device_cfg=DeviceCfg("cpu"))
     names = planner.joint_names
     start = JointState.from_position(planner.default_joint_state.position.repeat(2, 1), names)
     position = torch.zeros((2, 1, len(planner.tool_frames), 1, 3))
@@ -138,7 +138,7 @@ def test_batch_pose_maps_implicit_goal_to_selected_ik_endpoint(monkeypatch):
 
 
 def test_batch_grasp_approach_only_preserves_per_problem_result_shape():
-    planner = _planner()
+    planner = _planner(device_cfg=DeviceCfg("cpu"))
     start = JointState.from_position(planner.default_joint_state.position.repeat(2, 1), planner.joint_names)
     tool_poses = planner.compute_kinematics(start).tool_poses
     grasps = GoalToolPose(
@@ -154,7 +154,7 @@ def test_batch_grasp_approach_only_preserves_per_problem_result_shape():
 
 
 def test_graph_seeds_flatten_and_restore_batch_seed_shape():
-    planner = _planner(batch_size=2)
+    planner = _planner(batch_size=2, device_cfg=DeviceCfg("cpu"))
     names = planner.joint_names
     start = JointState.from_position(planner.default_joint_state.position.repeat(2, 1), names)
     goals = start.position[:, None].expand(-1, 3, -1).clone()
@@ -176,7 +176,7 @@ def test_graph_seeds_flatten_and_restore_batch_seed_shape():
 
 
 def test_multi_environment_disables_shared_graph_and_rejects_invalid_ratios():
-    planner = _planner(multi_env=True)
+    planner = _planner(multi_env=True, device_cfg=DeviceCfg("cpu"))
     assert planner.graph_planner is None
     start = planner.default_joint_state.unsqueeze(0)
     goal = JointState.from_position(start.position + 0.01, planner.joint_names)

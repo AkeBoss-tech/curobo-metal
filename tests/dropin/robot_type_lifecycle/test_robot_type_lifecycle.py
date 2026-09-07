@@ -36,7 +36,7 @@ def _mapping() -> dict:
 def test_mapping_factory_has_typed_dynamics_and_does_not_mutate_input(tmp_path: Path) -> None:
     source = _mapping()
     original = deepcopy(source)
-    cfg = RobotCfg.create(source, load_collision_spheres=False, num_envs=2)
+    cfg = RobotCfg.create(source, load_collision_spheres=False, num_envs=2, device_cfg=DeviceCfg("cpu"))
 
     assert source == original
     assert cfg.cspace.joint_names == ["shoulder"]
@@ -50,11 +50,11 @@ def test_mapping_factory_has_typed_dynamics_and_does_not_mutate_input(tmp_path: 
 
     target = tmp_path / "portable_robot.yml"
     cfg.write_config(target)
-    assert RobotCfg.create(target).cspace.joint_names == ["shoulder"]
+    assert RobotCfg.create(target, device_cfg=DeviceCfg("cpu")).cspace.joint_names == ["shoulder"]
 
 
 def test_precompiled_kinematics_mapping_preserves_typed_ownership() -> None:
-    device_cfg = DeviceCfg()
+    device_cfg = DeviceCfg("cpu")
     kin = KinematicsCfg.from_robot_yaml_file(str(_FIXTURE), device_cfg=device_cfg)
     cfg = RobotCfg.create({"kinematics": kin, "load_dynamics": True}, device_cfg=device_cfg)
 
@@ -65,10 +65,10 @@ def test_precompiled_kinematics_mapping_preserves_typed_ownership() -> None:
 
 
 def test_direct_model_clone_and_factory_identity_are_safe() -> None:
-    cfg = RobotCfg.from_basic(_FIXTURE.with_name("tiny_tree.urdf"), "base", ["tip"])
+    cfg = RobotCfg.from_basic(_FIXTURE.with_name("tiny_tree.urdf"), "base", ["tip"], device_cfg=DeviceCfg("cpu"))
     clone = cfg.clone()
 
-    assert RobotCfg.create(cfg) is cfg
+    assert RobotCfg.create(cfg, device_cfg=DeviceCfg("cpu")) is cfg
     assert clone is not cfg
     assert clone.kinematics is not cfg.kinematics
     clone.kinematics.tool_frames[:] = ["arm"]

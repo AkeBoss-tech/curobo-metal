@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"finite_difference": {"device": "mps", "dtype": "torch.float32", "shape": [], "values": -0.10742246359586716}, "gradient": {"device": "mps", "dtype": "torch.float32", "shape": [1, 7], "values": [[0.0, -0.10741449147462845, 1.325003908675404e-12, 0.5200337767601013, -3.650239832619917e-13, 0.17193832993507385, 0.0]]}}
+

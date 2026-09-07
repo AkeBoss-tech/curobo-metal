@@ -24,18 +24,19 @@ def _query(scene, values, env=None):
 
 
 def test_analytic_primitives_multi_env_and_mutation():
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     scenes = [
-        SceneCfg(sphere=[Sphere("ball", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.5)]),
+        SceneCfg(sphere=[Sphere("ball", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.5, device_cfg=DeviceCfg("cpu"))]),
         SceneCfg(
             capsule=[
                 Capsule(
                     "bar", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.2,
                     base=[0, 0, -1], tip=[0, 0, 1],
+                    device_cfg=DeviceCfg("cpu"),
                 )
             ],
             cylinder=[
-                Cylinder("can", pose=[3, 0, 0, 1, 0, 0, 0], radius=0.5, height=2)
+                Cylinder("can", pose=[3, 0, 0, 1, 0, 0, 0], radius=0.5, height=2, device_cfg=DeviceCfg("cpu"))
             ],
         ),
     ]
@@ -76,13 +77,13 @@ def test_speed_metric_and_raw_warp_boundary():
 
 
 def test_attachment_lifecycle_changes_production_spheres():
-    config = RobotSceneCollisionCfg.load_from_config()
+    config = RobotSceneCollisionCfg.load_from_config(device_cfg=DeviceCfg("cpu"))
     kinematics = config.kinematics
-    manager = AttachmentManager(kinematics)
+    manager = AttachmentManager(kinematics, device_cfg=DeviceCfg("cpu"))
     link = "panda_link7"
     original = kinematics.kinematics_config.get_link_spheres(link).clone()
     fitted = manager.fit_spheres(
-        [Cuboid("payload", pose=[0, 0, 0, 1, 0, 0, 0], dims=[0.1, 0.1, 0.1])],
+        [Cuboid("payload", pose=[0, 0, 0, 1, 0, 0, 0], dims=[0.1, 0.1, 0.1], device_cfg=DeviceCfg("cpu"))],
         num_spheres=1,
     )
     state = JointState.from_position(
@@ -102,10 +103,10 @@ def test_attachment_lifecycle_changes_production_spheres():
 
 def test_robot_scene_config_sampling_and_queries():
     scene = SceneCfg(
-        sphere=[Sphere("far", pose=[10, 0, 0, 1, 0, 0, 0], radius=0.2)]
+        sphere=[Sphere("far", pose=[10, 0, 0, 1, 0, 0, 0], radius=0.2, device_cfg=DeviceCfg("cpu"))]
     )
     collision = RobotSceneCollision(
-        RobotSceneCollisionCfg.load_from_config(scene_model=scene)
+        RobotSceneCollisionCfg.load_from_config(scene_model=scene, device_cfg=DeviceCfg("cpu"))
     )
     samples = collision.sample(3)
     assert samples.shape == (3, 7)
@@ -119,10 +120,10 @@ def test_robot_scene_config_sampling_and_queries():
 
 
 def test_low_level_checker_routes_scene_data():
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     data = SceneData.from_scene_model(
         SceneCfg(sphere=[
-            Sphere("ball", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.5)
+            Sphere("ball", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.5, device_cfg=DeviceCfg("cpu"))
         ]),
         cfg,
     )

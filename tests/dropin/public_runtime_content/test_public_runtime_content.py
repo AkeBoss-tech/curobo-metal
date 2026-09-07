@@ -74,11 +74,12 @@ def test_public_config_and_scene_types_support_normal_consumer_flow(tmp_path: Pa
                 name="table",
                 dims=parsed["cuboid"]["table"]["dims"],
                 pose=[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                device_cfg=DeviceCfg("cpu"),
             )
         ]
     )
     assert scene.cuboid[0].name == "table"
-    assert DeviceCfg().device.type == "cpu"
+    assert DeviceCfg("cpu").device.type == "cpu"
     assert SphereFitType.MORPHIT.value == "morphit"
 
 

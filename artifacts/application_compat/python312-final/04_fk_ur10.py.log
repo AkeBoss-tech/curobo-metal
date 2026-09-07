@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"joint_names": ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint", "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"], "position": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 1, 3], "values": [[[[0.2986122667789459, 0.2050788402557373, 0.7425727248191833]]]]}, "quaternion": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 1, 4], "values": [[[[0.04184800758957863, -0.7404118776321411, 0.6698104739189148, -0.03732328861951828]]]]}}
+

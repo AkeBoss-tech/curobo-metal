@@ -28,8 +28,8 @@ class _SweptChecker:
 
 
 def test_config_compiles_scalar_and_native_checker_count() -> None:
-    device_cfg = DeviceCfg()
-    scene = SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], [1, 1, 1])])
+    device_cfg = DeviceCfg("cpu")
+    scene = SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], [1, 1, 1], device_cfg=DeviceCfg("cpu"))])
     checker = SceneCollision(SceneCollisionCfg(device_cfg=device_cfg, scene_model=scene))
     cfg = SceneCollisionCostCfg(
         weight=1.0,
@@ -44,22 +44,22 @@ def test_config_compiles_scalar_and_native_checker_count() -> None:
     assert cfg.scene_collision_checker is checker
     assert cfg._num_scene_collision_checkers == checker.get_num_scene_collision_checkers()
 
-    tensor_scalar = SceneCollisionCostCfg(weight=1.0, activation_distance=torch.tensor(0.02))
+    tensor_scalar = SceneCollisionCostCfg(weight=1.0, activation_distance=torch.tensor(0.02), device_cfg=DeviceCfg("cpu"))
     assert tensor_scalar.activation_distance.shape == (1,)
 
 
 def test_config_accepts_query_protocol_and_checks_swept_capability() -> None:
     discrete = _DiscreteChecker()
-    cfg = SceneCollisionCostCfg(weight=1.0, _scene_collision_checker=discrete)
+    cfg = SceneCollisionCostCfg(weight=1.0, _scene_collision_checker=discrete, device_cfg=DeviceCfg("cpu"))
     assert cfg.scene_collision_checker is discrete
     assert cfg._num_scene_collision_checkers == 1
 
     swept = SceneCollisionCostCfg(
         weight=1.0, use_sweep=True, _scene_collision_checker=_SweptChecker()
-    )
+    , device_cfg=DeviceCfg("cpu"))
     assert swept._num_scene_collision_checkers == 1
     with pytest.raises(TypeError, match="configured discrete/swept"):
-        SceneCollisionCostCfg(weight=1.0, use_sweep=True, _scene_collision_checker=discrete)
+        SceneCollisionCostCfg(weight=1.0, use_sweep=True, _scene_collision_checker=discrete, device_cfg=DeviceCfg("cpu"))
 
 
 @pytest.mark.parametrize(

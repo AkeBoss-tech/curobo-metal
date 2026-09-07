@@ -108,3 +108,14 @@ def test_pose_route_is_device_resident_without_mps_fallback(monkeypatch):
     result = planner.plan_pose(goal, state, max_attempts=1)
     assert bool(result.success.all().item())
     assert result.js_solution.position.device.type == "mps"
+
+
+def test_zero_attempts_returns_none_without_running_solver(monkeypatch):
+    planner = _planner()
+    current = planner.default_joint_state
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("zero attempts must not execute the solver")
+
+    monkeypatch.setattr(planner.trajopt_solver, "solve_cspace", unexpected)
+    assert planner.plan_cspace(current, current, max_attempts=0) is None

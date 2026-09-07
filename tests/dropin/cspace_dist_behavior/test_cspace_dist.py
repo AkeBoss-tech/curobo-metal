@@ -89,7 +89,7 @@ def test_allocated_rollout_stays_on_mps_without_cpu_fallback() -> None:
 
 
 def test_unspecified_dof_is_resolved_when_an_allocated_rollout_arrives() -> None:
-    cost = CSpaceDistCost(CSpaceDistCostCfg(weight=1.0))
+    cost = CSpaceDistCost(CSpaceDistCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu")))
     cost.setup_batch_tensors(1, 2)
     value = cost(torch.ones((1, 2, 3)), torch.zeros((1, 3)), torch.tensor([0]))
     assert value.shape == (1, 2)

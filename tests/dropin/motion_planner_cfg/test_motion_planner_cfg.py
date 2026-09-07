@@ -20,6 +20,7 @@ def test_factory_compiles_scene_yaml_cache_and_graph_to_typed_configs():
         graph_planner_config={"max_nodes": 17, "new_nodes_per_iteration": 3},
         use_cuda_graph=True,
         store_debug=True,
+        device_cfg=DeviceCfg("cpu"),
     )
 
     assert isinstance(cfg.scene_collision_cfg, SceneCollisionCfg)
@@ -53,6 +54,7 @@ def test_factory_compiles_per_batch_scene_models_and_default_seed_scaling():
         max_batch_size=2,
         multi_env=True,
         use_cuda_graph=False,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert isinstance(cfg.scene_collision_cfg.scene_model, list)
     assert cfg.scene_collision_cfg.num_envs == 2
@@ -79,7 +81,7 @@ def test_factory_rejects_invalid_capacity_and_world_requests(kwargs, error):
 
 def test_factory_rejects_scene_lists_without_per_environment_mode():
     with pytest.raises(ValueError, match="multi_env=True"):
-        MotionPlannerCfg.create("franka.yml", scene_model=[{}])
+        MotionPlannerCfg.create("franka.yml", scene_model=[{}], device_cfg=DeviceCfg("cpu"))
 
 
 def test_factory_reuses_a_typed_scene_collision_config_across_all_children():
@@ -88,8 +90,9 @@ def test_factory_reuses_a_typed_scene_collision_config_across_all_children():
             {"cuboid": {"table": {"dims": [1, 1, 1], "pose": [0, 0, 0, 1, 0, 0, 0]}}}
         ),
         cache={"cuboid": 1},
+        device_cfg=DeviceCfg("cpu"),
     )
-    cfg = MotionPlannerCfg.create("franka.yml", scene_model=scene)
+    cfg = MotionPlannerCfg.create("franka.yml", scene_model=scene, device_cfg=DeviceCfg("cpu"))
 
     assert cfg.scene_collision_cfg is scene
     assert cfg.ik_solver_config.scene_collision_cfg is scene
@@ -99,13 +102,13 @@ def test_factory_reuses_a_typed_scene_collision_config_across_all_children():
 
 
 def test_direct_construction_rejects_incoherent_shape_or_scene_records():
-    cfg = MotionPlannerCfg.create("franka.yml", scene_model="collision_test.yml")
+    cfg = MotionPlannerCfg.create("franka.yml", scene_model="collision_test.yml", device_cfg=DeviceCfg("cpu"))
 
     bad_traj = cfg.trajopt_solver_config.clone(max_batch_size=2)
     with pytest.raises(ValueError, match="max_batch_size"):
         MotionPlannerCfg(cfg.ik_solver_config, bad_traj, device_cfg=cfg.device_cfg)
 
-    orphan_scene = SceneCollisionCfg(scene_model=SceneCfg.create({}))
+    orphan_scene = SceneCollisionCfg(scene_model=SceneCfg.create({}), device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="scene_collision_cfg"):
         MotionPlannerCfg(
             cfg.ik_solver_config,
@@ -117,7 +120,7 @@ def test_direct_construction_rejects_incoherent_shape_or_scene_records():
 
 
 def test_clone_is_independent_but_preserves_shared_child_scene_aliases():
-    cfg = MotionPlannerCfg.create("franka.yml", scene_model="collision_test.yml", random_seed=7)
+    cfg = MotionPlannerCfg.create("franka.yml", scene_model="collision_test.yml", random_seed=7, device_cfg=DeviceCfg("cpu"))
     clone = cfg.clone()
 
     assert clone is not cfg
@@ -135,7 +138,7 @@ def test_clone_is_independent_but_preserves_shared_child_scene_aliases():
 
 
 def test_clone_rejects_unknown_or_cross_device_updates_without_migrating_tensors():
-    cfg = MotionPlannerCfg.create("franka.yml")
+    cfg = MotionPlannerCfg.create("franka.yml", device_cfg=DeviceCfg("cpu"))
     with pytest.raises(TypeError, match="unknown MotionPlannerCfg"):
         cfg.clone(unknown=True)
     with pytest.raises(ValueError, match="cannot migrate"):

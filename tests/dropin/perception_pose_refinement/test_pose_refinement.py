@@ -48,7 +48,8 @@ def test_sdf_detector_recovers_a_local_rigid_transform_with_its_sdf_config():
     result = SDFPoseDetector(mesh, SDFDetectorCfg(
         max_iterations=24, n_points=64, distance_threshold=2.0,
         convergence_threshold=1e-6, rotation_convergence_threshold=1e-6,
-    )).detect_from_points(observed, initial_pose=Pose.from_list([0, 0, 0, 1, 0, 0, 0]))
+        device_cfg=DeviceCfg("cpu"),
+    )).detect_from_points(observed, initial_pose=Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")))
     assert result.config is None
     assert result.confidence == 1.0
     assert result.alignment_error < 2e-4
@@ -59,7 +60,7 @@ def test_sdf_detector_recovers_a_local_rigid_transform_with_its_sdf_config():
 def test_sdf_detector_requires_local_pose_and_state_is_cloneable():
     mesh = _mesh()
     points, _ = mesh.sample_surface_points(4)
-    detector = SDFPoseDetector(mesh, SDFDetectorCfg(max_iterations=0, n_points=4))
+    detector = SDFPoseDetector(mesh, SDFDetectorCfg(max_iterations=0, n_points=4, device_cfg=DeviceCfg("cpu")))
     with pytest.raises(ValueError, match="initial_pose"):
         detector.detect_from_points(points)
     state = SDFRefinementState(torch.zeros(1, 3), torch.tensor([[1.0, 0, 0, 0]]), torch.zeros(()),
@@ -74,8 +75,9 @@ def test_sdf_detector_exposes_pinned_refinement_state_lifecycle_without_warp():
     points, _ = mesh.sample_surface_points(12)
     detector = SDFPoseDetector(mesh, SDFDetectorCfg(
         max_iterations=2, inner_iterations=2, n_points=12, distance_threshold=1.0,
+        device_cfg=DeviceCfg("cpu"),
     ))
-    initial = Pose.from_list([0, 0, 0, 1, 0, 0, 0])
+    initial = Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu"))
     state = detector._setup_refinement(points, initial)
     assert state.n_points == 12
     assert state.best_JtJ.shape == (6, 6)
@@ -104,7 +106,7 @@ def test_dense_tsdf_refiner_returns_curobo_pose_error_iterations_contract():
                               grid_center=torch.tensor((0.0, 0.0, 0.4)),
                               depth_minimum_distance=0.1, depth_maximum_distance=2.0,
                               device="cpu"))
-    identity = Pose.from_list([0, 0, 0, 1, 0, 0, 0])
+    identity = Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu"))
     depth = torch.ones((4, 4))
     mapper.integrate(_camera(depth, identity))
     refiner = BlockSparseRaycastPoseRefiner(mapper, BlockSparseRaycastRefinerCfg(
@@ -121,7 +123,7 @@ def test_refiner_rejects_depth_without_its_required_valid_observations():
     mapper = Mapper(MapperCfg((0.2, 0.2, 0.2), voxel_size=0.1, device="cpu"))
     refiner = BlockSparseRaycastPoseRefiner(mapper, BlockSparseRaycastRefinerCfg(minimum_valid_depth_pixels=4))
     with pytest.raises(ValueError, match="fewer valid"):
-        refiner.refine_pose(torch.zeros((2, 2)), torch.eye(3), Pose.from_list([0, 0, 0, 1, 0, 0, 0]))
+        refiner.refine_pose(torch.zeros((2, 2)), torch.eye(3), Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

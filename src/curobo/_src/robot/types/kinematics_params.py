@@ -538,8 +538,10 @@ class _KinematicsParamsPortable:
         return list(self.robot_cfg.metadata.get("mesh_link_names", []))
 
     @property
-    def lock_jointstate(self) -> JointState:
+    def lock_jointstate(self) -> Optional[JointState]:
         locked = self.robot_cfg.metadata.get("lock_joints", {})
+        if not locked:
+            return None
         return JointState.from_position(
             self.robot_cfg.device_cfg.to_device(list(locked.values())),
             joint_names=list(locked),

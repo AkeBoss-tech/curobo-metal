@@ -1,0 +1,10 @@
+........................................................................ [ 44%]
+........................................................................ [ 88%]
+...................                                                      [100%]
+=============================== warnings summary ===============================
+tests/dropin/collision_robot_scene/test_collision_robot_scene.py:90
+  /Users/family/Documents/CodingProjects/curobo-metal/tests/dropin/collision_robot_scene/test_collision_robot_scene.py:90: SyntaxWarning: invalid escape sequence '\['
+    with pytest.raises(ValueError, match="\[batch, horizon, dof\]"):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+163 passed, 840 deselected, 1 warning in 17.81s

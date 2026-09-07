@@ -11,7 +11,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.types.tool_pose import GoalToolPose
 
 
-def _solver(device_cfg=DeviceCfg()):
+def _solver(device_cfg=DeviceCfg("cpu")):
     return SeedIKSolver(SeedIKSolverCfg.create(
         "franka.yml", device_cfg=device_cfg, num_seeds=3, max_iterations=16,
         inner_iterations=4, position_tolerance=0.01, orientation_tolerance=0.1,
@@ -26,7 +26,7 @@ def _default_goal(solver):
 
 
 def test_seed_ik_round_trip_and_seed_reset_are_deterministic():
-    solver = _solver()
+    solver = _solver(device_cfg=DeviceCfg("cpu"))
     goal = _default_goal(solver)
     start = solver.default_joint_position.view(1, 1, -1)
     result = solver.solve_single(goal, seed_config=start)
@@ -43,7 +43,7 @@ def test_seed_ik_round_trip_and_seed_reset_are_deterministic():
 
 
 def test_seed_ik_solves_batched_goalset_and_selects_exact_candidate():
-    solver = _solver()
+    solver = _solver(device_cfg=DeviceCfg("cpu"))
     exact = _default_goal(solver)
     position = exact.position.expand(2, -1, -1, 2, -1).clone()
     quaternion = exact.quaternion.expand(2, -1, -1, 2, -1).clone()
@@ -63,6 +63,7 @@ def test_seed_ik_minibatches_preserve_batched_seed_order_and_velocity_constraint
         "franka.yml", num_seeds=2, max_iterations=16, inner_iterations=4,
         position_tolerance=0.01, orientation_tolerance=0.1,
         max_problems_mini_batch=2, velocity_weight=0.1,
+        device_cfg=DeviceCfg("cpu"),
     ))
     exact = _default_goal(solver)
     goal = GoalToolPose(
@@ -76,7 +77,7 @@ def test_seed_ik_minibatches_preserve_batched_seed_order_and_velocity_constraint
         goal,
         current_state=JointState(
             current, velocity=torch.zeros_like(current), dt=torch.full((3,), 0.2)
-        ),
+        , device_cfg=DeviceCfg("cpu")),
         seed_config=current,
     )
     assert result.success.shape == (3, 1)
@@ -86,7 +87,7 @@ def test_seed_ik_minibatches_preserve_batched_seed_order_and_velocity_constraint
 
 
 def test_seed_ik_rejects_excess_seed_count_and_wrong_goal_dtype():
-    solver = _solver()
+    solver = _solver(device_cfg=DeviceCfg("cpu"))
     goal = _default_goal(solver)
     with pytest.raises(ValueError, match="more seeds"):
         solver.solve_single(
@@ -99,7 +100,7 @@ def test_seed_ik_rejects_excess_seed_count_and_wrong_goal_dtype():
 
 
 def test_seed_error_includes_joint_limit_and_velocity_residuals():
-    solver = _solver()
+    solver = _solver(device_cfg=DeviceCfg("cpu"))
     goal = _default_goal(solver)
     solver._setup_batch_size(1, 1)
     q = (solver.action_max + 0.2).view(1, -1)

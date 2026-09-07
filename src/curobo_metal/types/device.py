@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 import torch
+
+from curobo_metal.backend import default_device
 
 
 @dataclass(frozen=True)
 class DeviceCfg:
     """Subset-compatible replacement for cuRoboV2 ``DeviceCfg``."""
 
-    device: torch.device | str = torch.device("cpu")
+    device: torch.device | str = field(default_factory=default_device)
     dtype: torch.dtype = torch.float32
     collision_geometry_dtype: torch.dtype = torch.float32
     collision_gradient_dtype: torch.dtype = torch.float32

@@ -15,13 +15,13 @@ from curobo.util_file import load_yaml
 URDF = get_assets_path() / "robot/franka_description/franka_panda.urdf"
 
 
-def _franka_config(*, device_cfg: DeviceCfg = DeviceCfg(), num_envs: int = 1):
+def _franka_config(*, device_cfg: DeviceCfg = DeviceCfg("cpu"), num_envs: int = 1):
     data = load_yaml(str(get_robot_configs_path() / "franka.yml"))["robot_cfg"]["kinematics"]
     return KinematicsLoaderCfg(**data, device_cfg=device_cfg, num_envs=num_envs)
 
 
 def test_loader_compiles_packaged_relative_urdf_spheres_and_cspace():
-    loader = KinematicsLoader(_franka_config(num_envs=3))
+    loader = KinematicsLoader(_franka_config(num_envs=3, device_cfg=DeviceCfg("cpu")))
 
     assert loader.kinematics_parser.root_link == "base_link"
     assert loader.kinematics_config.num_dof == 7
@@ -38,7 +38,7 @@ def test_loader_compiles_packaged_relative_urdf_spheres_and_cspace():
 
 
 def test_loader_owns_config_inputs_and_reserves_unattached_collision_names():
-    config = _franka_config()
+    config = _franka_config(device_cfg=DeviceCfg("cpu"))
     original_tools = config.tool_frames.copy()
     loader = KinematicsLoader(config)
     config.tool_frames.append("not_a_robot_link")
@@ -55,7 +55,7 @@ def test_loader_owns_config_inputs_and_reserves_unattached_collision_names():
 def test_add_fixed_link_rebuilds_model_parser_and_tensor_cache():
     loader = KinematicsLoader(KinematicsLoaderCfg(
         base_link="base_link", tool_frames=["panda_hand"], urdf_path=str(URDF)
-    ))
+    , device_cfg=DeviceCfg("cpu")))
     before = loader.kinematics_config.num_links
     loader.add_fixed_link("portable_tool", "panda_hand")
 
@@ -71,6 +71,7 @@ def test_config_collision_disable_and_validation_boundaries():
     disabled = KinematicsLoaderCfg(
         base_link="base_link", tool_frames=["panda_hand"], urdf_path=str(URDF),
         collision_link_names=["panda_hand"], load_collision_spheres=False,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert disabled.collision_spheres is None
     assert disabled.collision_link_names == []
@@ -80,9 +81,10 @@ def test_config_collision_disable_and_validation_boundaries():
         KinematicsLoaderCfg(
             base_link="base_link", tool_frames=["panda_hand"], urdf_path=str(URDF),
             collision_link_names=["panda_hand"], collision_spheres=None,
+            device_cfg=DeviceCfg("cpu"),
         )
     with pytest.raises(NotImplementedError, match="USD/Isaac"):
-        KinematicsLoaderCfg(base_link="base", tool_frames=["tool"], urdf_path="robot.usd")
+        KinematicsLoaderCfg(base_link="base", tool_frames=["tool"], urdf_path="robot.usd", device_cfg=DeviceCfg("cpu"))
 
 
 def test_cspace_config_is_materialized_without_aliasing_caller_tensors():
@@ -95,9 +97,11 @@ def test_cspace_config_is_materialized_without_aliasing_caller_tensors():
         default_joint_position=[0.2, -0.3, *([0.0] * 7)],
         cspace_distance_weight=[1.0, 2.0, *([1.0] * 7)],
         null_space_weight=[3.0, 4.0, *([1.0] * 7)],
+        device_cfg=DeviceCfg("cpu"),
     )
     loader = KinematicsLoader(KinematicsLoaderCfg(
         base_link="panda_link0", tool_frames=["panda_link2"], urdf_path=str(URDF), cspace=cspace,
+        device_cfg=DeviceCfg("cpu"),
     ))
     assert loader.kinematics_config.cspace.default_joint_position[:2] == pytest.approx([0.2, -0.3])
     cspace.default_joint_position.add_(1.0)
@@ -119,6 +123,7 @@ def test_prismatic_lock_reduces_active_cspace_and_preserves_lock_state(tmp_path)
         base_link="base", tool_frames=["tool"], urdf_path=str(urdf),
         lock_joints={"slide": 0.4},
         cspace={"joint_names": ["slide", "wrist"], "default_joint_position": [0.0, 0.1]},
+        device_cfg=DeviceCfg("cpu"),
     ))
     assert loader.joint_names == ["wrist"]
     assert loader.kinematics_config.num_dof == 1
@@ -128,6 +133,7 @@ def test_prismatic_lock_reduces_active_cspace_and_preserves_lock_state(tmp_path)
     revolute = KinematicsLoader(KinematicsLoaderCfg(
         base_link="base", tool_frames=["tool"], urdf_path=str(urdf),
         lock_joints={"wrist": 0.1},
+        device_cfg=DeviceCfg("cpu"),
     ))
     assert revolute.lock_jointstate.joint_names == ["wrist"]
     torch.testing.assert_close(revolute.lock_jointstate.position, torch.tensor([0.1]))

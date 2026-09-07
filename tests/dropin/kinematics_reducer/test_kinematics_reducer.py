@@ -20,7 +20,7 @@ from curobo_metal.config.robot import (
 )
 
 
-def _branched_params(device_cfg: DeviceCfg = DeviceCfg()) -> KinematicsParams:
+def _branched_params(device_cfg: DeviceCfg = DeviceCfg("cpu")) -> KinematicsParams:
     robot = RobotCfg(
         name="branched",
         base_link="base",
@@ -52,7 +52,7 @@ def _branched_params(device_cfg: DeviceCfg = DeviceCfg()) -> KinematicsParams:
 
 
 def test_reduce_prunes_collision_only_branch_and_records_locks():
-    original = _branched_params()
+    original = _branched_params(device_cfg=DeviceCfg("cpu"))
     reduced = KinematicsReducer.reduce_dof(original, ["tool"])
 
     assert reduced.tool_frames == ["tool"]
@@ -68,7 +68,7 @@ def test_reduce_prunes_collision_only_branch_and_records_locks():
     assert reduced.robot_cfg.collision_link_names == ["tool"]
     assert reduced.robot_cfg.self_collision_ignore == {"tool": []}
 
-    model = Kinematics(KinematicsCfg(DeviceCfg(), ["tool"], reduced))
+    model = Kinematics(KinematicsCfg(DeviceCfg("cpu"), ["tool"], reduced))
     state = model.compute_kinematics(
         JointState.from_position(torch.zeros(2, 2), joint_names=reduced.joint_names)
     )
@@ -76,7 +76,7 @@ def test_reduce_prunes_collision_only_branch_and_records_locks():
 
 
 def test_reconstruct_preserves_batched_channels_metadata_and_order():
-    original = _branched_params()
+    original = _branched_params(device_cfg=DeviceCfg("cpu"))
     reduced = KinematicsReducer.reduce_dof(original, ["tool"])
     position = torch.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
     state = JointState.from_position(position, joint_names=reduced.joint_names)
@@ -102,11 +102,11 @@ def test_reconstruct_rejects_ambiguous_duplicate_lock_names():
 
 def test_reducer_rejects_retaining_dangling_collision_geometry():
     with pytest.raises(NotImplementedError, match="discarded links"):
-        KinematicsReducer.reduce_dof(_branched_params(), ["tool"], remove_collision_spheres=False)
+        KinematicsReducer.reduce_dof(_branched_params(device_cfg=DeviceCfg("cpu")), ["tool"], remove_collision_spheres=False)
 
 
 def test_cspace_and_limit_subsets_preserve_tensor_device():
-    params = _branched_params()
+    params = _branched_params(device_cfg=DeviceCfg("cpu"))
     cspace = KinematicsReducer._create_cspace_subset(
         params.robot_cfg.cspace, ["tool_joint", "arm_joint"],
     )
@@ -122,6 +122,7 @@ def test_cspace_and_limit_subsets_preserve_tensor_device():
         default_joint_position=torch.tensor([0.1, 0.2, 0.3]),
         cspace_distance_weight=torch.tensor([1.0, 2.0, 3.0]),
         null_space_weight=torch.tensor([3.0, 2.0, 1.0]),
+        device_cfg=DeviceCfg("cpu"),
     )
     reordered = KinematicsReducer._create_cspace_subset(
         tensor_cspace, ["tool_joint", "arm_joint"]

@@ -50,5 +50,5 @@ def test_internal_pinned_import_paths() -> None:
 def test_import_does_not_initialize_or_require_cuda() -> None:
     from curobo.types import DeviceCfg
 
-    assert DeviceCfg().device == torch.device("cpu")
+    assert DeviceCfg().device == torch.device("mps:0" if torch.backends.mps.is_available() else "cpu")
     assert not torch.cuda.is_initialized()

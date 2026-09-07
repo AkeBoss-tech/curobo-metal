@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from curobo.types import DeviceCfg
+
 import pytest
 import torch
 
@@ -20,6 +22,7 @@ def _planner(feasible=None) -> PRMGraphPlanner:
             neighbors_per_node=2,
             sampler_seed=3,
             use_cuda_graph_for_rollout=False,
+            device_cfg=DeviceCfg("cpu"),
         )
     )
 
@@ -84,6 +87,7 @@ def test_auto_reset_discards_dirty_compatibility_graph_without_building_it(
             new_nodes_per_iteration=0,
             neighbors_per_node=2,
             use_cuda_graph_for_rollout=False,
+            device_cfg=DeviceCfg("cpu"),
         )
     )
     refresh_count = 0

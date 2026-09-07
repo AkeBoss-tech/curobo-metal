@@ -23,9 +23,9 @@ from curobo._src.perception.pose_estimation.geometry import (
 
 def test_public_scene_and_sphere_fit():
     scene = Scene(
-        cuboid=[Cuboid("box", [0,0,0,1,0,0,0], dims=[1,1,1])],
-        capsule=[Capsule("cap", radius=.1, base=[0,0,0], tip=[0,0,1])],
-        cylinder=[Cylinder("cyl", radius=.1, height=1.)],
+        cuboid=[Cuboid("box", [0,0,0,1,0,0,0], dims=[1,1,1], device_cfg=DeviceCfg("cpu"))],
+        capsule=[Capsule("cap", radius=.1, base=[0,0,0], tip=[0,0,1], device_cfg=DeviceCfg("cpu"))],
+        cylinder=[Cylinder("cyl", radius=.1, height=1., device_cfg=DeviceCfg("cpu"))],
     )
     assert len(scene) == 3
 
@@ -35,6 +35,7 @@ def test_public_scene_and_sphere_fit():
     result = fit_spheres_to_mesh(
         Mesh(), num_spheres=2, fit_type=SphereFitType.VOXEL,
         compute_metrics=True,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert result.centers.shape == (2,3)
     assert result.metrics.num_spheres == 2
@@ -63,7 +64,7 @@ def test_transform_quaternion_and_camera_helpers_are_differentiable():
         [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
         [0, 1, 2, 3],
         [4],
-        DeviceCfg().cpu(),
+        DeviceCfg("cpu").cpu(),
     ) == [[1, 3, 0], [1, 2, 3]]
 
 
@@ -77,7 +78,7 @@ def test_depth_filter_and_mapper_lifecycle(tmp_path):
     camera = CameraObservation(
         depth_image=depth[0],
         intrinsics=torch.tensor([[10.,0,1.5],[0,10.,1.5],[0,0,1.]]),
-        pose=Pose.from_list([0,0,-.2,1,0,0,0]),
+        pose=Pose.from_list([0,0,-.2,1,0,0,0], device_cfg=DeviceCfg("cpu")),
         depth_to_meter=1.,
     )
     mapper.integrate(camera)
@@ -109,7 +110,7 @@ def test_rigid_geometry_samples_triangle_surfaces_instead_of_face_centroids():
         faces=torch.tensor([[0, 1, 2]]),
     )
     torch.manual_seed(7)
-    points, normals = RigidObjectGeometry(mesh).sample_surface_points(32)
+    points, normals = RigidObjectGeometry(mesh, device_cfg=DeviceCfg("cpu")).sample_surface_points(32)
     assert points.shape == normals.shape == (32, 3)
     torch.testing.assert_close(points[:, 0], torch.zeros(32))
     assert torch.all(points[:, 1:] >= 0)
@@ -140,7 +141,7 @@ def test_articulated_geometry_caches_local_meshes_and_applies_fk_with_gradients(
                 tool_poses={"tool": Pose(position, torch.tensor([[1.0, 0.0, 0.0, 0.0]]))}
             )
 
-    geometry = ArticulatedRobotGeometry(Robot(), min_points_per_link=4, max_points_per_link=4)
+    geometry = ArticulatedRobotGeometry(Robot(), min_points_per_link=4, max_points_per_link=4, device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="Must call update"):
         geometry.sample_surface_points(2)
     q = torch.tensor([0.25], requires_grad=True)

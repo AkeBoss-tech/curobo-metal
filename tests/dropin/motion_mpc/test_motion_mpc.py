@@ -25,6 +25,7 @@ def _planner(batch=1):
     cfg = MotionPlannerCfg.create(
         "franka.yml", num_ik_seeds=2, num_trajopt_seeds=1,
         use_cuda_graph=True, max_batch_size=batch,
+        device_cfg=DeviceCfg("cpu"),
     )
     cfg.trajopt_solver_config.max_iterations = 2
     return MotionPlanner(cfg)
@@ -36,7 +37,7 @@ def test_public_aliases_signatures_and_config_defaults():
     signature = inspect.signature(MotionPlanner.plan_cspace)
     assert signature.parameters["max_attempts"].default == 5
     assert signature.parameters["enable_graph_attempt"].default == 1
-    cfg = MotionPlannerCfg.create("franka.yml", use_cuda_graph=True)
+    cfg = MotionPlannerCfg.create("franka.yml", use_cuda_graph=True, device_cfg=DeviceCfg("cpu"))
     assert cfg.ik_solver_config.use_cuda_graph is False
     assert cfg.device_cfg.device.type == "cpu"
 
@@ -68,6 +69,7 @@ def test_mpc_setup_goal_and_receding_horizon_result():
     cfg = ModelPredictiveControlCfg.create(
         "franka.yml", warm_start_optimization_num_iters=2,
         cold_start_optimization_num_iters=2,
+        device_cfg=DeviceCfg("cpu"),
     )
     mpc = ModelPredictiveControl(cfg)
     current = mpc.default_joint_state
@@ -89,7 +91,7 @@ def test_mpc_setup_goal_and_receding_horizon_result():
 
 
 def test_goal_and_seed_managers_are_deterministic():
-    device = DeviceCfg()
+    device = DeviceCfg("cpu")
     solve = SolveState(SolveMode.BATCH, 2, 1, num_seeds=3)
     state = JointState.from_position(torch.zeros(2, 2), ["a", "b"])
     manager = GoalManager(device)
@@ -113,6 +115,7 @@ def test_retarget_configuration_and_sequence_type():
     cfg = MotionRetargeterCfg.create(
         "franka.yml", criteria, num_envs=2, num_seeds_global=2,
         num_seeds_local=1,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert cfg.tool_frames == ["panda_hand"]
     sequence = SequenceGoalToolPose(

@@ -24,7 +24,7 @@ def test_pose_shapes_clone_index_and_mutating_to() -> None:
     )
     assert pose.position.shape == (2, 3)
     assert pose.quaternion.shape == (2, 4)
-    assert torch.equal(pose.quaternion[:, 0], torch.ones(2))
+    assert torch.equal(pose.quaternion[:, 0], pose.quaternion.new_ones(2))
 
     clone = pose.clone()
     assert isinstance(clone, Pose)
@@ -45,6 +45,6 @@ def test_pose_matrix_and_composition_behavior() -> None:
     result = left.multiply(right)
 
     assert isinstance(result, Pose)
-    assert torch.allclose(result.position, torch.tensor([[1.0, 2.0, 0.0]]))
+    assert torch.allclose(result.position, result.position.new_tensor([[1.0, 2.0, 0.0]]))
     assert result.get_matrix().shape == (1, 4, 4)
-    assert torch.allclose(result.inverse().multiply(result).position, torch.zeros(1, 3))
+    assert torch.allclose(result.inverse().multiply(result).position, result.position.new_zeros(1, 3))

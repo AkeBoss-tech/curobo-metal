@@ -37,13 +37,13 @@ class _SceneChecker:
 
 
 def test_initialize_is_reconfigurable_and_skips_unbound_scene_costs():
-    manager = RobotCostManager(DeviceCfg())
-    no_checker = RobotCostManagerCfg(scene_collision_cfg=SceneCollisionCostCfg(weight=1.0))
+    manager = RobotCostManager(DeviceCfg("cpu"))
+    no_checker = RobotCostManagerCfg(scene_collision_cfg=SceneCollisionCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu")))
     manager.initialize_from_config(no_checker)
     assert manager.get_cost_component_names() == []
 
     checker = _SceneChecker()
-    with_checker = RobotCostManagerCfg(scene_collision_cfg=SceneCollisionCostCfg(weight=1.0))
+    with_checker = RobotCostManagerCfg(scene_collision_cfg=SceneCollisionCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu")))
     manager.initialize_from_config(with_checker, _Transition(total_spheres=2), checker)
     assert manager.get_cost_component_names() == ["scene_collision"]
     assert manager.get_cost("scene_collision").config.scene_collision_checker is checker
@@ -55,21 +55,21 @@ def test_initialize_is_reconfigurable_and_skips_unbound_scene_costs():
 
 
 def test_self_collision_interpolation_is_execution_local_and_zero_sphere_disables():
-    cfg = RobotCostManagerCfg(self_collision_cfg=SelfCollisionCostCfg(weight=6.0))
+    cfg = RobotCostManagerCfg(self_collision_cfg=SelfCollisionCostCfg(weight=6.0, device_cfg=DeviceCfg("cpu")))
     transition = _Transition(
         total_spheres=2,
         self_collision_config=SimpleNamespace(collision_pairs=torch.tensor([[0, 1]])),
         interpolation_steps=3,
     )
-    manager = RobotCostManager(DeviceCfg()).initialize_from_config(cfg, transition)
+    manager = RobotCostManager(DeviceCfg("cpu")).initialize_from_config(cfg, transition)
     component = manager.get_cost("self_collision")
     assert component is not None
     torch.testing.assert_close(component.weight, torch.tensor([2.0]))
     # The caller configuration is reusable across manager instances.
     torch.testing.assert_close(cfg.self_collision_cfg.weight, torch.tensor([6.0]))
 
-    empty = RobotCostManager(DeviceCfg()).initialize_from_config(
-        RobotCostManagerCfg(self_collision_cfg=SelfCollisionCostCfg(weight=1.0)),
+    empty = RobotCostManager(DeviceCfg("cpu")).initialize_from_config(
+        RobotCostManagerCfg(self_collision_cfg=SelfCollisionCostCfg(weight=1.0, device_cfg=DeviceCfg("cpu"))),
         _Transition(total_spheres=0, self_collision_config=SimpleNamespace()),
     )
     assert empty.has_cost("self_collision")
@@ -77,7 +77,7 @@ def test_self_collision_interpolation_is_execution_local_and_zero_sphere_disable
 
 
 def test_uninitialized_update_is_noop_and_state_device_is_never_copied_implicitly():
-    manager = RobotCostManager(DeviceCfg())
+    manager = RobotCostManager(DeviceCfg("cpu"))
     manager.update_params(dt=0.25, tool_pose_criteria="not inspected before initialization")
     assert manager._initialized is False
 

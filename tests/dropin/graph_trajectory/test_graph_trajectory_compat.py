@@ -42,7 +42,7 @@ def test_pinned_public_names_and_signatures():
 
 
 def test_seed_interpolation_and_retiming_are_batched_and_deterministic():
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     generator = TrajectorySeedGenerator(5, 2, cfg)
     start = torch.tensor([[0.0, -1.0], [1.0, 2.0]])
     goal = torch.tensor([[[1.0, 1.0], [2.0, 0.0]], [[0.0, 0.0], [-1.0, 1.0]]])
@@ -63,12 +63,13 @@ def test_seed_interpolation_and_retiming_are_batched_and_deterministic():
 
 
 def test_graph_primitives_and_prm_lifecycle():
-    device_cfg = DeviceCfg()
+    device_cfg = DeviceCfg("cpu")
     low, high = torch.tensor([-1.0, -1.0]), torch.tensor([1.0, 1.0])
     cfg = PRMGraphPlannerCfg(
         action_lower_bounds=low, action_upper_bounds=high,
         new_nodes_per_iteration=32, neighbors_per_node=8,
         sampler_seed=7, use_cuda_graph_for_rollout=False,
+        device_cfg=DeviceCfg("cpu"),
     )
     sampler = NodeSamplingStrategy(
         cfg, low, high, torch.ones(2), 2,
@@ -109,8 +110,8 @@ def test_execution_manager_consumes_commands():
 
 
 def test_trajectory_optimizer_cspace_routes_to_production_ops():
-    kinematics = KinematicsCfg.from_robot_yaml_file("franka.yml")
-    robot = RobotCfg(kinematics.kinematics_config.robot_cfg, device_cfg=DeviceCfg())
+    kinematics = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu"))
+    robot = RobotCfg(kinematics.kinematics_config.robot_cfg, device_cfg=DeviceCfg("cpu"))
     cfg = TrajOptSolverCfg(
         core_cfg=[], robot_config=robot, num_seeds=2,
         interpolation_type=TrajInterpolationType.LINEAR_CUDA,

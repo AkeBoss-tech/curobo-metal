@@ -114,9 +114,9 @@ def test_yaml_urdf_preserves_tree_metadata_and_compiles() -> None:
     assert tree.joint_names == ("shoulder",)
     assert tree.links[3].q_index == 0
     assert tree.links[3].multiplier == -0.02
-    model = robot.to_whole_body_model(dtype=torch.float64)
+    model = robot.to_whole_body_model(device="cpu", dtype=torch.float64)
     assert model.dof == 1 and model.link_names == ("base", "arm", "tip", "finger")
-    spheres, indices = robot.to_collision_inputs(dtype=torch.float64)
+    spheres, indices = robot.to_collision_inputs(device="cpu", dtype=torch.float64)
     assert spheres.shape == (2, 4)
     assert indices.tolist() == [0, 1]
 

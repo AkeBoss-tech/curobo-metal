@@ -21,7 +21,7 @@ from curobo._src.optim.optimization_iteration_state import OptimizationIteration
 from curobo._src.types.device_cfg import DeviceCfg
 
 
-def _context(*, device_cfg=DeviceCfg(), scales=(0.0, 0.25, 0.5, 1.0)):
+def _context(*, device_cfg=DeviceCfg("cpu"), scales=(0.0, 0.25, 0.5, 1.0)):
     target = torch.tensor(0.8, device=device_cfg.device, dtype=device_cfg.dtype)
 
     def evaluate(points: torch.Tensor):
@@ -72,7 +72,7 @@ def _state(*, device="cpu"):
     ],
 )
 def test_line_searches_create_autograd_candidates_inside_no_grad_and_keep_batches(strategy):
-    context = _context()
+    context = _context(device_cfg=DeviceCfg("cpu"))
     state = _state()
     with torch.no_grad():
         result = strategy.search(state, context)
@@ -86,7 +86,7 @@ def test_line_searches_create_autograd_candidates_inside_no_grad_and_keep_batche
 
 
 def test_line_search_resizing_and_scale_boundaries_are_explicit():
-    context = _context()
+    context = _context(device_cfg=DeviceCfg("cpu"))
     strategy = GreedyLineSearchStrategy()
     assert strategy.update_num_problems(3, context) is strategy
     assert strategy.num_problems == context.num_problems == 3
@@ -103,7 +103,7 @@ def test_line_search_resizing_and_scale_boundaries_are_explicit():
 
 
 def test_line_search_rejects_malformed_context_tensors_and_preserves_first_ties():
-    context = _context(scales=(0.0, 1.0))
+    context = _context(scales=(0.0, 1.0), device_cfg=DeviceCfg("cpu"))
     state = _state()
     tie = GreedyLineSearchStrategy()
 

@@ -1,5 +1,7 @@
 """Portable lifecycle coverage for solver, motion, and rollout compatibility."""
 
+from curobo.types import DeviceCfg
+
 import pytest
 import torch
 
@@ -21,7 +23,7 @@ from curobo._src.types.tool_pose import GoalToolPose
 def _trajopt():
     cfg = MotionPlannerCfg.create(
         "franka.yml", num_trajopt_seeds=2, use_cuda_graph=False
-    ).trajopt_solver_config
+    , device_cfg=DeviceCfg("cpu")).trajopt_solver_config
     cfg.max_iterations = 2
     return TrajOptSolver(cfg)
 
@@ -49,10 +51,10 @@ def test_trajopt_pose_goal_state_route_and_cuda_boundary():
 
 
 def test_planner_scene_mutation_and_attachment_lifecycle():
-    cfg = MotionPlannerCfg.create("franka.yml", use_cuda_graph=False)
+    cfg = MotionPlannerCfg.create("franka.yml", use_cuda_graph=False, device_cfg=DeviceCfg("cpu"))
     cfg.trajopt_solver_config.max_iterations = 2
     planner = MotionPlanner(cfg)
-    scene = SceneCfg(sphere=[Sphere("keepout", position=[3.0, 0.0, 0.0], radius=0.1)])
+    scene = SceneCfg(sphere=[Sphere("keepout", position=[3.0, 0.0, 0.0], radius=0.1, device_cfg=DeviceCfg("cpu"))])
     planner.update_world(scene)
     assert planner.attachment_manager is not None
     assert planner.ik_solver.scene_collision_checker is planner._scene_collision
@@ -61,7 +63,7 @@ def test_planner_scene_mutation_and_attachment_lifecycle():
 
 
 def test_solver_core_goal_lifecycle_and_ik_cuda_boundary():
-    cfg = IKSolverCfg.create("franka.yml", num_seeds=2, use_cuda_graph=False)
+    cfg = IKSolverCfg.create("franka.yml", num_seeds=2, use_cuda_graph=False, device_cfg=DeviceCfg("cpu"))
     core = SolverCore(cfg.core_cfg)
     state = core.default_joint_state.unsqueeze(0)
     solve_state = SolveState(SolveMode.SINGLE, 1, 1, num_seeds=2)

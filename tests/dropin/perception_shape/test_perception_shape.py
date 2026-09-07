@@ -1,5 +1,7 @@
 """Executable portable perception surface checks beyond raw-kernel boundaries."""
 
+from curobo.types import DeviceCfg
+
 import torch
 import pytest
 
@@ -35,7 +37,7 @@ def _camera(depth):
     return CameraObservation(
         depth_image=depth,
         intrinsics=torch.tensor(((8.0, 0.0, 1.5), (0.0, 8.0, 1.5), (0.0, 0.0, 1.0))),
-        pose=Pose.from_list([0, 0, 0, 1, 0, 0, 0]),
+        pose=Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")),
         depth_to_meter=1.0,
     )
 
@@ -63,13 +65,13 @@ def test_mapper_region_mutation_and_render_surface_are_real_dense_operations():
     assert mapper.get_stats()["observed_voxels"] == 0
     depth, normals, valid = mapper.render(
         torch.tensor(((8.0, 0.0, 1.5), (0.0, 8.0, 1.5), (0.0, 0.0, 1.0))),
-        Pose.from_list([0, 0, 0, 1, 0, 0, 0]), (4, 4),
+        Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")), (4, 4),
     )
     assert depth.shape == valid.shape == (4, 4)
     assert normals.shape == (4, 4, 3)
     assert mapper.render_color_only(
         torch.tensor(((8.0, 0.0, 1.5), (0.0, 8.0, 1.5), (0.0, 0.0, 1.0))),
-        Pose.from_list([0, 0, 0, 1, 0, 0, 0]), (4, 4),
+        Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")), (4, 4),
     ).dtype == torch.uint8
 
 
@@ -81,7 +83,7 @@ def test_tsdf_integrator_and_mesh_detector_execute_without_warp():
     mesh = RobotMesh(vertices, torch.tensor(((0, 1, 2),)))
     points, normals = mesh.sample_surface_points(5)
     assert points.shape == normals.shape == (5, 3)
-    result = PoseDetector(mesh, DetectorCfg()).detect_from_points(points, None)
+    result = PoseDetector(mesh, DetectorCfg(device_cfg=DeviceCfg("cpu"))).detect_from_points(points, None)
     assert result.alignment_error < 1e-5
     state = SDFRefinementState(torch.zeros(1, 3), torch.tensor([[1.0, 0.0, 0.0, 0.0]]), torch.zeros(1))
     assert state.clone().copy_(state).iterations == 0

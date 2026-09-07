@@ -35,6 +35,7 @@ def test_factory_resolves_short_robot_scene_and_task_mappings() -> None:
         use_cuda_graph_for_rollout=False,
         self_collision_check=False,
         graph_path_finder_seed=11,
+        device_cfg=DeviceCfg("cpu"),
     )
 
     # Franka's two locked finger joints are removed, matching the c-space
@@ -55,13 +56,13 @@ def test_factory_resolves_short_robot_scene_and_task_mappings() -> None:
 
 
 def test_factory_default_paths_compile_without_optional_nvidia_task_corpus() -> None:
-    cfg = PRMGraphPlannerCfg.create("franka.yml")
+    cfg = PRMGraphPlannerCfg.create("franka.yml", device_cfg=DeviceCfg("cpu"))
     assert cfg.action_dim == 7
     assert isinstance(cfg.rollout_config, RobotRolloutCfg)
     with pytest.raises(FileNotFoundError, match="portable package only falls back"):
-        PRMGraphPlannerCfg.create("franka.yml", graph_planner_config="missing.yml")
+        PRMGraphPlannerCfg.create("franka.yml", graph_planner_config="missing.yml", device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="unknown collision_cache"):
-        PRMGraphPlannerCfg.create("franka.yml", collision_cache={"warp": 1})
+        PRMGraphPlannerCfg.create("franka.yml", collision_cache={"warp": 1}, device_cfg=DeviceCfg("cpu"))
 
 
 @pytest.mark.parametrize(
@@ -85,6 +86,7 @@ def test_config_bounds_are_canonicalized_and_clone_is_independent() -> None:
         action_lower_bounds=[-1.0, -2.0],
         action_upper_bounds=[1.0, 2.0],
         connection_radius=0.7,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert cfg.action_dim == 2
     assert cfg.action_lower_bounds.device.type == "cpu"

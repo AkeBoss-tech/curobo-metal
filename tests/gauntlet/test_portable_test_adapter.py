@@ -199,7 +199,7 @@ class TestDeviceCfg:
         assert cfg.device == torch.device('mps', 0)
 """
     result = adapt_source(source, test_module="curobo.tests._src.types.test_device_cfg")
-    assert "assert cfg.device == torch.device('cpu')" in result.source
+    assert "assert cfg.device == torch.device('mps:0' if torch.backends.mps.is_available() else 'cpu')" in result.source
     assert 'cfg.is_same_torch_device(torch.device("cpu", 0))' in result.source
     assert "cfg.is_same_torch_device(torch.device('mps', 0))" in result.source
     assert result.oracle_replacements == 3

@@ -1,0 +1,10 @@
+Warp 1.16.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.0
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 3090" (24 GiB, sm_86, mempool enabled)
+   Kernel cache:
+     /home/omen/.cache/warp/1.16.0
+Module curobo._src.geom.transform 48d2e02 load on device 'cuda:0' took 960.19 ms  (compiled)
+CUROBO_APPLICATION_RESULT={"identity": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4, 4], "values": [[[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]]}, "matrix": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4, 4], "values": [[[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]]}}
+

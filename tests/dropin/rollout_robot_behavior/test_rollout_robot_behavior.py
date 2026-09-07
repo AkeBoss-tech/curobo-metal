@@ -17,7 +17,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 class _Transition:
     def __init__(self, cfg):
         self.cfg = cfg
-        device_cfg = getattr(cfg, "device_cfg", DeviceCfg())
+        device_cfg = getattr(cfg, "device_cfg", DeviceCfg("cpu"))
         tensor_args = device_cfg.as_torch_dict()
         self.action_dim = 2
         self.action_horizon = 3
@@ -46,7 +46,7 @@ class _Transition:
         return JointState.from_position(current.position + action[:, shift_steps - 1])
 
 
-def _config(device=DeviceCfg()):
+def _config(device=DeviceCfg("cpu")):
     transition = SimpleNamespace(class_type=_Transition)
     empty = RobotCostManagerCfg()
     return RobotRolloutCfg(

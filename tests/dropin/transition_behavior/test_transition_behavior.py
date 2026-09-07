@@ -25,13 +25,13 @@ from curobo._src.util.state_filter import FilterCfg
 
 
 def _transition(control_space=ControlSpace.ACCELERATION, *, dynamics=False):
-    kin = KinematicsCfg.from_robot_yaml_file("franka.yml")
+    kin = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu"))
     params = kin.kinematics_config
-    robot = RobotCfg(params.robot_cfg, DynamicsCfg(params, DeviceCfg()) if dynamics else None)
+    robot = RobotCfg(params.robot_cfg, DynamicsCfg(params, DeviceCfg("cpu")) if dynamics else None, device_cfg=DeviceCfg("cpu"))
     return RobotStateTransition(RobotStateTransitionCfg(
         robot_config=robot,
         dt_traj_params=TimeTrajCfg(0.05, 1.0, 0.05),
-        device_cfg=DeviceCfg(),
+        device_cfg=DeviceCfg("cpu"),
         batch_size=2,
         horizon=5,
         control_space=control_space,
@@ -39,7 +39,7 @@ def _transition(control_space=ControlSpace.ACCELERATION, *, dynamics=False):
 
 
 def test_velocity_state_table_indices_and_autograd():
-    transition = StateFromVelocity(DeviceCfg(), torch.full((4,), 0.1), 2, horizon=4)
+    transition = StateFromVelocity(DeviceCfg("cpu"), torch.full((4,), 0.1), 2, horizon=4)
     state = JointState.from_position(torch.tensor([[0.0, 0.0], [10.0, -2.0]]))
     action = torch.ones(3, 4, 2, requires_grad=True)
     result = transition.forward(state, action, start_state_idx=torch.tensor([1, 0, 1]))
@@ -52,7 +52,7 @@ def test_velocity_state_table_indices_and_autograd():
 
 def test_position_clique_accepts_compact_actions_and_uses_goal():
     state = JointState.from_position(torch.zeros(2, 2))
-    model = StateFromPositionClique(DeviceCfg(), torch.full((7,), 0.1), 2, horizon=8)
+    model = StateFromPositionClique(DeviceCfg("cpu"), torch.full((7,), 0.1), 2, horizon=8)
     compact = torch.ones(2, 4, 2, requires_grad=True)
     goal = JointState.from_position(torch.full((1, 2), 3.0))
     output = model.forward(state, compact, goal_state=goal)
@@ -109,18 +109,18 @@ def test_transition_updates_schedule_and_validates_action_layout():
 
 
 def test_filtered_multi_step_command_returns_each_command_state():
-    kin = KinematicsCfg.from_robot_yaml_file("franka.yml")
+    kin = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu"))
     params = kin.kinematics_config
-    robot = RobotCfg(params.robot_cfg)
+    robot = RobotCfg(params.robot_cfg, device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="[Vv]elocity.*not implemented"):
         RobotStateTransition(RobotStateTransitionCfg(
             robot_config=robot,
             dt_traj_params=TimeTrajCfg(0.1, 1.0, 0.1),
-            device_cfg=DeviceCfg(),
+            device_cfg=DeviceCfg("cpu"),
             batch_size=1,
             horizon=4,
             control_space=ControlSpace.VELOCITY,
-            state_filter_cfg=FilterCfg(FilterCoeff(), 0.1, ControlSpace.VELOCITY),
+            state_filter_cfg=FilterCfg(FilterCoeff(), 0.1, ControlSpace.VELOCITY, device_cfg=DeviceCfg("cpu")),
         ))
 
 

@@ -75,9 +75,9 @@ def test_tool_pose_transform_and_autograd_value_lifecycle() -> None:
     assert not detached.position.requires_grad
     clone.position.add_(1.0)
     assert not torch.equal(clone.position, tool.position)
-    assert tool.to(DeviceCfg(dtype=torch.float64)).dtype == torch.float64
+    assert tool.to(DeviceCfg("cpu", dtype=torch.float64)).dtype == torch.float64
     with pytest.raises(ValueError, match="either device_cfg"):
-        tool.to(DeviceCfg(), dtype=torch.float64)
+        tool.to(DeviceCfg("cpu"), dtype=torch.float64)
 
 
 def test_goal_from_poses_validates_goalset_layout_and_noncontiguous_input() -> None:

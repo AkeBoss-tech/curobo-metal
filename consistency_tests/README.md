@@ -22,14 +22,16 @@ from a clean environment where the candidate wheel is installed, on an Apple
 Silicon machine with MPS available:
 
 ```sh
-PYTORCH_ENABLE_MPS_FALLBACK=0 python tools/gauntlet/run_portable_upstream.py \
+PYTORCH_ENABLE_MPS_FALLBACK=0 python -m tools.gauntlet.run_portable_upstream \
   --upstream /path/to/pinned/curobo \
   --wheel /path/to/curobo_metal.whl \
   --junit artifacts/gauntlet/portable-upstream-junit.xml \
   --output artifacts/gauntlet/portable-case-census.json
 ```
 
-This command covers all 116 substituted upstream modules, rejects collection
+Run this command from the repository root with the installed-wheel environment's
+Python. It covers every substituted upstream test module in the execution census
+(currently 114), rejects collection
 errors and unreviewed skips, records each pinned source hash, verifies that
 `curobo` came from `site-packages` and that every hashed installed file matches
 the exact candidate wheel's `RECORD`, requires MPS, and disables PyTorch's MPS

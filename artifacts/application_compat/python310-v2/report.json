@@ -1,0 +1,582 @@
+{
+  "backend": "metal",
+  "cases": [
+    {
+      "elapsed_seconds": 1.1116876669984777,
+      "file": "01_device_state.py",
+      "observations": {
+        "names": [
+          "a",
+          "b",
+          "c"
+        ],
+        "restored": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              -0.20000000298023224,
+              0.30000001192092896
+            ]
+          ]
+        },
+        "state": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              -0.20000000298023224,
+              0.30000001192092896
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.5164546250016429,
+      "error": "application failed or did not emit exactly one result; see log",
+      "file": "02_pose.py",
+      "passed": false,
+      "returncode": 1
+    },
+    {
+      "elapsed_seconds": 0.8895323330070823,
+      "file": "03_fk_franka.py",
+      "observations": {
+        "joint_names": [
+          "panda_joint1",
+          "panda_joint2",
+          "panda_joint3",
+          "panda_joint4",
+          "panda_joint5",
+          "panda_joint6",
+          "panda_joint7"
+        ],
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            16,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.16047725081443787,
+                  -0.016101431101560593,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1606776863336563,
+                  -0.013960368931293488,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16084954142570496,
+                  -0.011816820129752159,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16099277138710022,
+                  -0.009671173989772797,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1611074060201645,
+                  -0.007523808628320694,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16119340062141418,
+                  -0.005375103559345007,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1612507402896881,
+                  -0.003225445281714201,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16127941012382507,
+                  -0.0010752120288088918,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16127941012382507,
+                  0.0010752120288088918,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1612507402896881,
+                  0.003225445281714201,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16119340062141418,
+                  0.005375103559345007,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1611074060201645,
+                  0.007523808628320694,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16099277138710022,
+                  0.009671173989772797,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16084954142570496,
+                  0.011816820129752159,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1606776863336563,
+                  0.013960368931293488,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16047725081443787,
+                  0.016101431101560593,
+                  0.6368466019630432
+                ]
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.7580279580142815,
+      "file": "04_fk_ur10.py",
+      "observations": {
+        "joint_names": [
+          "shoulder_pan_joint",
+          "shoulder_lift_joint",
+          "elbow_joint",
+          "wrist_1_joint",
+          "wrist_2_joint",
+          "wrist_3_joint"
+        ],
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.2986122667789459,
+                  0.2050788402557373,
+                  0.7425727248191833
+                ]
+              ]
+            ]
+          ]
+        },
+        "quaternion": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            4
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.04184800758957863,
+                  -0.7404118776321411,
+                  0.6698104739189148,
+                  -0.03732328861951828
+                ]
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.8085293330077548,
+      "file": "05_fk_gradient.py",
+      "observations": {
+        "finite_difference": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [],
+          "values": -0.10742246359586716
+        },
+        "gradient": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            7
+          ],
+          "values": [
+            [
+              0.0,
+              -0.10741449147462845,
+              1.325003908675404e-12,
+              0.5200337767601013,
+              -3.650239832619917e-13,
+              0.17193832993507385,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 1.6031767080130521,
+      "file": "06_collision_mutation.py",
+      "observations": {
+        "far": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "values": [
+            [
+              [
+                0.0
+              ]
+            ]
+          ]
+        },
+        "near": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "values": [
+            [
+              [
+                0.20000000298023224
+              ]
+            ]
+          ]
+        },
+        "restored": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "values": [
+            [
+              [
+                0.0
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 5.554037416994106,
+      "file": "07_ik.py",
+      "observations": {
+        "joint_names": [
+          "panda_joint1",
+          "panda_joint2",
+          "panda_joint3",
+          "panda_joint4",
+          "panda_joint5",
+          "panda_joint6",
+          "panda_joint7",
+          "panda_finger_joint1",
+          "panda_finger_joint2"
+        ],
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.16218823194503784,
+              0.014960325323045254,
+              0.6358193755149841
+            ]
+          ]
+        },
+        "solution": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            9
+          ]
+        },
+        "success": {
+          "device": "mps",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        },
+        "unreachable_success": {
+          "device": "mps",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              false
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 1.6786177500034682,
+      "file": "08_motion.py",
+      "observations": {
+        "0": {
+          "endpoint": {
+            "device": "mps",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              7
+            ],
+            "values": [
+              [
+                [
+                  0.10000000149011612,
+                  -1.2999999523162842,
+                  0.0,
+                  -2.5,
+                  0.0,
+                  1.5,
+                  0.800000011920929
+                ]
+              ]
+            ]
+          },
+          "path": {
+            "device": "mps",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              81,
+              7
+            ]
+          },
+          "success": {
+            "device": "mps",
+            "dtype": "torch.bool",
+            "shape": [
+              1,
+              1
+            ],
+            "values": [
+              [
+                true
+              ]
+            ]
+          }
+        },
+        "1": {
+          "endpoint": {
+            "device": "mps",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              7
+            ],
+            "values": [
+              [
+                [
+                  0.10000000149011612,
+                  -1.2999999523162842,
+                  0.0,
+                  -2.5,
+                  0.0,
+                  1.5,
+                  0.800000011920929
+                ]
+              ]
+            ]
+          },
+          "path": {
+            "device": "mps",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              81,
+              7
+            ]
+          },
+          "success": {
+            "device": "mps",
+            "dtype": "torch.bool",
+            "shape": [
+              1,
+              1
+            ],
+            "values": [
+              [
+                true
+              ]
+            ]
+          }
+        },
+        "zero_attempts_is_none": true
+      },
+      "passed": true,
+      "returncode": 0
+    }
+  ],
+  "expected_device": "mps",
+  "manifest_sha256": "22879046539256913720872a752c9bd79a4c54a0fc90b1e417a2f3b75c788354",
+  "mps_fallback_enabled": false,
+  "passed": false,
+  "runtime": {
+    "cuda_available": false,
+    "direct_url": {
+      "archive_info": {},
+      "url": "file:///Users/family/Documents/CodingProjects/curobo-metal/dist/release-candidate/curobo_metal-0.1.0a1-py3-none-any.whl"
+    },
+    "mps_available": true,
+    "owners": [
+      "curobo-metal"
+    ],
+    "package_root": "/private/tmp/curobo-release-py310/lib/python3.10/site-packages/curobo",
+    "python": "3.10.20 (main, Mar 25 2026, 03:21:46) [Clang 22.1.1 ]",
+    "torch": "2.14.0",
+    "version": "0.1.0a1",
+    "wheel_files_verified": 732
+  },
+  "schema_version": 1,
+  "source_hashes": {
+    "01_device_state.py": "2b2ef59bb496fdd71d6009386dc304e6e6b4f4679b0c3f1c3fefa740a0370fca",
+    "02_pose.py": "82c3fdbe870a0670527c2fbe26d4fb6ada2ade9cc00a8d451a88548e6f38aa4d",
+    "03_fk_franka.py": "863a8401020aad0e86692859c4fca45509ae60d3963207bb63764bef3c2733f3",
+    "04_fk_ur10.py": "9712673da8c5154fa2c05ac05419f89b6f0cf9b58946cd74b3706d1c9edc1d41",
+    "05_fk_gradient.py": "caa40ac6f17d1a747120702fc2f77b7cf545997c3c712667d261e80438be3ea6",
+    "06_collision_mutation.py": "dd4ea3aede52bd5413f16638472f21a09c9c2302223589e61c345e839b485eeb",
+    "07_ik.py": "0140048d2ce3a6cc97e855c9573673859885b768e8d08581be527d20c7daf149",
+    "08_motion.py": "67b014b4260ec5c8d847343888e9464d96aac99b4d5742cede421c8d2ccc87be",
+    "application_support.py": "d8b6e6c6ae8d01994ab602627abe74cee8c3ba8115d214900f6d5c6cde38b155"
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "wheel_sha256": "6508c9f795afa6ee4ef17e3998d7e05b50b4ea9c7947aeb131f622eaaae5250b"
+}

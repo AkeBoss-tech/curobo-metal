@@ -13,7 +13,7 @@ from curobo._src.types.robot import RobotCfg
 from curobo._src.types.tool_pose import GoalToolPose
 
 
-def _cfg(device_cfg: DeviceCfg = DeviceCfg(), **kwargs) -> SeedIKSolverCfg:
+def _cfg(device_cfg: DeviceCfg = DeviceCfg("cpu"), **kwargs) -> SeedIKSolverCfg:
     return SeedIKSolverCfg.create(
         "franka.yml",
         device_cfg=device_cfg,
@@ -33,13 +33,13 @@ def _goal(solver: SeedIKSolver) -> GoalToolPose:
 
 
 def test_cfg_create_preserves_robotcfg_and_accepts_robot_mapping():
-    from_name = _cfg()
-    from_cfg = SeedIKSolverCfg.create(from_name.robot_config, num_seeds=3)
+    from_name = _cfg(device_cfg=DeviceCfg("cpu"))
+    from_cfg = SeedIKSolverCfg.create(from_name.robot_config, num_seeds=3, device_cfg=DeviceCfg("cpu"))
     assert from_cfg.robot_config is from_name.robot_config
     assert from_cfg.num_seeds == 3
 
     mapping = from_name.robot_config.kinematics.to_mapping()
-    from_mapping = SeedIKSolverCfg.create(mapping, num_seeds=1)
+    from_mapping = SeedIKSolverCfg.create(mapping, num_seeds=1, device_cfg=DeviceCfg("cpu"))
     assert isinstance(from_mapping.robot_config, RobotCfg)
     assert from_mapping.robot_config.cspace.joint_names == from_name.robot_config.cspace.joint_names
 
@@ -60,7 +60,7 @@ def test_cfg_rejects_invalid_portable_runtime_values(kwargs, message):
 
 
 def test_destroy_then_resolve_recreates_shape_dependent_buffers():
-    solver = SeedIKSolver(_cfg())
+    solver = SeedIKSolver(_cfg(device_cfg=DeviceCfg("cpu")))
     goal = _goal(solver)
     seed = solver.default_joint_position.reshape(1, 1, -1)
     first = solver.solve_single(goal, seed_config=seed)
@@ -72,13 +72,13 @@ def test_destroy_then_resolve_recreates_shape_dependent_buffers():
 
 
 def test_current_state_contract_rejects_invalid_time_and_seed_values():
-    solver = SeedIKSolver(_cfg(velocity_weight=0.1))
+    solver = SeedIKSolver(_cfg(velocity_weight=0.1, device_cfg=DeviceCfg("cpu")))
     goal = _goal(solver)
     position = solver.default_joint_position.reshape(1, -1)
     with pytest.raises(ValueError, match="positive finite"):
         solver.solve_single(
             goal,
-            current_state=JointState(position, dt=torch.zeros(1)),
+            current_state=JointState(position, dt=torch.zeros(1), device_cfg=DeviceCfg("cpu")),
             seed_config=position,
         )
     with pytest.raises(ValueError, match="finite"):

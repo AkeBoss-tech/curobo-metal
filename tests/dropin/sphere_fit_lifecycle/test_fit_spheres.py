@@ -34,7 +34,7 @@ def _cube_mesh(device: str = "cpu"):
 @pytest.mark.parametrize("fit_type", list(SphereFitType))
 def test_fit_dispatch_is_deterministic_and_reports_portable_boundary(fit_type):
     mesh = _cube_mesh()
-    kwargs = dict(num_spheres=4, fit_type=fit_type, surface_radius=0.03, device_cfg=DeviceCfg())
+    kwargs = dict(num_spheres=4, fit_type=fit_type, surface_radius=0.03, device_cfg=DeviceCfg("cpu"))
     first = fit_spheres_to_mesh(mesh, **kwargs)
     second = fit_spheres_to_mesh(mesh, **kwargs)
     torch.testing.assert_close(first.centers, second.centers)
@@ -59,6 +59,7 @@ def test_vertex_cloud_fallback_clip_plane_and_metric_boundary():
         surface_radius=0.1,
         clip_plane=((1.0, 0.0, 0.0), 0.0),
         compute_metrics=True,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert result.debug_info["fallback_used"]
     assert result.debug_info["metrics_boundary"].startswith("vertex-surface proxy")
@@ -68,14 +69,14 @@ def test_vertex_cloud_fallback_clip_plane_and_metric_boundary():
 
 
 def test_auto_count_and_invalid_arguments():
-    result = fit_spheres_to_mesh(_cube_mesh(), sphere_density=0.5, fit_type="surface")
+    result = fit_spheres_to_mesh(_cube_mesh(), sphere_density=0.5, fit_type="surface", device_cfg=DeviceCfg("cpu"))
     assert result.debug_info["auto_n_spheres"] and result.num_spheres >= 1
     with pytest.raises(ValueError, match="fit_type"):
-        fit_spheres_to_mesh(_cube_mesh(), fit_type="warp")
+        fit_spheres_to_mesh(_cube_mesh(), fit_type="warp", device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="num_spheres"):
-        fit_spheres_to_mesh(_cube_mesh(), num_spheres=0)
+        fit_spheres_to_mesh(_cube_mesh(), num_spheres=0, device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="clip_plane normal"):
-        fit_spheres_to_mesh(_cube_mesh(), num_spheres=1, clip_plane=((0, 0, 0), 0))
+        fit_spheres_to_mesh(_cube_mesh(), num_spheres=1, clip_plane=((0, 0, 0), 0), device_cfg=DeviceCfg("cpu"))
 
 
 def test_mps_fit_stays_on_mps_without_fallback(monkeypatch):

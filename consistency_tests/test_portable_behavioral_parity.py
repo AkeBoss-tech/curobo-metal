@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "artifacts/gauntlet/portable-case-census.json"
+EXECUTION_CENSUS = ROOT / "artifacts/api_compat/upstream-execution-census.json"
 
 
 def _report() -> dict:
@@ -16,10 +17,26 @@ def _report() -> dict:
     return payload
 
 
+def _expected_modules() -> set[str]:
+    census = json.loads(EXECUTION_CENSUS.read_text(encoding="utf-8"))
+    assert census["upstream_revision"] == _report()["upstream_revision"]
+    modules = {
+        entry["module"]
+        for entry in census["entries"]
+        if entry["surface"] == "bundled_test"
+        and entry["disposition"] == "platform_substituted"
+    }
+    assert modules
+    return modules
+
+
 def test_every_substituted_module_has_case_level_evidence() -> None:
-    summary = _report()["summary"]
-    assert summary["substituted_test_modules"] == 116
-    assert summary["covered_test_modules"] == 116
+    report = _report()
+    expected = _expected_modules()
+    summary = report["summary"]
+    assert {case["module"] for case in report["cases"]} == expected
+    assert summary["substituted_test_modules"] == len(expected)
+    assert summary["covered_test_modules"] == len(expected)
     assert summary["missing_test_modules"] == []
 
 
@@ -35,11 +52,12 @@ def test_evidence_came_from_a_clean_installed_wheel_on_mps() -> None:
 
 def test_every_pinned_source_and_portable_adaptation_is_hash_audited() -> None:
     source = _report().get("source", {})
-    assert len(source.get("modules", {})) == 116
+    expected = _expected_modules()
+    assert set(source.get("modules", {})) == expected
     adapter = source.get("portable_adapter", {})
     assert len(adapter.get("source_sha256", "")) == 64
     # One record per test module plus the adapted pinned conftest.
-    assert len(adapter.get("records", {})) == 117
+    assert set(adapter.get("records", {})) == expected | {"conftest.py"}
     assert adapter.get("device_string_replacements", 0) > 0
     assert adapter.get("availability_replacements", 0) > 0
 

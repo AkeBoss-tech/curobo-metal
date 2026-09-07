@@ -1,0 +1,99 @@
+........................................................................ [  5%]
+........................................................................ [ 10%]
+........................................................................ [ 15%]
+........................................................................ [ 20%]
+........................................................................ [ 25%]
+........................................................................ [ 31%]
+........................................................................ [ 36%]
+........................................................................ [ 41%]
+........................................................................ [ 46%]
+........................................................................ [ 51%]
+........................................................................ [ 57%]
+....F................................................................... [ 62%]
+........................................................................ [ 67%]
+........................................................................ [ 72%]
+........................................................................ [ 77%]
+........................................................................ [ 82%]
+........................................................................ [ 88%]
+........................................................................ [ 93%]
+........................................................................ [ 98%]
+.....................                                                    [100%]
+=================================== FAILURES ===================================
+________ test_global_then_local_ik_and_sequence_have_v2_state_lifecycle ________
+
+    def test_global_then_local_ik_and_sequence_have_v2_state_lifecycle():
+        retargeter = MotionRetargeter(_config())
+        goal = _goal_from_state(retargeter, retargeter.default_joint_state)
+    
+        first = retargeter.solve_frame(goal)
+        assert first.joint_state.position.shape == (1, retargeter.action_dim)
+        assert first.trajectory is None
+        assert retargeter._prev_solution is not None
+        assert retargeter._prev_velocity is None
+    
+        second = retargeter.solve_frame(goal)
+        assert second.joint_state.position.shape == (1, retargeter.action_dim)
+        assert second.trajectory is None
+        assert retargeter._prev_velocity is not None
+        assert retargeter._local_ik_solver.config.optimization_dt == retargeter.config.optimization_dt
+    
+        sequence = SequenceGoalToolPose(
+            retargeter.tool_frames,
+            goal.position.repeat(3, 1, 1, 1, 1),
+            goal.quaternion.repeat(3, 1, 1, 1, 1),
+        )
+>       output = retargeter.solve_sequence(sequence)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/dropin/retargeter_behavior/test_motion_retargeter.py:74: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/curobo/_src/motion/motion_retargeter.py:237: in solve_sequence
+    result = self.solve_frame(tool_poses.get_frame(index))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/curobo/_src/motion/motion_retargeter.py:222: in solve_frame
+    return self._solve_local_ik(goal_tool_poses)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/curobo/_src/motion/motion_retargeter.py:270: in _solve_local_ik
+    result = self._local_ik_solver.solve_pose(
+src/curobo/_src/solver/solver_ik.py:928: in solve_pose
+    current_state = _normalize_current_state_batch(
+src/curobo/_src/solver/solver_ik.py:54: in _normalize_current_state_batch
+    result = current_state.clone()
+             ^^^^^^^^^^^^^^^^^^^^^
+src/curobo/_src/state/state_joint.py:170: in clone
+    return type(self)(
+<string>:14: in __init__
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = JointState(position=tensor([[ 1.4563e-03, -1.3000e+00, -4.2951e-04, -2.5000e+00, -7.9922e-04,
+          1.5000e+00,  8...ch.float32, collision_distance_dtype=torch.float32), dt=None, aux_data={}, knot=None, knot_dt=None, control_space=None)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.position, torch.Tensor):
+            self.device_cfg = DeviceCfg(self.position.device, self.position.dtype)
+        else:
+            self.position = self.device_cfg.to_device(self.position)
+    
+        for field in ("velocity", "acceleration", "jerk"):
+            value = getattr(self, field)
+            if value is None:
+                continue
+            value = self.device_cfg.to_device(value)
+            # Finite differences intentionally shorten the horizon for each
+            # successive derivative, so only the joint/DOF axis is invariant.
+            # Rejecting a shorter velocity/acceleration here would make an
+            # otherwise valid V2 trajectory impossible to index or clone.
+            if value.ndim == 0 or value.shape[-1] != self.position.shape[-1]:
+>               raise ValueError(f"{field} must end in the position DOF dimension")
+E               ValueError: velocity must end in the position DOF dimension
+
+src/curobo/_src/state/state_joint.py:59: ValueError
+------------------------------ Captured log call -------------------------------
+WARNING  curobo:logging.py:33 DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+WARNING  curobo:logging.py:33 DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+WARNING  curobo:logging.py:33 DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+WARNING  curobo:logging.py:33 DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+=========================== short test summary info ============================
+FAILED tests/dropin/retargeter_behavior/test_motion_retargeter.py::test_global_then_local_ik_and_sequence_have_v2_state_lifecycle
+1 failed, 1388 passed in 87.37s (0:01:27)

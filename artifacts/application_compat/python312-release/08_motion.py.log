@@ -1,0 +1,6 @@
+CUROBO_APPLICATION_RESULT={"0": {"endpoint": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 7], "values": [[[0.10000000149011612, -1.2999999523162842, 0.0, -2.5, 0.0, 1.5, 0.800000011920929]]]}, "path": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 81, 7]}, "success": {"device": "mps", "dtype": "torch.bool", "shape": [1, 1], "values": [[true]]}}, "1": {"endpoint": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 7], "values": [[[0.10000000149011612, -1.2999999523162842, 0.0, -2.5, 0.0, 1.5, 0.800000011920929]]]}, "path": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 81, 7]}, "success": {"device": "mps", "dtype": "torch.bool", "shape": [1, 1], "values": [[true]]}}, "zero_attempts_is_none": true}
+
+DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.

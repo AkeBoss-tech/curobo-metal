@@ -7,7 +7,7 @@ from curobo.types import DeviceCfg, JointState
 
 def _model(**kwargs):
     config = KinematicsCfg.from_robot_yaml_file(
-        "franka.yml", device_cfg=kwargs.pop("device_cfg", DeviceCfg())
+        "franka.yml", device_cfg=kwargs.pop("device_cfg", DeviceCfg("cpu"))
     )
     return Kinematics(config, **kwargs)
 

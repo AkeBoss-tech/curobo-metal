@@ -20,12 +20,12 @@ from curobo._src.types.robot import RobotCfg
 def _cfg(
     control_space: ControlSpace = ControlSpace.ACCELERATION,
     *,
-    device_cfg: DeviceCfg = DeviceCfg(),
+    device_cfg: DeviceCfg = DeviceCfg("cpu"),
     horizon: int = 4,
 ) -> RobotStateTransitionCfg:
     kinematics = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=device_cfg)
     return RobotStateTransitionCfg(
-        robot_config=RobotCfg(kinematics.kinematics_config),
+        robot_config=RobotCfg(kinematics.kinematics_config, device_cfg=DeviceCfg("cpu")),
         dt_traj_params=TimeTrajCfg(0.1, 1.0, 0.1),
         device_cfg=device_cfg,
         batch_size=2,
@@ -45,7 +45,7 @@ def test_time_schedule_handles_zero_and_horizon_one_and_validates_updates():
 
 
 def test_create_accepts_materialized_values_and_preserves_optional_filter_absence():
-    cfg = _cfg()
+    cfg = _cfg(device_cfg=DeviceCfg("cpu"))
     created = RobotStateTransitionCfg.create(
         {
             "dt_traj_params": cfg.dt_traj_params,
@@ -63,11 +63,12 @@ def test_create_accepts_materialized_values_and_preserves_optional_filter_absenc
         RobotStateTransitionCfg.create(
             {"dt_traj_params": {"base_dt": 0.1, "base_ratio": 1.0, "max_dt": 0.1}, "control_space": "warp"},
             cfg.robot_config,
+            device_cfg=DeviceCfg("cpu"),
         )
 
 
 def test_transition_exposes_stable_schedule_and_rebuilds_public_batch_buffer():
-    transition = RobotStateTransition(_cfg(ControlSpace.ACCELERATION, horizon=1))
+    transition = RobotStateTransition(_cfg(ControlSpace.ACCELERATION, horizon=1, device_cfg=DeviceCfg("cpu")))
     assert transition.traj_dt.shape == (1,)
     assert transition.dt == pytest.approx(0.1)
     assert transition.state_seq.position.shape == (2, 1, 7)
@@ -81,7 +82,7 @@ def test_transition_exposes_stable_schedule_and_rebuilds_public_batch_buffer():
 
 
 def test_integrate_action_uses_control_order_and_has_finite_gradients():
-    acceleration = RobotStateTransition(_cfg(ControlSpace.ACCELERATION))
+    acceleration = RobotStateTransition(_cfg(ControlSpace.ACCELERATION, device_cfg=DeviceCfg("cpu")))
     action = torch.ones(1, 3, 7, requires_grad=True)
     acceleration_result = acceleration.integrate_action(action)
     torch.testing.assert_close(acceleration_result[0, :, 0], torch.tensor([0.01, 0.03, 0.06]))
@@ -89,11 +90,11 @@ def test_integrate_action_uses_control_order_and_has_finite_gradients():
     assert action.grad is not None and torch.isfinite(action.grad).all()
 
     with pytest.raises(ValueError, match="Velocity control space not implemented"):
-        RobotStateTransition(_cfg(ControlSpace.VELOCITY))
+        RobotStateTransition(_cfg(ControlSpace.VELOCITY, device_cfg=DeviceCfg("cpu")))
 
 
 def test_transition_rejects_wrong_rank_or_config_device():
-    transition = RobotStateTransition(_cfg(ControlSpace.ACCELERATION))
+    transition = RobotStateTransition(_cfg(ControlSpace.ACCELERATION, device_cfg=DeviceCfg("cpu")))
     state = JointState.from_position(torch.zeros(1, 7), joint_names=transition.joint_names)
     with pytest.raises(ValueError, match=r"\[batch, horizon, dof\]"):
         transition.forward(state, torch.zeros(4, 7))

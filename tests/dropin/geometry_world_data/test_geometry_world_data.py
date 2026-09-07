@@ -17,18 +17,19 @@ def _voxel(name: str) -> VoxelGrid:
         dims=[2, 2, 2],
         voxel_size=1.0,
         feature_tensor=torch.arange(8.0).reshape(2, 2, 2),
+        device_cfg=DeviceCfg("cpu"),
     )
 
 
 def test_scene_data_routes_per_environment_lifecycle() -> None:
-    left = SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1])], voxel=[_voxel("left")])
-    right = SceneCfg(cuboid=[Cuboid("far", [2, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1])], voxel=[_voxel("right")])
-    data = SceneData.from_batch_scene_cfg([left, right], DeviceCfg())
+    left = SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1], device_cfg=DeviceCfg("cpu"))], voxel=[_voxel("left")])
+    right = SceneCfg(cuboid=[Cuboid("far", [2, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1], device_cfg=DeviceCfg("cpu"))], voxel=[_voxel("right")])
+    data = SceneData.from_batch_scene_cfg([left, right], DeviceCfg("cpu"))
     assert data.get_obstacle_names(0) == ["box", "left"]
     assert data.get_obstacle_names(1) == ["far", "right"]
     data.enable_obstacle("box", False)
     assert data.cuboids.enable[0, 0].item() == 0
-    data.update_obstacle_pose("far", Pose.from_list([3, 0, 0, 1, 0, 0, 0]), env_idx=1)
+    data.update_obstacle_pose("far", Pose.from_list([3, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")), env_idx=1)
     torch.testing.assert_close(data.cuboids.inv_pose[1, 0, :3], torch.tensor([-3.0, 0.0, 0.0]))
     data.clear(1)
     assert data.get_obstacle_names(1) == []
@@ -37,7 +38,7 @@ def test_scene_data_routes_per_environment_lifecycle() -> None:
 
 def test_voxel_grid_storage_validates_updates_and_reconstructs_metadata() -> None:
     grid = _voxel("grid")
-    data = SceneData.from_scene_cfg(SceneCfg(voxel=[grid]), DeviceCfg())
+    data = SceneData.from_scene_cfg(SceneCfg(voxel=[grid]), DeviceCfg("cpu"))
     assert data.voxels is not None
     assert data.voxels.get_grid_shape(name="grid") == torch.Size([2, 2, 2])
     data.voxels.update_features(torch.ones(8), "grid")
@@ -49,11 +50,11 @@ def test_voxel_grid_storage_validates_updates_and_reconstructs_metadata() -> Non
 
 
 def test_scene_conversion_preserves_pose_and_exposes_collision_layers() -> None:
-    mesh = Mesh("tri", pose=[1, 0, 0, 1, 0, 0, 0], vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]])
+    mesh = Mesh("tri", pose=[1, 0, 0, 1, 0, 0, 0], vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]], device_cfg=DeviceCfg("cpu"))
     world = SceneCfg(
-        cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 2, 3])],
-        sphere=[Sphere("ball", pose=[2, 0, 0, 1, 0, 0, 0], radius=.5)],
-        capsule=[Capsule("cap", pose=[1, 0, 0, 1, 0, 0, 0], base=[0, 0, 0], tip=[0, 0, 2], radius=.1)],
+        cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 2, 3], device_cfg=DeviceCfg("cpu"))],
+        sphere=[Sphere("ball", pose=[2, 0, 0, 1, 0, 0, 0], radius=.5, device_cfg=DeviceCfg("cpu"))],
+        capsule=[Capsule("cap", pose=[1, 0, 0, 1, 0, 0, 0], base=[0, 0, 0], tip=[0, 0, 2], radius=.1, device_cfg=DeviceCfg("cpu"))],
         mesh=[mesh],
     )
     obb = world.get_obb_world()

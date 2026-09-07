@@ -30,8 +30,8 @@ def _state(kinematics, batch: int = 1) -> JointState:
 def _scene(device_cfg: DeviceCfg) -> SceneCollision:
     scene = SceneCfg(
         sphere=[
-            Sphere("first", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.2),
-            Sphere("second", pose=[1, 0, 0, 1, 0, 0, 0], radius=0.2),
+            Sphere("first", pose=[0, 0, 0, 1, 0, 0, 0], radius=0.2, device_cfg=DeviceCfg("cpu")),
+            Sphere("second", pose=[1, 0, 0, 1, 0, 0, 0], radius=0.2, device_cfg=DeviceCfg("cpu")),
         ]
     )
     return SceneCollision(SceneCollisionCfg(device_cfg, scene, cache={}))
@@ -48,7 +48,7 @@ def test_update_broadcasts_single_offset_to_multi_environment_bank():
     params = kinematics.kinematics_config
     link = "panda_link7"
     original = params.get_link_spheres(link).clone()
-    offset = Pose.from_list([0.5, 0.0, 0.4, 1, 0, 0, 0], DeviceCfg())
+    offset = Pose.from_list([0.5, 0.0, 0.4, 1, 0, 0, 0], DeviceCfg("cpu"))
 
     manager.update(torch.tensor([[0.0, 0.0, 0.0, 0.02]]), _state(kinematics, 2), link, offset)
 
@@ -61,12 +61,12 @@ def test_update_broadcasts_single_offset_to_multi_environment_bank():
 
 
 def test_attach_replacement_restores_prior_scene_obstacles():
-    device_cfg = DeviceCfg()
+    device_cfg = DeviceCfg("cpu")
     kinematics, _ = _kinematics_and_manager()
     scene = _scene(device_cfg)
     manager = AttachmentManager(kinematics, scene, device_cfg)
     state = _state(kinematics)
-    payload = [Cuboid("payload", pose=[0, 0, 0, 1, 0, 0, 0], dims=[0.05] * 3)]
+    payload = [Cuboid("payload", pose=[0, 0, 0, 1, 0, 0, 0], dims=[0.05] * 3, device_cfg=DeviceCfg("cpu"))]
 
     manager.attach(state, payload, link_name="panda_link7", num_spheres=1, disable_obstacle_names=["first"])
     assert not _active(scene, "first")
@@ -81,13 +81,13 @@ def test_attach_replacement_restores_prior_scene_obstacles():
 
 
 def test_attach_validates_all_scene_targets_before_mutating():
-    device_cfg = DeviceCfg()
+    device_cfg = DeviceCfg("cpu")
     kinematics, _ = _kinematics_and_manager()
     scene = _scene(device_cfg)
     manager = AttachmentManager(kinematics, scene, device_cfg)
     params = kinematics.kinematics_config
     original = params.get_link_spheres("panda_link7").clone()
-    payload = [Cuboid("payload", pose=[0, 0, 0, 1, 0, 0, 0], dims=[0.05] * 3)]
+    payload = [Cuboid("payload", pose=[0, 0, 0, 1, 0, 0, 0], dims=[0.05] * 3, device_cfg=DeviceCfg("cpu"))]
 
     with pytest.raises(ValueError, match="does not exist"):
         manager.attach(

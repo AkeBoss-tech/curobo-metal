@@ -1,10 +1,12 @@
 """Tensor device configuration without eager CUDA dependencies."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 import torch
+
+from curobo_metal.backend import default_device
 
 
 class _DeviceCfgPortableMixin:
@@ -29,9 +31,9 @@ class _DeviceCfgPortableMixin:
 
 @dataclass(frozen=True)
 class DeviceCfg(_DeviceCfgPortableMixin):
-    """Pinned field layout with an explicitly portable CPU default."""
+    """Pinned field layout with an automatic MPS/CPU device default."""
 
-    device: torch.device = torch.device("cpu")
+    device: torch.device = field(default_factory=default_device)
     dtype: torch.dtype = torch.float32
     collision_geometry_dtype: torch.dtype = torch.float32
     collision_gradient_dtype: torch.dtype = torch.float32

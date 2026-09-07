@@ -72,7 +72,7 @@ def test_seed_count_boundary_lm_budget_and_typed_world_cfg_are_honored():
     with pytest.raises(ValueError, match="finite"):
         solver.solve_pose(
             _exact_goal(solver),
-            seed_config=torch.full((1, 1, solver.action_dim), float("nan")),
+            seed_config=torch.full((1, 1, solver.action_dim), float("nan"), device=solver.device_cfg.device),
             run_optimizer=False,
         )
 

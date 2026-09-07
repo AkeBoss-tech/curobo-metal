@@ -44,7 +44,7 @@ class _Transition:
         return JointState.from_position(current.position + actions[:, shift_steps - 1])
 
 
-def _cfg(*, scene_collision_cfg=None, device_cfg=DeviceCfg()):
+def _cfg(*, scene_collision_cfg=None, device_cfg=DeviceCfg("cpu")):
     return RobotRolloutCfg(
         device_cfg=device_cfg,
         transition_model_cfg=SimpleNamespace(class_type=_Transition),
@@ -54,19 +54,19 @@ def _cfg(*, scene_collision_cfg=None, device_cfg=DeviceCfg()):
 
 def test_scene_config_builds_portable_checker_and_external_checker_wins():
     scene_cfg = SceneCollisionCfg(
-        scene_model=SceneCfg(cuboid=[Cuboid("wall", [1, 0, 0, 1, 0, 0, 0], [1, 1, 1])])
-    )
-    owned = RobotRollout(_cfg(scene_collision_cfg=scene_cfg))
+        scene_model=SceneCfg(cuboid=[Cuboid("wall", [1, 0, 0, 1, 0, 0, 0], [1, 1, 1], device_cfg=DeviceCfg("cpu"))])
+    , device_cfg=DeviceCfg("cpu"))
+    owned = RobotRollout(_cfg(scene_collision_cfg=scene_cfg, device_cfg=DeviceCfg("cpu")))
     assert owned.scene_collision_checker is not None
     assert owned.scene_collision_checker.check_obstacle_exists("wall")
 
     external = object()
-    supplied = RobotRollout(_cfg(scene_collision_cfg=scene_cfg), scene_collision_checker=external)
+    supplied = RobotRollout(_cfg(scene_collision_cfg=scene_cfg, device_cfg=DeviceCfg("cpu")), scene_collision_checker=external)
     assert supplied.scene_collision_checker is external
 
 
 def test_action_bounds_normalize_transition_constants_and_batch_validation():
-    rollout = RobotRollout(_cfg())
+    rollout = RobotRollout(_cfg(device_cfg=DeviceCfg("cpu")))
     torch.testing.assert_close(rollout.action_bounds, torch.tensor([[-1.0, -2.0], [1.0, 2.0]]))
     with pytest.raises(ValueError, match="positive"):
         rollout.update_batch_size(0)

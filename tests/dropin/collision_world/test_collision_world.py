@@ -10,7 +10,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 
 
 def _query(scene: SceneCfg, spheres: torch.Tensor):
-    checker = create_scene_collision(SceneCollisionCfg(scene_model=scene))
+    checker = create_scene_collision(SceneCollisionCfg(scene_model=scene, device_cfg=DeviceCfg("cpu")))
     buffer = CollisionBuffer.from_shape(spheres.shape, DeviceCfg(device=spheres.device))
     return checker, checker.get_sphere_distance_raw(
         spheres, buffer, spheres.new_tensor(1), spheres.new_tensor(0)
@@ -19,12 +19,12 @@ def _query(scene: SceneCfg, spheres: torch.Tensor):
 
 def test_cuboid_discrete_buffers_mutation_and_environments() -> None:
     scenes = [
-        SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[2, 2, 2])]),
-        SceneCfg(cuboid=[Cuboid("far", [10, 0, 0, 1, 0, 0, 0], dims=[2, 2, 2])]),
+        SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[2, 2, 2], device_cfg=DeviceCfg("cpu"))]),
+        SceneCfg(cuboid=[Cuboid("far", [10, 0, 0, 1, 0, 0, 0], dims=[2, 2, 2], device_cfg=DeviceCfg("cpu"))]),
     ]
-    checker = create_scene_collision(SceneCollisionCfg(scene_model=scenes))
+    checker = create_scene_collision(SceneCollisionCfg(scene_model=scenes, device_cfg=DeviceCfg("cpu")))
     spheres = torch.tensor([[[[1.1, 0, 0, .2]]], [[[1.1, 0, 0, .2]]]])
-    buffer = CollisionBuffer.from_shape(spheres.shape, DeviceCfg())
+    buffer = CollisionBuffer.from_shape(spheres.shape, DeviceCfg("cpu"))
     result = checker.get_sphere_distance_raw(
         spheres, buffer, torch.tensor(2.), torch.tensor(0.),
         env_query_idx=torch.tensor([0, 1]),
@@ -44,6 +44,7 @@ def test_mesh_and_voxel_esdf_paths() -> None:
     mesh = Mesh(
         "triangle", pose=[0, 0, 0, 1, 0, 0, 0],
         vertices=[[0, -1, -1], [0, 1, -1], [0, 0, 1]], faces=[[0, 1, 2]],
+        device_cfg=DeviceCfg("cpu"),
     )
     _, mesh_result = _query(
         SceneCfg(mesh=[mesh]), torch.tensor([[[[.1, 0, 0, .2]]]])
@@ -54,6 +55,7 @@ def test_mesh_and_voxel_esdf_paths() -> None:
     voxel = VoxelGrid(
         "esdf", pose=[0, 0, 0, 1, 0, 0, 0], dims=[3, 3, 3],
         voxel_size=1, feature_tensor=values,
+        device_cfg=DeviceCfg("cpu"),
     )
     _, voxel_result = _query(
         SceneCfg(voxel=[voxel]), torch.tensor([[[[0, 0, 0, .6]]]])
@@ -62,10 +64,10 @@ def test_mesh_and_voxel_esdf_paths() -> None:
 
 
 def test_swept_detects_between_knots_and_supports_speed_metric() -> None:
-    scene = SceneCfg(cuboid=[Cuboid("thin", [0, 0, 0, 1, 0, 0, 0], dims=[.2, 2, 2])])
-    checker = create_scene_collision(SceneCollisionCfg(scene_model=scene))
+    scene = SceneCfg(cuboid=[Cuboid("thin", [0, 0, 0, 1, 0, 0, 0], dims=[.2, 2, 2], device_cfg=DeviceCfg("cpu"))])
+    checker = create_scene_collision(SceneCollisionCfg(scene_model=scene, device_cfg=DeviceCfg("cpu")))
     spheres = torch.tensor([[[[-1, 0, 0, .2]], [[1, 0, 0, .2]]]])
-    buffer = CollisionBuffer.from_shape(spheres.shape, DeviceCfg())
+    buffer = CollisionBuffer.from_shape(spheres.shape, DeviceCfg("cpu"))
     swept = checker.get_swept_sphere_distance_raw(
         spheres, buffer, torch.tensor(1.), torch.tensor(0.), torch.tensor(1.)
     )
@@ -83,9 +85,9 @@ def test_public_aliases_and_analytic_sphere_obstacle() -> None:
     assert RobotCollisionChecker.__name__ == "RobotSceneCollision"
     assert RobotCollisionCheckerCfg.__name__ == "RobotSceneCollisionCfg"
     sphere = __import__("curobo._src.geom.types", fromlist=["Sphere"]).Sphere("s", radius=1)
-    checker = create_scene_collision(SceneCollisionCfg(scene_model=SceneCfg(sphere=[sphere])))
+    checker = create_scene_collision(SceneCollisionCfg(scene_model=SceneCfg(sphere=[sphere]), device_cfg=DeviceCfg("cpu")))
     query = torch.tensor([[[[2.0, 0, 0, 0.25]]]])
-    buffer = CollisionBuffer.from_shape(query.shape, DeviceCfg())
+    buffer = CollisionBuffer.from_shape(query.shape, DeviceCfg("cpu"))
     value = checker.get_sphere_distance_raw(
         query, buffer, torch.tensor(1.0), torch.tensor(0.0)
     )

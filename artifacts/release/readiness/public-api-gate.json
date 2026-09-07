@@ -1,0 +1,366 @@
+{
+  "method": {
+    "imports_executed": false,
+    "module_contract": "runtime_modules_excluding_curobo._src",
+    "non_claims": [
+      "numerical equivalence",
+      "CUDA or Warp ABI equivalence",
+      "device, autograd, or performance equivalence",
+      "dynamic exports or runtime-generated methods"
+    ],
+    "parser": "python-ast",
+    "scope": "top_level_exports_and_declared_callable_shapes"
+  },
+  "modules": [
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 0,
+        "missing": [],
+        "present": 0
+      },
+      "module": "present",
+      "name": "curobo"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 1,
+        "missing": [],
+        "present": 1
+      },
+      "module": "present",
+      "name": "curobo._version"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 2,
+        "missing": [],
+        "present": 2
+      },
+      "module": "present",
+      "name": "curobo.batch_motion_planner"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 2,
+        "missing": [],
+        "present": 2
+      },
+      "module": "present",
+      "name": "curobo.collision_checking"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 11,
+        "missing": [],
+        "present": 11
+      },
+      "module": "present",
+      "name": "curobo.config_io"
+    },
+    {
+      "callables": {
+        "compared": 8,
+        "different": [],
+        "matching": 8
+      },
+      "exports": {
+        "expected": 10,
+        "missing": [],
+        "present": 10
+      },
+      "module": "present",
+      "name": "curobo.content"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 3,
+        "missing": [],
+        "present": 3
+      },
+      "module": "present",
+      "name": "curobo.inverse_kinematics"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 3,
+        "missing": [],
+        "present": 3
+      },
+      "module": "present",
+      "name": "curobo.kinematics"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 5,
+        "missing": [],
+        "present": 5
+      },
+      "module": "present",
+      "name": "curobo.logging"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 3,
+        "missing": [],
+        "present": 3
+      },
+      "module": "present",
+      "name": "curobo.model_predictive_control"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 3,
+        "missing": [],
+        "present": 3
+      },
+      "module": "present",
+      "name": "curobo.motion_planner"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 5,
+        "missing": [],
+        "present": 5
+      },
+      "module": "present",
+      "name": "curobo.motion_retargeter"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 11,
+        "missing": [],
+        "present": 11
+      },
+      "module": "present",
+      "name": "curobo.optim"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 11,
+        "missing": [],
+        "present": 11
+      },
+      "module": "present",
+      "name": "curobo.perception"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 1,
+        "missing": [],
+        "present": 1
+      },
+      "module": "present",
+      "name": "curobo.profiling"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 2,
+        "missing": [],
+        "present": 2
+      },
+      "module": "present",
+      "name": "curobo.robot_builder"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 1,
+        "missing": [],
+        "present": 1
+      },
+      "module": "present",
+      "name": "curobo.robot_parser"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 2,
+        "missing": [],
+        "present": 2
+      },
+      "module": "present",
+      "name": "curobo.rollout"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 17,
+        "missing": [],
+        "present": 17
+      },
+      "module": "present",
+      "name": "curobo.runtime"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 9,
+        "missing": [],
+        "present": 9
+      },
+      "module": "present",
+      "name": "curobo.scene"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 5,
+        "missing": [],
+        "present": 5
+      },
+      "module": "present",
+      "name": "curobo.sphere_fit"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 3,
+        "missing": [],
+        "present": 3
+      },
+      "module": "present",
+      "name": "curobo.trajectory_optimizer"
+    },
+    {
+      "callables": {
+        "compared": 0,
+        "different": [],
+        "matching": 0
+      },
+      "exports": {
+        "expected": 10,
+        "missing": [],
+        "present": 10
+      },
+      "module": "present",
+      "name": "curobo.types"
+    },
+    {
+      "callables": {
+        "compared": 2,
+        "different": [],
+        "matching": 2
+      },
+      "exports": {
+        "expected": 2,
+        "missing": [],
+        "present": 2
+      },
+      "module": "present",
+      "name": "curobo.viewer"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "compared_callables": 10,
+    "different_callable_shapes": 0,
+    "expected_exports": 122,
+    "matching_callable_shapes": 10,
+    "missing_modules": 0,
+    "modules": 24,
+    "present_exports": 122,
+    "present_modules": 24
+  },
+  "upstream": {
+    "revision": "8e734f3ced1df898990bcd92de40abce475907db"
+  }
+}

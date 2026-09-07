@@ -68,7 +68,7 @@ def test_execution_queue_stays_on_mps_without_fallback():
 
 
 def test_seed_helpers_are_deterministic_differentiable_and_stop_motion():
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     generator = TrajectorySeedGenerator(6, 2, cfg)
     matrix = interpolate_kernel(3, 4, cfg)
     torch.testing.assert_close(matrix.sum(dim=-1), torch.ones(8))
@@ -96,9 +96,9 @@ def test_seed_helpers_are_deterministic_differentiable_and_stop_motion():
 def test_cubic_quintic_and_numpy_helper_are_meaningful_and_keep_endpoints():
     raw = JointState.from_position(torch.tensor([[[0.0], [1.0], [-1.0], [0.0]]], requires_grad=True))
     raw.dt = torch.tensor([0.1])
-    linear, _ = get_batch_interpolated_trajectory(raw, torch.tensor(0.04), TrajInterpolationType.LINEAR)
-    cubic, steps = get_batch_interpolated_trajectory(raw, torch.tensor(0.04), TrajInterpolationType.CUBIC)
-    quintic, _ = get_batch_interpolated_trajectory(raw, torch.tensor(0.04), TrajInterpolationType.QUINTIC)
+    linear, _ = get_batch_interpolated_trajectory(raw, torch.tensor(0.04), TrajInterpolationType.LINEAR, device_cfg=DeviceCfg("cpu"))
+    cubic, steps = get_batch_interpolated_trajectory(raw, torch.tensor(0.04), TrajInterpolationType.CUBIC, device_cfg=DeviceCfg("cpu"))
+    quintic, _ = get_batch_interpolated_trajectory(raw, torch.tensor(0.04), TrajInterpolationType.QUINTIC, device_cfg=DeviceCfg("cpu"))
     assert steps.tolist() == [10]
     torch.testing.assert_close(cubic.position[:, 0], raw.position[:, 0])
     torch.testing.assert_close(cubic.position[:, -1], raw.position[:, -1])
@@ -112,13 +112,14 @@ def test_cubic_quintic_and_numpy_helper_are_meaningful_and_keep_endpoints():
 
 
 def test_list_interpolation_returns_pinned_result_metadata():
-    output = JointState.zeros((2, 8, 1), DeviceCfg())
+    output = JointState.zeros((2, 8, 1), DeviceCfg("cpu"))
     result, steps, dt = get_interpolated_trajectory(
         [torch.tensor([[0.0], [1.0]]), torch.tensor([[2.0], [4.0]])],
         output,
         des_horizon=5,
         interpolation_dt=0.1,
         kind=TrajInterpolationType.LINEAR,
+        device_cfg=DeviceCfg("cpu"),
     )
     assert result.position.shape == (2, 8, 1)
     assert steps == [5, 5]

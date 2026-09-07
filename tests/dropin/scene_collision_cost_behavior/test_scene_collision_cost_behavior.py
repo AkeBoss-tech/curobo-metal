@@ -17,7 +17,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 
 def _checker(device: torch.device) -> SceneCollision:
     cfg = DeviceCfg(device)
-    scene = SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], [0.4, 0.4, 0.4])])
+    scene = SceneCfg(cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], [0.4, 0.4, 0.4], device_cfg=cfg)])
     return SceneCollision(SceneCollisionCfg(device_cfg=cfg, scene_model=scene, max_distance=1.0))
 
 
@@ -26,6 +26,7 @@ def test_native_scene_cost_aggregates_once_and_resets_workspace() -> None:
     config = SceneCollisionCostCfg(
         weight=2.0, activation_distance=0.1, num_spheres=2,
         use_grad_input=True, _scene_collision_checker=_checker(device),
+        device_cfg=DeviceCfg("cpu"),
     )
     cost = SceneCollisionCost(config)
     cost.setup_batch_tensors(2, 2)
@@ -68,6 +69,7 @@ def test_scene_cost_topology_sweep_and_binary_lifecycle() -> None:
         weight=1.0, activation_distance=0.05, num_spheres=1,
         use_sweep=True, use_speed_metric=True, convert_to_binary=True,
         _scene_collision_checker=checker,
+        device_cfg=DeviceCfg("cpu"),
     )
     cost = SceneCollisionCost(config)
     cost.setup_batch_tensors(1, 3)
@@ -102,6 +104,7 @@ def test_scene_cost_rejects_invalid_spheres_before_query(
 ) -> None:
     cost = SceneCollisionCost(SceneCollisionCostCfg(
         weight=1.0, num_spheres=1, _scene_collision_checker=_checker(torch.device("cpu")),
+        device_cfg=DeviceCfg("cpu"),
     ))
     with pytest.raises(ValueError, match=error):
         cost(SimpleNamespace(robot_spheres=spheres))
@@ -109,7 +112,7 @@ def test_scene_cost_rejects_invalid_spheres_before_query(
 
 def test_scene_cost_config_rejects_plain_callable_without_query_protocol() -> None:
     with pytest.raises(TypeError, match="configured discrete/swept"):
-        SceneCollisionCostCfg(weight=1.0, _scene_collision_checker=lambda _: None)
+        SceneCollisionCostCfg(weight=1.0, _scene_collision_checker=lambda _: None, device_cfg=DeviceCfg("cpu"))
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple Metal")

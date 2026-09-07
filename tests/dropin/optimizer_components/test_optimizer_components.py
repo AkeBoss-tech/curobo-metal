@@ -37,7 +37,7 @@ def test_action_bounds_reject_invalid_shapes_and_limits(lows, highs, horizon) ->
 
 
 def test_best_tracker_tracks_strict_improvement_and_masked_clear() -> None:
-    tracker = BestTracker(DeviceCfg())
+    tracker = BestTracker(DeviceCfg("cpu"))
     tracker.resize(2, 2, 1)
     state = OptimizationIterationState(
         action=torch.tensor([[[3.0], [4.0]], [[7.0], [8.0]]]),

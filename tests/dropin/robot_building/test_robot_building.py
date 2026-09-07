@@ -60,7 +60,7 @@ def test_urdf_parser_preserves_tree_mimic_and_inertials():
 
 
 def test_builder_and_loader_compile_full_urdf():
-    builder = RobotBuilder(str(URDF), tool_frames=["panda_hand"])
+    builder = RobotBuilder(str(URDF), tool_frames=["panda_hand"], device_cfg=DeviceCfg("cpu"))
     config = builder.build()
     loader = KinematicsLoader(config)
     assert loader.kinematics_config.num_dof == 9
@@ -86,7 +86,7 @@ def test_builder_collects_exact_primitive_spheres_and_round_trips_yaml(tmp_path)
 </robot>""",
         encoding="utf-8",
     )
-    builder = RobotBuilder(str(urdf), tool_frames=["tool"])
+    builder = RobotBuilder(str(urdf), tool_frames=["tool"], device_cfg=DeviceCfg("cpu"))
     spheres = builder.fit_collision_spheres(
         use_collision_mesh=True, compute_metrics=True,
         clip_links={"base": ("x", 0.2)},
@@ -101,14 +101,14 @@ def test_builder_collects_exact_primitive_spheres_and_round_trips_yaml(tmp_path)
     assert config.collision_link_names == ["base"]
     saved = tmp_path / "primitive.yml"
     builder.save(config, str(saved))
-    loaded = RobotBuilder.from_config(str(saved))
+    loaded = RobotBuilder.from_config(str(saved), device_cfg=DeviceCfg("cpu"))
     assert loaded.collision_spheres == {"base": [{"center": [0.25, 0.0, 0.0], "radius": 0.1}]}
     assert len(builder.refit_link_spheres("base", num_spheres=2, use_collision_mesh=True)) == 2
 
 
 def test_builder_save_serializes_runtime_cspace_and_xrdf(tmp_path):
     """Loaded configs materialize cspace tensors but remain editable/savable."""
-    builder = RobotBuilder.from_config(str(get_assets_path().parent / "configs/robot/franka.yml"))
+    builder = RobotBuilder.from_config(str(get_assets_path().parent / "configs/robot/franka.yml"), device_cfg=DeviceCfg("cpu"))
     config = builder.build()
     yaml_path = tmp_path / "franka-edited.yml"
     builder.save(config, str(yaml_path))
@@ -116,7 +116,7 @@ def test_builder_save_serializes_runtime_cspace_and_xrdf(tmp_path):
     cspace = saved["kinematics"]["cspace"]
     assert isinstance(cspace["default_joint_position"], list)
     assert isinstance(cspace["max_acceleration"], list)
-    reloaded = RobotBuilder.from_config(str(yaml_path))
+    reloaded = RobotBuilder.from_config(str(yaml_path), device_cfg=DeviceCfg("cpu"))
     assert reloaded._cspace_config["joint_names"] == builder._cspace_config["joint_names"]
 
     xrdf_path = tmp_path / "franka.xrdf"
@@ -151,6 +151,7 @@ def test_joint_limits_and_cspace_reindex_scale_clone():
     cfg = CSpaceParams(
         ["a", "b"], [0.0, 1.0], [1.0, 2.0], [1.0, 1.0],
         velocity_scale=[0.5, 0.25],
+        device_cfg=DeviceCfg("cpu"),
     )
     limits = JointLimits.from_data_dict({
         "joint_names": ["a", "b"],
@@ -158,7 +159,7 @@ def test_joint_limits_and_cspace_reindex_scale_clone():
         "velocity": [[-4, -8], [4, 8]],
         "acceleration": [[-2, -2], [2, 2]],
         "jerk": [[-10, -10], [10, 10]],
-    })
+    }, device_cfg=DeviceCfg("cpu"))
     scaled = cfg.scale_joint_limits(limits)
     torch.testing.assert_close(scaled.velocity[1], torch.tensor([2.0, 2.0]))
     cfg.inplace_reindex(["b", "a"])
@@ -167,12 +168,13 @@ def test_joint_limits_and_cspace_reindex_scale_clone():
 
 
 def test_franka_dynamics_batches_and_autograd():
-    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml")
+    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu"))
     dynamics = Dynamics(DynamicsCfg(cfg.kinematics_config, cfg.device_cfg))
     q = torch.zeros((2, 3, cfg.dof), requires_grad=True)
     state = JointState(
         q, torch.zeros_like(q), torch.zeros_like(q),
         joint_names=cfg.kinematics_config.joint_names,
+        device_cfg=DeviceCfg("cpu"),
     )
     torque = dynamics.compute_inverse_dynamics(state)
     assert torque.shape == q.shape and torch.isfinite(torque).all()
@@ -185,7 +187,7 @@ def test_franka_dynamics_batches_and_autograd():
 
 
 def test_kinematics_reducer_and_state_reconstruction():
-    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml")
+    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu"))
     reduced = KinematicsReducer.reduce_dof(
         cfg.kinematics_config, ["panda_link4"], remove_collision_spheres=True
     )

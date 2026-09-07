@@ -16,11 +16,12 @@ def _tetra(name: str = "tetra", *, pose=None) -> Mesh:
         pose=pose or [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         vertices=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         faces=[[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]],
+        device_cfg=DeviceCfg("cpu"),
     )
 
 
 def test_shared_geometry_pose_lifecycle_and_scene_interop() -> None:
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     left, right = _tetra(pose=[0, 0, 0, 1, 0, 0, 0]), _tetra(pose=[2, 0, 0, 1, 0, 0, 0])
     data = MeshData.from_batch_scene_cfg([SceneCfg(mesh=[left]), SceneCfg(mesh=[right])], cfg)
 
@@ -39,7 +40,7 @@ def test_shared_geometry_pose_lifecycle_and_scene_interop() -> None:
 def test_query_points_uses_current_environment_enable_and_pose() -> None:
     data = MeshData.from_batch_scene_cfg(
         [SceneCfg(mesh=[_tetra(pose=[0, 0, 0, 1, 0, 0, 0])]), SceneCfg(mesh=[_tetra(pose=[2, 0, 0, 1, 0, 0, 0])])],
-        DeviceCfg(),
+        DeviceCfg("cpu"),
     )
     points = torch.tensor([[[1.5, 0.1, 0.1]], [[1.5, 0.1, 0.1]]], requires_grad=True)
     result = data.query_points(points, env_indices=torch.tensor([0, 1]))
@@ -55,7 +56,7 @@ def test_query_points_uses_current_environment_enable_and_pose() -> None:
 
 
 def test_cache_rejects_ambiguous_geometry_replacement_and_exposes_warp_boundary() -> None:
-    data = MeshData.from_scene_cfg(SceneCfg(mesh=[_tetra()]), DeviceCfg())
+    data = MeshData.from_scene_cfg(SceneCfg(mesh=[_tetra()]), DeviceCfg("cpu"))
     changed = _tetra()
     changed.vertices = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
     with pytest.raises(ValueError, match="different geometry"):

@@ -19,7 +19,7 @@ class _Rollout:
         return (action - 0.6).square().sum(dim=(-1, -2))
 
 
-def _core(*, device_cfg=DeviceCfg(), null_fraction=0.0):
+def _core(*, device_cfg=DeviceCfg("cpu"), null_fraction=0.0):
     config = MPPICfg(
         num_iters=4,
         inner_iters=2,
@@ -53,7 +53,7 @@ def _core(*, device_cfg=DeviceCfg(), null_fraction=0.0):
 
 
 def test_particle_core_runs_batched_callback_lifecycle_and_returns_best_action():
-    core = _core()
+    core = _core(device_cfg=DeviceCfg("cpu"))
     seed = torch.zeros(2, 3, 2)
     result = core.optimize(seed)
     assert result.shape == seed.shape
@@ -67,7 +67,7 @@ def test_particle_core_runs_batched_callback_lifecycle_and_returns_best_action()
 
 
 def test_particle_core_population_order_bounds_reset_and_shift_are_deterministic():
-    core = _core(null_fraction=0.5)
+    core = _core(null_fraction=0.5, device_cfg=DeviceCfg("cpu"))
     seed = torch.full((1, 3, 2), 0.8)
     core.update_seed(seed)
     population = core.sample_actions()
@@ -90,12 +90,12 @@ def test_particle_core_population_order_bounds_reset_and_shift_are_deterministic
 
 
 def test_particle_core_callback_validation_and_cuda_boundary_are_explicit():
-    config = MPPICfg(num_particles=2)
+    config = MPPICfg(num_particles=2, device_cfg=DeviceCfg("cpu"))
     with pytest.raises(TypeError, match="callable"):
         ParticleOptCore(config, [_Rollout()], None)
     with pytest.raises(NotImplementedError, match="CUDA Graph"):
         ParticleOptCore(config, [_Rollout()], lambda _: None, use_cuda_graph=True)
-    core = _core()
+    core = _core(device_cfg=DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="seed action"):
         core.update_seed(torch.zeros(5))
     with pytest.raises(ValueError, match="optimizer mppi"):

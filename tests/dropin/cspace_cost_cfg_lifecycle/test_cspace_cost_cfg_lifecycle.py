@@ -36,6 +36,7 @@ def test_base_cspace_target_buffer_is_independent_and_validate_is_strict() -> No
     cfg = CSpaceCostCfg(
         weight=[1.0, 1.0], activation_distance=[0.0, 0.0], dof=2,
         cost_type=CSpaceCostType.POSITION, joint_limits=_limits(), cspace_target_weight=2.0,
+        device_cfg=DeviceCfg("cpu"),
     )
     cost = BaseCSpaceCost(cfg)
     assert not cost.cspace_target_enabled
@@ -65,6 +66,7 @@ def test_teleport_state_conversion_accepts_position_only_bounds() -> None:
     cfg = CSpaceCostCfg(
         weight=[1.0] * 5, activation_distance=[0.0] * 5,
         cost_type=CSpaceCostType.STATE, dof=2,
+        device_cfg=DeviceCfg("cpu"),
     )
     cfg.set_bounds(PositionOnly(), teleport_mode=True)
     assert cfg.cost_type is CSpaceCostType.POSITION
@@ -87,6 +89,7 @@ def test_dist_cfg_enforces_weight_lifecycle_and_transition_selection() -> None:
     cfg = CSpaceDistCostCfg(
         weight=1.5, dof=2, only_terminal_cost=True,
         terminal_dof_weight=[2.0, 3.0], non_terminal_dof_weight=[7.0, 8.0],
+        device_cfg=DeviceCfg("cpu"),
     )
     torch.testing.assert_close(cfg.non_terminal_dof_weight, torch.zeros(2))
     buffer = cfg.terminal_dof_weight
@@ -96,7 +99,7 @@ def test_dist_cfg_enforces_weight_lifecycle_and_transition_selection() -> None:
     with pytest.raises(ValueError, match="contain 2 values"):
         cfg.update_terminal_dof_weight([1.0, 2.0, 3.0])
     with pytest.raises(ValueError, match="provided dof weights"):
-        CSpaceDistCostCfg(weight=1.0, dof=2, terminal_dof_weight=[1.0, 2.0, 3.0])
+        CSpaceDistCostCfg(weight=1.0, dof=2, terminal_dof_weight=[1.0, 2.0, 3.0], device_cfg=DeviceCfg("cpu"))
 
     @dataclass
     class Transition:
@@ -104,7 +107,7 @@ def test_dist_cfg_enforces_weight_lifecycle_and_transition_selection() -> None:
         null_space_weight: torch.Tensor = torch.tensor([2.0, 4.0])
         cspace_distance_weight: torch.Tensor = torch.tensor([1.0, 3.0])
 
-    result = CSpaceDistCostCfg(weight=1.0, use_null_space=True, only_terminal_cost=False)
+    result = CSpaceDistCostCfg(weight=1.0, use_null_space=True, only_terminal_cost=False, device_cfg=DeviceCfg("cpu"))
     assert result.initialize_from_transition_model(Transition()) is result
     torch.testing.assert_close(result.terminal_dof_weight, torch.tensor([2.0, 4.0]))
     torch.testing.assert_close(result.non_terminal_dof_weight, torch.tensor([2.0, 4.0]))

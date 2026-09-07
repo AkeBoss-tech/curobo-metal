@@ -26,13 +26,14 @@ def _grid(name: str, *, dims=(2.0, 2.0, 2.0), offset: float = 0.0) -> VoxelGrid:
         dims=list(dims),
         voxel_size=1.0,
         feature_tensor=torch.arange(float(shape[0] * shape[1] * shape[2])).reshape(shape),
+        device_cfg=DeviceCfg("cpu"),
     )
 
 
 def test_cuboid_cache_is_atomic_and_rejects_duplicate_names() -> None:
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     cache = CuboidData.create_cache(2, 1, cfg)
-    first = Cuboid("first", [0, 0, 0, 1, 0, 0, 0], dims=[1, 2, 3])
+    first = Cuboid("first", [0, 0, 0, 1, 0, 0, 0], dims=[1, 2, 3], device_cfg=DeviceCfg("cpu"))
     cache.load_batch([first], 0)
     with pytest.raises(ValueError, match="unique"):
         cache.load_batch([first, first], 0)
@@ -45,16 +46,16 @@ def test_cuboid_cache_is_atomic_and_rejects_duplicate_names() -> None:
 
 
 def test_scene_rejects_cross_layer_duplicates_and_tracks_environments() -> None:
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     duplicate = SceneCfg(
-        cuboid=[Cuboid("same", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1])],
+        cuboid=[Cuboid("same", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1], device_cfg=DeviceCfg("cpu"))],
         voxel=[_grid("same")],
     )
     with pytest.raises(ValueError, match="unique"):
         SceneData.from_scene_cfg(duplicate, cfg)
 
     scene = SceneData.create_cache(2, cfg, cuboid_cache=1, voxel_cache={"layers": 1, "dims": [2, 2, 2], "voxel_size": 1})
-    scene.add_obstacle(Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1]), env_idx=1)
+    scene.add_obstacle(Cuboid("box", [0, 0, 0, 1, 0, 0, 0], dims=[1, 1, 1], device_cfg=DeviceCfg("cpu")), env_idx=1)
     scene.add_obstacle(_grid("grid", offset=2.0), env_idx=1)
     assert scene.get_obstacle_names(1) == ["box", "grid"]
     scene.update_obstacle_pose("box", Pose.from_list([4, 0, 0, 1, 0, 0, 0], cfg), 1)
@@ -64,7 +65,7 @@ def test_scene_rejects_cross_layer_duplicates_and_tracks_environments() -> None:
 
 
 def test_voxel_metadata_updates_are_exact_and_reconstruct_world_pose() -> None:
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     source = _grid("grid", dims=(2.0, 3.0, 2.0), offset=3.0)
     data = VoxelData.from_voxel_grid(source, cfg)
     assert data.get_grid_shape(name="grid") == torch.Size([2, 3, 2])

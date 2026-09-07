@@ -15,7 +15,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 def _pruner(device: str = "cpu") -> tuple[PathPruner, list[tuple[torch.Tensor, torch.Tensor]]]:
     cfg = SimpleNamespace(device_cfg=DeviceCfg(device=torch.device(device)))
     calls: list[tuple[torch.Tensor, torch.Tensor]] = []
-    pruner = PathPruner(cfg)
+    pruner = PathPruner(cfg, device_cfg=cfg.device_cfg)
     nodes = torch.tensor(
         [[0.0, 0.0, 0.0], [0.5, 0.0, 1.0], [1.0, 0.0, 2.0], [1.0, 1.0, 3.0], [2.0, 0.0, 4.0]],
         **cfg.device_cfg.as_torch_dict(),
@@ -49,12 +49,12 @@ def test_shortcut_candidates_are_complete_ordered_and_device_resident() -> None:
 
 
 def test_shortcut_registration_reduces_real_weighted_graph_path() -> None:
-    cfg = SimpleNamespace(device_cfg=DeviceCfg())
+    cfg = SimpleNamespace(device_cfg=DeviceCfg("cpu"))
     finder = NetworkXPathFinder(seed=3)
     finder.add_nodes([0, 1, 2])
     finder.add_edges([(0, 1, 1.1), (1, 2, 1.1)])
     nodes = torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 0.0, 2.0]])
-    pruner = PathPruner(cfg)
+    pruner = PathPruner(cfg, device_cfg=cfg.device_cfg)
 
     def steer(start: torch.Tensor, goal: torch.Tensor, *, add_exact_node: bool) -> None:
         assert not add_exact_node
@@ -89,7 +89,7 @@ def test_validation_empty_paths_and_dependency_lifecycle() -> None:
     with pytest.raises(TypeError, match="integer"):
         pruner._prepare_edges_for_shortcuts([[0.0]])
 
-    bare = PathPruner(SimpleNamespace(device_cfg=DeviceCfg()))
+    bare = PathPruner(SimpleNamespace(device_cfg=DeviceCfg("cpu")), device_cfg=DeviceCfg("cpu"))
     with pytest.raises(RuntimeError, match="set_dependencies"):
         bare.prune_path_with_shortcuts([], [], [])
 

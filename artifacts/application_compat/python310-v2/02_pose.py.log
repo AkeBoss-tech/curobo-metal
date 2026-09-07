@@ -1,0 +1,12 @@
+
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+  File "/Users/family/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/runpy.py", line 289, in run_path
+    return _run_module_code(code, init_globals, run_name,
+  File "/Users/family/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/runpy.py", line 96, in _run_module_code
+    _run_code(code, mod_globals, init_globals,
+  File "/Users/family/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/Users/family/Documents/CodingProjects/curobo-metal/examples/application_compat/02_pose.py", line 4, in <module>
+    import warp as wp
+ModuleNotFoundError: No module named 'warp'

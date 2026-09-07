@@ -15,19 +15,19 @@ from curobo._src.util.error_metrics import rotation_error_matrix
 from curobo._src.util.xrdf_util import convert_curobo_to_xrdf
 
 def test_convex_hull_signed_distance():
-    helper=ConvexPolygon2DHelper();helper.build_convex_hull(torch.tensor([[[0.,0.],[1,0],[1,1],[0,1],[.5,.5]]]))
+    helper=ConvexPolygon2DHelper(device_cfg=DeviceCfg("cpu"));helper.build_convex_hull(torch.tensor([[[0.,0.],[1,0],[1,1],[0,1],[.5,.5]]]))
     result=helper.compute_point_hull_distance(torch.tensor([[[[.5,.5],[2.,.5]]]]),torch.tensor([0]))
     torch.testing.assert_close(result,torch.tensor([[[-.5,1.]]]))
 
 def test_portable_data_caches():
-    cfg=DeviceCfg()
-    cub=Cuboid("box",[0,0,0,1,0,0,0],dims=[1,2,3])
+    cfg=DeviceCfg("cpu")
+    cub=Cuboid("box",[0,0,0,1,0,0,0],dims=[1,2,3], device_cfg=DeviceCfg("cpu"))
     data=CuboidData.from_scene_cfg(SceneCfg(cuboid=[cub]),cfg)
     assert data.get_names()==["box"] and data.dims.shape==(1,1,4)
-    mesh=Mesh("tri",vertices=[[0,0,0],[1,0,0],[0,1,0]],faces=[[0,1,2]])
+    mesh=Mesh("tri",vertices=[[0,0,0],[1,0,0],[0,1,0]],faces=[[0,1,2]], device_cfg=DeviceCfg("cpu"))
     md=MeshData.from_scene_cfg(SceneCfg(mesh=[mesh]),cfg)
     assert md.get_cached_mesh_names()==["tri"]
-    grid=VoxelGrid("grid",pose=[0,0,0,1,0,0,0],dims=[2,2,2],voxel_size=1,feature_tensor=torch.arange(8.))
+    grid=VoxelGrid("grid",pose=[0,0,0,1,0,0,0],dims=[2,2,2],voxel_size=1,feature_tensor=torch.arange(8.), device_cfg=DeviceCfg("cpu"))
     vd=VoxelData.from_scene_cfg(SceneCfg(voxel=[grid]),cfg)
     assert vd.get_grid_shape(name="grid")==torch.Size([2,2,2])
     with pytest.raises(NotImplementedError):data.to_warp()

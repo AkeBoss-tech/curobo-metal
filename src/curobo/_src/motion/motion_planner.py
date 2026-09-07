@@ -587,7 +587,7 @@ class MotionPlanner(_MotionPlannerPortableMixin):
         self._validate_state(goal_state, "goal_state")
         self._validate_state(current_state, "current_state")
         if max_attempts < 1:
-            raise ValueError("max_attempts must be positive")
+            return None
         result = None
         total_time = solve_time = 0.0
         original = current_state.clone()

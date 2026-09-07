@@ -46,7 +46,7 @@ def _iteration_manager(*, joint_limit_weight=1.0, device="cpu"):
 
 
 def test_goal_manager_rejects_malformed_goal_and_state_payloads_before_buffer_creation():
-    manager = GoalManager(DeviceCfg())
+    manager = GoalManager(DeviceCfg("cpu"))
     with pytest.raises(ValueError, match="goalset size"):
         manager.update_goal_buffer(_solve(goalset=2), goal_tool_poses=_pose(goalset=1))
     with pytest.raises(ValueError, match="batch size"):
@@ -56,7 +56,7 @@ def test_goal_manager_rejects_malformed_goal_and_state_payloads_before_buffer_cr
 
 
 def test_goal_manager_accepts_compact_single_problem_joint_state():
-    manager = GoalManager(DeviceCfg())
+    manager = GoalManager(DeviceCfg("cpu"))
     solve_state = SolveState(SolveMode.BATCH, 1, 1, num_goalset=1, num_seeds=2)
     current = JointState.from_position(torch.zeros(2))
     registry, update_reference = manager.update_goal_buffer(solve_state, current_js=current)
@@ -66,7 +66,7 @@ def test_goal_manager_accepts_compact_single_problem_joint_state():
 
 def test_seed_manager_converts_all_state_channels_together_and_rejects_nonfinite_seeds():
     manager = SeedManager(
-        DeviceCfg(), 2, torch.tensor([-1.0, -1.0]), torch.tensor([1.0, 1.0]), action_horizon=4
+        DeviceCfg("cpu"), 2, torch.tensor([-1.0, -1.0]), torch.tensor([1.0, 1.0]), action_horizon=4
     )
     state = JointState.from_position(torch.zeros(1, 2, dtype=torch.float64))
     state.velocity = torch.ones(1, 2, dtype=torch.float64)

@@ -64,7 +64,7 @@ def test_device_cfg_portable_integer_bool_clone_and_mps_boundary() -> None:
 def test_pose_function_reexports_are_differentiable_and_wxyz_consistent() -> None:
     position = torch.tensor([[1.0, 0.0, 0.0]], requires_grad=True)
     left = Pose(position, torch.tensor([[1.0, 0.0, 0.0, 0.0]]))
-    right = Pose.from_list([0, 2, 0, 1, 0, 0, 0])
+    right = Pose.from_list([0, 2, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu"))
     combined = pose_multiply(left, right)
     torch.testing.assert_close(combined.position, torch.tensor([[1.0, 2.0, 0.0]]))
     torch.testing.assert_close(pose_inverse(left).multiply(left).position, torch.zeros(1, 3))
@@ -103,7 +103,7 @@ def test_explicit_inherited_state_and_pose_surface_preserves_metadata_and_autogr
     assert pose.get_pose_vector().shape == (1, 7)
     torch.testing.assert_close(pose.inverse().position, torch.zeros(1, 3))
     torch.testing.assert_close(pose.get_rotation(), matrix[:3, :3].unsqueeze(0))
-    assert Pose.from_list([0, 0, 0, 1, 0, 0, 0]).to_list() == [0.0] * 3 + [1.0, 0.0, 0.0, 0.0]
+    assert Pose.from_list([0, 0, 0, 1, 0, 0, 0], device_cfg=DeviceCfg("cpu")).to_list() == [0.0] * 3 + [1.0, 0.0, 0.0, 0.0]
 
 
 def test_tool_goal_sequence_metadata_and_camera_function_reexports() -> None:

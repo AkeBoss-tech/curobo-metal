@@ -1,0 +1,33 @@
+{
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "hardware": "Apple M4",
+  "application_cases_passed": 8,
+  "application_report_sha256": "7c692f4d50b822b02287d39493fbf57f7b3ae710957dba1e08c7727742af5700",
+  "wheel_sha256": "512a4ff8f3ce5f883304e903f83a04c8a0dc649566522305d89ef3fecb421a39",
+  "wheel": "dist/application-compat/curobo_metal-0.1.0a1-py3-none-any.whl",
+  "cuda_bundle_archive": "/Users/family/Documents/CodingProjects/curobo-metal/dist/application-compat/cuda-application-replay.zip",
+  "cuda_application_replay": "pending; bundle prepared, no paired application claim",
+  "full_suite": {
+    "passed": 1387,
+    "command": "PYTORCH_ENABLE_MPS_FALLBACK=0 .venv/bin/python -m pytest -q --tb=short",
+    "log": "full-suite.log"
+  },
+  "post_review_mps_tests": {
+    "passed": 163,
+    "log": "mps-review.log"
+  },
+  "installed_wheel_smoke": "passed",
+  "api_inventory": "regenerated inventory identical to checked-in artifact",
+  "public_facade": {
+    "modules": 24,
+    "exports": 122,
+    "comparable_signatures": 10,
+    "differences": 0
+  },
+  "fixture_migration": "Legacy CPU fixtures now request CPU explicitly; dedicated automatic-device tests and installed applications exercise default MPS.",
+  "production_fixes": [
+    "Automatic MPS/CPU selection with explicit requests preserved",
+    "Positive collision constraints across cuboid, sphere, capsule, cylinder, and mixed scenes",
+    "Zero-attempt C-space planning returns None"
+  ]
+}

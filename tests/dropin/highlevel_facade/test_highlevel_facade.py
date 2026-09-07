@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 
 import pytest
+from curobo.types import DeviceCfg
 import torch
 
 from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
@@ -23,6 +24,7 @@ def test_public_trajectory_pose_signature_and_ik_composition():
     cfg = TrajectoryOptimizerCfg.create(
         "franka.yml", num_seeds=2, override_optimizer_num_iters={"lbfgs": 2},
         use_cuda_graph=True,
+        device_cfg=DeviceCfg("cpu"),
     )
     solver = TrajectoryOptimizer(cfg)
     current = solver.default_joint_state
@@ -47,7 +49,7 @@ def test_public_collision_names_match_pinned_signature_and_execute():
     assert list(inspect.signature(RobotCollisionChecker.validate).parameters) == [
         "self", "q", "env_query_idx"
     ]
-    cfg = RobotCollisionCheckerCfg.load_from_config("franka.yml")
+    cfg = RobotCollisionCheckerCfg.load_from_config("franka.yml", device_cfg=DeviceCfg("cpu"))
     checker = RobotCollisionChecker(cfg)
     q = checker.kinematics.default_joint_state.position.reshape(1, 1, -1)
     assert checker.validate(q).shape == (1, 1)
@@ -55,7 +57,7 @@ def test_public_collision_names_match_pinned_signature_and_execute():
 
 
 def test_public_kinematics_mesh_call_has_precise_portable_boundary():
-    kin = Kinematics(KinematicsCfg.from_robot_yaml_file("franka.yml"))
+    kin = Kinematics(KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu")))
     assert list(inspect.signature(Kinematics.get_robot_as_mesh).parameters) == [
         "self", "joint_position"
     ]

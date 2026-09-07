@@ -1,0 +1,4 @@
+CUROBO_APPLICATION_RESULT={"joint_names": ["panda_joint1", "panda_joint2", "panda_joint3", "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7", "panda_finger_joint1", "panda_finger_joint2"], "position": {"device": "mps", "dtype": "torch.float32", "shape": [1, 3], "values": [[0.16218823194503784, 0.014960325323045254, 0.6358193755149841]]}, "solution": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 9]}, "success": {"device": "mps", "dtype": "torch.bool", "shape": [1, 1], "values": [[true]]}, "unreachable_success": {"device": "mps", "dtype": "torch.bool", "shape": [1, 1], "values": [[false]]}}
+
+DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.
+DEPRECATED: append_joints is deprecated. Use append_joints_to_state() from state_joint_ops instead.

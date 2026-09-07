@@ -27,14 +27,14 @@ def test_joint_state_constructors_clone_to_and_index() -> None:
 
 def test_joint_state_zeros_detach_assignment_and_errors() -> None:
     state = JointState.zeros((2, 3), DeviceCfg(), ["a", "b", "c"])
-    assert torch.equal(state.dt, torch.ones(2))
+    assert torch.equal(state.dt, state.dt.new_ones(2))
     assert state.control_space is None
     state.control_space = ControlSpace.POSITION
 
     detached = state.detach()
     assert detached is state
-    state[0] = JointState.from_position(torch.full((3,), 4.0), ["a", "b", "c"])
-    assert torch.equal(state.position[0], torch.full((3,), 4.0))
+    state[0] = JointState.from_position(state.position.new_full((3,), 4.0), ["a", "b", "c"])
+    assert torch.equal(state.position[0], state.position.new_full((3,), 4.0))
     # Pinned cuRobo permits construction of partially described states and
     # rejects invalid names when a name-dependent operation is requested.
     partial = JointState.from_position(torch.zeros(2), ["only_one"])

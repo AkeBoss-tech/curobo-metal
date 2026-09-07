@@ -1,0 +1,293 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "cuRobo Metal Feature Support Matrix",
+    "description": "Feature-by-feature release support, evidence, limitations, and remaining parity work for the cuRobo Metal 0.1.0a1 checkpoint.",
+    "generatedAt": "2026-09-07T13:27:09Z",
+    "cards": [],
+    "charts": [
+      {
+        "id": "status_distribution_chart",
+        "title": "Feature rows by support status",
+        "subtitle": "56 feature-level rows; categories describe release support and are not weighted by complexity.",
+        "type": "bar",
+        "dataset": "status_distribution",
+        "sourceId": "matrix_snapshot",
+        "valueFormat": "number",
+        "encodings": {
+          "x": {"field": "status", "type": "nominal", "label": "Support status"},
+          "y": {"field": "count", "type": "quantitative", "label": "Feature rows"},
+          "tooltip": [{"field": "count", "type": "quantitative", "label": "Feature rows", "format": "number"}]
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "feature_matrix_table",
+        "title": "Feature support matrix",
+        "subtitle": "Status at commit d31c24b; platform columns refer to portable observable behavior, not CUDA ABI emulation.",
+        "dataset": "feature_matrix",
+        "sourceId": "matrix_snapshot",
+        "defaultSort": {"field": "area", "direction": "asc"},
+        "columns": [
+          {"field": "area", "label": "Area", "type": "text"},
+          {"field": "feature", "label": "Feature", "type": "text"},
+          {"field": "status", "label": "Status", "type": "text"},
+          {"field": "cpu", "label": "CPU", "type": "text"},
+          {"field": "mps", "label": "Apple MPS", "type": "text"}
+        ]
+      },
+      {
+        "id": "feature_evidence_table",
+        "title": "Feature evidence and boundaries",
+        "subtitle": "Companion lookup for API compatibility, primary evidence, and the exact limitation or remaining work.",
+        "dataset": "feature_matrix",
+        "sourceId": "matrix_snapshot",
+        "defaultSort": {"field": "feature", "direction": "asc"},
+        "columns": [
+          {"field": "feature", "label": "Feature", "type": "text"},
+          {"field": "api", "label": "Drop-in API", "type": "text"},
+          {"field": "evidence", "label": "Primary evidence", "type": "text"},
+          {"field": "boundary", "label": "Boundary / remaining work", "type": "text"}
+        ]
+      },
+      {
+        "id": "test_coverage_table",
+        "title": "Installed-wheel upstream evidence by subsystem",
+        "subtitle": "Every portable case passed; raw excluded failures remain visible separately.",
+        "dataset": "test_coverage",
+        "sourceId": "matrix_snapshot",
+        "defaultSort": {"field": "area", "direction": "asc"},
+        "columns": [
+          {"field": "area", "label": "Subsystem", "type": "text"},
+          {"field": "portable_passed", "label": "Portable passed", "format": "number"},
+          {"field": "portable_failed", "label": "Portable failed", "format": "number"},
+          {"field": "mechanism_excluded", "label": "Mechanism excluded", "format": "number"},
+          {"field": "excluded_raw_failures", "label": "Excluded raw failures", "format": "number"}
+        ]
+      },
+      {
+        "id": "partial_modules_table",
+        "title": "Partially resolved modules",
+        "subtitle": "The broad static inventory is wider than the strict public-facade release gate.",
+        "dataset": "partial_modules",
+        "sourceId": "matrix_snapshot",
+        "defaultSort": {"field": "module", "direction": "asc"},
+        "columns": [
+          {"field": "module", "label": "Module", "type": "text"},
+          {"field": "surface", "label": "Surface", "type": "text"},
+          {"field": "missing_symbols", "label": "Missing symbols", "format": "number"},
+          {"field": "interpretation", "label": "Interpretation", "type": "text"}
+        ]
+      }
+    ],
+    "sources": [
+      {"id": "matrix_snapshot", "label": "Reconciled feature support snapshot", "path": "artifacts/release/feature-support-matrix/artifact.json"},
+      {"id": "case_census", "label": "Installed-wheel portable case census", "path": "artifacts/gauntlet/portable-case-census.json"},
+      {"id": "api_inventory", "label": "Pinned upstream API inventory", "path": "artifacts/api_compat/upstream-api.json"},
+      {"id": "capability_inventory", "label": "Capability and evidence inventory", "path": "artifacts/parity/capabilities.json"},
+      {"id": "execution_census", "label": "Pinned upstream workload census", "path": "artifacts/api_compat/upstream-execution-census.json"},
+      {"id": "compatibility_contract", "label": "Release compatibility contract", "path": "docs/compatibility.md"},
+      {"id": "mechanism_policy", "label": "Exact mechanism exclusion policy", "path": "gauntlet/portable-dropin-parity.json"}
+    ],
+    "blocks": [
+      {"id": "title", "type": "markdown", "body": "# cuRobo Metal Feature Support Matrix"},
+      {
+        "id": "technical_summary",
+        "type": "markdown",
+        "sourceId": "case_census",
+        "body": "## Technical summary\n\n**The 0.1.0a1 checkpoint is a strong portable cuRobo alpha, not literal NVIDIA-runtime parity.** All 2,749 upstream cases classified as portable pass against the installed wheel, with zero portable failures. Another 103 exact cases require CUDA, raw Warp interoperability, or MPS float64 and are classified as mechanism exclusions rather than supported behavior. The broad static inventory resolves 571 of 586 modules; the remaining 15 are two perception internals and 13 example workflows."
+      },
+      {
+        "id": "definitions",
+        "type": "markdown",
+        "body": "## How to read the matrix\n\n- **Supported** means the portable behavior exists and has direct test evidence.\n- **Supported with limits** means the behavior works within a stated dtype, size, performance, or lifecycle boundary.\n- **Mechanism excluded** means the upstream test inspects an NVIDIA execution mechanism that cannot exist on Metal; equivalent observable behavior may still be supported.\n- **Not supported** means a user-visible portable behavior is not implemented in this alpha.\n- **External unavailable** means the behavior requires an ecosystem such as Isaac Sim, Omniverse, ROS, or USD authoring that is outside the core package.\n- **Partial** means imports or a subset workflow exist, but the complete upstream workflow is not promised."
+      },
+      {
+        "id": "status_distribution_intro",
+        "type": "markdown",
+        "sourceId": "capability_inventory",
+        "body": "## Most feature rows are supported, with gaps concentrated at platform boundaries\n\nForty-six of the 56 matrix rows are supported outright or supported within a documented limit. The remaining ten rows identify exact mechanism exclusions, genuinely unsupported high-level behaviors, external ecosystems, or partial example workflows. This count is an index of matrix rows—not a weighted completeness score—so the detailed table remains the authoritative lookup."
+      },
+      {"id": "status_distribution", "type": "chart", "chartId": "status_distribution_chart"},
+      {
+        "id": "feature_matrix_intro",
+        "type": "markdown",
+        "sourceId": "capability_inventory",
+        "body": "## Portable robotics functionality is broadly present\n\nCore configuration, kinematics, collision, costs, optimization, IK, trajectory optimization, graph planning, motion planning, dynamics, and bounded perception workflows are supported on CPU and Apple MPS. The material remaining engineering gaps are concentrated in unbounded high-level sparse mapping, LiDAR integration, complete example workflows, external ecosystems, and performance—not in the central motion-planning API."
+      },
+      {"id": "feature_matrix", "type": "table", "tableId": "feature_matrix_table"},
+      {
+        "id": "feature_evidence_intro",
+        "type": "markdown",
+        "body": "## Evidence and boundaries make qualified support explicit\n\nThe companion table separates API compatibility and proof from the compact platform matrix. A supported-with-limits row is not a blanket promise: its boundary states the dtype, scale, performance, lifecycle, or external-dependency constraint that controls the claim."
+      },
+      {"id": "feature_evidence", "type": "table", "tableId": "feature_evidence_table"},
+      {
+        "id": "test_evidence_intro",
+        "type": "markdown",
+        "sourceId": "case_census",
+        "body": "## Every classified portable upstream case passes\n\nThe case denominator is the 2,852-case platform-substituted installed-wheel gauntlet at pinned cuRobo commit `8e734f3ced1df898990bcd92de40abce475907db`. Portable pass/fail counts exclude exact mechanism-only cases; the raw-failure column deliberately preserves the fact that 44 excluded tests physically fail when they call unavailable NVIDIA or float64 mechanisms."
+      },
+      {"id": "test_coverage", "type": "table", "tableId": "test_coverage_table"},
+      {
+        "id": "inventory_intro",
+        "type": "markdown",
+        "sourceId": "api_inventory",
+        "body": "## Fifteen broad-inventory modules remain partial\n\nThe strict public-facade gate is exact for 24 modules, 122 exports, and 10 comparable signatures. The broader AST inventory intentionally includes internal dependency re-exports and full example-script globals; those produce the 15 partial modules below and should not be confused with 15 broken public APIs."
+      },
+      {"id": "partial_inventory", "type": "table", "tableId": "partial_modules_table"},
+      {
+        "id": "limitations",
+        "type": "markdown",
+        "sourceId": "compatibility_contract",
+        "body": "## Important limitations and robustness checks\n\n- High-level `Mapper` retains a dense ESDF mirror and rejects estimates above 1 GiB before allocation. Standalone sparse TSDF/ESDF remains available for larger maps.\n- High-level LiDAR integration is not implemented; only projection/helper behavior is portable today.\n- MPS has no float64 storage, so float64 gradcheck cases run on CPU rather than Metal.\n- Raw Warp cannot wrap MPS tensors. Block hashing, mesh SDF alignment, CUDA graphs, CUDA streams/events, and NVRTC must use Metal-native observable implementations or remain mechanism exclusions.\n- Several passing end-to-end paths are materially slower than release-quality targets, especially motion retargeting, ESDF planning, and PRM planning.\n- The 13 partial example modules are import-compatible adapters or bounded demonstrations, not complete Isaac/ROS/USD workflows."
+      },
+      {
+        "id": "next_steps",
+        "type": "markdown",
+        "body": "## Recommended path to broader parity\n\n1. Replace the high-level mapper's dense ESDF mirror with sparse-native query, render, and static-overlay paths.\n2. Implement portable LiDAR integration and validate multi-sensor lifecycle behavior.\n3. Close the five internal dependency re-export symbols only if internal static parity is a release requirement.\n4. Turn the 13 partial examples into complete portable workflows where they do not depend on unavailable external ecosystems.\n5. Establish Apple-silicon CI and performance budgets for PRM, ESDF planning, and retargeting.\n6. Keep CUDA/Warp ABI cases explicitly excluded; target equivalent user-visible outcomes rather than pretending Metal provides NVIDIA runtime objects."
+      },
+      {
+        "id": "further_questions",
+        "type": "markdown",
+        "body": "## Decisions still needed\n\n- Is the public promise a portable Python replacement, or must internal `_src` dependency re-exports also be exact?\n- Should Isaac/ROS/USD examples ship as separate integration packages rather than block the core Metal release?\n- What high-level mapping volume and latency targets define the first stable release?"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-09-07T13:27:09Z",
+    "status": "ready",
+    "datasets": {
+      "release_summary": [
+        {"portable_passed": 2749, "portable_failed": 0, "mechanism_exclusions": 103, "resolved_modules": 571, "partial_modules": 15}
+      ],
+      "status_distribution": [
+        {"status": "Supported", "count": 37},
+        {"status": "Limited", "count": 9},
+        {"status": "Mechanism", "count": 4},
+        {"status": "Unsupported", "count": 2},
+        {"status": "Partial", "count": 2},
+        {"status": "External", "count": 2}
+      ],
+      "feature_matrix": [
+        {"id": 1, "area": "Configuration", "feature": "Packaged robot, scene, and config assets", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "wheel smoke; configuration capability", "boundary": "Forty hash-pinned assets are packaged; external simulator assets are outside scope."},
+        {"id": 2, "area": "Configuration", "feature": "YAML robot/world loaders and serialization", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "configuration.robot_config_and_loaders", "boundary": "Pinned portable field set and relative asset resolution."},
+        {"id": 3, "area": "Configuration", "feature": "URDF parsing and model construction", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "robot/config and parser tests", "boundary": "Portable robot-model semantics; simulator extensions excluded."},
+        {"id": 4, "area": "Configuration", "feature": "XRDF parsing", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "upstream XRDF utility coverage", "boundary": "USD/Isaac scene authoring is separate."},
+        {"id": 5, "area": "Configuration", "feature": "USD scene/config authoring", "status": "External unavailable", "cpu": "No", "mps": "No", "api": "Explicit failure", "evidence": "execution census; compatibility contract", "boundary": "Requires usd-core/pxr or simulator ecosystem."},
+        {"id": 6, "area": "Types and math", "feature": "DeviceCfg and tensor factories", "status": "Supported with limits", "cpu": "Yes", "mps": "Float32", "api": "Compatible", "evidence": "types.device_cfg; types upstream cases", "boundary": "MPS float64 is rejected explicitly; CPU float64 remains supported."},
+        {"id": 7, "area": "Types and math", "feature": "Pose, quaternion, and transform operations", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "types.pose; geom upstream cases", "boundary": "Float64 numerical gradcheck runs on CPU because MPS lacks float64."},
+        {"id": 8, "area": "Types and math", "feature": "JointState, robot state, goals, and solver results", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "types.joint_state; types.solver_results", "boundary": "Portable layouts, indexing, mutation, and serialization covered."},
+        {"id": 9, "area": "Kinematics", "feature": "Forward kinematics", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "kinematics.forward_kinematics", "boundary": "Differentiable PyTorch path plus selected fused Metal kernels."},
+        {"id": 10, "area": "Kinematics", "feature": "Geometric Jacobian", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "kinematics.geometric_jacobian", "boundary": "MPS gradients covered; double gradcheck remains CPU-only."},
+        {"id": 11, "area": "Kinematics", "feature": "Tree, mimic joints, extra links, COM, and reducers", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "robot upstream cases", "boundary": "Portable articulated-model behavior covered."},
+        {"id": 12, "area": "Collision", "feature": "Sphere-pair collision primitives", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "collision.sphere_pair_primitives", "boundary": "Selected fused Metal hot paths available."},
+        {"id": 13, "area": "Collision", "feature": "Robot self-collision", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "cost and robot-scene upstream cases", "boundary": "Portable observable distances, costs, and gradients."},
+        {"id": 14, "area": "Collision", "feature": "Robot-scene collision and world mutation", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "collision.robot_scene", "boundary": "Scene lifecycle and attachment/world updates covered."},
+        {"id": 15, "area": "Collision", "feature": "Cuboid world collision", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "collision.cuboid_world", "boundary": "Portable query semantics covered."},
+        {"id": 16, "area": "Collision", "feature": "Mesh world collision", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "collision.mesh_world", "boundary": "Uses portable mesh behavior; raw Warp BVH calls are not a Metal API."},
+        {"id": 17, "area": "Collision", "feature": "Voxel and ESDF collision queries", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "collision.voxel_esdf_query", "boundary": "User-visible query behavior is portable."},
+        {"id": 18, "area": "Collision", "feature": "Raw Warp collision kernels and packed ABI", "status": "Mechanism excluded", "cpu": "Warp CPU only", "mps": "No", "api": "Not emulated", "evidence": "exact gauntlet mechanism policy", "boundary": "Warp cannot wrap MPS tensors; use portable collision APIs."},
+        {"id": 19, "area": "Costs", "feature": "C-space, pose, and composable costs", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "cost.pose_and_composable_costs; 157 upstream cases", "boundary": "Portable values and gradients covered."},
+        {"id": 20, "area": "Costs", "feature": "Scene, self-collision, and support-polygon costs", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "cost upstream area", "boundary": "All 157 classified portable cost cases pass."},
+        {"id": 21, "area": "Optimization", "feature": "L-BFGS and line search", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "optim.lbfgs", "boundary": "CUDA-event timing comparison excluded; eager optimization works."},
+        {"id": 22, "area": "Optimization", "feature": "Particle, MPPI, and evolution strategies", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "optim.particle_evolution", "boundary": "MPS float32; covariance-adaptation equivalence remains bounded."},
+        {"id": 23, "area": "Optimization", "feature": "SciPy and Torch optimizer adapters", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "optim upstream cases", "boundary": "CUDA graph capture around adapters is excluded."},
+        {"id": 24, "area": "Optimization", "feature": "CUDA graph capture, streams, and events", "status": "Mechanism excluded", "cpu": "No", "mps": "No", "api": "Explicit boundary", "evidence": "runtime.cuda_graphs_and_fused_cuda_kernels", "boundary": "Metal has no CUDA runtime objects; eager observable behavior is in scope."},
+        {"id": 25, "area": "Inverse kinematics", "feature": "Batched inverse kinematics", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "ik.inverse_kinematics", "boundary": "Configuration, seeds, results, and failure behavior covered."},
+        {"id": 26, "area": "Trajectory", "feature": "Trajectory optimization", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "trajectory.trajectory_optimization", "boundary": "Portable solver and result behavior covered."},
+        {"id": 27, "area": "Trajectory", "feature": "State transitions: teleport, velocity, acceleration, clique", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "119 portable transition cases", "boundary": "Three float64 MPS gradchecks and five upstream mechanism skips are excluded."},
+        {"id": 28, "area": "Trajectory", "feature": "Dynamics-aware B-spline and interpolation", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "trajectory.dynamics_aware_bspline", "boundary": "Portable trajectory layout and gradients covered."},
+        {"id": 29, "area": "Graph planning", "feature": "PRM planning", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "graph.prm_planner; 95 upstream cases", "boundary": "Correct but performance is not yet at CUDA parity; exact PRM suite took about 204 s."},
+        {"id": 30, "area": "Graph planning", "feature": "Batch seeds, node sampling, and graph lifecycle", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "graph upstream area", "boundary": "All 95 portable graph cases pass."},
+        {"id": 31, "area": "Motion generation", "feature": "High-level motion planning", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "motion_generation.motion_gen; 217 upstream cases", "boundary": "Pose, goalset, grasp, batch, shared-kinematics, and failure lifecycles covered."},
+        {"id": 32, "area": "Motion generation", "feature": "World mutation and ESDF planning", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "motion planner ESDF upstream cases", "boundary": "Correct but ESDF planner suite took about 269 s."},
+        {"id": 33, "area": "Motion generation", "feature": "Motion retargeting and MPC", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "motion retargeter upstream cases", "boundary": "Correct but first-frame MPC suite took about 309 s."},
+        {"id": 34, "area": "Dynamics", "feature": "Inverse dynamics / RNEA", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "dynamics.inverse_dynamics", "boundary": "Portable reference and runtime behavior covered."},
+        {"id": 35, "area": "Dynamics", "feature": "Whole-body kinematics and dynamics", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "whole_body.kinematics_dynamics", "boundary": "Portable articulated behavior covered."},
+        {"id": 36, "area": "Perception", "feature": "Depth filtering and camera observation utilities", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "perception upstream cases", "boundary": "Dtype preservation is supported within device capabilities."},
+        {"id": 37, "area": "Perception", "feature": "Dense camera TSDF integration", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "perception.depth_esdf_mapping", "boundary": "Projective integration, decay, reset, and lifecycle covered."},
+        {"id": 38, "area": "Perception", "feature": "Standalone sparse TSDF integration", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "standalone sparse integrator regressions", "boundary": "Occupied/surface extraction, RGB/features, import, and checkpoints covered."},
+        {"id": 39, "area": "Perception", "feature": "Standalone and bounded high-level ESDF", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "ESDF and mapper tests", "boundary": "High-level dense mirror is preflight-limited to an estimated 1 GiB."},
+        {"id": 40, "area": "Perception", "feature": "Multi-camera integration", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "10/10 exact multi-camera upstream cases", "boundary": "Per-camera intrinsics, convergent views, RGB averaging, and decay covered."},
+        {"id": 41, "area": "Perception", "feature": "RGB and feature-grid integration/matching", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "feature matching and generated-observation upstream cases", "boundary": "Grouped and tiled feature kernels match references."},
+        {"id": 42, "area": "Perception", "feature": "Block checkpoint save/load/import", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "checkpoint upstream cases", "boundary": "One raw CUDA checkpoint mechanism case is excluded."},
+        {"id": 43, "area": "Perception", "feature": "Static obstacles and sparse persistence", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "mapper high-level release regressions", "boundary": "Replacement clears stale static-only blocks and recycles capacity."},
+        {"id": 44, "area": "Perception", "feature": "Sparse mesh extraction", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Internal partial", "evidence": "marching-cubes and seam regressions", "boundary": "Geometry is welded across blocks; three upstream dependency re-exports remain absent."},
+        {"id": 45, "area": "Perception", "feature": "Depth, normals, color, and textured rendering", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "Compatible", "evidence": "renderer and high-level mapper cases", "boundary": "Bounded high-level map size applies."},
+        {"id": 46, "area": "Perception", "feature": "RobotMesh and pose estimation", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Internal partial", "evidence": "31 portable RobotMesh and 14 pose-detector cases", "boundary": "Two optional-dependency re-export symbols remain absent; raw Warp surface checks excluded."},
+        {"id": 47, "area": "Perception", "feature": "Raw Warp block hash and mesh-SDF alignment", "status": "Mechanism excluded", "cpu": "Warp CPU only", "mps": "No", "api": "Not emulated", "evidence": "33 exact perception mechanism exclusions", "boundary": "Warp cannot consume MPS tensors; portable block/mesh behavior is tested separately."},
+        {"id": 48, "area": "Perception", "feature": "LiDAR projection helpers", "status": "Supported with limits", "cpu": "Yes", "mps": "Yes", "api": "Partial", "evidence": "LiDAR projection upstream coverage", "boundary": "Projection utilities exist; full mapper integration does not."},
+        {"id": 49, "area": "Perception", "feature": "High-level multi-sensor LiDAR mapping", "status": "Not supported", "cpu": "No", "mps": "No", "api": "Explicit failure", "evidence": "MapperCfg.lidar_num_sensors boundary", "boundary": "Requires a portable sparse LiDAR integration implementation."},
+        {"id": 50, "area": "Perception", "feature": "Unbounded high-level sparse mapping", "status": "Not supported", "cpu": "No", "mps": "No", "api": "Explicit MemoryError", "evidence": "mapper memory-budget regression", "boundary": "Use standalone sparse APIs, coarser voxels, or partitioned maps above the 1 GiB estimate."},
+        {"id": 51, "area": "Examples", "feature": "Getting-started examples", "status": "Partial", "cpu": "Some", "mps": "Some", "api": "Imports present", "evidence": "example import tests; broad API inventory", "boundary": "Eight getting-started modules are not complete upstream workflow replicas."},
+        {"id": 52, "area": "Examples", "feature": "Guide and reference workflows", "status": "Partial", "cpu": "Some", "mps": "Some", "api": "Imports present", "evidence": "example import tests; broad API inventory", "boundary": "Five reference/guide modules remain partial and may require external systems."},
+        {"id": 53, "area": "Packaging", "feature": "curobo namespace, wheel assets, and clean install", "status": "Supported", "cpu": "Yes", "mps": "Yes", "api": "24/24 public modules", "evidence": "wheel smoke; public facade gate", "boundary": "Must not be co-installed with NVIDIA cuRobo because both own the namespace."},
+        {"id": 54, "area": "Runtime", "feature": "Selected fused Metal kernels", "status": "Supported", "cpu": "Fallback path", "mps": "Yes", "api": "Observable compatibility", "evidence": "kinematics/collision Metal capability tests", "boundary": "Not every upstream CUDA kernel has a one-for-one Metal kernel."},
+        {"id": 55, "area": "Runtime", "feature": "CUDA streams, graphs, NVRTC, and fused CUDA ABI", "status": "Mechanism excluded", "cpu": "No", "mps": "No", "api": "Explicit boundary", "evidence": "runtime.cuda_graphs_and_fused_cuda_kernels", "boundary": "Impossible as literal Metal objects; target equivalent results instead."},
+        {"id": 56, "area": "External integrations", "feature": "Isaac Sim, Omniverse, ROS, USD authoring, and NVIDIA viewers", "status": "External unavailable", "cpu": "No", "mps": "No", "api": "Outside core package", "evidence": "integration.isaac_ros_usd_visualization", "boundary": "Candidate for separate optional integration packages."}
+      ],
+      "test_coverage": [
+        {"area": "collision", "portable_passed": 15, "portable_failed": 0, "mechanism_excluded": 0, "excluded_raw_failures": 0},
+        {"area": "cost", "portable_passed": 157, "portable_failed": 0, "mechanism_excluded": 0, "excluded_raw_failures": 0},
+        {"area": "geom", "portable_passed": 45, "portable_failed": 0, "mechanism_excluded": 38, "excluded_raw_failures": 5},
+        {"area": "graph_planner", "portable_passed": 95, "portable_failed": 0, "mechanism_excluded": 0, "excluded_raw_failures": 0},
+        {"area": "motion", "portable_passed": 217, "portable_failed": 0, "mechanism_excluded": 0, "excluded_raw_failures": 0},
+        {"area": "optim", "portable_passed": 303, "portable_failed": 0, "mechanism_excluded": 17, "excluded_raw_failures": 2},
+        {"area": "perception", "portable_passed": 280, "portable_failed": 0, "mechanism_excluded": 33, "excluded_raw_failures": 32},
+        {"area": "robot", "portable_passed": 156, "portable_failed": 0, "mechanism_excluded": 1, "excluded_raw_failures": 0},
+        {"area": "rollout", "portable_passed": 254, "portable_failed": 0, "mechanism_excluded": 0, "excluded_raw_failures": 0},
+        {"area": "solver", "portable_passed": 476, "portable_failed": 0, "mechanism_excluded": 1, "excluded_raw_failures": 0},
+        {"area": "state", "portable_passed": 15, "portable_failed": 0, "mechanism_excluded": 0, "excluded_raw_failures": 0},
+        {"area": "test_examples", "portable_passed": 5, "portable_failed": 0, "mechanism_excluded": 0, "excluded_raw_failures": 0},
+        {"area": "transition", "portable_passed": 119, "portable_failed": 0, "mechanism_excluded": 8, "excluded_raw_failures": 3},
+        {"area": "types", "portable_passed": 370, "portable_failed": 0, "mechanism_excluded": 2, "excluded_raw_failures": 2},
+        {"area": "util", "portable_passed": 242, "portable_failed": 0, "mechanism_excluded": 3, "excluded_raw_failures": 0}
+      ],
+      "partial_modules": [
+        {"module": "curobo._src.perception.mapper.mesh_extractor", "surface": "runtime internal", "missing_symbols": 3, "interpretation": "Missing upstream dependency re-exports; mesh extraction behavior is implemented."},
+        {"module": "curobo._src.perception.pose_estimation.mesh_robot", "surface": "runtime internal", "missing_symbols": 2, "interpretation": "Missing optional dependency re-exports; portable RobotMesh behavior is implemented."},
+        {"module": "curobo.examples.getting_started.build_robot_model", "surface": "bundled example", "missing_symbols": 13, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.getting_started.feature_mapping", "surface": "bundled example", "missing_symbols": 31, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.getting_started.forward_kinematics", "surface": "bundled example", "missing_symbols": 9, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.getting_started.humanoid_retargeting", "surface": "bundled example", "missing_symbols": 18, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.getting_started.inverse_kinematics", "surface": "bundled example", "missing_symbols": 22, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.getting_started.motion_planning", "surface": "bundled example", "missing_symbols": 20, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.getting_started.reactive_control", "surface": "bundled example", "missing_symbols": 16, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.getting_started.volumetric_mapping", "surface": "bundled example", "missing_symbols": 28, "interpretation": "Bounded portable mapper adapter, not the full upstream script."},
+        {"module": "curobo.examples.guides.custom_optimization", "surface": "bundled example", "missing_symbols": 23, "interpretation": "Import-compatible portable subset."},
+        {"module": "curobo.examples.reference.lidar_volumetric_mapping", "surface": "bundled example", "missing_symbols": 104, "interpretation": "Helper subset only; full LiDAR workflow is unsupported."},
+        {"module": "curobo.examples.reference.live_volumetric_mapping_mpc", "surface": "bundled example", "missing_symbols": 28, "interpretation": "Import-compatible entry point; full external workflow is not implemented."},
+        {"module": "curobo.examples.reference.robot_pose_calibration", "surface": "bundled example", "missing_symbols": 14, "interpretation": "Import-compatible entry point; full external workflow is not implemented."},
+        {"module": "curobo.examples.reference.sphere_fit_comparison", "surface": "bundled example", "missing_symbols": 21, "interpretation": "Import-compatible entry point; full external workflow is not implemented."}
+      ]
+    },
+    "accessIssues": []
+  },
+  "sources": [
+    {
+      "id": "matrix_snapshot",
+      "file": {"path": "artifacts/release/feature-support-matrix/artifact.json", "description": "Bounded reconciled feature, test-coverage, and partial-module datasets embedded in this report artifact."},
+      "query": {
+        "engine": "duckdb",
+        "language": "sql",
+        "sql": "WITH artifact AS (SELECT content::JSON AS doc FROM read_text('artifacts/release/feature-support-matrix/artifact.json')) SELECT j.key AS dataset_name, j.value AS rows FROM artifact, json_each(json_extract(doc, '$.snapshot.datasets')) AS j",
+        "description": "Reads every bounded matrix dataset embedded in the canonical report artifact."
+      }
+    },
+    {"id": "case_census", "file": {"path": "artifacts/gauntlet/portable-case-census.json", "description": "Case-level installed-wheel upstream parity results at pinned revision."}},
+    {"id": "api_inventory", "file": {"path": "artifacts/api_compat/upstream-api.json", "description": "AST-generated module, symbol, and callable-shape inventory."}},
+    {"id": "capability_inventory", "file": {"path": "artifacts/parity/capabilities.json", "description": "Release capability classifications and linked implementation/test evidence."}},
+    {"id": "execution_census", "file": {"path": "artifacts/api_compat/upstream-execution-census.json", "description": "Classification of all 211 upstream test modules and 14 examples."}},
+    {"id": "compatibility_contract", "file": {"path": "docs/compatibility.md", "description": "Authoritative human-readable alpha compatibility contract."}},
+    {"id": "mechanism_policy", "file": {"path": "gauntlet/portable-dropin-parity.json", "description": "Fail-closed exact case-level adaptation and mechanism exclusion policy."}}
+  ],
+  "package_info": {
+    "originUrl": "artifact://curobo-metal-feature-support-matrix",
+    "controls": {"edit": false, "refresh": false}
+  }
+}

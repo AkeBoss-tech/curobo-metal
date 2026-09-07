@@ -280,7 +280,7 @@ class MotionRetargeter:
         # public diagnostic mask identifies every held environment.
         solution = torch.where(success[:, None], candidate, self._prev_solution)
         if result.js_solution is not None and result.js_solution.velocity is not None:
-            velocity = result.js_solution.velocity[:, 0]
+            velocity = result.js_solution.reorder(self.joint_names).velocity[:, 0]
             if self._prev_velocity is None:
                 previous_velocity = torch.zeros_like(velocity)
             else:

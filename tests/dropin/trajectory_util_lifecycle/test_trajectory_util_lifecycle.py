@@ -29,7 +29,7 @@ def test_cuda_named_bspline_mode_is_a_differentiable_portable_clamped_spline():
     source = _spline_state()
     output, steps = get_batch_interpolated_trajectory(
         source, torch.tensor(0.05), TrajInterpolationType.BSPLINE_KNOTS_CUDA
-    )
+    , device_cfg=DeviceCfg("cpu"))
     assert steps.tolist() == [25]
     assert output.position.shape == (1, 25, 1)
     torch.testing.assert_close(output.position[:, 0], source.knot[:, 0])
@@ -48,7 +48,7 @@ def test_bspline_boundary_tables_variable_lengths_and_output_tail_are_explicit()
     source.knot = knots
     source.knot_dt = torch.tensor([0.1, 0.2])
     source.control_space = ControlSpace.BSPLINE_3
-    out = JointState.zeros((2, 41, 1), DeviceCfg())
+    out = JointState.zeros((2, 41, 1), DeviceCfg("cpu"))
     start = JointState.from_position(torch.tensor([[0.0], [100.0]], requires_grad=True))
     goal = JointState.from_position(torch.tensor([[7.0], [200.0]], requires_grad=True))
     result = get_bspline_interpolation(
@@ -75,7 +75,7 @@ def test_cubic_cuda_parity_path_honors_boundary_table_indices():
     start = JointState.from_position(torch.tensor([[10.0], [20.0], [30.0]]))
     goal = JointState.from_position(torch.tensor([[40.0], [50.0], [60.0]]))
     result = get_bspline_interpolation(
-        source, JointState.zeros((2, 21, 1), DeviceCfg()), torch.tensor(0.1),
+        source, JointState.zeros((2, 21, 1), DeviceCfg("cpu")), torch.tensor(0.1),
         current_state=start, goal_state=goal,
         start_idx=torch.tensor([2, 0]), goal_idx=torch.tensor([1, 2]),
         use_implicit_goal_state=torch.ones(2, dtype=torch.bool),
@@ -90,14 +90,14 @@ def test_spline_mode_rejects_incomplete_or_incompatible_metadata_before_output_m
     with pytest.raises(ValueError, match="knot"):
         get_batch_interpolated_trajectory(
             source, torch.tensor(0.05), TrajInterpolationType.BSPLINE_KNOTS_CUDA
-        )
+        , device_cfg=DeviceCfg("cpu"))
     source.knot = source.position
     source.knot_dt = torch.tensor([0.1])
     source.control_space = ControlSpace.POSITION
     with pytest.raises(ValueError, match="BSPLINE"):
         get_batch_interpolated_trajectory(
             source, torch.tensor(0.05), TrajInterpolationType.BSPLINE_KNOTS_CUDA
-        )
+        , device_cfg=DeviceCfg("cpu"))
 
 
 def test_execution_manager_offset_window_uses_pinned_slice_semantics():

@@ -309,6 +309,7 @@ class _SceneCollisionPortable:
         self, query_spheres: torch.Tensor, collision_buffer: CollisionBuffer,
         weight: torch.Tensor, activation_distance: torch.Tensor,
         env_query_idx: Optional[torch.Tensor], swept: bool,
+        *, constraint: bool = False,
     ) -> torch.Tensor:
         if query_spheres.ndim != 4 or query_spheres.shape[-1] != 4:
             raise ValueError("query_spheres must have shape [batch, horizon, num_spheres, 4]")
@@ -317,6 +318,8 @@ class _SceneCollisionPortable:
         activation = float(activation_distance.item())
         if activation < 0:
             raise ValueError("activation_distance must be nonnegative")
+        if constraint and activation != 0:
+            raise ValueError("constraint queries require zero activation distance")
         disabled_spheres = query_spheres[..., 3] < 0
         collision_spheres = query_spheres
         if bool(disabled_spheres.any().item()):
@@ -367,8 +370,22 @@ class _SceneCollisionPortable:
             )
             analytic_distance = analytic_distance.reshape_as(distance)
             analytic_gradient = analytic_gradient.reshape_as(gradient)
-            choose_analytic = analytic_distance < distance
-            distance = torch.minimum(distance, analytic_distance)
+            if constraint:
+                # Native world queries already return penetration penalties;
+                # analytic geometry retains signed clearance in the raw API.
+                # Normalize only this constraint path, preserving raw queries.
+                if not has_backend:
+                    distance = torch.zeros_like(distance)
+                analytic_gradient = torch.where(
+                    (analytic_distance < 0)[..., None],
+                    -analytic_gradient, torch.zeros_like(analytic_gradient),
+                )
+                analytic_distance = (-analytic_distance).clamp_min(0)
+                choose_analytic = analytic_distance > distance
+                distance = torch.maximum(distance, analytic_distance)
+            else:
+                choose_analytic = analytic_distance < distance
+                distance = torch.minimum(distance, analytic_distance)
             gradient = torch.where(
                 choose_analytic[..., None], analytic_gradient, gradient
             )
@@ -387,6 +404,11 @@ class _SceneCollisionPortable:
         collision_buffer.gradient.zero_()
         collision_buffer.gradient[..., :3].copy_((gradient * scale).detach())
         return output
+
+    def _get_sphere_constraint_raw(self, query_spheres, collision_buffer, weight,
+                                   activation_distance, env_query_idx=None, return_loss=False):
+        return self._query(query_spheres, collision_buffer, weight, activation_distance,
+                           env_query_idx, False, constraint=True)
 
     def get_sphere_distance_raw(self, query_spheres, collision_buffer, weight, activation_distance,
                                 env_query_idx=None, return_loss=False):

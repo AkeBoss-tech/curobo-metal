@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"far": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 1], "values": [[[0.0]]]}, "near": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 1], "values": [[[0.20000000298023224]]]}, "restored": {"device": "mps", "dtype": "torch.float32", "shape": [1, 1, 1], "values": [[[0.0]]]}}
+

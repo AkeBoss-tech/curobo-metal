@@ -35,6 +35,11 @@ and [compatibility boundary](https://github.com/AkeBoss-tech/curobo-metal/blob/m
 
 ## Pinned upstream
 
+Eight portable V2 applications now have an installed-wheel execution gate with
+automatic MPS selection, unchanged source hashes, and a CUDA replay bundle.
+See [application compatibility](docs/application-compatibility.md) for covered
+behavior, commands, paired CUDA evidence, and the bounded coverage of this gate.
+
 Compatibility is developed against cuRoboV2 commit:
 
 ```text

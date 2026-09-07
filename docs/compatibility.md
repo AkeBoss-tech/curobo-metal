@@ -44,6 +44,16 @@ the same environment because both own `curobo`.
 
 ## Bounded claims
 
+The [application gate](application-compatibility.md) additionally verifies eight
+hash-pinned portable V2 programs against an installed wheel, using default MPS
+selection and graph settings. The same source is packaged for CUDA replay;
+paired CUDA evidence for these application programs is still pending. This is
+not a claim that the original NVIDIA CUDA-specific tutorials execute unchanged.
+
+Omitted device requests now select MPS when available, otherwise CPU. Explicit
+requests are preserved; CPU must be specified for float64 workloads on a Mac.
+This is a platform substitution for upstream's CUDA default.
+
 The exact static surface is not a claim of byte-identical source or behavior in
 every numerical regime. The 19 paired adapters certify their declared corpora
 and matrices; they do not turn platform-specific ABIs into portable APIs.

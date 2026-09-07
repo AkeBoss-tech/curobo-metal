@@ -14,9 +14,20 @@ class Backend(str, Enum):
     MPS = "mps"
 
 
+def default_device() -> torch.device:
+    """Select the available native accelerator for an omitted device request.
+
+    Explicit requests are validated separately; availability never redirects an
+    explicitly requested MPS device to CPU.
+    """
+    # Allocated MPS tensors report index 0; match their device exactly so public
+    # configuration/tensor equality checks work just as with upstream cuda:0.
+    return torch.device("mps:0" if torch.backends.mps.is_available() else "cpu")
+
+
 def resolve_device(device: str | torch.device | None = None) -> torch.device:
     """Resolve and validate a supported, available compute device."""
-    resolved = torch.device("cpu" if device is None else device)
+    resolved = default_device() if device is None else torch.device(device)
     if resolved.type not in {backend.value for backend in Backend}:
         raise ValueError(
             f"unsupported device {resolved}; curobo-metal supports only cpu and mps"
@@ -25,7 +36,7 @@ def resolve_device(device: str | torch.device | None = None) -> torch.device:
         raise ValueError(f"device indices are not supported: {resolved}")
     if resolved.type == Backend.MPS.value and not torch.backends.mps.is_available():
         raise RuntimeError("MPS was requested but is not available")
-    return torch.device(resolved.type)
+    return torch.device("mps:0" if resolved.type == Backend.MPS.value else "cpu")
 
 
 def validate_tensor_device(

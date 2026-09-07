@@ -1,0 +1,618 @@
+{
+  "cases": [
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_batch_size_mismatch_raises",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_joint_names",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_reset_clears_state",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_sequence_batch_mismatch_raises",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_solve_frame_first_call",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_solve_frame_subsequent_call",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_solve_sequence",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterIK::test_solve_sequence_resets_state",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC::test_solve_frame_mpc_first_frame",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC::test_solve_frame_mpc_returns_trajectory",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestMotionRetargeterMPC::test_solve_sequence_mpc",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestRetargetResult::test_ik_result_no_trajectory",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.motion.test_motion_retargeter::tests._src.motion.test_motion_retargeter.TestRetargetResult::test_mpc_result_with_trajectory",
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverCfgCreate::test_create_batch_config",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverCfgCreate::test_create_creates_config",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverCfgCreate::test_create_default_lm_ik",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverCfgCreate::test_create_sets_num_seeds",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverCfgCreate::test_create_sets_tolerances",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverGetUniqueSolution::test_get_unique_solution",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverInitialization::test_init_creates_components",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverInitialization::test_init_with_config",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverInitialization::test_init_without_lm_ik",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverInitialization::test_multi_link_ik_uses_additional_lm_seeds",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverProblemBatchSize::test_problem_batch_size_after_solve",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverProperties::test_action_dim_property",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverProperties::test_default_joint_position_property",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverProperties::test_default_joint_state_property",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverProperties::test_joint_names_property",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverProperties::test_kinematics_property",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverResetSeed::test_reset_seed_no_error",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePose::test_solve_pose_js_solution",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePose::test_solve_pose_multiple_return_seeds",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePose::test_solve_pose_result_fields",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePose::test_solve_pose_returns_result",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePose::test_solve_pose_run_optimizer_false",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePose::test_solve_pose_timing",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePose::test_solve_pose_with_tool_pose_input",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePoseBatch::test_solve_pose_batch",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePoseBatch::test_solve_pose_batch_run_optimizer_false",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePoseBatchEnv::test_solve_pose_multi_env",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePoseGoalset::test_solve_pose_goalset",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverSolvePoseGoalset::test_solve_pose_goalset_with_return_seeds",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverUpdateWorld::test_update_world_method_exists",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverVariableBatchSize::test_solve_pose_fewer_than_max",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    },
+    {
+      "detail": null,
+      "exclusion": null,
+      "id": "curobo.tests._src.solver.test_solver_ik::tests._src.solver.test_solver_ik.TestIKSolverVariableBatchSize::test_solve_pose_single_problem_ibatch_size_solver",
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "parity_status": "portable_executed",
+      "pytest_status": "passed"
+    }
+  ],
+  "execution": {
+    "candidate_wheel_record_verified": true,
+    "curobo_import_path": "/private/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo/__init__.py",
+    "distribution_version": "0.1.0a1",
+    "installed_wheel": true,
+    "mps_available": true,
+    "mps_built": true,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "pytorch_enable_mps_fallback": "0",
+    "torch": "2.14.0",
+    "verified_record_files": 732,
+    "wheel": {
+      "path": "/Users/family/Documents/CodingProjects/curobo-metal/dist/release-candidate/curobo_metal-0.1.0a1-py3-none-any.whl",
+      "sha256": "ca7b888d0a311e91d1f42d164fc2be5c51ad0acdf178e84d0b0300f0d7f1f32f"
+    }
+  },
+  "junit": {
+    "path": "/Users/family/Documents/CodingProjects/curobo-metal/artifacts/release/readiness/ik-retargeter-final-junit.xml",
+    "sha256": "ee02ed027a8e59e3a79a365de4d1f2425801d3e75aface39e698f183ea8a7454"
+  },
+  "policy": "pinned-curobo-v2-portable-dropin-parity",
+  "pytest_exit_code": 0,
+  "pytest_shards": [
+    {
+      "elapsed_seconds": 60.181402,
+      "junit_complete": true,
+      "module": "curobo.tests._src.solver.test_solver_ik",
+      "returncode": 0,
+      "test_path": "tests/_src/solver/test_solver_ik.py",
+      "timed_out": false
+    },
+    {
+      "elapsed_seconds": 242.114259,
+      "junit_complete": true,
+      "module": "curobo.tests._src.motion.test_motion_retargeter",
+      "returncode": 0,
+      "test_path": "tests/_src/motion/test_motion_retargeter.py",
+      "timed_out": false
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "conftest_sha256": "cd9d99c1b8f1095a99fd3044e55d3e44feed0341ae9122d99507726e5d3a093f",
+    "modules": {
+      "curobo.tests._src.motion.test_motion_retargeter": "363b1ac4c202a6142bf2b577f437c85d220160dcaf286cc70669646b83f0cfaf",
+      "curobo.tests._src.solver.test_solver_ik": "50e1aa64921608593e7bff99dc56f7cf53039db17ab59cda4f724bfc5fbc2d9a"
+    },
+    "portable_adapter": {
+      "availability_preserved": 0,
+      "availability_replacements": 35,
+      "device_string_replacements": 13,
+      "helper_import_replacements": 0,
+      "is_cuda_assertion_replacements": 0,
+      "mechanism_scaffold_guards": 0,
+      "oracle_replacements": 0,
+      "records": {
+        "conftest.py": {
+          "adapted_sha256": "968149edeed07a3b85a53e3d112943a65319f6c935d5144a791d40a29d86d310",
+          "availability_preserved": 0,
+          "availability_replacements": 0,
+          "device_string_replacements": 2,
+          "helper_import_replacements": 0,
+          "is_cuda_assertion_replacements": 0,
+          "mechanism_scaffold_guards": 0,
+          "oracle_replacements": 0,
+          "synchronize_replacements": 0
+        },
+        "curobo.tests._src.motion.test_motion_retargeter": {
+          "adapted_sha256": "3053d9e198b03a76b5d36af7b598fb7b554637aa70fb5f486b282edfa10793cb",
+          "availability_preserved": 0,
+          "availability_replacements": 2,
+          "device_string_replacements": 10,
+          "helper_import_replacements": 0,
+          "is_cuda_assertion_replacements": 0,
+          "mechanism_scaffold_guards": 0,
+          "oracle_replacements": 0,
+          "synchronize_replacements": 0
+        },
+        "curobo.tests._src.solver.test_solver_ik": {
+          "adapted_sha256": "dea22029c90b6de77356c969596c68e3e82facfb26b780577e5b0879f64b76bc",
+          "availability_preserved": 0,
+          "availability_replacements": 33,
+          "device_string_replacements": 1,
+          "helper_import_replacements": 0,
+          "is_cuda_assertion_replacements": 0,
+          "mechanism_scaffold_guards": 0,
+          "oracle_replacements": 0,
+          "synchronize_replacements": 0
+        }
+      },
+      "scope": "exact device string literals, torch.cuda.is_available gates, and pinned unshipped test-helper imports; assertion-scoped Tensor.is_cuda residency checks; zero-argument synchronization barriers; pinned DeviceCfg portability oracles",
+      "source_sha256": "cbd200b5dbd6e6a8d110c6c10e9d368ea37cc8927cab677b128575dd67348ff5",
+      "synchronize_replacements": 0
+    },
+    "upstream_path": "/private/tmp/curobo-upstream.XTX4Xy"
+  },
+  "summary": {
+    "areas": {
+      "motion": {
+        "cases": 13,
+        "excluded_raw_failures": 0,
+        "parity": {
+          "portable_executed": 13
+        },
+        "portable_failed": 0,
+        "portable_passed": 13,
+        "pytest": {
+          "passed": 13
+        }
+      },
+      "solver": {
+        "cases": 32,
+        "excluded_raw_failures": 0,
+        "parity": {
+          "portable_executed": 32
+        },
+        "portable_failed": 0,
+        "portable_passed": 32,
+        "pytest": {
+          "passed": 32
+        }
+      }
+    },
+    "cases": 45,
+    "covered_test_modules": 2,
+    "excluded_raw_failures": 0,
+    "implementation_parity_complete": false,
+    "missing_test_modules": [
+      "curobo.tests._src.collision.test_collision_robot_scene",
+      "curobo.tests._src.collision.test_mesh_collision_sdf",
+      "curobo.tests._src.cost.test_cost_base",
+      "curobo.tests._src.cost.test_cost_cspace",
+      "curobo.tests._src.cost.test_cost_scene_collision",
+      "curobo.tests._src.cost.test_cost_self_collision",
+      "curobo.tests._src.cost.test_cost_support_polygon",
+      "curobo.tests._src.cost.test_cost_tool_pose",
+      "curobo.tests._src.geom.sdf.test_voxel_collision",
+      "curobo.tests._src.geom.test_pose",
+      "curobo.tests._src.geom.test_quaternion",
+      "curobo.tests._src.geom.test_transform",
+      "curobo.tests._src.graph_planner.test_constructor",
+      "curobo.tests._src.graph_planner.test_graph_planner_batch_seed",
+      "curobo.tests._src.graph_planner.test_graph_planner_prm",
+      "curobo.tests._src.graph_planner.test_node_sampling_strategy",
+      "curobo.tests._src.motion.test_motion_planner",
+      "curobo.tests._src.motion.test_motion_planner_batch",
+      "curobo.tests._src.motion.test_motion_planner_cfg",
+      "curobo.tests._src.motion.test_motion_planner_esdf",
+      "curobo.tests._src.motion.test_motion_planner_grasp_goalset",
+      "curobo.tests._src.motion.test_motion_planner_num_envs",
+      "curobo.tests._src.motion.test_motion_planner_result",
+      "curobo.tests._src.motion.test_motion_planner_shared_kinematics",
+      "curobo.tests._src.motion.test_motion_retargeter_lock_joints",
+      "curobo.tests._src.optim.external.test_scipy_opt",
+      "curobo.tests._src.optim.external.test_torch_opt",
+      "curobo.tests._src.optim.gradient.test_conjugate_gradient",
+      "curobo.tests._src.optim.gradient.test_lbfgs",
+      "curobo.tests._src.optim.gradient.test_lsr1",
+      "curobo.tests._src.optim.particle.sample_strategies.test_particle_sampler_cfg",
+      "curobo.tests._src.optim.particle.sample_strategies.test_processor_knot",
+      "curobo.tests._src.optim.particle.sample_strategies.test_processor_standard",
+      "curobo.tests._src.optim.particle.sample_strategies.test_processor_stomp",
+      "curobo.tests._src.optim.particle.test_mppi",
+      "curobo.tests._src.optim.particle.test_parallel_optimizers",
+      "curobo.tests._src.optim.test_multi_stage_optimizer",
+      "curobo.tests._src.optim.test_optim_factory",
+      "curobo.tests._src.optim.test_optimizer_cuda_graph",
+      "curobo.tests._src.perception.mapper.test_block_checkpoint",
+      "curobo.tests._src.perception.mapper.test_block_decay",
+      "curobo.tests._src.perception.mapper.test_block_hash",
+      "curobo.tests._src.perception.mapper.test_block_integrate",
+      "curobo.tests._src.perception.mapper.test_block_marching_cubes",
+      "curobo.tests._src.perception.mapper.test_builder",
+      "curobo.tests._src.perception.mapper.test_comparison",
+      "curobo.tests._src.perception.mapper.test_feature_grid",
+      "curobo.tests._src.perception.mapper.test_feature_matching",
+      "curobo.tests._src.perception.mapper.test_generated_observation_correctness",
+      "curobo.tests._src.perception.mapper.test_integrator",
+      "curobo.tests._src.perception.mapper.test_lidar_projection",
+      "curobo.tests._src.perception.mapper.test_multi_camera",
+      "curobo.tests._src.perception.mapper.test_renderer",
+      "curobo.tests._src.perception.test_filter_depth",
+      "curobo.tests._src.perception.test_mesh_robot",
+      "curobo.tests._src.perception.test_sdf_cuda_graph",
+      "curobo.tests._src.perception.test_sdf_pose_detector",
+      "curobo.tests._src.perception.test_util",
+      "curobo.tests._src.perception.test_wp_mesh_sdf_alignment",
+      "curobo.tests._src.robot.kinematics.test_jacobian_gradcheck",
+      "curobo.tests._src.robot.kinematics.test_kinematics_cfg",
+      "curobo.tests._src.robot.kinematics.test_kinematics_extended",
+      "curobo.tests._src.robot.kinematics.test_kinematics_multi_env_spheres",
+      "curobo.tests._src.robot.kinematics.test_kinematics_reducer",
+      "curobo.tests._src.robot.kinematics.test_kinematics_state",
+      "curobo.tests._src.robot.types.test_joint_limits",
+      "curobo.tests._src.robot.types.test_types",
+      "curobo.tests._src.rollout.cost_manager.test_cost_manager_integration",
+      "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot",
+      "curobo.tests._src.rollout.cost_manager.test_cost_manager_robot_cfg",
+      "curobo.tests._src.rollout.cost_manager.test_multi_env_idxs_env",
+      "curobo.tests._src.rollout.test_goal_registry",
+      "curobo.tests._src.rollout.test_metrics",
+      "curobo.tests._src.rollout.test_rollout_protocol",
+      "curobo.tests._src.rollout.test_rollout_robot",
+      "curobo.tests._src.rollout.test_rollout_robot_cfg",
+      "curobo.tests._src.rollout.test_rollout_rosenbrock",
+      "curobo.tests._src.solver.seed_ik.test_seed_ik_solver",
+      "curobo.tests._src.solver.seed_ik.test_seed_ik_solver_cfg",
+      "curobo.tests._src.solver.seed_ik.test_seed_ik_state",
+      "curobo.tests._src.solver.seed_ik.test_seed_iteration_state_manager",
+      "curobo.tests._src.solver.test_manager_goal",
+      "curobo.tests._src.solver.test_manager_seed",
+      "curobo.tests._src.solver.test_solver_base_cfg",
+      "curobo.tests._src.solver.test_solver_base_result",
+      "curobo.tests._src.solver.test_solver_ik_cfg",
+      "curobo.tests._src.solver.test_solver_mpc",
+      "curobo.tests._src.solver.test_solver_mpc_cfg",
+      "curobo.tests._src.solver.test_solver_mpc_result",
+      "curobo.tests._src.solver.test_solver_trajopt",
+      "curobo.tests._src.solver.test_solver_trajopt_cfg",
+      "curobo.tests._src.solver.test_solver_trajopt_result",
+      "curobo.tests._src.state.test_state_robot_extended",
+      "curobo.tests._src.transition.test_fns_state_transition",
+      "curobo.tests._src.transition.test_robot_state_transition",
+      "curobo.tests._src.transition.test_transition_error_handling",
+      "curobo.tests._src.transition.test_transition_gradients",
+      "curobo.tests._src.types.test_camera",
+      "curobo.tests._src.types.test_device_cfg",
+      "curobo.tests._src.types.test_pose",
+      "curobo.tests._src.types.test_sequence_tool_pose",
+      "curobo.tests._src.types.test_tool_pose",
+      "curobo.tests._src.util.sampling.test_sample_buffer",
+      "curobo.tests._src.util.test_cuda_graph_util",
+      "curobo.tests._src.util.test_cuda_stream_util",
+      "curobo.tests._src.util.test_state_filter",
+      "curobo.tests._src.util.test_trajectory",
+      "curobo.tests._src.util.test_trajectory_execution_manager",
+      "curobo.tests._src.util.test_trajectory_seed_generator",
+      "curobo.tests._src.util.test_viser_visualizer",
+      "curobo.tests._src.util.test_warp",
+      "curobo.tests.test_examples"
+    ],
+    "parity": {
+      "portable_executed": 45
+    },
+    "portable_failed": 0,
+    "portable_passed": 45,
+    "pytest": {
+      "passed": 45
+    },
+    "substituted_test_modules": 114,
+    "test_definition_complete": false
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db"
+}

@@ -23,7 +23,7 @@ from curobo._src.types.device_cfg import DeviceCfg
 
 
 def test_tensor_geometry_broadcasts_radii_and_honours_caller_output_buffers():
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     centers = torch.tensor(((0.0, 0.0, 0.0), (1.0, 2.0, 3.0)))
     sphere = tensor_sphere(centers, torch.tensor((0.1, 0.2)), device_cfg=cfg)
     assert sphere.shape == (2, 4)
@@ -40,30 +40,31 @@ def test_tensor_geometry_broadcasts_radii_and_honours_caller_output_buffers():
     assert capsule.shape == (2, 7)
     torch.testing.assert_close(capsule[:, 6], torch.tensor((0.2, 0.4)))
     with pytest.raises(ValueError, match="nonnegative"):
-        tensor_sphere(torch.zeros(3), -0.1)
+        tensor_sphere(torch.zeros(3), -0.1, device_cfg=DeviceCfg("cpu"))
 
 
 def test_cube_helpers_validate_transforms_and_normalize_equivalent_quaternions():
-    dims, inverse = tensor_cube([1, 2, 3, 2, 0, 0, 0], [1, 2, 3])
+    dims, inverse = tensor_cube([1, 2, 3, 2, 0, 0, 0], [1, 2, 3], device_cfg=DeviceCfg("cpu"))
     torch.testing.assert_close(dims, torch.tensor((1.0, 2.0, 3.0)))
     torch.testing.assert_close(inverse, torch.tensor([[-1.0, -2.0, -3.0, 1.0, 0.0, 0.0, 0.0]]))
     batch_dims, batch_inverse = batch_tensor_cube(
         [[0, 0, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0, 0]], [[1, 1, 1], [2, 2, 2]],
+        device_cfg=DeviceCfg("cpu"),
     )
     assert batch_dims.shape == (2, 3) and batch_inverse.shape == (2, 7)
     with pytest.raises(ValueError, match="nonzero"):
-        tensor_cube([0, 0, 0, 0, 0, 0, 0], [1, 1, 1])
+        tensor_cube([0, 0, 0, 0, 0, 0, 0], [1, 1, 1], device_cfg=DeviceCfg("cpu"))
 
 
 def test_scene_json_round_trip_preserves_collision_geometry_and_independent_clone():
     scene = SceneCfg(
-        cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], [1, 2, 3], material=Material(0.2, 0.6))],
-        sphere=[Sphere("ball", position=[1, 0, 0], radius=0.25)],
-        capsule=[Capsule("cap", base=[0, 0, 0], tip=[0, 0, 1], radius=0.1)],
-        cylinder=[Cylinder("cyl", pose=[0, 1, 0, 1, 0, 0, 0], radius=0.2, height=1.0)],
-        mesh=[Mesh("tri", vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]])],
+        cuboid=[Cuboid("box", [0, 0, 0, 1, 0, 0, 0], [1, 2, 3], material=Material(0.2, 0.6), device_cfg=DeviceCfg("cpu"))],
+        sphere=[Sphere("ball", position=[1, 0, 0], radius=0.25, device_cfg=DeviceCfg("cpu"))],
+        capsule=[Capsule("cap", base=[0, 0, 0], tip=[0, 0, 1], radius=0.1, device_cfg=DeviceCfg("cpu"))],
+        cylinder=[Cylinder("cyl", pose=[0, 1, 0, 1, 0, 0, 0], radius=0.2, height=1.0, device_cfg=DeviceCfg("cpu"))],
+        mesh=[Mesh("tri", vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]], device_cfg=DeviceCfg("cpu"))],
         voxel=[VoxelGrid("grid", pose=[0, 0, 0, 1, 0, 0, 0], dims=[2, 2, 2], voxel_size=1.0,
-                         feature_tensor=torch.arange(8.0))],
+                         feature_tensor=torch.arange(8.0), device_cfg=DeviceCfg("cpu"))],
     )
     encoded = json.loads(json.dumps(scene.to_dict()))
     restored = SceneCfg.create(encoded)

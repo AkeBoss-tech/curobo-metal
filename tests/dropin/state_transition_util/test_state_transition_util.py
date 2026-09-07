@@ -41,11 +41,12 @@ def test_joint_state_ops_autograd_and_trajectory_indexing():
 
 
 def test_filter_and_transition_semantics():
-    cfg = DeviceCfg()
+    cfg = DeviceCfg("cpu")
     start = JointState.from_position(torch.zeros(2, 3), ["a", "b", "c"])
     filt = JointStateFilter(FilterCfg.create(
         {"position": 0.5, "velocity": 1, "acceleration": 1, "jerk": 1},
         dt=0.1, control_space=ControlSpace.ACCELERATION,
+        device_cfg=DeviceCfg("cpu"),
     ))
     filt.filter_joint_state(start)
     command = filt.integrate_acc(torch.ones(2, 3), start)
@@ -72,6 +73,7 @@ def test_sampling_is_deterministic_bounded_and_device_resident():
 
     sample_buffer = SampleBuffer.create_halton_sample_buffer(
         3, [2, 3, 4], [-2, -3, -4], store_buffer=32, seed=7,
+        device_cfg=DeviceCfg("cpu"),
     )
     first = sample_buffer.get_samples(8, bounded=True)
     sample_buffer.reset()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from curobo.types import DeviceCfg
 import torch
 
 from curobo._src.robot.dynamics import Dynamics, DynamicsCfg
@@ -11,7 +12,7 @@ from curobo._src.state.state_joint import JointState
 
 
 def _dynamics() -> tuple[Dynamics, KinematicsCfg]:
-    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml")
+    cfg = KinematicsCfg.from_robot_yaml_file("franka.yml", device_cfg=DeviceCfg("cpu"))
     return Dynamics(DynamicsCfg(cfg.kinematics_config, cfg.device_cfg)), cfg
 
 
@@ -22,6 +23,7 @@ def _state(cfg: KinematicsCfg, *, batch: int = 2, horizon: int = 3) -> JointStat
         torch.zeros_like(q),
         torch.zeros_like(q),
         joint_names=cfg.kinematics_config.joint_names,
+        device_cfg=DeviceCfg("cpu"),
     )
 
 
@@ -89,6 +91,7 @@ def test_external_wrench_rank_and_joint_reorder_are_deterministic() -> None:
         state.velocity[..., list(reversed(range(cfg.dof)))],
         state.acceleration[..., list(reversed(range(cfg.dof)))],
         joint_names=reverse,
+        device_cfg=DeviceCfg("cpu"),
     )
     # Results are returned in backend order, matching the historical RNEA
     # facade's internal-order contract after name normalization.
@@ -100,7 +103,7 @@ def test_external_wrench_rank_and_joint_reorder_are_deterministic() -> None:
 def test_forward_mass_rollout_and_mutation_lifecycle() -> None:
     dynamics, cfg = _dynamics()
     position = torch.zeros((2, cfg.dof))
-    state = JointState(position, torch.zeros_like(position), torch.zeros_like(position))
+    state = JointState(position, torch.zeros_like(position), torch.zeros_like(position), device_cfg=DeviceCfg("cpu"))
     torque = dynamics.compute_inverse_dynamics(state)
     acceleration = dynamics.compute_forward_dynamics(state, torque)
     torch.testing.assert_close(acceleration, torch.zeros_like(acceleration), atol=5e-4, rtol=5e-4)

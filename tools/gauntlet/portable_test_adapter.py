@@ -284,7 +284,7 @@ def _adapt_device_cfg_oracles(source: str) -> tuple[str, int]:
     """Adapt three assertions invalidated by portable device normalization.
 
     The pinned CUDA class defaults to ``cuda:0`` and preserves explicit index
-    zero.  The portable class deliberately defaults to CPU and treats an
+    zero.  The portable class defaults to the available MPS/CPU device and treats an
     omitted CPU/MPS index as operationally equivalent to index zero.  Restrict
     these oracle changes to their exact test functions; ordinary device
     assertions, constructors, and production expressions remain untouched.
@@ -308,7 +308,7 @@ def _adapt_device_cfg_oracles(source: str) -> tuple[str, int]:
         "test_from_basic_cuda": "assert cfg.device == torch.device('mps', 0)",
     }
     replacement_by_scope = {
-        "test_default_initialization": "assert cfg.device == torch.device('cpu')",
+        "test_default_initialization": "assert cfg.device == torch.device('mps:0' if torch.backends.mps.is_available() else 'cpu')",
         "test_from_basic_cpu": (
             'assert cfg.is_same_torch_device(torch.device("cpu", 0))'
         ),
