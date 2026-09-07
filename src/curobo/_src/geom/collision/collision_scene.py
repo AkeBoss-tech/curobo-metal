@@ -407,8 +407,8 @@ class _SceneCollisionPortable:
     def get_swept_sphere_distance_raw(self, query_spheres, collision_buffer, weight,
                                       activation_distance, trajectory_dt,
                                       enable_speed_metric=False, env_query_idx=None, return_loss=False):
-        if trajectory_dt.numel() not in (1, query_spheres.shape[1]):
-            raise ValueError("trajectory_dt must be scalar or horizon-sized")
+        if trajectory_dt.numel() not in (1, query_spheres.shape[0], query_spheres.shape[1]):
+            raise ValueError("trajectory_dt must be scalar, batch-sized, or horizon-sized")
         result = self._query(
             query_spheres, collision_buffer, weight, activation_distance,
             env_query_idx, True,

@@ -26,6 +26,7 @@ from curobo._src.perception.mapper.checkpoint_blocks import (
 )
 from curobo._src.perception.mapper.constants import (
     DEFAULT_HASH_LAYOUT,
+    MAX_POOL_IDX,
     PY_HASH_EMPTY,
     PY_HASH_TOMBSTONE,
     PY_VALUE_MASK,
@@ -100,10 +101,10 @@ class BlockSparseTSDFCfg:
             raise ValueError("block_size must be 1 or a power of two through 32")
         if self.max_blocks < 1 or self.hash_capacity < 1:
             raise ValueError("max_blocks and hash_capacity must be positive")
+        if self.max_blocks > MAX_POOL_IDX:
+            raise ValueError("max_blocks exceeds the packed hash pool capacity")
         if not self.enable_dynamic and not self.enable_static:
             raise ValueError("at least one of enable_dynamic or enable_static must be True")
-        if self.feature_dim:
-            raise NotImplementedError("feature-volume block storage requires CUDA/Warp")
         if self.color_grid_size != 1:
             raise NotImplementedError("RGB block control grids require CUDA/Warp")
         if self.feature_block_grid_size < 1 or self.feature_channels_per_thread < 1:
@@ -166,11 +167,17 @@ class BlockDataView:
             dtype=coords.dtype,
             device=coords.device,
         )
-        block_base = (coords + blocks // 2).to(centers.dtype) * float(self.block_size)
-        center_offset = centers.new_tensor([grid_w, grid_h, grid_d]) * 0.5
+        # Sparse block coordinates are signed around the center anchor.  Map
+        # them back to the native dense voxel lattice before computing the
+        # local feature-node coordinate.
+        block_offset = torch.floor(blocks.to(centers.dtype) * 0.5)
+        block_base = (coords.to(centers.dtype) + block_offset) * float(self.block_size)
         voxel = (
             centers - self.origin.to(device=centers.device, dtype=centers.dtype)
-        ) / float(self.voxel_size) + center_offset
+        ) / float(self.voxel_size)
+        voxel = voxel + torch.tensor(
+            [grid_w, grid_h, grid_d], dtype=centers.dtype, device=centers.device
+        ) * 0.5
         local = voxel - block_base.to(centers.device)
         grid_max = float(self.feature_block_grid_size - 1)
         grid = torch.floor(
@@ -246,7 +253,11 @@ class MatchedVoxels:
         result = self.block_scores.new_full((len(self.voxels),), fill_value)
         if matched.numel():
             any_match = matched.any(-1)
-            result[any_match] = self.block_scores.to(result.device)[matched[any_match].to(torch.bool).argmax(-1)]
+            # MPS does not implement argmax for bool tensors. The match mask
+            # is one-hot per row, so integer argmax is exactly equivalent.
+            result[any_match] = self.block_scores.to(result.device)[
+                matched[any_match].to(torch.int32).argmax(-1)
+            ]
         return result
 
 
@@ -366,6 +377,12 @@ class BlockSparseTSDF:
         # diagnostics remain meaningful without claiming sparse-pool ABI.
         self._frame_observed: torch.Tensor | None = None
         self._coords_cache: torch.Tensor | None = None
+        # Small bounded pools retain the actual compact block representation.
+        # Large/default configurations continue to use the production dense
+        # mapper and avoid eagerly allocating a 100k-block compatibility pool.
+        self._sparse_data: BlockSparseTSDFData | None = None
+        if config.max_blocks < math.prod(config.grid_shape):
+            self._sparse_data = self._make_sparse_data()
         # The bounded dense implementation historically exposed selected-
         # environment lifecycle helpers.  Keep them on instances without
         # widening the pinned class declaration.
@@ -461,7 +478,67 @@ class BlockSparseTSDF:
             ), -1).reshape(-1, 3)
         return self._coords_cache
 
+    def _make_sparse_data(self) -> BlockSparseTSDFData:
+        device = self.state.tsdf.device
+        half = torch.float16
+        block_voxels = self.config.block_size ** 3
+        color_voxels = self.config.color_grid_size ** 3
+        feature_voxels = self.config.feature_block_grid_size ** 3
+        max_blocks = self.config.max_blocks
+        def empty_i32(shape: tuple[int, ...]) -> torch.Tensor:
+            return torch.full(shape, PY_HASH_EMPTY, dtype=torch.int32, device=device)
+        return BlockSparseTSDFData(
+            block_data=torch.zeros((max_blocks, block_voxels, 2), dtype=half, device=device),
+            block_grid_rgb=torch.zeros((max_blocks, color_voxels, 4), dtype=half, device=device),
+            block_coords=torch.zeros(max_blocks * 3, dtype=torch.int32, device=device),
+            block_size=self.config.block_size,
+            decay_factor=torch.ones(max_blocks, dtype=half, device=device),
+            free_count=torch.zeros(1, dtype=torch.int32, device=device),
+            free_list=empty_i32((max_blocks,)),
+            frustum_flags=torch.zeros(max_blocks, dtype=torch.int32, device=device),
+            grid_shape=self.config.grid_shape,
+            hash_capacity=self.config.hash_capacity,
+            hash_table=torch.full((self.config.hash_capacity,), PY_HASH_EMPTY, dtype=torch.int64, device=device),
+            max_blocks=max_blocks,
+            new_block_count=torch.zeros(1, dtype=torch.int32, device=device),
+            new_blocks=empty_i32((max_blocks,)),
+            num_allocated=torch.zeros(1, dtype=torch.int32, device=device),
+            origin=self.config.origin.to(device),
+            truncation_distance=self.config.truncation_distance,
+            voxel_size=self.config.voxel_size,
+            allocation_failures=torch.zeros(1, dtype=torch.int32, device=device),
+            block_sums=torch.zeros(max_blocks, dtype=torch.float32, device=device),
+            block_to_hash_slot=empty_i32((max_blocks,)),
+            recycle_count=torch.zeros(1, dtype=torch.int32, device=device),
+            static_block_data=torch.zeros(
+                (max_blocks, block_voxels) if self.config.enable_static else (0,),
+                dtype=half,
+                device=device,
+            ),
+            static_block_sums=torch.zeros(
+                max_blocks if self.config.enable_static else 0,
+                dtype=torch.int32,
+                device=device,
+            ),
+            feature_dim=self.config.feature_dim,
+            feature_block_grid_size=self.config.feature_block_grid_size,
+            color_grid_size=self.config.color_grid_size,
+            has_dynamic=self.config.enable_dynamic,
+            has_static=self.config.enable_static,
+            has_features=self.config.feature_dim > 0,
+            block_features=torch.zeros(
+                (max_blocks, feature_voxels, self.config.feature_dim), dtype=half, device=device
+            ) if self.config.feature_dim else None,
+            block_feature_weight=torch.zeros(
+                (max_blocks, feature_voxels), dtype=half, device=device
+            ) if self.config.feature_dim else None,
+        )
+
     def _data(self, environment: int = 0) -> BlockSparseTSDFData:
+        if self._sparse_data is not None:
+            if environment != 0:
+                raise ValueError("compact block storage has one environment")
+            return self._sparse_data
         environment = self._environment_index(environment)
         state = self.state
         n = int(state.tsdf[environment].numel())
@@ -512,6 +589,33 @@ class BlockSparseTSDF:
 
     def _reset(self, env_indices: torch.Tensor | None = None) -> None:
         """Reset all or selected environments while preserving other batch state."""
+        if self._sparse_data is not None:
+            if env_indices is not None:
+                selected = self._environment_indices(env_indices)
+                if selected.numel() != 1 or int(selected[0].item()) != 0:
+                    raise ValueError("compact block storage has one environment")
+            data = self._sparse_data
+            data.block_data.zero_()
+            data.block_grid_rgb.zero_()
+            data.block_coords.zero_()
+            data.decay_factor.fill_(1)
+            data.free_count.zero_()
+            data.free_list.fill_(PY_HASH_EMPTY)
+            data.frustum_flags.zero_()
+            data.hash_table.fill_(PY_HASH_EMPTY)
+            data.new_block_count.zero_()
+            data.new_blocks.fill_(PY_HASH_EMPTY)
+            data.num_allocated.zero_()
+            data.allocation_failures.zero_()
+            data.block_sums.zero_()
+            data.block_to_hash_slot.fill_(PY_HASH_EMPTY)
+            data.recycle_count.zero_()
+            data.static_block_data.zero_()
+            data.static_block_sums.zero_()
+            if data.block_features is not None:
+                data.block_features.zero_()
+            if data.block_feature_weight is not None:
+                data.block_feature_weight.zero_()
         selected = self._environment_indices(env_indices)
         self._native.reset(None if env_indices is None else selected)
         self.reset_failure_counter()
@@ -523,6 +627,24 @@ class BlockSparseTSDF:
             self._frame_observed = updated
 
     def export_blocks(self) -> Dict[str, torch.Tensor]:
+        if self._sparse_data is not None:
+            data = self._sparse_data
+            allocated = int(data.num_allocated.item())
+            active = torch.nonzero(
+                data.block_to_hash_slot[:allocated] != PY_HASH_EMPTY, as_tuple=False
+            ).flatten()
+            result = {
+                "active_block_coords": data.block_coords.view(self.config.max_blocks, 3)[active].detach().clone(),
+            }
+            if self.config.enable_dynamic:
+                result["block_data"] = data.block_data[active].detach().clone()
+                result["block_grid_rgb"] = data.block_grid_rgb[active].detach().clone()
+            if self.config.feature_dim:
+                result["block_features"] = data.block_features[active].detach().clone()
+                result["block_feature_weight"] = data.block_feature_weight[active].detach().clone()
+            if self.config.enable_static:
+                result["static_block_data"] = data.static_block_data[active].detach().clone()
+            return result
         state = self.state
         return {name: getattr(state, name).detach().clone() for name in
                 ("tsdf", "weight", "occupancy", "esdf", "gradient", "generation")}
@@ -539,6 +661,57 @@ class BlockSparseTSDF:
         self.invalidate_cache()
 
     def import_blocks(self, blocks: Dict[str, torch.Tensor]) -> None:
+        if "active_block_coords" in blocks:
+            if self._sparse_data is None:
+                raise NotImplementedError(
+                    "importing a compact block-pool requires max_blocks smaller than dense grid capacity"
+                )
+            metadata = build_block_metadata(self)
+            validate_block_payload(blocks, metadata)
+            data = self._sparse_data
+            if int(data.num_allocated.item()) != 0 or bool(
+                (data.hash_table != PY_HASH_EMPTY).any().item()
+            ):
+                raise ValueError("block import requires an empty target")
+            coords = blocks["active_block_coords"].to(device=data.block_coords.device)
+            validate_import_block_coords_for_hash_layout(coords)
+            validate_import_block_coords_for_grid(coords, self.config.grid_shape, self.config.block_size)
+            count = int(coords.shape[0])
+            if count > self.config.max_blocks:
+                raise ValueError("import contains more blocks than target max_blocks")
+            hash_table, slots = rebuild_import_hash_state(
+                coords, self.config.hash_capacity, self.config.max_blocks
+            )
+            data.hash_table.copy_(hash_table)
+            data.block_to_hash_slot.copy_(slots)
+            data.block_coords.zero_()
+            data.block_coords[: count * 3].copy_(coords.reshape(-1))
+            data.num_allocated.fill_(count)
+            data.free_count.zero_()
+            if self.config.enable_dynamic:
+                data.block_data.zero_()
+                data.block_grid_rgb.zero_()
+                data.block_data[:count].copy_(blocks["block_data"].to(data.block_data.device))
+                data.block_grid_rgb[:count].copy_(blocks["block_grid_rgb"].to(data.block_grid_rgb.device))
+                data.block_sums.zero_()
+                data.block_sums[:count].copy_(data.block_data[:count, :, 1].float().sum(-1))
+            if self.config.feature_dim:
+                data.block_features.zero_()
+                data.block_feature_weight.zero_()
+                data.block_features[:count].copy_(blocks["block_features"].to(data.block_features.device))
+                data.block_feature_weight[:count].copy_(
+                    blocks["block_feature_weight"].to(data.block_feature_weight.device)
+                )
+            if self.config.enable_static:
+                data.static_block_data.zero_()
+                data.static_block_data[:count].copy_(
+                    blocks["static_block_data"].to(data.static_block_data.device)
+                )
+                data.static_block_sums.zero_()
+                data.static_block_sums[:count].copy_(
+                    torch.count_nonzero(data.static_block_data[:count], dim=-1).to(torch.int32)
+                )
+            return
         expected = {"tsdf", "weight", "occupancy", "esdf", "gradient", "generation"}
         native_checkpoint = set(blocks) == expected | {"format", "version", "config"}
         if set(blocks) != expected and not native_checkpoint:
@@ -566,6 +739,39 @@ class BlockSparseTSDF:
         self, scan_pool: bool = True, scan_hash: bool = False, *, environment: int | None = None
     ) -> Dict[str, float]:
         """Return selected-environment or aggregate dense storage diagnostics."""
+        if self._sparse_data is not None:
+            if environment not in (None, 0):
+                raise ValueError("compact block storage has one environment")
+            data = self._sparse_data
+            allocated = int(data.num_allocated.item())
+            free = int(data.free_count.item())
+            active = allocated - free
+            stats: Dict[str, float] = {
+                "num_allocated": allocated,
+                "free_count": free,
+                "active_blocks": active,
+                "holes": free,
+                "recycled_last": int(data.recycle_count.item()),
+                "tombstone_count": int((data.hash_table == PY_HASH_TOMBSTONE).sum().item()),
+                "pool_usage_pct": active / max(data.max_blocks, 1) * 100.0,
+                "fragmentation_pct": free / max(allocated, 1) * 100.0,
+                "hash_load_pct": active / max(data.hash_capacity, 1) * 100.0,
+                "allocation_failures": int(data.allocation_failures.item()),
+                "storage": "sparse_portable",
+            }
+            if not scan_pool:
+                stats.pop("holes")
+            if scan_hash:
+                stats.update(
+                    {
+                        "hash_empty": int((data.hash_table == PY_HASH_EMPTY).sum().item()),
+                        "hash_tomb": int(
+                            (data.hash_table == PY_HASH_TOMBSTONE).sum().item()
+                        ),
+                        "hash_occ": int((data.hash_table >= 0).sum().item()),
+                    }
+                )
+            return stats
         masks = self._observed_all()
         if environment is not None:
             masks = masks[self._environment_index(environment)].unsqueeze(0)
@@ -610,6 +816,12 @@ class BlockSparseTSDF:
         return None
 
     def memory_usage_bytes(self) -> int:
+        if self._sparse_data is not None:
+            return sum(
+                value.numel() * value.element_size()
+                for value in vars(self._sparse_data).values()
+                if isinstance(value, torch.Tensor)
+            )
         state = self.state
         return sum(value.numel() * value.element_size() for value in (
             state.tsdf, state.weight, state.occupancy, state.esdf, state.gradient, state.generation,

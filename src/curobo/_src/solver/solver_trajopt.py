@@ -35,6 +35,40 @@ from curobo._src.util.trajectory import (
 from curobo._src.util.trajectory_seed_generator import TrajectorySeedGenerator
 from curobo_metal.optim import ExecutionCache
 from curobo_metal.ops.trajectory import TrajectoryProblem, optimize_trajectory
+from curobo_metal.ops.kinematics import KinematicChain as _KinematicChain
+from curobo_metal.reference.forward_kinematics import SerialRobot as _SerialRobot
+
+
+def _trajectory_dimension_chain(robot, *, device, dtype) -> _KinematicChain:
+    """Build the trajectory optimizer's joint-dimension carrier.
+
+    A serial robot can use its actual chain.  Whole-body retargeting robots
+    are trees with several tracked effectors, while this optimizer's composed
+    objective is purely joint-space unless a collision model is explicitly
+    supplied.  For that case, use a deterministic zero-origin serial carrier
+    containing every active joint.  Cartesian IK still runs through the real
+    tree kinematics; this carrier supplies only the DOF/device metadata used
+    by the joint-space trajectory objective.
+    """
+    if len(robot.tool_frames) == 1:
+        return robot.to_kinematic_chain(device=device, dtype=dtype)
+    joints = [
+        joint for joint in robot.joints
+        if joint.kind != "fixed" and joint.mimic_joint is None
+    ]
+    proxy = _SerialRobot.from_dict({
+        "name": f"{robot.name}_trajectory_coordinates",
+        "joints": [
+            {
+                "name": joint.name,
+                "type": "revolute",
+                "axis": [0.0, 0.0, 1.0],
+                "origin": {"xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0]},
+            }
+            for joint in joints
+        ],
+    })
+    return _KinematicChain(proxy, device=device, dtype=dtype)
 
 
 class TrajOptSolver:
@@ -47,8 +81,8 @@ class TrajOptSolver:
         self.config = config
         self._scene_collision_checker = scene_collision_checker
         robot = config.robot_config.kinematics
-        self._chain = robot.to_kinematic_chain(
-            device=config.device_cfg.device, dtype=config.device_cfg.dtype
+        self._chain = _trajectory_dimension_chain(
+            robot, device=config.device_cfg.device, dtype=config.device_cfg.dtype
         )
         joints = [
             joint for joint in robot.joints

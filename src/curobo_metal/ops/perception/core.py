@@ -226,10 +226,36 @@ def dense_esdf(
             values.append(torch.full((len(coords),), empty_value, device=device, dtype=dtype))
             gradients.append(torch.zeros((len(coords), 3), device=device, dtype=dtype))
             continue
-        distance = torch.cdist(coords, coords)
-        target_mask = torch.where(mask[:, None], ~mask[None], mask[None])
-        candidates = torch.where(target_mask, distance, torch.full_like(distance, torch.inf))
-        best, winner = candidates.min(-1)
+        # Computing the full N x N matrix made otherwise modest mapper
+        # volumes (for example 50 x 40 x 40) consume tens of gigabytes.  The
+        # nearest opposite-class point is identical when evaluated in bounded
+        # query/target tiles; retain only the current winner for each query.
+        best = torch.full((len(coords),), torch.inf, device=device, dtype=dtype)
+        winner = torch.zeros((len(coords),), device=device, dtype=torch.long)
+        for source_value, target_value in ((False, True), (True, False)):
+            source_indices = torch.nonzero(mask == source_value, as_tuple=False).flatten()
+            target_indices = torch.nonzero(mask == target_value, as_tuple=False).flatten()
+            if not len(source_indices) or not len(target_indices):
+                continue
+            for query_start in range(0, len(source_indices), 1024):
+                query_indices = source_indices[query_start : query_start + 1024]
+                query_best = torch.full(
+                    (len(query_indices),), torch.inf, device=device, dtype=dtype
+                )
+                query_winner = torch.zeros(
+                    (len(query_indices),), device=device, dtype=torch.long
+                )
+                for target_start in range(0, len(target_indices), 4096):
+                    candidate_indices = target_indices[target_start : target_start + 4096]
+                    distances = torch.cdist(coords[query_indices], coords[candidate_indices])
+                    candidate_best, local_winner = distances.min(-1)
+                    improve = candidate_best < query_best
+                    query_best = torch.where(improve, candidate_best, query_best)
+                    query_winner = torch.where(
+                        improve, candidate_indices[local_winner], query_winner
+                    )
+                best[query_indices] = query_best
+                winner[query_indices] = query_winner
         all_occupied = ~torch.isfinite(best)
         delta = coords - coords[winner]
         unit = delta / best.clamp_min(torch.finfo(dtype).tiny)[:, None]

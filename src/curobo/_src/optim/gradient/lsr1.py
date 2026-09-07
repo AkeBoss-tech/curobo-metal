@@ -54,8 +54,8 @@ def jit_lsr1_compute_step_direction(
         raise ValueError("m must be a nonnegative integer")
     if epsilon <= 0:
         raise ValueError("epsilon must be positive")
-    if not isinstance(stable_mode, bool) or not stable_mode:
-        raise ValueError("stable_mode must be true")
+    if not isinstance(stable_mode, bool):
+        raise ValueError("stable_mode must be a bool")
     if grad.ndim < 2:
         raise ValueError("grad must have a batch dimension and event dimensions")
     batch = grad.shape[0]
@@ -79,8 +79,12 @@ def jit_lsr1_compute_step_direction(
     for index in range(history):
         sy = (s[:, index] * y[:, index]).sum(-1)
         yy = y[:, index].square().sum(-1)
-        valid = (~selected) & torch.isfinite(sy) & torch.isfinite(yy) & (sy > epsilon) & (yy > epsilon)
-        gamma = torch.where(valid, scale * (sy / yy.clamp_min(epsilon)), gamma)
+        finite = torch.isfinite(sy) & torch.isfinite(yy) & (yy > epsilon)
+        valid = (~selected) & finite & ((sy > epsilon) if stable_mode else torch.ones_like(finite))
+        candidate = scale * torch.relu(sy / yy.clamp_min(epsilon))
+        if stable_mode:
+            candidate = torch.nan_to_num(candidate, nan=epsilon, posinf=epsilon, neginf=epsilon)
+        gamma = torch.where(valid, candidate, gamma)
         selected |= valid
     result = gamma[:, None] * flat_grad
     for index in range(history):

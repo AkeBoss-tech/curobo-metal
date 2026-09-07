@@ -264,7 +264,8 @@ KEY_MASK = wp.constant(wp.int64(DEFAULT_HASH_LAYOUT.key_mask_signed))
 PY_POSITIVE_MASK: int = 0x7FFFFFFFFFFFFFFF
 PENDING_POOL_IDX: int = DEFAULT_HASH_LAYOUT.pending_pool_idx
 PENDING_POOL_IDX_WP = wp.constant(wp.int32(PENDING_POOL_IDX))
-# The upstream packed key admits a much larger CUDA pool.  The portable
-# storage implementation deliberately retains its established bounded pool
-# ceiling, preventing allocations that cannot be materialized on MPS.
-MAX_POOL_IDX: int = min(DEFAULT_HASH_LAYOUT.max_pool_idx, 65_534)
+# Largest real pool index representable by the packed hash value.  The all-ones
+# value is reserved as ``PENDING_POOL_IDX`` while a block is being allocated.
+# Runtime allocation remains independently bounded by mapper configuration and
+# memory; this constant describes the public hash ABI, not an eager allocation.
+MAX_POOL_IDX: int = DEFAULT_HASH_LAYOUT.max_pool_idx

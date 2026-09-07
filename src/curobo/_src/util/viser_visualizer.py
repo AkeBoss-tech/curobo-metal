@@ -53,9 +53,10 @@ class ViserVisualizer:
         visualize_collision_meshes: bool = False,
     ):
         del initialize_viser
-        raise NotImplementedError(
-            "Viser external integration is unavailable in the portable Metal package"
-        )
+        if viser is None or ViserUrdf is None or _yourdfpy is None or _trimesh is None:
+            raise ImportError(
+                "Viser visualization requires the optional viser, yourdfpy, and trimesh dependencies"
+            )
         # Match the pinned CUDA-labelled declaration default while keeping the
         # actual portable visualization/kinematics path on MPS or CPU.
         if device_cfg.device.type == "cuda":

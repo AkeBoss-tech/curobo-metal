@@ -106,6 +106,16 @@ def test_enabled_tool_pose_cost_requires_robot_kinematics_state():
         manager.compute_costs(state, goal=goal)
 
 
+def test_update_params_rejects_non_mapping_tool_pose_criteria():
+    cfg = RobotCostManagerCfg(
+        tool_pose_cfg=ToolPoseCostCfg(weight=[1.0, 1.0], tool_frames=["ee"])
+    )
+    manager = RobotCostManager().initialize_from_config(cfg)
+
+    with pytest.raises(ValueError, match="must be a dict"):
+        manager.update_params(tool_pose_criteria="invalid")
+
+
 def test_joint_torque_must_match_joint_trajectory_shape_and_device():
     state = RobotState(
         JointState.from_position(torch.zeros(1, 2, 2)),

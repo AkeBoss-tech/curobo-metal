@@ -197,10 +197,14 @@ class _SelfConfig:
 
 def test_scene_and_self_collision_reductions_and_support_polygon() -> None:
     spheres = torch.tensor([[[[0., 0., 0., .2], [.6, 0., 0., .2], [.1, .7, 0., .2]]]], requires_grad=True)
-    scene = SceneCollisionCost(SceneCollisionCostCfg(weight=2.0, activation_distance=.1, sum_distance=False))
-    scene.config.scene_collision_checker = _Checker()
+    scene = SceneCollisionCost(SceneCollisionCostCfg(
+        weight=2.0,
+        activation_distance=.1,
+        sum_distance=False,
+        _scene_collision_checker=_Checker(),
+    ))
     scene_value = scene(spheres)
-    assert scene_value.shape == (1, 1) and scene_value.item() > 0
+    assert scene_value.shape == (1, 1, 3) and bool((scene_value > 0).any())
 
     self_cost = SelfCollisionCost(SelfCollisionCostCfg(weight=1.0, self_collision_kin_config=_SelfConfig(), store_pair_distance=True))
     self_value = self_cost(spheres)

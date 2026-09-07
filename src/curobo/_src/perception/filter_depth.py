@@ -57,10 +57,9 @@ def _portable_device(device: str | torch.device) -> torch.device:
 class FilterDepth:
     """Apply the V2 batched depth-filter contract on CPU or float32 MPS.
 
-    Inputs may use either the source-shaped ``(B, H, W)`` layout or a single
-    unbatched ``(H, W)`` image. Matching calls reuse public output buffers,
-    while shape changes allocate temporary outputs just as the source
-    implementation does.
+    Inputs use the source-shaped ``(B, H, W)`` layout. Matching calls reuse
+    public output buffers, while shape changes allocate temporary outputs just
+    as the source implementation does.
     """
 
     def __init__(
@@ -215,30 +214,14 @@ class FilterDepth:
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Filter a depth image/batch and return depth plus a validity mask.
 
-        A 2-D input keeps its 2-D shape on return, including when caller-owned
-        2-D output buffers are supplied.  Batched callers retain the original
-        3-D behavior and buffer-reuse contract.
+        Inputs must retain the public V2 batched ``(B, H, W)`` contract.
         """
 
         if not isinstance(depth_image, torch.Tensor) or depth_image.dtype != torch.float32:
             raise TypeError("depth_image must be a float32 torch.Tensor")
-        if depth_image.ndim not in (2, 3):
-            raise ValueError("FilterDepth expects a depth tensor of shape (H, W) or (B, H, W)")
-        unbatched = depth_image.ndim == 2
-        caller_depth_out = depth_out
-        caller_valid_mask_out = valid_mask_out
-        if unbatched:
-            if depth_out is not None:
-                if not isinstance(depth_out, torch.Tensor) or depth_out.ndim != 2:
-                    raise ValueError("depth_out must have shape (H, W) for an unbatched input")
-                depth_out = depth_out.unsqueeze(0)
-            if valid_mask_out is not None:
-                if not isinstance(valid_mask_out, torch.Tensor) or valid_mask_out.ndim != 2:
-                    raise ValueError("valid_mask_out must have shape (H, W) for an unbatched input")
-                valid_mask_out = valid_mask_out.unsqueeze(0)
-            value = depth_image.unsqueeze(0)
-        else:
-            value = depth_image
+        if depth_image.ndim != 3:
+            raise ValueError("FilterDepth expects a depth tensor of shape (B, H, W)")
+        value = depth_image
         batch, height, width = value.shape
         # Caller-owned buffers define the destination device.  This permits a
         # CPU image/buffer lifecycle even when the filter was constructed with
@@ -259,11 +242,6 @@ class FilterDepth:
         filtered = torch.where(valid, filtered, torch.zeros_like(filtered))
         out_depth.copy_(filtered)
         out_mask.copy_(valid)
-        if unbatched:
-            return (
-                caller_depth_out if caller_depth_out is not None else out_depth.squeeze(0),
-                caller_valid_mask_out if caller_valid_mask_out is not None else out_mask.squeeze(0),
-            )
         return out_depth, out_mask
 
     def update_config(

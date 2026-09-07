@@ -11,12 +11,16 @@ def decay_and_recycle(
     tsdf,
     decay_factor: float = 0.95,
 ) -> int:
+    if getattr(tsdf, "_portable_sparse", False):
+        return tsdf.decay_and_recycle(decay_factor)
     state = dense_state(tsdf)
     state.weight.mul_(decay_factor)
-    return state
+    return 0
 
 
 def launch_recycle(tsdf, num_blocks: int | None = None):
+    if getattr(tsdf, "_portable_sparse", False):
+        return tsdf.decay_and_recycle(1.0)
     return dense_state(tsdf)
 
 

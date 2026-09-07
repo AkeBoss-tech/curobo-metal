@@ -94,8 +94,9 @@ def test_graph_primitives_and_prm_lifecycle():
     )
     assert result.success.tolist() == [True, True]
     assert result.interpolated_waypoints.shape == (2, 25, 2)
-    with pytest.raises(NotImplementedError, match="CUDA graph"):
-        planner.reset_cuda_graph()
+    # Resetting an absent capture is an upstream-compatible lifecycle no-op;
+    # requesting actual CUDA capture remains unsupported below.
+    planner.reset_cuda_graph()
 
 
 def test_execution_manager_consumes_commands():

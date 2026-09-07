@@ -66,7 +66,9 @@ def _verify_installed_record(distribution_root: Path, wheel: Path) -> int:
     """Prove installed files match every SHA-256 entry in the candidate wheel."""
 
     with zipfile.ZipFile(wheel) as archive:
-        records = [name for name in archive.namelist() if name.endswith(".dist-info/RECORD")]
+        records = [
+            name for name in archive.namelist() if name.endswith(".dist-info/RECORD")
+        ]
         if len(records) != 1:
             raise ValueError(f"candidate wheel has {len(records)} RECORD files")
         rows = list(csv.reader(archive.read(records[0]).decode("utf-8").splitlines()))
@@ -76,7 +78,9 @@ def _verify_installed_record(distribution_root: Path, wheel: Path) -> int:
             continue
         algorithm, separator, expected = encoded_hash.partition("=")
         if separator != "=" or algorithm != "sha256":
-            raise ValueError(f"unsupported wheel RECORD hash for {relative}: {encoded_hash}")
+            raise ValueError(
+                f"unsupported wheel RECORD hash for {relative}: {encoded_hash}"
+            )
         installed = distribution_root / relative
         if not installed.is_file():
             raise ValueError(f"installed candidate is missing wheel file: {relative}")
@@ -90,7 +94,9 @@ def _verify_installed_record(distribution_root: Path, wheel: Path) -> int:
     return checked
 
 
-def selected_test_paths(execution_census: dict[str, Any], disposition: str) -> tuple[str, ...]:
+def selected_test_paths(
+    execution_census: dict[str, Any], disposition: str
+) -> tuple[str, ...]:
     paths = []
     for entry in execution_census["entries"]:
         if entry["surface"] != "bundled_test" or entry["disposition"] != disposition:
@@ -175,7 +181,11 @@ def _run_module(
     # clean wheel environment even when the optional pytest-timeout plugin is
     # absent. Add the finer per-case guard only when that plugin is installed.
     if importlib.util.find_spec("pytest_timeout") is not None:
-        command[command.index(f"--junitxml={junit_path}"):command.index(f"--junitxml={junit_path}")] = [
+        command[
+            command.index(f"--junitxml={junit_path}") : command.index(
+                f"--junitxml={junit_path}"
+            )
+        ] = [
             f"--timeout={PYTEST_CASE_TIMEOUT_SECONDS:g}",
             "--timeout-method=signal",
         ]
@@ -275,7 +285,9 @@ def _installed_runtime(wheel: Path) -> dict[str, Any]:
     try:
         import_path.relative_to(distribution_root)
     except ValueError as exc:
-        raise ValueError(f"curobo is outside the installed distribution: {import_path}") from exc
+        raise ValueError(
+            f"curobo is outside the installed distribution: {import_path}"
+        ) from exc
     if not torch.backends.mps.is_built() or not torch.backends.mps.is_available():
         raise ValueError("portable replay requires an available PyTorch MPS backend")
     verified_files = _verify_installed_record(distribution_root, wheel)
@@ -368,7 +380,9 @@ def main(argv: list[str] | None = None) -> int:
         staged_helpers = stage / "_curobo_upstream_helpers"
         staged_helpers.mkdir()
         (staged_helpers / "__init__.py").write_text("", encoding="utf-8")
-        lidar_helper = upstream / "curobo/examples/reference/lidar_volumetric_mapping.py"
+        lidar_helper = (
+            upstream / "curobo/examples/reference/lidar_volumetric_mapping.py"
+        )
         if not lidar_helper.is_file():
             parser.error(f"missing pinned upstream helper: {lidar_helper}")
         shutil.copyfile(lidar_helper, staged_helpers / lidar_helper.name)
@@ -383,6 +397,9 @@ def main(argv: list[str] | None = None) -> int:
             "availability_preserved": conftest_adaptation.availability_preserved,
             "helper_import_replacements": conftest_adaptation.helper_import_replacements,
             "is_cuda_assertion_replacements": conftest_adaptation.is_cuda_assertion_replacements,
+            "synchronize_replacements": conftest_adaptation.synchronize_replacements,
+            "oracle_replacements": conftest_adaptation.oracle_replacements,
+            "mechanism_scaffold_guards": conftest_adaptation.mechanism_scaffold_guards,
         }
         adaptation_records = {
             "conftest.py": {
@@ -392,6 +409,9 @@ def main(argv: list[str] | None = None) -> int:
                 "availability_preserved": conftest_adaptation.availability_preserved,
                 "helper_import_replacements": conftest_adaptation.helper_import_replacements,
                 "is_cuda_assertion_replacements": conftest_adaptation.is_cuda_assertion_replacements,
+                "synchronize_replacements": conftest_adaptation.synchronize_replacements,
+                "oracle_replacements": conftest_adaptation.oracle_replacements,
+                "mechanism_scaffold_guards": conftest_adaptation.mechanism_scaffold_guards,
             }
         }
         for relative in paths:
@@ -404,6 +424,7 @@ def main(argv: list[str] | None = None) -> int:
             adaptation = adapt_source(
                 source.read_text(encoding="utf-8"),
                 preserve_availability_scopes=_raw_mechanism_scopes(policy, module),
+                test_module=module,
             )
             destination.write_text(adaptation.source, encoding="utf-8")
             adaptation_counts["device_string_replacements"] += (
@@ -412,12 +433,21 @@ def main(argv: list[str] | None = None) -> int:
             adaptation_counts["availability_replacements"] += (
                 adaptation.availability_replacements
             )
-            adaptation_counts["availability_preserved"] += adaptation.availability_preserved
+            adaptation_counts["availability_preserved"] += (
+                adaptation.availability_preserved
+            )
             adaptation_counts["helper_import_replacements"] += (
                 adaptation.helper_import_replacements
             )
             adaptation_counts["is_cuda_assertion_replacements"] += (
                 adaptation.is_cuda_assertion_replacements
+            )
+            adaptation_counts["synchronize_replacements"] += (
+                adaptation.synchronize_replacements
+            )
+            adaptation_counts["oracle_replacements"] += adaptation.oracle_replacements
+            adaptation_counts["mechanism_scaffold_guards"] += (
+                adaptation.mechanism_scaffold_guards
             )
             source_hashes[module] = _sha256(source)
             adaptation_records[module] = {
@@ -427,6 +457,9 @@ def main(argv: list[str] | None = None) -> int:
                 "availability_preserved": adaptation.availability_preserved,
                 "helper_import_replacements": adaptation.helper_import_replacements,
                 "is_cuda_assertion_replacements": adaptation.is_cuda_assertion_replacements,
+                "synchronize_replacements": adaptation.synchronize_replacements,
+                "oracle_replacements": adaptation.oracle_replacements,
+                "mechanism_scaffold_guards": adaptation.mechanism_scaffold_guards,
             }
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
@@ -467,9 +500,12 @@ def main(argv: list[str] | None = None) -> int:
             "scope": (
                 "exact device string literals, torch.cuda.is_available gates, and "
                 "pinned unshipped test-helper imports; assertion-scoped Tensor.is_cuda "
-                "residency checks"
+                "residency checks; zero-argument synchronization barriers; pinned "
+                "DeviceCfg portability oracles"
             ),
-            "source_sha256": _sha256(Path(__file__).with_name("portable_test_adapter.py")),
+            "source_sha256": _sha256(
+                Path(__file__).with_name("portable_test_adapter.py")
+            ),
             "records": adaptation_records,
             **adaptation_counts,
         },
@@ -488,7 +524,9 @@ def main(argv: list[str] | None = None) -> int:
         for run in module_runs
     ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     summary = result["summary"]
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if summary["implementation_parity_complete"] else 1

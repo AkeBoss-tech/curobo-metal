@@ -25,6 +25,7 @@ from curobo._src.util.logging import log_and_raise, log_info
 from curobo._src.util.torch_util import profile_class_methods
 from curobo_metal.ops.world_collision import VoxelGrid as NativeVoxelGrid
 from curobo_metal.ops.world_collision import query_esdf
+from curobo_metal.ops.perception.core import dense_esdf
 from .integrator_tsdf import BlockSparseTSDFIntegrator, BlockSparseTSDFIntegratorCfg
 
 
@@ -227,6 +228,92 @@ class BlockSparseESDFIntegrator:
         # kernels cannot be supported on every Metal runtime.
         return torch.float32 if self.device.type == "mps" else self.dtype
 
+    @property
+    def _uses_sparse_tsdf(self) -> bool:
+        return self._tsdf_integrator is not None and getattr(
+            self._tsdf_integrator._tsdf, "_portable_sparse", False
+        )
+
+    def _generation_token(self) -> torch.Tensor:
+        """Return a mutation token for either dense or sparse TSDF storage."""
+        if self._uses_sparse_tsdf:
+            return torch.tensor(
+                [self._tsdf_integrator._frame_count],
+                device=self.device,
+                dtype=torch.int64,
+            )
+        return self._tsdf_integrator.mapper._mapper.state.generation
+
+    def _sparse_dense_fields(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Materialize sparse blocks into the bounded ESDF lattice.
+
+        ESDF output is inherently dense, so this is intentionally used only
+        for the bounded output grid already allocated by this facade.  The
+        TSDF itself remains sparse; no nominal 512^3 TSDF pool is created.
+        """
+        if self._esdf_grid_shape is None:
+            raise RuntimeError("sparse ESDF requires esdf_grid_shape")
+        data = self._tsdf_integrator._tsdf.data
+        shape = tuple(int(value) for value in self._esdf_grid_shape)
+        tsdf = torch.ones(shape, device=self.device, dtype=torch.float32)
+        weight = torch.zeros(shape, device=self.device, dtype=torch.float32)
+        high_water = int(data.num_allocated.item())
+        if high_water == 0:
+            return tsdf, weight, torch.zeros_like(weight, dtype=torch.bool)
+        active = torch.nonzero(
+            data.block_to_hash_slot[:high_water] >= 0, as_tuple=False
+        ).flatten().to(device=self.device, dtype=torch.long)
+        if active.numel() == 0:
+            return tsdf, weight, torch.zeros_like(weight, dtype=torch.bool)
+        block_size = int(data.block_size)
+        blocks = torch.tensor(
+            [math.ceil(int(data.grid_shape[2]) / block_size),
+             math.ceil(int(data.grid_shape[1]) / block_size),
+             math.ceil(int(data.grid_shape[0]) / block_size)],
+            device=self.device, dtype=torch.float32,
+        )
+        block_offset = torch.floor(blocks * 0.5)
+        local_slot = torch.arange(
+            block_size ** 3, device=self.device, dtype=torch.long
+        )
+        local_x = torch.div(local_slot, block_size * block_size, rounding_mode="floor")
+        remainder = local_slot.remainder(block_size * block_size)
+        local_y = torch.div(remainder, block_size, rounding_mode="floor")
+        local_z = remainder.remainder(block_size)
+        local = torch.stack((local_x, local_y, local_z), dim=-1).to(torch.float32)
+        coords = data.block_coords.view(-1, 3)[active].to(torch.float32)
+        xyz = (coords[:, None] + block_offset + local[None]) * 1.0
+        xyz = xyz.to(torch.long)
+        # The public grid shape is (z, y, x), while block coordinates and
+        # local slots are stored in world (x, y, z) order.
+        ix, iy, iz = xyz[..., 0], xyz[..., 1], xyz[..., 2]
+        valid = (
+            (iz >= 0) & (iz < shape[0]) & (iy >= 0) & (iy < shape[1])
+            & (ix >= 0) & (ix < shape[2])
+        )
+        dynamic = data.block_data[active].float()
+        dynamic_weight = dynamic[..., 1]
+        dynamic_sdf = dynamic[..., 0] / dynamic_weight.clamp_min(1.0e-6)
+        observed = valid & (dynamic_weight >= float(self.config.minimum_tsdf_weight))
+        flat_index = iz * (shape[1] * shape[2]) + iy * shape[2] + ix
+        flat_index = flat_index[observed]
+        flat_tsdf = dynamic_sdf[observed]
+        flat_weight = dynamic_weight[observed]
+        tsdf_flat, weight_flat = tsdf.reshape(-1), weight.reshape(-1)
+        tsdf_flat[flat_index] = flat_tsdf
+        weight_flat[flat_index] = flat_weight
+        if data.has_static:
+            static = data.static_block_data[active].float()
+            static_valid = valid & torch.isfinite(static) & (static < 1.0e9)
+            # Recompute the flattened static indices because its validity mask
+            # is independent of dynamic observation validity.
+            static_index = (iz * (shape[1] * shape[2]) + iy * shape[2] + ix)[static_valid]
+            static_values = static[static_valid]
+            tsdf_flat[static_index] = static_values
+            weight_flat[static_index] = 1.0
+        occupancy = (weight > 0) & (tsdf <= 0.0)
+        return tsdf, weight, occupancy
+
     def _print_config(self):
         return {
             "tsdf_voxel_size": self.voxel_size,
@@ -264,10 +351,7 @@ class BlockSparseESDFIntegrator:
         """
         if self._tsdf_integrator is None or self._last_compute_generation is None:
             return False
-        return bool(torch.equal(
-            self._last_compute_generation,
-            self._tsdf_integrator.mapper._mapper.state.generation,
-        ))
+        return bool(torch.equal(self._last_compute_generation, self._generation_token()))
 
     def reset(self) -> None:
         if self._tsdf_integrator is None:
@@ -398,7 +482,10 @@ class BlockSparseESDFIntegrator:
         if self._site_index is None:
             return
         if occupancy is None:
-            occupancy = self._tsdf_integrator.mapper._mapper.state.occupancy[0]
+            if self._uses_sparse_tsdf:
+                occupancy = self._sparse_dense_fields()[2]
+            else:
+                occupancy = self._tsdf_integrator.mapper._mapper.state.occupancy[0]
         occupied = torch.nonzero(occupancy, as_tuple=False)
         self._site_index.fill_(-1)
         if occupied.numel() == 0:
@@ -413,21 +500,34 @@ class BlockSparseESDFIntegrator:
         self._site_index.copy_(nearest.reshape(self._esdf_grid_shape))
 
     def _refresh_dist_field(self, origin: torch.Tensor) -> torch.Tensor:
-        state = self._tsdf_integrator.mapper._mapper.state
-        occupancy = self._window_tensor(state.occupancy[0], origin)
-        tsdf = self._window_tensor(state.tsdf[0], origin)
-        weight = self._window_tensor(state.weight[0], origin)
-        if torch.equal(origin, self._origin):
-            field = state.esdf[0].to(dtype=self._field_dtype)
-        else:
-            from curobo_metal.ops.perception import dense_esdf
-            compute_dtype = torch.float32 if self._field_dtype == torch.float16 else self._field_dtype
+        if self._uses_sparse_tsdf:
+            tsdf, weight, occupancy = self._sparse_dense_fields()
+            occupancy = self._window_tensor(occupancy, origin)
+            tsdf = self._window_tensor(tsdf, origin)
+            weight = self._window_tensor(weight, origin)
+            compute_dtype = (
+                torch.float32 if self._field_dtype == torch.float16 else self._field_dtype
+            )
             field, _ = dense_esdf(
-                occupancy.unsqueeze(0), self.esdf_voxel_size,
-                self._tsdf_integrator.mapper._mapper.config.unobserved_esdf,
+                occupancy.unsqueeze(0), self.esdf_voxel_size, 1.0,
                 dtype=compute_dtype,
             )
             field = field[0].to(dtype=self._field_dtype)
+        else:
+            state = self._tsdf_integrator.mapper._mapper.state
+            occupancy = self._window_tensor(state.occupancy[0], origin)
+            tsdf = self._window_tensor(state.tsdf[0], origin)
+            weight = self._window_tensor(state.weight[0], origin)
+            if torch.equal(origin, self._origin):
+                field = state.esdf[0].to(dtype=self._field_dtype)
+            else:
+                compute_dtype = torch.float32 if self._field_dtype == torch.float16 else self._field_dtype
+                field, _ = dense_esdf(
+                    occupancy.unsqueeze(0), self.esdf_voxel_size,
+                    self._tsdf_integrator.mapper._mapper.config.unobserved_esdf,
+                    dtype=compute_dtype,
+                )
+                field = field[0].to(dtype=self._field_dtype)
         if self.config.blend_esdf:
             # The measured TSDF is most informative at observed surface cells;
             # smoothly hand off to the exact dense EDT away from that band.
@@ -460,6 +560,12 @@ class BlockSparseESDFIntegrator:
 
     def _seed_esdf_impl(self, esdf_origin, esdf_voxel_size):
         del esdf_voxel_size
+        if self._uses_sparse_tsdf:
+            self._last_window_occupancy = self._window_tensor(
+                self._sparse_dense_fields()[2], esdf_origin
+            )
+            self._seed_dense_sites(self._last_window_occupancy)
+            return None
         state = self._tsdf_integrator.mapper._mapper.state
         self._last_window_occupancy = self._window_tensor(state.occupancy[0], esdf_origin)
         self._seed_dense_sites(self._last_window_occupancy)
@@ -469,7 +575,7 @@ class BlockSparseESDFIntegrator:
         del esdf_voxel_size
         field = self._refresh_dist_field(esdf_origin)
         self._compute_count += 1
-        self._last_compute_generation = self._tsdf_integrator.mapper._mapper.state.generation.clone()
+        self._last_compute_generation = self._generation_token().clone()
         return field
 
     def _compute_esdf_impl(self, esdf_origin, esdf_voxel_size):
@@ -478,7 +584,11 @@ class BlockSparseESDFIntegrator:
 
     def _compute(self, tsdf):
         """Historical convenience: compute exact ESDF for a compatible dense map."""
-        if self._tsdf_integrator is None or (tsdf is not self and tsdf is not self._tsdf_integrator and tsdf is not self._tsdf_integrator.mapper):
+        if self._tsdf_integrator is None or (
+            tsdf is not self and tsdf is not self._tsdf_integrator
+            and tsdf is not self._tsdf_integrator._tsdf
+            and (self._uses_sparse_tsdf or tsdf is not self._tsdf_integrator.mapper)
+        ):
             from ._portable import dense_state
             state = dense_state(tsdf)
             from curobo_metal.ops.perception import dense_esdf
@@ -580,7 +690,7 @@ class BlockSparseESDFIntegrator:
         grid = NativeVoxelGrid(
             field, self.esdf_voxel_size, center.to(dtype=field.dtype),
             torch.eye(3, device=self.device, dtype=field.dtype),
-            self._tsdf_integrator.mapper._mapper.config.unobserved_esdf,
+            1.0 if self._uses_sparse_tsdf else self._tsdf_integrator.mapper._mapper.config.unobserved_esdf,
         )
         return query_esdf(points, [[grid]], padding=padding)
 

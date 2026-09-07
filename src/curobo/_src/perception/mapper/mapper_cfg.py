@@ -6,6 +6,12 @@ import math
 import torch
 
 from curobo._src.perception.mapper.block_allocation import calculate_tsdf_max_blocks
+from curobo._src.perception.mapper.constants import (
+    _validate_color_grid_size,
+    _validate_feature_block_grid_size,
+    _validate_feature_channels_per_thread,
+    _validate_feature_grid_shape,
+)
 from curobo._src.util.logging import log_and_raise
 
 
@@ -108,6 +114,12 @@ class MapperCfg:
             raise ValueError("texture camera dimensions must be positive")
         if self.feature_dim < 0 or self.feature_block_grid_size < 1 or self.feature_channels_per_thread < 1:
             raise ValueError("feature dimensions must be nonnegative/positive as appropriate")
+        _validate_color_grid_size(self.color_grid_size, self.block_size)
+        _validate_feature_block_grid_size(self.feature_block_grid_size, self.block_size)
+        _validate_feature_channels_per_thread(self.feature_channels_per_thread)
+        _validate_feature_grid_shape(
+            self.feature_dim, self.feature_grid_height, self.feature_grid_width
+        )
         if self.max_feature_tile_channels <= 0 or self.max_support_pixels_per_block_camera <= 0:
             raise ValueError("feature and camera support capacities must be positive")
         if self.lidar_num_sensors < 0 or self.max_support_pixels_per_block_lidar <= 0:

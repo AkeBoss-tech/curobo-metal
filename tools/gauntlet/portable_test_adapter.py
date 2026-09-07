@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import io
+import textwrap
 import tokenize
 from dataclasses import dataclass
 
@@ -11,6 +12,8 @@ from dataclasses import dataclass
 DEVICE_STRINGS = {"cuda": "mps", "cuda:0": "mps:0"}
 CUDA_AVAILABLE = "torch.cuda.is_available()"
 MPS_AVAILABLE = "torch.backends.mps.is_available()"
+CUDA_SYNCHRONIZE = "torch.cuda.synchronize()"
+MPS_SYNCHRONIZE = "torch.mps.synchronize()"
 UPSTREAM_HELPER_IMPORTS = {
     "from curobo.examples.reference.lidar_volumetric_mapping import ": (
         "from _curobo_upstream_helpers.lidar_volumetric_mapping import "
@@ -26,6 +29,34 @@ class Adaptation:
     availability_preserved: int
     helper_import_replacements: int
     is_cuda_assertion_replacements: int
+    synchronize_replacements: int
+    oracle_replacements: int
+    mechanism_scaffold_guards: int
+
+
+VOXEL_COLLISION_MODULE = "curobo.tests._src.geom.sdf.test_voxel_collision"
+VOXEL_WARP_SCAFFOLD_START = "for _module_path in OBSTACLE_SDF_MODULES:\n"
+VOXEL_WARP_SCAFFOLD_END = "\ndef _make_empty_esdf(\n"
+
+
+def _guard_voxel_collision_mechanism_scaffold(source: str) -> tuple[str, int]:
+    """Keep raw Warp declarations from blocking adjacent portable case collection.
+
+    The pinned module registers foreign Warp functions and decorates test-only
+    kernels at import time, before pytest can apply its per-case CUDA skips.
+    On the portable wheel those foreign functions deliberately expose no Warp
+    ABI, so registration fails during collection.  The guarded block is used
+    exclusively by reviewed raw-kernel cases; the four VoxelData construction
+    cases below it remain unchanged and executable on MPS.
+    """
+
+    start = source.find(VOXEL_WARP_SCAFFOLD_START)
+    end = source.find(VOXEL_WARP_SCAFFOLD_END)
+    if start < 0 or end < 0 or end <= start:
+        raise ValueError("pinned voxel-collision Warp scaffold shape changed")
+    scaffold = source[start:end]
+    guarded = "if torch.cuda.is_available():\n" + textwrap.indent(scaffold, "    ")
+    return source[:start] + guarded + source[end:], 1
 
 
 def _dotted_name(node: ast.AST) -> str | None:
@@ -81,15 +112,14 @@ def _availability_spans(
         ):
             scope = parents[scope]
         scope_name = _scope_name(scope, parents)
-        if (
-            scope_name in preserve_availability_scopes
-            or (
-                isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and scope.name in preserve_availability_scopes
-            )
+        if scope_name in preserve_availability_scopes or (
+            isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and scope.name in preserve_availability_scopes
         ):
             continue
-        spans.append((node.lineno, node.col_offset, node.end_lineno, node.end_col_offset))
+        spans.append(
+            (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset)
+        )
     return spans, total
 
 
@@ -112,13 +142,70 @@ def _replace_spans(source: str, spans: list[tuple[int, int, int, int]]) -> str:
     return source
 
 
+def _synchronize_spans(
+    source: str, preserve_scopes: frozenset[str]
+) -> tuple[list[tuple[int, int, int, int]], int]:
+    """Return timing-barrier calls that should target the adapted MPS device."""
+
+    tree = ast.parse(source)
+    parents: dict[ast.AST, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+    spans = []
+    total = 0
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and not node.args
+            and not node.keywords
+            and _dotted_name(node.func) == "torch.cuda.synchronize"
+        ):
+            continue
+        total += 1
+        scope: ast.AST = node
+        while scope in parents and not isinstance(
+            scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            scope = parents[scope]
+        scope_name = _scope_name(scope, parents)
+        if scope_name in preserve_scopes or (
+            isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and scope.name in preserve_scopes
+        ):
+            continue
+        spans.append(
+            (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset)
+        )
+    return spans, total
+
+
+def _replace_synchronize_spans(
+    source: str, spans: list[tuple[int, int, int, int]]
+) -> str:
+    lines = source.splitlines(keepends=True)
+    offsets = []
+    running = 0
+    for line in lines:
+        offsets.append(running)
+        running += len(line)
+    replacements = []
+    for start_line, start_col, end_line, end_col in spans:
+        start = offsets[start_line - 1] + start_col
+        end = offsets[end_line - 1] + end_col
+        if source[start:end] != CUDA_SYNCHRONIZE:
+            raise ValueError("unexpected CUDA synchronize source span")
+        replacements.append((start, end))
+    for start, end in sorted(replacements, reverse=True):
+        source = source[:start] + MPS_SYNCHRONIZE + source[end:]
+    return source
+
+
 def _is_cuda_attribute(node: ast.AST) -> bool:
     return isinstance(node, ast.Attribute) and node.attr == "is_cuda"
 
 
-def _is_assertion_attribute(
-    node: ast.AST, parents: dict[ast.AST, ast.AST]
-) -> bool:
+def _is_assertion_attribute(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
     """Return whether an ``.is_cuda`` attribute belongs to an ``assert`` test."""
 
     parent = parents.get(node)
@@ -156,7 +243,15 @@ def _is_cuda_assertion_spans(
         segment = ast.get_source_segment(source, node)
         if not segment or not segment.endswith(".is_cuda"):
             raise ValueError("unexpected source span for CUDA residency assertion")
-        spans.append((node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, segment))
+        spans.append(
+            (
+                node.lineno,
+                node.col_offset,
+                node.end_lineno,
+                node.end_col_offset,
+                segment,
+            )
+        )
     return spans
 
 
@@ -185,16 +280,80 @@ def _replace_is_cuda_assertions(
     return source
 
 
+def _adapt_device_cfg_oracles(source: str) -> tuple[str, int]:
+    """Adapt three assertions invalidated by portable device normalization.
+
+    The pinned CUDA class defaults to ``cuda:0`` and preserves explicit index
+    zero.  The portable class deliberately defaults to CPU and treats an
+    omitted CPU/MPS index as operationally equivalent to index zero.  Restrict
+    these oracle changes to their exact test functions; ordinary device
+    assertions, constructors, and production expressions remain untouched.
+    """
+
+    tree = ast.parse(source)
+    parents: dict[ast.AST, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+    replacements: list[tuple[int, int, str]] = []
+    lines = source.splitlines(keepends=True)
+    offsets = []
+    running = 0
+    for line in lines:
+        offsets.append(running)
+        running += len(line)
+    expected_scopes = {
+        "test_default_initialization": "assert cfg.device == torch.device('mps', 0)",
+        "test_from_basic_cpu": 'assert cfg.device == torch.device("cpu", 0)',
+        "test_from_basic_cuda": "assert cfg.device == torch.device('mps', 0)",
+    }
+    replacement_by_scope = {
+        "test_default_initialization": "assert cfg.device == torch.device('cpu')",
+        "test_from_basic_cpu": (
+            'assert cfg.is_same_torch_device(torch.device("cpu", 0))'
+        ),
+        "test_from_basic_cuda": (
+            "assert cfg.is_same_torch_device(torch.device('mps', 0))"
+        ),
+    }
+    seen: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assert):
+            continue
+        scope = parents.get(node)
+        while scope is not None and not isinstance(scope, ast.FunctionDef):
+            scope = parents.get(scope)
+        if not isinstance(scope, ast.FunctionDef) or scope.name not in expected_scopes:
+            continue
+        start = offsets[node.lineno - 1] + node.col_offset
+        end = offsets[node.end_lineno - 1] + node.end_col_offset
+        segment = source[start:end]
+        if segment != expected_scopes[scope.name]:
+            continue
+        replacements.append((start, end, replacement_by_scope[scope.name]))
+        seen.add(scope.name)
+    if seen != set(expected_scopes):
+        missing = sorted(set(expected_scopes) - seen)
+        raise ValueError(f"pinned DeviceCfg oracle shape changed: {missing}")
+    for start, end, replacement in sorted(replacements, reverse=True):
+        source = source[:start] + replacement + source[end:]
+    return source, len(replacements)
+
+
 def adapt_source(
     source: str,
     *,
     adapt_availability: bool = True,
     preserve_availability_scopes: frozenset[str] = frozenset(),
+    test_module: str | None = None,
 ) -> Adaptation:
     """Replace portable device gates and their exact residency assertions.
 
     CUDA graph, stream, event, and Warp APIs are intentionally untouched: those
     need case-level mechanism review rather than a broad textual substitution.
+    A zero-argument ``torch.cuda.synchronize()`` used only as a device timing
+    barrier follows the substituted tensor device, except in those reviewed
+    mechanism scopes.
     ``adapt_availability=False`` is the conftest mode and also leaves CUDA
     residency assertions untouched because that file's CUDA guard is intentional.
     """
@@ -230,11 +389,26 @@ def adapt_source(
         availability_count = len(spans)
         availability_preserved = total - availability_count
         adapted = _replace_spans(adapted, spans)
+    synchronize_count = 0
+    if adapt_availability:
+        synchronize_spans, _total = _synchronize_spans(
+            adapted, preserve_availability_scopes
+        )
+        synchronize_count = len(synchronize_spans)
+        adapted = _replace_synchronize_spans(adapted, synchronize_spans)
     is_cuda_assertion_count = 0
     if adapt_availability:
         is_cuda_assertion_spans = _is_cuda_assertion_spans(adapted)
         is_cuda_assertion_count = len(is_cuda_assertion_spans)
         adapted = _replace_is_cuda_assertions(adapted, is_cuda_assertion_spans)
+    oracle_count = 0
+    if test_module == "curobo.tests._src.types.test_device_cfg":
+        adapted, oracle_count = _adapt_device_cfg_oracles(adapted)
+    mechanism_scaffold_count = 0
+    if test_module == VOXEL_COLLISION_MODULE:
+        adapted, mechanism_scaffold_count = _guard_voxel_collision_mechanism_scaffold(
+            adapted
+        )
     return Adaptation(
         adapted,
         device_count,
@@ -242,4 +416,7 @@ def adapt_source(
         availability_preserved,
         helper_import_count,
         is_cuda_assertion_count,
+        synchronize_count,
+        oracle_count,
+        mechanism_scaffold_count,
     )

@@ -167,7 +167,10 @@ class _ToolPoseCostCfgPortableMixin:
 class ToolPoseCostCfg(_ToolPoseCostCfgPortableMixin, _PortableToolPoseCostCfg):
     """Configuration for multi-link goalset pose cost."""
 
-    class_type: Type[ToolPoseCost] = ToolPoseCost
+    # Upstream configuration points at the canonical interleaved cost class.
+    # Keep the compact façade import available for legacy direct callers, but
+    # do not leak it through this public factory field.
+    class_type: Type[_PinnedToolPoseCost] = _PinnedToolPoseCost
     tool_frames: Optional[List[str]] = None
     tool_pose_criteria: Dict[str, ToolPoseCriteria] = field(default_factory=dict)
     use_lie_group: bool = False

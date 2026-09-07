@@ -11,12 +11,12 @@ from curobo._src.perception.mapper.constants import MAX_POOL_IDX, REFERENCE_BLOC
 
 def test_default_budget_scales_in_voxels_then_respects_packed_pool_limit() -> None:
     assert default_max_blocks(REFERENCE_BLOCK_SIZE) == min(100_000, MAX_POOL_IDX)
-    assert default_max_blocks(REFERENCE_BLOCK_SIZE // 2) == MAX_POOL_IDX
+    assert default_max_blocks(REFERENCE_BLOCK_SIZE // 2) == min(800_000, MAX_POOL_IDX)
 
 
 def test_surface_estimate_has_a_voxel_floor_and_never_returns_reserved_pool_id() -> None:
     assert calculate_tsdf_max_blocks((16, 16, 16), 0.1, 8, 0.01, roughness=1.0) == 10_000
-    assert calculate_tsdf_max_blocks((16, 16, 16), 0.1, 4, 0.01, roughness=1.0) == MAX_POOL_IDX
+    assert calculate_tsdf_max_blocks((16, 16, 16), 0.1, 4, 0.01, roughness=1.0) == 80_000
     assert calculate_tsdf_max_blocks((100_000, 100_000, 100_000), 0.001, 1, 1.0) == MAX_POOL_IDX
 
 

@@ -354,7 +354,10 @@ class MotionPlannerCfg(_MotionPlannerCfgPortableMixin):
             robot_cfg = robot
         else:
             kin = KinematicsCfg.from_robot_yaml_file(robot, device_cfg=device_cfg)
-            robot_cfg = RobotCfg(kin.kinematics_config.robot_cfg, device_cfg=device_cfg)
+            requested_envs = max_batch_size if multi_env else 1
+            model = kin.kinematics_config.robot_cfg
+            model._curobo_num_envs = requested_envs
+            robot_cfg = RobotCfg(model, device_cfg=device_cfg)
 
         # A typed SceneCollisionCfg lets direct IKSolver/SolverCore users and
         # high-level MotionPlanner users observe the same world/cache request.

@@ -129,3 +129,14 @@ def test_filter_and_integrators_stay_on_mps_without_cpu_fallback(monkeypatch) ->
     action_result = filter_.integrate_acc(torch.ones(3, device="mps"))
     assert action_result.position.device.type == "mps"
     torch.testing.assert_close(action_result.position.cpu(), torch.full((2, 3), 0.24))
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+def test_integrator_explicit_state_device_is_not_overridden_by_default_config() -> None:
+    # The upstream integrators inherit the command-state device; device_cfg is
+    # used by filter_joint_state, not to migrate an explicitly supplied state.
+    filter_ = JointStateFilter(_cfg())
+    state = _state("mps")
+    action = torch.ones(3, device="mps")
+
+    assert filter_.integrate_acc(action, state).position.device.type == "mps"

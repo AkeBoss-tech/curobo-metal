@@ -131,7 +131,12 @@ def resolve_yaml_configs(
         kin = KinematicsCfg.from_robot_yaml_file(
             robot, device_cfg=device_cfg, load_collision_spheres=load_collision_spheres
         )
-        robot_cfg = RobotCfg(kin.kinematics_config.robot_cfg, device_cfg=device_cfg)
+        # SolverCore reconstructs KinematicsParams from the normalized tree.
+        # Carry the requested environment capacity with that tree so every
+        # reconstruction expands both the mutable and reference sphere banks.
+        model = kin.kinematics_config.robot_cfg
+        model._curobo_num_envs = num_envs
+        robot_cfg = RobotCfg(model, device_cfg=device_cfg)
     else:
         robot_value = robot if isinstance(robot, dict) else resolve_config(
             join_path(get_robot_configs_path(), robot)

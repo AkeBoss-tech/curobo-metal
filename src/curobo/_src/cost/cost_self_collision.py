@@ -16,8 +16,6 @@ import torch
 
 from curobo._src.curobolib.cuda_ops.geometry import SelfCollisionDistance
 from curobo._src.util.logging import log_and_raise
-from curobo_metal.ops.collision import sphere_sphere_signed_distance
-
 from .portable import BaseCost
 
 if TYPE_CHECKING:
@@ -124,8 +122,6 @@ class SelfCollisionCost(_SelfCollisionCostPortableMixin, BaseCost):
             raise ValueError("sphere count does not match self collision kinematics config")
         if not bool(torch.isfinite(robot_spheres).all().item()):
             raise ValueError("robot_spheres must contain only finite values")
-        if bool((robot_spheres[..., 3] < 0).any().item()):
-            raise ValueError("robot sphere radii must be non-negative")
         if self._batch_size >= 0 and robot_spheres.shape[:2] != (self._batch_size, self._horizon):
             raise ValueError("robot_spheres batch and horizon must match setup_batch_tensors")
         pairs = self._pairs(device=robot_spheres.device)
@@ -133,6 +129,13 @@ class SelfCollisionCost(_SelfCollisionCostPortableMixin, BaseCost):
             raise ValueError("collision_pairs contains an out-of-range sphere")
         if bool((pairs[:, 0] == pairs[:, 1]).any().item()):
             raise ValueError("collision_pairs cannot contain a sphere paired with itself")
+        # cuRobo represents disabled collision-sphere slots with a negative
+        # radius sentinel (normally -100).  Those slots are valid input as
+        # long as the compiled pair list does not reference them.
+        if pairs.numel() > 0:
+            paired_radii = robot_spheres[..., pairs.reshape(-1), 3]
+            if bool((paired_radii < 0).any().item()):
+                raise ValueError("enabled collision-pair radii must be non-negative")
         return True
 
     def _padding(self, spheres: torch.Tensor) -> torch.Tensor:
@@ -213,12 +216,13 @@ class SelfCollisionCost(_SelfCollisionCostPortableMixin, BaseCost):
             return robot_spheres[..., 0].sum(dim=-1, keepdim=True) * 0
 
         flat = robot_spheres.reshape(batch * horizon, robot_spheres.shape[-2], 4)
-        # This call supplies the shared input and pair validation, first-tie
-        # convention, and fused MPS autograd path.  We reconstruct the exact
-        # V2 squared-overlap objective from its signed clearance.
-        signed = sphere_sphere_signed_distance(flat, pairs).distances
+        # Work only on enabled pairs.  The full sphere array can contain
+        # cuRobo's negative-radius sentinel for disabled slots, which generic
+        # sphere-distance APIs correctly reject as geometry but the compiled
+        # self-collision topology intentionally excludes.
+        delta = flat[:, pairs[:, 0], :3] - flat[:, pairs[:, 1], :3]
+        length = torch.linalg.vector_norm(delta, dim=-1)
         radius_sum = flat[:, pairs[:, 0], 3] + flat[:, pairs[:, 1], 3]
-        length = signed + radius_sum
         padding = self._padding(robot_spheres)
         effective_radius = radius_sum + padding[pairs[:, 0]] + padding[pairs[:, 1]]
         overlap = effective_radius.square() - length.square()

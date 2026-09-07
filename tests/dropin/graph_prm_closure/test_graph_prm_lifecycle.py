@@ -28,7 +28,9 @@ def test_indexed_roadmap_graph_is_weighted_deterministic_and_resettable() -> Non
     planner = _planner()
     planner._append_samples(torch.tensor([[-0.9], [-0.3], [0.3], [0.9]]))
 
+    assert planner._compat_graph_generation != planner._generation
     assert planner.graph_path_finder.graph.number_of_nodes() == 4
+    assert planner._compat_graph_generation == planner._generation
     exists, labels = planner._check_paths_exist([0, 0], [3, 2], require_all_paths=True)
     assert exists is True
     assert labels == [True, True]
@@ -46,6 +48,67 @@ def test_indexed_roadmap_graph_is_weighted_deterministic_and_resettable() -> Non
     assert planner.n_nodes == 0
     assert planner.graph_path_finder.graph.number_of_nodes() == 0
     assert planner._check_paths_exist([0], [3]) == (False, [False])
+
+
+def test_repeated_extensions_defer_one_compatibility_rebuild_until_observed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = _planner()
+    refresh_count = 0
+    original_refresh = planner._refresh_compat_graph
+
+    def counted_refresh() -> None:
+        nonlocal refresh_count
+        refresh_count += 1
+        original_refresh()
+
+    monkeypatch.setattr(planner, "_refresh_compat_graph", counted_refresh)
+    planner._append_samples(torch.tensor([[-0.9], [-0.3]]))
+    planner._append_samples(torch.tensor([[0.3], [0.9]]))
+    assert refresh_count == 0
+
+    assert planner.graph_path_finder.graph.number_of_nodes() == 4
+    assert refresh_count == 1
+    assert planner.graph_path_finder.graph.number_of_edges() > 0
+    assert refresh_count == 1
+
+
+def test_auto_reset_discards_dirty_compatibility_graph_without_building_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = PRMGraphPlanner(
+        PRMGraphPlannerCfg(
+            max_nodes=40,
+            action_lower_bounds=torch.tensor([-1.0]),
+            action_upper_bounds=torch.tensor([1.0]),
+            new_nodes_per_iteration=0,
+            neighbors_per_node=2,
+            use_cuda_graph_for_rollout=False,
+        )
+    )
+    refresh_count = 0
+    original_refresh = planner._refresh_compat_graph
+
+    def counted_refresh() -> None:
+        nonlocal refresh_count
+        refresh_count += 1
+        original_refresh()
+
+    monkeypatch.setattr(planner, "_refresh_compat_graph", counted_refresh)
+    for _ in range(4):
+        planner.extend_roadmap_with_random_samples(8, neighbors_per_node=2)
+    assert planner.n_nodes == 32
+    assert refresh_count == 0
+
+    result = planner.find_path(
+        torch.tensor([[-0.8]]),
+        torch.tensor([[0.8]]),
+        interpolate_waypoints=False,
+    )
+    assert result.success.tolist() == [True]
+    assert planner.n_nodes == 0
+    assert refresh_count == 0
+    assert planner.graph_path_finder.graph.number_of_nodes() == 0
 
 
 def test_indexed_roadmap_rechecks_edge_feasibility_and_keeps_partial_connectivity() -> None:

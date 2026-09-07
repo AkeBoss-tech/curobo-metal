@@ -56,6 +56,25 @@ def test_extension_obeys_feasibility_bounds_and_capacity() -> None:
     assert bool(feasible(samples).all())
     assert bool(((samples >= -1) & (samples <= 1)).all())
 
+
+def test_default_rejection_sampling_stops_after_first_sufficient_chunk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = PRMGraphPlanner(_cfg())
+    seen_batch_sizes: list[int] = []
+
+    def feasible(points: torch.Tensor) -> torch.Tensor:
+        seen_batch_sizes.append(points.shape[0])
+        return torch.ones(points.shape[0], dtype=torch.bool, device=points.device)
+
+    # Model the pure rollout path rather than the observable user callback
+    # path, which intentionally retains one full batched invocation.
+    monkeypatch.setattr(planner, "check_samples_feasibility", feasible)
+    planner.config.check_feasibility_fn = None
+    samples = planner._feasible_random_samples(8)
+    assert samples.shape == (8, 2)
+    assert seen_batch_sizes == [8]
+
     full = PRMGraphPlanner(_cfg(max_nodes=4))
     full.extend_roadmap_with_random_samples(4)
     with pytest.raises(ValueError, match="capacity"):
@@ -98,6 +117,27 @@ def test_find_path_preserves_pinned_batch_validity_and_interpolation_contract() 
         planner.get_interpolated_trajectory(paths, success, 7, TrajInterpolationType.LINEAR_CUDA)
 
 
+def test_batch_direct_connections_are_checked_in_one_feasibility_call() -> None:
+    calls: list[int] = []
+
+    def feasible(points: torch.Tensor) -> torch.Tensor:
+        calls.append(points.shape[0])
+        return torch.ones(points.shape[0], dtype=torch.bool, device=points.device)
+
+    planner = PRMGraphPlanner(_cfg(feasible=feasible, new_nodes=4))
+    starts = torch.tensor([[-0.8, -0.2], [-0.7, 0.1], [-0.6, 0.3]])
+    goals = torch.tensor([[0.8, 0.2], [0.7, -0.1], [0.6, -0.3]])
+    result = planner.find_path(starts, goals, interpolate_waypoints=False)
+
+    assert result.success.tolist() == [True, True, True]
+    # One endpoint batch and one concatenated edge batch; no per-query graph
+    # rollout or unnecessary roadmap growth is performed.
+    assert len(calls) == 2
+    assert calls[0] == 6
+    assert calls[1] > 6
+    assert planner.n_nodes == 0
+
+
 def test_strict_tensor_ranks_and_warmup_lifecycle() -> None:
     planner = PRMGraphPlanner(_cfg(new_nodes=2))
     with pytest.raises(ValueError, match="2D"):
@@ -106,8 +146,7 @@ def test_strict_tensor_ranks_and_warmup_lifecycle() -> None:
         planner.find_path(torch.zeros(1, 2), torch.ones(2, 2))
     planner.warmup(num_warmup_iterations=2, max_batch_size=1)
     assert planner.n_nodes == 0
-    with pytest.raises(NotImplementedError, match="CUDA graph"):
-        planner.reset_cuda_graph()
+    assert planner.reset_cuda_graph() is None
 
 
 def test_query_growth_retains_deterministic_roadmap_and_honors_neighbor_policy() -> None:

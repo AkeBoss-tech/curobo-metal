@@ -85,6 +85,17 @@ def test_rejects_missing_config_and_invalid_pairs() -> None:
         SelfCollisionCost(config)(_spheres())
 
 
+def test_disabled_sphere_radius_sentinel_is_ignored_outside_enabled_pairs() -> None:
+    config = _cfg()
+    config.self_collision_kin_config.collision_pairs = torch.tensor([[0, 1]])
+    spheres = _spheres()
+    spheres[..., 2, 3] = -100.0
+
+    value = SelfCollisionCost(config)(spheres)
+
+    torch.testing.assert_close(value, torch.tensor([[[0.08]]]))
+
+
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple Metal")
 def test_mps_self_collision_is_resident_and_differentiable() -> None:
     spheres = _spheres(torch.device("mps"), requires_grad=True)

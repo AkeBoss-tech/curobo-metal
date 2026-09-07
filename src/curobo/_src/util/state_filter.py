@@ -57,9 +57,10 @@ class FilterCfg:
 class JointStateFilter(FilterCfg):
     """Stateful low-pass filtering plus position/velocity/acceleration steps.
 
-    The object owns one command state.  Every enabled ingress is converted to
-    the configured portable device, while output tensors retain normal PyTorch
-    autograd edges.  Integrators accept a ``[dof]`` action, or any action
+    The object owns one command state.  Filtering ingress is converted to the
+    configured portable device; explicit states supplied to the integrators
+    retain their own device, matching upstream command integration semantics.
+    Output tensors retain normal PyTorch autograd edges. Integrators accept a ``[dof]`` action, or any action
     broadcastable to the current state shape, which covers batched and
     batch-by-horizon command buffers without special CUDA kernels.
     """
@@ -128,7 +129,6 @@ class JointStateFilter(FilterCfg):
         if state is not None:
             if not isinstance(state, JointState):
                 raise TypeError("cmd_joint_state must be a JointState")
-            state = state.to(self.device_cfg)
             if self.cmd_joint_state is None:
                 self.cmd_joint_state = state.clone()
             else:

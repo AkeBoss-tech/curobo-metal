@@ -388,10 +388,16 @@ def make_block_sparse_kernels(
     _validate_feature_grid_shape(feature_dim, fg_h, fg_w)
     if seeding_method is not None and seeding_method not in {"gather", "scatter"}:
         raise ValueError("seeding_method must be 'gather' or 'scatter'")
+    num_cameras = int(_resolve(cfg, "num_cameras", 1) or 1)
+    image_height = int(_resolve(cfg, "image_height", 1) or 1)
+    image_width = int(_resolve(cfg, "image_width", 1) or 1)
+    texture_num_cameras = int(_resolve(cfg, "texture_num_cameras", num_cameras) or num_cameras)
+    texture_height = int(_resolve(cfg, "texture_camera_image_height", image_height) or image_height)
+    texture_width = int(_resolve(cfg, "texture_camera_image_width", image_width) or image_width)
     values = {
         "block_size": size, "feature_dim": feature_dim,
-        "num_cameras": int(_resolve(cfg, "num_cameras", 1)), "image_height": int(_resolve(cfg, "image_height", 1)), "image_width": int(_resolve(cfg, "image_width", 1)),
-        "texture_num_cameras": int(_resolve(cfg, "texture_num_cameras", _resolve(cfg, "num_cameras", 1))), "texture_camera_image_height": int(_resolve(cfg, "texture_camera_image_height", _resolve(cfg, "image_height", 1))), "texture_camera_image_width": int(_resolve(cfg, "texture_camera_image_width", _resolve(cfg, "image_width", 1))),
+        "num_cameras": num_cameras, "image_height": image_height, "image_width": image_width,
+        "texture_num_cameras": texture_num_cameras, "texture_camera_image_height": texture_height, "texture_camera_image_width": texture_width,
         "lidar_num_sensors": int(_resolve(cfg, "lidar_num_sensors", 0)), "lidar_image_height": int(_resolve(cfg, "lidar_image_height", 1) or 1), "lidar_image_width": int(_resolve(cfg, "lidar_image_width", 1) or 1),
         "num_samples": int(_resolve(cfg, "num_samples", max(1, math.ceil(2 * trunc / max(voxel * size, 1e-9)) + 1))),
         "grid_shape": grid, "origin_xyz": origin, "voxel_size": voxel, "truncation_distance": trunc,

@@ -37,6 +37,31 @@ def test_content_and_content_path_are_installed_package_relative() -> None:
     assert ContentPath().robot_config_root_path == get_robot_configs_path()
 
 
+def test_all_upstream_task_configs_are_present_and_parseable() -> None:
+    expected = {
+        "metrics_base.yml",
+        "graph_planner/exact_graph_planner.yml",
+        "graph_planner/transition_graph_planner.yml",
+        "ik/lbfgs_ik.yml",
+        "ik/lbfgs_retarget_ik.yml",
+        "ik/particle_ik.yml",
+        "ik/transition_ik.yml",
+        "mpc/lbfgs_mpc.yml",
+        "mpc/lbfgs_retarget_mpc.yml",
+        "mpc/transition_bspline_mpc.yml",
+        "trajopt/lbfgs_bspline_trajopt.yml",
+        "trajopt/particle_trajopt.yml",
+        "trajopt/transition_bspline_trajopt.yml",
+    }
+    task_root = get_task_configs_path()
+    actual = {
+        path.relative_to(task_root).as_posix() for path in task_root.rglob("*.yml")
+    }
+    assert actual == expected
+    for relative in expected:
+        assert isinstance(load_yaml(str(task_root / relative)), dict)
+
+
 def test_public_config_and_scene_types_support_normal_consumer_flow(tmp_path: Path) -> None:
     source = tmp_path / "scene.yml"
     write_yaml({"cuboid": {"table": {"dims": [1.0, 2.0, 0.1]}}}, str(source))
@@ -73,7 +98,14 @@ def test_public_timer_uses_seconds_and_honors_runtime_disable() -> None:
         internal_runtime.cuda_event_timers = prior
 
 
-@pytest.mark.parametrize("factory, dependency", [(UsdWriter, "usd-core"), (ViserVisualizer, "Viser")])
-def test_optional_public_viewers_fail_explicitly_without_extra_dependencies(factory, dependency: str) -> None:
-    with pytest.raises((ImportError, NotImplementedError), match=dependency):
-        factory()
+def test_optional_public_usd_viewer_fails_explicitly_without_dependency() -> None:
+    with pytest.raises((ImportError, NotImplementedError), match="usd-core"):
+        UsdWriter()
+
+
+def test_optional_public_viser_viewer_fails_explicitly_without_dependency(monkeypatch) -> None:
+    import curobo._src.util.viser_visualizer as implementation
+
+    monkeypatch.setattr(implementation, "viser", None)
+    with pytest.raises(ImportError, match="Viser"):
+        ViserVisualizer()

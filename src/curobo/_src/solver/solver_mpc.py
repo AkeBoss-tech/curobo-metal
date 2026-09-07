@@ -237,10 +237,6 @@ class MPCSolver:
             raise ValueError("tool_frames must not be empty")
         if not set(frames).issubset(self.tool_frames):
             raise ValueError(f"tool_frames must be a subset of {self.tool_frames}")
-        if len(frames) != 1:
-            raise NotImplementedError(
-                "portable MPC supports one tracked tool frame; multi-tool tracking is unavailable"
-            )
         current_state.dt = self._normalise_dt(dt, current_state, batch_size)
         mode = (
             SolveMode.MULTI_ENV if self.config.multi_env else
@@ -805,8 +801,10 @@ class MPCSolver:
             raise NotImplementedError("portable MPC supports a single-time pose goal")
         if goal.num_goalset != 1:
             raise NotImplementedError("portable MPC supports one pose goal per robot")
-        if goal.num_links != 1:
-            raise NotImplementedError("portable MPC supports one tracked tool frame")
+        if goal.num_links != len(self._solve_state.tool_frames):
+            raise ValueError(
+                "goal pose link count must match the configured tracked tool frames"
+            )
         if goal.tool_frames != self._solve_state.tool_frames:
             raise ValueError(f"goal tool frame must be {self._solve_state.tool_frames}")
         if goal.batch_size != self.problem_batch_size:

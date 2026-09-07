@@ -40,7 +40,7 @@ def test_debugger_sampling_is_seeded_and_exports_json_safe_inspection_artifacts(
     assert artifact["last_result"]["num_spheres"] == 65
 
 
-def test_debugger_rejects_invalid_joint_data_and_external_backends_explicitly():
+def test_debugger_rejects_invalid_joint_data_and_supports_optional_viser():
     debugger = RobotDebugger("franka.yml")
     with pytest.raises(ValueError, match="elements"):
         debugger.check_collision_at_config([0.0])
@@ -50,8 +50,9 @@ def test_debugger_rejects_invalid_joint_data_and_external_backends_explicitly():
         debugger.sample_collision_checks(num_samples=0)
     with pytest.raises(FileNotFoundError):
         RobotDebugger.from_xrdf("robot.xrdf")
-    with pytest.raises((ImportError, NotImplementedError), match="Viser|Viser robot adapter"):
-        debugger.visualize_collision_at_config(torch.zeros(7))
+    visualizer = debugger.visualize_collision_at_config(torch.zeros(7))
+    assert visualizer.joint_names == debugger.robot_model.joint_names
+    visualizer._server.stop()
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")

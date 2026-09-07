@@ -68,14 +68,14 @@ def test_transform_quaternion_and_camera_helpers_are_differentiable():
 
 
 def test_depth_filter_and_mapper_lifecycle(tmp_path):
-    depth = torch.ones(4,4)
+    depth = torch.ones(1, 4, 4)
     filtered, valid = FilterDepth((4,4), device="cpu")(depth)
     assert valid.all() and torch.equal(filtered, depth)
 
     cfg = MapperCfg((.2,.2,.2), voxel_size=.05, device="cpu", image_height=4, image_width=4)
     mapper = Mapper(cfg)
     camera = CameraObservation(
-        depth_image=depth,
+        depth_image=depth[0],
         intrinsics=torch.tensor([[10.,0,1.5],[0,10.,1.5],[0,0,1.]]),
         pose=Pose.from_list([0,0,-.2,1,0,0,0]),
         depth_to_meter=1.,

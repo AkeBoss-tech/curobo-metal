@@ -3,22 +3,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from importlib.metadata import packages_distributions, version
+from pathlib import Path
 
 import torch
 
 import curobo
-from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
-from curobo.content import get_assets_path, get_robot_path
-from curobo.inverse_kinematics import InverseKinematics, InverseKinematicsCfg
-from curobo.kinematics import Kinematics, KinematicsCfg
-from curobo.motion_planner import MotionPlanner, MotionPlannerCfg
-from curobo.optim import LBFGSOptCfg, MPPICfg
-from curobo.perception import Mapper, MapperCfg
-from curobo.robot_builder import RobotBuilder
-from curobo.robot_parser import UrdfRobotParser
-from curobo._src.robot.loader import KinematicsLoader
 from curobo._src.collision.attachment_manager import AttachmentManager
 from curobo._src.curobolib.cuda_ops.tensor_checks import check_float32_tensors
 from curobo._src.geom.convex_polygon_helper import ConvexPolygon2DHelper
@@ -26,8 +16,18 @@ from curobo._src.optim.gradient.gradient_descent import GradientDescentOpt
 from curobo._src.perception.mapper.integrator_esdf import (
     BlockSparseESDFIntegratorCfg,
 )
+from curobo._src.robot.loader import KinematicsLoader
 from curobo._src.util.cuda_graph_util import create_graph_executor
 from curobo._src.util.sampling.sequencer_halton import HaltonSequencer
+from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
+from curobo.content import get_assets_path, get_robot_path, get_task_configs_path
+from curobo.inverse_kinematics import InverseKinematics, InverseKinematicsCfg
+from curobo.kinematics import Kinematics, KinematicsCfg
+from curobo.motion_planner import MotionPlanner, MotionPlannerCfg
+from curobo.optim import LBFGSOptCfg, MPPICfg
+from curobo.perception import Mapper, MapperCfg
+from curobo.robot_builder import RobotBuilder
+from curobo.robot_parser import UrdfRobotParser
 from curobo.rollout import RosenbrockCfg, RosenbrockRollout
 from curobo.scene import Cuboid, Scene
 from curobo.sphere_fit import SphereFitType
@@ -51,6 +51,30 @@ def main() -> None:
     urdf = get_assets_path() / config["urdf_path"]
     assert robot_config.is_file(), robot_config
     assert urdf.is_file(), urdf
+
+    # Solver and rollout constructors resolve these files lazily.  Checking only
+    # the robot assets lets a wheel import successfully and then fail when a
+    # consumer first creates an IK/MPC/trajectory rollout.
+    task_configs = get_task_configs_path()
+    required_task_configs = (
+        "metrics_base.yml",
+        "graph_planner/exact_graph_planner.yml",
+        "graph_planner/transition_graph_planner.yml",
+        "ik/lbfgs_ik.yml",
+        "ik/lbfgs_retarget_ik.yml",
+        "ik/particle_ik.yml",
+        "ik/transition_ik.yml",
+        "mpc/lbfgs_mpc.yml",
+        "mpc/lbfgs_retarget_mpc.yml",
+        "mpc/transition_bspline_mpc.yml",
+        "trajopt/lbfgs_bspline_trajopt.yml",
+        "trajopt/particle_trajopt.yml",
+        "trajopt/transition_bspline_trajopt.yml",
+    )
+    for relative in required_task_configs:
+        task_config = task_configs / relative
+        assert task_config.is_file(), task_config
+        assert isinstance(load_yaml(str(task_config)), dict), task_config
 
     device_cfg = DeviceCfg(torch.device("cpu"), torch.float32)
     pose = Pose.from_list([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], device_cfg)

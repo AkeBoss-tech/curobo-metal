@@ -37,7 +37,9 @@ from curobo._src.util.cuda_event_timer import CudaEventTimer
 from curobo._src.util.logging import log_and_raise, log_warn
 from curobo._src.util.trajectory import TrajInterpolationType, linear_smooth
 from curobo_metal.ops.graph_planning import (
+    GraphPlanningResult,
     GraphPlanningProblem,
+    PlanningMetrics,
     PersistentRoadmap,
     interpolate_edge,
 )
@@ -117,6 +119,8 @@ class PRMGraphPlanner:
         # for callers that extend a roadmap and inspect/find paths by node
         # index, without pretending that it is a CUDA/Warp graph buffer.
         self.graph_path_finder = NetworkXPathFinder(seed=int(config.graph_path_finder_seed))
+        self._materializing_compat_graph = False
+        self.graph_path_finder.set_update_callback(self._ensure_compat_graph)
         self.path_pruner = PathPruner(config, self.device_cfg)
         self.linear_connector = LinearConnector(config, self.device_cfg)
         self.distance_calculator = DistanceNeighborCalculator(
@@ -245,9 +249,18 @@ class PRMGraphPlanner:
         # shape entries without discarding the PersistentRoadmap object itself.
         self._roadmap.cache.reset()
         self._generation += 1
-        # Keep the indexed inspection graph in sync for callers that inspect
-        # ``graph_path_finder.graph`` immediately after appending nodes.
-        self._refresh_compat_graph()
+        # Compatibility edges are expensive to construct and are irrelevant
+        # to the production query backend.  Leave the generation dirty; the
+        # path finder's graph view invokes ``_ensure_compat_graph`` before any
+        # observable read, so callers still see the complete current graph.
+
+    def _ensure_compat_graph(self) -> None:
+        """Materialize the current inspectable graph exactly once on demand."""
+        if (
+            not self._materializing_compat_graph
+            and self._compat_graph_generation != self._generation
+        ):
+            self._refresh_compat_graph()
 
     def _compat_candidate_pairs(self, samples: torch.Tensor) -> list[tuple[int, int]]:
         """Return stable weighted-kNN pairs for the observable PRM graph.
@@ -289,26 +302,32 @@ class PRMGraphPlanner:
         """
         if self._compat_graph_generation == self._generation:
             return
-        self.graph_path_finder.reset_graph()
-        samples = self._roadmap_samples
-        if samples is None or samples.shape[0] == 0:
+        self._materializing_compat_graph = True
+        try:
+            self.graph_path_finder.reset_graph()
+            samples = self._roadmap_samples
+            if samples is None or samples.shape[0] == 0:
+                self._compat_graph_generation = self._generation
+                return
+            self.graph_path_finder.add_nodes(range(samples.shape[0]))
+            pairs = self._compat_candidate_pairs(samples)
+            if pairs:
+                pieces = [interpolate_edge(samples[left], samples[right], self.config.edge_step)
+                          for left, right in pairs]
+                lengths = [piece.shape[0] for piece in pieces]
+                mask = self.check_samples_feasibility(torch.cat(pieces, dim=0))
+                for (left, right), valid in zip(pairs, torch.split(mask, lengths)):
+                    if bool(valid.all().item()):
+                        distance = torch.linalg.vector_norm(
+                            (samples[right] - samples[left]) * self.cspace_distance_weight
+                        )
+                        self.graph_path_finder.add_edge(left, right, float(distance.item()))
+            # Mark the generation current before committing staged nodes and
+            # edges so the path finder's callback cannot recursively rebuild.
             self._compat_graph_generation = self._generation
-            return
-        self.graph_path_finder.add_nodes(range(samples.shape[0]))
-        pairs = self._compat_candidate_pairs(samples)
-        if pairs:
-            pieces = [interpolate_edge(samples[left], samples[right], self.config.edge_step)
-                      for left, right in pairs]
-            lengths = [piece.shape[0] for piece in pieces]
-            mask = self.check_samples_feasibility(torch.cat(pieces, dim=0))
-            for (left, right), valid in zip(pairs, torch.split(mask, lengths)):
-                if bool(valid.all().item()):
-                    distance = torch.linalg.vector_norm(
-                        (samples[right] - samples[left]) * self.cspace_distance_weight
-                    )
-                    self.graph_path_finder.add_edge(left, right, float(distance.item()))
-        self.graph_path_finder.update_graph()
-        self._compat_graph_generation = self._generation
+            self.graph_path_finder.update_graph()
+        finally:
+            self._materializing_compat_graph = False
 
     def _set_roadmap_neighbors_per_node(self, value: int) -> None:
         """Increase the persistent roadmap's neighbour policy and rebuild it.
@@ -385,8 +404,33 @@ class PRMGraphPlanner:
             return self.action_bound_lows.new_empty((0, self.action_dim))
         requested = max(count, count * max(1, int(self.config.sample_rejection_ratio)))
         candidates = self._random_samples(requested)
-        feasible = self.check_samples_feasibility(candidates)
-        return candidates[feasible][:count]
+        return self._take_first_feasible(candidates, count)
+
+    def _take_first_feasible(self, candidates: torch.Tensor, count: int) -> torch.Tensor:
+        """Return the same first feasible rows without evaluating an unused tail.
+
+        Rejection sampling deliberately generates the full deterministic
+        candidate stream.  On real robot rollouts, however, evaluating ten
+        times the requested count after enough valid rows are already known
+        is pure wasted collision work.  Chunking preserves the selected rows
+        exactly.  User callbacks retain their historical single batched call
+        because they may intentionally observe invocation shape or count.
+        """
+        if self.config.check_feasibility_fn is not None or candidates.shape[0] <= count:
+            return candidates[self.check_samples_feasibility(candidates)][:count]
+        accepted: list[torch.Tensor] = []
+        accepted_count = 0
+        chunk_size = max(1, count)
+        for start in range(0, candidates.shape[0], chunk_size):
+            chunk = candidates[start : start + chunk_size]
+            selected = chunk[self.check_samples_feasibility(chunk)]
+            accepted.append(selected)
+            accepted_count += int(selected.shape[0])
+            if accepted_count >= count:
+                break
+        if not accepted:
+            return candidates[:0]
+        return torch.cat(accepted, dim=0)[:count]
 
     def _ellipsoidal_samples(
         self,
@@ -418,7 +462,7 @@ class PRMGraphPlanner:
         midpoint = (x_start + x_goal) * 0.5
         points = midpoint + unit * radius
         points = torch.maximum(torch.minimum(points, self.action_bound_highs), self.action_bound_lows)
-        return points[self.check_samples_feasibility(points)][:count]
+        return self._take_first_feasible(points, count)
 
     @staticmethod
     def _sample_cache_key(problem: GraphPlanningProblem, batch_index: int, dof: int) -> tuple[object, ...]:
@@ -525,6 +569,42 @@ class PRMGraphPlanner:
             self._set_roadmap_neighbors_per_node(neighbors)
         return backend
 
+    def _plan_direct_connections(
+        self, x_start: torch.Tensor, x_goal: torch.Tensor
+    ) -> tuple[torch.Tensor, list[torch.Tensor], list[PlanningMetrics]]:
+        """Collision-check every terminal edge in one device rollout.
+
+        ``plan_graph`` eventually performs the same check independently for
+        every batch member.  Doing it once here preserves the chosen direct
+        path while avoiding repeated robot rollout setup and lets later PRM
+        growth operate only on genuinely blocked queries.
+        """
+        pieces = [
+            interpolate_edge(x_start[index], x_goal[index], self.config.edge_step)
+            for index in range(x_start.shape[0])
+        ]
+        lengths = [piece.shape[0] for piece in pieces]
+        validity = self.check_samples_feasibility(torch.cat(pieces, dim=0))
+        success = torch.stack(
+            [chunk.all() for chunk in torch.split(validity, lengths)]
+        ).to(dtype=torch.bool, device=x_start.device)
+        sample_count = self._candidate_count()
+        metrics = []
+        for index, piece in enumerate(pieces):
+            cost = float(torch.linalg.vector_norm(x_goal[index] - x_start[index]).item())
+            metrics.append(
+                PlanningMetrics(
+                    samples_requested=sample_count,
+                    samples_valid=self.n_nodes,
+                    validity_queries=int(piece.shape[0]) + 2,
+                    edge_checks=1,
+                    edges_valid=int(success[index].item()),
+                    nodes_expanded=2 if bool(success[index].item()) else 1,
+                    path_cost=cost if bool(success[index].item()) else float("inf"),
+                )
+            )
+        return success, pieces, metrics
+
     def _interpolate_paths(
         self,
         paths: List[torch.Tensor | None],
@@ -591,7 +671,57 @@ class PRMGraphPlanner:
                 False, "Start or End state in collision",
             )
 
-        backend = self._plan_with_growth(x_start, x_goal)
+        direct_success, direct_paths, direct_metrics = self._plan_direct_connections(
+            x_start, x_goal
+        )
+        failed_indices = torch.nonzero(~direct_success, as_tuple=False).flatten()
+        if failed_indices.numel() == 0:
+            backend = GraphPlanningResult(
+                success=direct_success,
+                status=tuple("direct_success" for _ in direct_paths),
+                paths=tuple(direct_paths),
+                roadmap_paths=tuple(
+                    torch.stack((x_start[index], x_goal[index]))
+                    for index in range(x_start.shape[0])
+                ),
+                metrics=tuple(direct_metrics),
+            )
+            self._last_backend = backend
+        else:
+            failed_backend = self._plan_with_growth(
+                x_start[failed_indices], x_goal[failed_indices]
+            )
+            failed_lookup = {
+                int(batch_index): failed_index
+                for failed_index, batch_index in enumerate(failed_indices.tolist())
+            }
+            statuses: list[str] = []
+            paths: list[torch.Tensor] = []
+            roadmap_paths: list[torch.Tensor] = []
+            metrics: list[PlanningMetrics] = []
+            success_values: list[torch.Tensor] = []
+            for batch_index in range(x_start.shape[0]):
+                failed_index = failed_lookup.get(batch_index)
+                if failed_index is None:
+                    statuses.append("direct_success")
+                    paths.append(direct_paths[batch_index])
+                    roadmap_paths.append(torch.stack((x_start[batch_index], x_goal[batch_index])))
+                    metrics.append(direct_metrics[batch_index])
+                    success_values.append(direct_success[batch_index])
+                else:
+                    statuses.append(failed_backend.status[failed_index])
+                    paths.append(failed_backend.paths[failed_index])
+                    roadmap_paths.append(failed_backend.roadmap_paths[failed_index])
+                    metrics.append(failed_backend.metrics[failed_index])
+                    success_values.append(failed_backend.success[failed_index])
+            backend = GraphPlanningResult(
+                success=torch.stack(success_values),
+                status=tuple(statuses),
+                paths=tuple(paths),
+                roadmap_paths=tuple(roadmap_paths),
+                metrics=tuple(metrics),
+            )
+            self._last_backend = backend
         plans: List[torch.Tensor | None] = [
             path if bool(ok) else None for path, ok in zip(backend.roadmap_paths, backend.success)
         ]
@@ -709,7 +839,23 @@ class PRMGraphPlanner:
         )
 
     def reset_cuda_graph(self):
-        raise NotImplementedError("CUDA graph capture is unavailable on CPU/MPS")
+        """Reset rollout capture state when present; otherwise remain a no-op.
+
+        Metal never creates a CUDA graph, but upstream permits this lifecycle
+        method on the ordinary non-captured rollout.  Resetting absent state
+        is therefore harmless and distinct from requesting CUDA capture.
+        """
+        for rollout in self.get_all_rollout_instances():
+            reset = getattr(rollout, "reset_cuda_graph", None)
+            if reset is None:
+                continue
+            try:
+                reset()
+            except NotImplementedError:
+                # The portable rollout correctly rejects actual CUDA capture;
+                # the PRM wrapper has no captured state that needs clearing.
+                pass
+        return None
 
     def get_all_rollout_instances(self) -> List[RobotRollout]:
         return [rollout for rollout in (self.feasibility_rollout, self.auxiliary_rollout)

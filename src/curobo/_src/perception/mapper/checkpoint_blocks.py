@@ -17,6 +17,7 @@ import torch
 
 from curobo._src.perception.mapper.constants import (
     DEFAULT_HASH_LAYOUT,
+    MAX_POOL_IDX,
     PY_HASH_EMPTY,
     PY_HASH_PRIME_X,
     PY_HASH_PRIME_Y,
@@ -50,15 +51,23 @@ def build_block_metadata(tsdf) -> Dict[str, Any]:
     grid_shape = tuple(int(x) for x in _value(
         tsdf, "grid_shape", _value(config, "grid_shape", state_tensor.shape[-3:])
     ))
-    center = _value(tsdf, "grid_center", _value(config, "grid_center", (0.0, 0.0, 0.0)))
+    center = _value(
+        tsdf,
+        "grid_center",
+        _value(
+            tsdf,
+            "_grid_center",
+            _value(config, "grid_center", _value(config, "origin", (0.0, 0.0, 0.0))),
+        ),
+    )
     return {
         "voxel_size": float(_value(tsdf, "voxel_size", _value(config, "voxel_size", 1.0))),
         "block_size": int(_value(tsdf, "block_size", _value(config, "block_size", 8))),
         "truncation_distance": float(_value(tsdf, "truncation_distance", _value(config, "truncation_distance", 0.04))),
         "grid_center": [float(x) for x in torch.as_tensor(center).reshape(-1).tolist()[:3]],
         "grid_shape": list(grid_shape),
-        "has_dynamic": True,
-        "has_static": False,
+        "has_dynamic": bool(_value(tsdf, "has_dynamic", _value(config, "enable_dynamic", True))),
+        "has_static": bool(_value(tsdf, "has_static", _value(config, "enable_static", False))),
         "feature_dim": int(_value(tsdf, "feature_dim", 0)),
         "feature_block_grid_size": int(_value(tsdf, "feature_block_grid_size", 1)),
         "color_grid_size": int(_value(tsdf, "color_grid_size", 1)),
@@ -110,8 +119,12 @@ def validate_block_checkpoint(checkpoint: Any) -> None:
 def validate_block_metadata(block_metadata: Any) -> None:
     if not isinstance(block_metadata, dict):
         raise ValueError("block_metadata must be a dictionary")
-    if set(block_metadata) != BLOCK_METADATA_KEYS:
-        raise ValueError("block_metadata fields do not match the portable checkpoint schema")
+    extra = set(block_metadata) - BLOCK_METADATA_KEYS
+    if extra:
+        raise ValueError(f"block_metadata contains unsupported fields: {sorted(extra)}")
+    missing = BLOCK_METADATA_KEYS - set(block_metadata)
+    if missing:
+        raise ValueError(f"block_metadata is missing required fields: {sorted(missing)}")
     require_positive_float(block_metadata, "voxel_size")
     require_positive_float(block_metadata, "truncation_distance")
     require_positive_int(block_metadata, "block_size")
@@ -201,8 +214,12 @@ def validate_sparse_block_payload(blocks: Dict[str, torch.Tensor], block_metadat
     if block_metadata["has_static"]:
         expected.add("static_block_data")
         require_shape(require_tensor(blocks, "static_block_data", torch.float16), "static_block_data", (count, block_voxels))
-    if set(blocks) != expected:
-        raise ValueError("sparse block payload fields do not match checkpoint metadata")
+    extra = set(blocks) - expected
+    if extra:
+        raise ValueError(f"sparse block payload contains unsupported fields: {sorted(extra)}")
+    missing = expected - set(blocks)
+    if missing:
+        raise ValueError(f"sparse block payload is missing required fields: {sorted(missing)}")
 
 
 def validate_block_metadata_for_target(block_metadata: Dict[str, Any], tsdf) -> None:
@@ -229,13 +246,31 @@ def signed_int64_from_uint64(value: int) -> int:
 
 
 def pack_hash_entry_host(bx: int, by: int, bz: int, pool_idx: int) -> int:
-    """Stable portable host hash packing; this is not a Warp ABI promise."""
-    for coordinate in (bx, by, bz):
-        if not -(1 << 15) <= int(coordinate) < (1 << 15):
-            raise ValueError("block coordinate is outside the portable int16 hash range")
-    if not 0 <= int(pool_idx) < (1 << 16):
-        raise ValueError("pool_idx is outside the portable uint16 hash range")
-    packed = (((int(bx) + (1 << 15)) & 0xFFFF) << 48) | (((int(by) + (1 << 15)) & 0xFFFF) << 32) | (((int(bz) + (1 << 15)) & 0xFFFF) << 16) | int(pool_idx)
+    """Pack one entry using cuRobo's public 13/13/13/25 hash layout."""
+    layout = DEFAULT_HASH_LAYOUT
+    coordinates = (int(bx), int(by), int(bz))
+    for coordinate, lower, upper in zip(
+        coordinates, layout.coord_min_xyz, layout.coord_max_xyz
+    ):
+        if not lower <= coordinate <= upper:
+            raise ValueError(
+                f"block coordinate is outside the {layout.name} hash range"
+            )
+    pool_idx = int(pool_idx)
+    if not 0 <= pool_idx <= MAX_POOL_IDX:
+        raise ValueError("pool_idx is outside the packed hash pool range")
+    x, y, z = (
+        (coordinate + bias) & mask
+        for coordinate, bias, mask in zip(
+            coordinates, layout.coord_bias_xyz, layout.coord_masks_xyz
+        )
+    )
+    packed = (
+        (x << layout.x_shift)
+        | (y << layout.y_shift)
+        | (z << layout.z_shift)
+        | pool_idx
+    )
     return signed_int64_from_uint64(packed)
 
 
@@ -249,20 +284,36 @@ def validate_import_block_coords_unique(coords: torch.Tensor) -> None:
     if coords.ndim != 2 or coords.shape[-1] != 3 or coords.dtype not in (torch.int32, torch.int64):
         raise ValueError("block coordinates must be an int32/int64 [N, 3] tensor")
     if coords.shape[0] and torch.unique(coords, dim=0).shape[0] != coords.shape[0]:
-        raise ValueError("block coordinates must be unique")
+        raise ValueError("block coordinates contain duplicate entries")
 
 
 def validate_import_block_coords_for_hash_layout(coords: torch.Tensor) -> None:
     validate_import_block_coords_unique(coords)
-    if coords.numel() and bool((coords.abs() >= (1 << 15)).any().item()):
-        raise ValueError("block coordinates are outside the portable int16 hash range")
+    if coords.numel():
+        lower = torch.tensor(
+            DEFAULT_HASH_LAYOUT.coord_min_xyz, dtype=coords.dtype, device=coords.device
+        )
+        upper = torch.tensor(
+            DEFAULT_HASH_LAYOUT.coord_max_xyz, dtype=coords.dtype, device=coords.device
+        )
+        if bool(((coords < lower) | (coords > upper)).any().item()):
+            raise ValueError(
+                f"block coordinates are outside the {DEFAULT_HASH_LAYOUT.name} hash range"
+            )
 
 
 def validate_import_block_coords_for_grid(coords: torch.Tensor, grid_shape: Tuple[int, int, int], block_size: int) -> None:
     validate_import_block_coords_unique(coords)
-    blocks = torch.tensor([ceil_div_positive(int(n), int(block_size)) for n in grid_shape], device=coords.device)
-    if coords.numel() and bool(((coords < 0) | (coords >= blocks)).any().item()):
-        raise ValueError("block coordinates lie outside grid_shape")
+    blocks = torch.tensor(
+        [ceil_div_positive(int(n), int(block_size)) for n in grid_shape],
+        device=coords.device,
+    )
+    # Block coordinates are centered around the grid origin.  For an even
+    # two-block extent, for example, the valid coordinates are ``[-1, 0]``.
+    lower = -(blocks // 2)
+    upper = lower + blocks
+    if coords.numel() and bool(((coords < lower) | (coords >= upper)).any().item()):
+        raise ValueError("block coordinates lie outside target grid")
 
 
 def rebuild_import_hash_state(
@@ -275,6 +326,8 @@ def rebuild_import_hash_state(
         raise ValueError("hash_capacity must be positive and max_blocks nonnegative")
     if coords.shape[0] > max_blocks:
         raise ValueError("import contains more blocks than max_blocks")
+    if max_blocks > MAX_POOL_IDX:
+        raise ValueError("max_blocks exceeds the packed hash pool capacity")
     hashes = torch.full((hash_capacity,), -1, dtype=torch.int64, device=coords.device)
     block_to_hash_slot = torch.full((max_blocks,), -1, dtype=torch.int32, device=coords.device)
     for index, xyz in enumerate(coords.tolist()):
@@ -294,21 +347,54 @@ def apply_constant_dynamic_weight(
     blocks: Dict[str, torch.Tensor],
     import_weight: float,
 ) -> None:
+    if "block_data" in blocks:
+        data = blocks["block_data"]
+        old_weight = data[..., 1].clone()
+        observed = old_weight > 0
+        scale = torch.where(
+            observed,
+            torch.as_tensor(import_weight, dtype=data.dtype, device=data.device)
+            / old_weight.clamp_min(torch.finfo(data.dtype).tiny),
+            torch.zeros_like(old_weight),
+        )
+        data[..., 0].mul_(scale)
+        data[..., 1].copy_(torch.where(observed, torch.full_like(old_weight, import_weight), old_weight))
+    if "block_grid_rgb" in blocks:
+        rgbw = blocks["block_grid_rgb"]
+        old_weight = rgbw[..., 3].clone()
+        observed = old_weight > 0
+        scale = torch.where(
+            observed,
+            torch.as_tensor(import_weight, dtype=rgbw.dtype, device=rgbw.device)
+            / old_weight.clamp_min(torch.finfo(rgbw.dtype).tiny),
+            torch.zeros_like(old_weight),
+        )
+        rgbw[..., :3].mul_(scale.unsqueeze(-1))
+        rgbw[..., 3].copy_(torch.where(observed, torch.full_like(old_weight, import_weight), old_weight))
     for key in ("weight", "block_grid_weight"):
         if key in blocks:
             original = blocks[key]
-            blocks[key] = torch.where(
-                original > 0,
-                torch.full_like(original, import_weight),
-                torch.zeros_like(original),
-            )
+            blocks[key] = torch.where(original > 0, torch.full_like(original, import_weight), original)
 
 
 def apply_constant_feature_weight(
     blocks: Dict[str, torch.Tensor],
     import_weight: float,
 ) -> None:
-    apply_constant_dynamic_weight(blocks, import_weight)
+    if "block_features" not in blocks:
+        return
+    features = blocks["block_features"]
+    weights = blocks["block_feature_weight"]
+    old_weight = weights.clone()
+    observed = old_weight > 0
+    scale = torch.where(
+        observed,
+        torch.as_tensor(import_weight, dtype=weights.dtype, device=weights.device)
+        / old_weight.clamp_min(torch.finfo(weights.dtype).tiny),
+        torch.zeros_like(old_weight),
+    )
+    features.mul_(scale.unsqueeze(-1))
+    weights.copy_(torch.where(observed, torch.full_like(old_weight, import_weight), old_weight))
 
 
 def prepare_blocks_for_import(
@@ -321,8 +407,6 @@ def prepare_blocks_for_import(
 ) -> Dict[str, torch.Tensor]:
     validate_block_metadata(block_metadata)
     validate_block_payload(blocks, block_metadata)
-    if is_sparse_block_payload(blocks):
-        raise NotImplementedError("importing CUDA/Warp sparse block-pool payloads is unavailable on the portable dense mapper")
     result = clone_blocks(blocks)
     if import_weight is not None:
         if import_weight <= 0:
@@ -330,6 +414,7 @@ def prepare_blocks_for_import(
         if import_weight < minimum_tsdf_weight:
             raise ValueError("import_weight must be >= minimum_tsdf_weight")
         apply_constant_dynamic_weight(result, import_weight)
+        apply_constant_feature_weight(result, import_weight)
     validate_recycle_threshold(result, block_metadata, block_empty_threshold)
     if minimum_tsdf_weight < 0:
         raise ValueError("minimum_tsdf_weight must be nonnegative")

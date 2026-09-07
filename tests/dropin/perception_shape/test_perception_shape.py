@@ -24,6 +24,7 @@ from curobo._src.perception.mapper.checkpoint_blocks import (
     rebuild_import_hash_state,
     save_block_checkpoint,
 )
+from curobo._src.perception.mapper.constants import PY_VALUE_MASK
 from curobo._src.perception.mapper.integrator_esdf import (
     BlockSparseESDFIntegrator,
     BlockSparseESDFIntegratorCfg,
@@ -40,8 +41,8 @@ def _camera(depth):
 
 
 def test_filter_depth_uses_portable_bilateral_range_weighting_and_buffers():
-    depth = torch.ones((4, 4))
-    depth[1, 1] = 3.0
+    depth = torch.ones((1, 4, 4))
+    depth[0, 1, 1] = 3.0
     output = torch.empty_like(depth)
     mask = torch.empty_like(depth, dtype=torch.bool)
     filtered, valid = FilterDepth((4, 4), flying_pixel_threshold=3.0)(depth, output, mask)
@@ -108,6 +109,7 @@ def test_checkpoint_contract_roundtrip_and_warp_payload_boundary(tmp_path):
     assert torch.equal(loaded["blocks"]["tsdf"], blocks["tsdf"])
     entry = pack_hash_entry_host(-1, 0, 1, 7)
     assert isinstance(entry, int)
+    assert (entry & PY_VALUE_MASK) == 7
     hash_table, block_to_hash_slot = rebuild_import_hash_state(
         torch.tensor([[0, 0, 0]], dtype=torch.int32), 4, 1
     )

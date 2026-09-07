@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import torch
 
+from curobo.content import get_robot_configs_path
 from curobo._src.cost.cost_self_collision import SelfCollisionCost
 from curobo._src.cost.cost_self_collision_cfg import SelfCollisionCostCfg
 from curobo._src.robot.kinematics import Kinematics, KinematicsCfg
@@ -36,9 +37,16 @@ class _RobotDebuggerPortableMixin:
     def __init__(self, config_path: str, device_cfg: Optional[DeviceCfg] = None) -> None:
         if not isinstance(config_path, str) or not config_path:
             raise ValueError("config_path must be a nonempty robot YAML path")
-        self.config_path = config_path
+        candidate = Path(config_path)
+        if not candidate.is_file():
+            bundled = get_robot_configs_path() / config_path
+            if bundled.is_file():
+                candidate = bundled
+        self.config_path = str(candidate)
         self.device_cfg = device_cfg or DeviceCfg()
-        self._robot_config = KinematicsCfg.from_robot_yaml_file(config_path, device_cfg=self.device_cfg)
+        self._robot_config = KinematicsCfg.from_robot_yaml_file(
+            self.config_path, device_cfg=self.device_cfg
+        )
         self._robot_model = Kinematics(self._robot_config)
         self._self_collision_config = self._compile_self_collision_config()
         # V2 exposes the compiled collision configuration through the public

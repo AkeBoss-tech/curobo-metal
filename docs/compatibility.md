@@ -20,8 +20,11 @@ the same environment because both own `curobo`.
 
 ## Audited alpha claims
 
-- The strict pinned Python surface is exact: 361/361 runtime modules, 3,870/
-  3,870 AST-discovered exports, and 747/747 callable shapes.
+- The release's strict public-facade gate is exact for 24 modules, 122 exports,
+  and 10 comparable callable signatures. The broader generated inventory
+  resolves 571/586 audited modules; 15 remain partial (two perception internals
+  and 13 bundled example workflows). Static inventory coverage is not a claim
+  that every upstream internal or example workflow is implemented.
 - CPU and Apple MPS production paths exist for the documented configuration,
   types, kinematics, collision, cost, IK, trajectory, graph-planning,
   perception, dynamics, and high-level planning slices. Requested MPS execution
@@ -33,16 +36,27 @@ the same environment because both own `curobo`.
 - The wheel includes 40 byte-exact, hash-pinned upstream robot, configuration,
   and scene assets. See `THIRD_PARTY_NOTICES.md` and
   `artifacts/release/asset-provenance.json`.
-- All 225 pinned upstream test/example modules are classified. The 55
-  applicable modules pass unchanged against a clean installed wheel (1,116
-  tests); 13 external-unavailable, 35 not-applicable, and 122
-  platform-substituted entries retain explicit reasons.
+- All 225 pinned upstream test/example modules are classified: 55 applicable,
+  15 external-unavailable, 35 not-applicable, and 120 platform-substituted.
+  Installed-wheel gauntlet reports preserve case-level portable results and
+  exact reasons for hardware-mechanism exclusions; the classifications do not
+  turn excluded CUDA/Warp calls into passing Metal behavior.
 
 ## Bounded claims
 
 The exact static surface is not a claim of byte-identical source or behavior in
 every numerical regime. The 19 paired adapters certify their declared corpora
 and matrices; they do not turn platform-specific ABIs into portable APIs.
+
+The high-level `Mapper` currently maintains a dense PyTorch ESDF mirror. It
+preflights that allocation and rejects configurations whose estimated mirror
+exceeds 1 GiB, before allocating native state. Large sparse maps therefore need
+the standalone sparse TSDF/ESDF APIs, a coarser voxel size, or partitioned maps;
+unbounded high-level sparse mapping is not part of this alpha.
+
+Bundled examples provide import-compatible portable entry points, but the 13
+partial example modules are not complete replacements for NVIDIA/Isaac/ROS/USD
+workflows.
 
 L-BFGS now has fallback-disabled MPS and pinned-CUDA outcome evidence for an
 eager, batched quadratic solve. The shared claim deliberately excludes hard
@@ -79,14 +93,15 @@ API, its tests, and the capability inventory for the exact slice.
 
 A stable drop-in claim requires all of the following:
 
-1. The strict `_src` export/signature gate is fail-closed and complete.
+1. The strict public-facade export/signature gate is fail-closed and complete;
+   broader internal/example inventory gaps remain explicitly reported.
 2. All nineteen paired capabilities cover their declared dtype/device,
    batch/layout, invalid/infeasible, mutation/cache, gradient,
    collision-boundary, and repeatability matrices.
 3. Classify the 211 pinned upstream test modules and 14 examples; execute every
-   applicable item unchanged against the installed wheel and record exclusions.
-   This gate is complete: the census has no unreviewed entries, and the 55
-   applicable modules pass 1,116 unchanged tests in aggregate.
+   in-scope portable case against the installed wheel and record exact
+   exclusions. The census has no unreviewed modules; release evidence must also
+   show zero failures among cases classified as portable.
 4. Pass clean wheel and sdist installs on the supported Python matrix, full
    fallback-disabled Apple MPS tests, CUDA replay, metadata/license checks, and
    namespace-conflict checks from a clean tagged commit.

@@ -132,15 +132,18 @@ def test_retargeter_rejects_multi_frame_goal_at_frame_api_boundary():
         retargeter.solve_frame(multi_frame)
 
 
-def test_mpc_multi_tool_boundary_and_goal_type_errors_are_explicit():
+def test_mpc_multi_tool_configuration_and_goal_type_errors_are_explicit():
     criteria = {
-        "panda_hand": ToolPoseCriteria.track_position(),
-        "panda_link7": ToolPoseCriteria.track_position(),
+        "pelvis": ToolPoseCriteria.track_position(),
+        "torso_link": ToolPoseCriteria.track_position(),
     }
-    with pytest.raises(NotImplementedError, match="one tracked tool frame"):
-        MotionRetargeter(MotionRetargeterCfg.create(
-            "franka.yml", criteria, use_mpc=True, self_collision_check=False,
-        ))
+    multi_tool = MotionRetargeter(MotionRetargeterCfg.create(
+        "unitree_g1_29dof_retarget.yml", criteria, use_mpc=True,
+        self_collision_check=False,
+        num_seeds_global=1, mpc_warm_start_num_iters=1,
+        mpc_cold_start_num_iters=1,
+    ))
+    assert multi_tool.tool_frames[:2] == ["pelvis", "torso_link"]
     retargeter = MotionRetargeter(_config())
     with pytest.raises(TypeError, match="GoalToolPose"):
         retargeter.solve_frame(torch.zeros(1, 7))

@@ -19,11 +19,14 @@
       "Replace an exact Python string literal equal to cuda with mps.",
       "Replace an exact Python string literal equal to cuda:0 with mps:0.",
       "Replace an exact torch.cuda.is_available() gate with torch.backends.mps.is_available() in test modules.",
+      "Replace an exact zero-argument torch.cuda.synchronize() timing barrier with torch.mps.synchronize() outside reviewed CUDA-mechanism cases.",
       "Replace an assertion-scoped Tensor.is_cuda residency check with an exact device.type == 'mps' check after device substitution.",
-      "Redirect an exact import of an unshipped pinned-upstream example helper to an identically sourced non-shadowing staged helper module."
+      "In the pinned DeviceCfg module only, adapt the no-argument default oracle to the deliberate CPU-safe portable default and compare normalized CPU/MPS index zero with DeviceCfg.is_same_torch_device.",
+      "Redirect an exact import of an unshipped pinned-upstream example helper to an identically sourced non-shadowing staged helper module.",
+      "Guard the pinned voxel-collision module's test-only raw Warp registration and kernel declarations behind the original CUDA availability check so its adjacent VoxelData construction cases can collect and execute on MPS."
     ],
     "forbidden": [
-      "Changing assertions, tolerances, test parameters, or expected values except the exact assertion-scoped Tensor.is_cuda residency adaptation permitted above.",
+      "Changing assertions, tolerances, test parameters, or expected values except the exact assertion-scoped Tensor.is_cuda and pinned DeviceCfg portability-oracle adaptations permitted above.",
       "Renaming or emulating CUDA graph, CUDA stream, CUDA event, or Warp APIs.",
       "Adding skip or xfail markers outside a reviewed case-level mechanism exclusion."
     ]
@@ -102,6 +105,10 @@
       "reason": "The availability adapter makes this CUDA-conditional matrix include MPS and then requests float64 MPS storage, which Metal does not support; CPU float32/float64 and MPS float32 configuration behavior are covered by adjacent cases."
     },
     {
+      "case_pattern": "curobo.tests._src.types.test_device_cfg::tests._src.types.test_device_cfg.TestDeviceCfg::test_cpu",
+      "reason": "The device-literal adapter turns a CUDA float64 configuration used only to test conversion to CPU into an invalid MPS float64 configuration. Metal cannot represent float64, while adjacent cases verify CPU float64 preservation and explicit MPS float32 configuration."
+    },
+    {
       "case_pattern": "curobo.tests._src.optim.test_optimizer_cuda_graph::tests._src.optim.test_optimizer_cuda_graph.TestOptimizerCudaGraph::test_mixin_creates_executors_based_on_graphable_methods",
       "reason": "The case requires creation and inspection of CUDA Graph executors; the graphable-method declaration remains portable, but CUDA executor objects have no MPS equivalent."
     },
@@ -172,6 +179,270 @@
     {
       "case_pattern": "curobo.tests._src.robot.types.test_types::tests._src.robot.types.test_types.TestKinematicsParams::test_kinematics_device_cfg_placeholder",
       "reason": "The pinned upstream test is unconditionally skipped with an explicit integration-only placeholder and contains no executable assertions on CUDA or MPS; the KinematicsParams device contract executes throughout the robot integration suite."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_checkpoint::tests._src.perception.mapper.test_block_checkpoint::test_cuda_checkpoint_roundtrip_preserves_block_data",
+      "reason": "After the portable checkpoint export/import assertions complete, this case directly converts MPS tensors with Warp and launches a raw Warp hash kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding::test_roundtrip_positive_coords",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding::test_roundtrip_negative_coords",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding::test_roundtrip_mixed_coords",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding::test_roundtrip_coord_limits",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestBlockKeyEncoding::test_unique_keys",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestSpatialHash::test_hash_in_range",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestSpatialHash::test_hash_deterministic",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestBlockSparseTSDF::test_warp_data_caching",
+      "reason": "The asserted object is the raw Warp BlockSparseTSDF ABI struct and its Warp-specific cache lifecycle; the portable tensor storage lifecycle is exercised by the adjacent initialization, reset, memory, and statistics cases."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestFindOrInsert::test_insert_single_block",
+      "reason": "The test body directly converts sparse storage MPS tensors with wp.from_torch and launches a raw Warp insertion kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestFindOrInsert::test_insert_same_block_twice",
+      "reason": "The test body directly converts sparse storage MPS tensors with wp.from_torch and launches a raw Warp insertion kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestFindOrInsert::test_insert_different_blocks",
+      "reason": "The test body directly converts sparse storage MPS tensors with wp.from_torch and launches a raw Warp insertion kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestHashLookup::test_lookup_nonexistent",
+      "reason": "The test body directly converts sparse storage MPS tensors with wp.from_torch and launches a raw Warp lookup kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestHashLookup::test_lookup_after_insert",
+      "reason": "The test body directly converts sparse storage MPS tensors with wp.from_torch and launches raw Warp insertion and lookup kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestCoordinateConversion::test_world_to_block_coords",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp coordinate kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestCoordinateConversion::test_local_index_roundtrip",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp coordinate kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.mapper.test_block_hash::tests._src.perception.mapper.test_block_hash.TestClearNewBlocks::test_clear_blocks",
+      "reason": "The test body directly converts sparse storage MPS tensors with wp.from_torch and launches raw Warp clearing kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_mesh_robot::tests._src.perception.test_mesh_robot.TestSurfacePointValidity::test_sampled_points_on_surface_rigid",
+      "reason": "The test body directly converts sampled MPS points with wp.from_torch and launches a raw Warp mesh-query kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_mesh_robot::tests._src.perception.test_mesh_robot.TestSurfacePointValidity::test_sampled_points_on_surface_articulated",
+      "reason": "The test body directly converts sampled MPS points with wp.from_torch and launches a raw Warp mesh-query kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_mesh_robot::tests._src.perception.test_mesh_robot.TestSurfacePointValidity::test_sampled_points_on_surface_after_update",
+      "reason": "The test body directly converts sampled MPS points with wp.from_torch and launches a raw Warp mesh-query kernel; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestIdentityPose::test_residuals_near_zero",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestIdentityPose::test_jtr_near_zero",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestPerturbedPose::test_translation_perturbation",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestPerturbedPose::test_rotation_perturbation",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestJtJProperties::test_jtj_is_symmetric",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestJtJProperties::test_jtj_is_positive_semidefinite",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestJtJProperties::test_jtj_diagonal_positive",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestHuberLoss::test_huber_reduces_outlier_influence",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestDifferentMeshes::test_sphere_mesh",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestDifferentMeshes::test_cylinder_mesh",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestEdgeCases::test_single_point",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestEdgeCases::test_many_points",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.perception.test_wp_mesh_sdf_alignment::tests._src.perception.test_wp_mesh_sdf_alignment.TestEdgeCases::test_points_outside_threshold",
+      "reason": "The test helper directly converts MPS tensors with wp.from_torch and launches raw Warp mesh SDF/alignment kernels; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelDataWarp::test_to_warp_returns_struct",
+      "reason": "The asserted result is the raw VoxelDataWarp ABI struct; Warp has no MPS tensor interop or Metal launch backend, while adjacent VoxelData construction behavior executes on MPS."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelDataWarp::test_warp_fields_populated",
+      "reason": "The asserted fields belong to the raw VoxelDataWarp ABI struct; Warp has no MPS tensor interop or Metal launch backend, while adjacent VoxelData construction behavior executes on MPS."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelEmpty::test_sphere_in_free_space_zero_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelEmpty::test_multiple_spheres_in_free_space",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelEmpty::test_sphere_outside_grid_zero_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelBox::test_sphere_inside_box_has_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelBox::test_sphere_far_from_box_zero_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelBox::test_sphere_near_surface_has_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelBox::test_gradient_nonzero_at_surface",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelBox::test_inside_deeper_has_higher_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelBatch::test_batch_of_spheres",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionKernelBatch::test_horizon_dimension",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp voxel-collision kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestVoxelCollisionUpdateFeatures::test_update_features_inplace",
+      "reason": "The case updates VoxelData then launches a raw Warp voxel-collision kernel to observe it; Warp has no MPS tensor interop or Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionFreeSpace::test_swept_horizon1_no_sweep",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionFreeSpace::test_swept_horizon2_minimal_sweep",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionFreeSpace::test_swept_free_space_zero_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionFreeSpace::test_swept_outside_grid_zero_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionBox::test_swept_through_box_has_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionBox::test_swept_detects_intermediate_collision",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionBox::test_swept_stationary_matches_static",
+      "reason": "The test invokes helpers that convert MPS tensors with wp.from_torch and launch raw Warp static and swept-voxel kernels; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionBox::test_swept_gradient_nonzero_on_collision",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionBox::test_swept_far_from_box_zero_cost",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionBatch::test_batch_swept_collision",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestSweptVoxelCollisionBatch::test_multi_sphere_swept",
+      "reason": "The test invokes a helper that converts MPS tensors with wp.from_torch and launches the raw Warp swept-voxel kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_sdf_with_grad_kernel_free_space",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp SDF kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_sdf_only_kernel_free_space",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp SDF kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_sdf_only_vs_with_grad_agree",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches two test-only Warp SDF kernels; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_sdf_only_kernel_many_points",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp SDF kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_both_sdf_functions_in_one_kernel",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp SDF kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_both_sdf_functions_many_points",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp SDF kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_sweep_pattern_kernel",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp sweep-pattern kernel; Warp has no Metal launch backend."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_full_sweep_replica_kernel",
+      "reason": "The pinned case is already unconditionally skipped because it exists only to reproduce a raw Warp code-generation failure; it defines no portable Metal behavior."
+    },
+    {
+      "case_pattern": "curobo.tests._src.geom.sdf.test_voxel_collision::tests._src.geom.sdf.test_voxel_collision.TestStandaloneComputeLocalSdf::test_dual_sweep_kernel",
+      "reason": "The test body directly converts MPS tensors with wp.from_torch and launches a test-only Warp dual-sweep kernel; Warp has no Metal launch backend."
     }
   ]
 }

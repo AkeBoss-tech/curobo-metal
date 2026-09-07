@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from curobo._src.cost.cost_tool_pose import ToolPoseCost as CanonicalToolPoseCost
 from curobo._src.cost.cost_tool_pose_cfg import ToolPoseCost, ToolPoseCostCfg
 from curobo._src.cost.tool_pose_criteria import ToolPoseCriteria
 from curobo._src.types.tool_pose import GoalToolPose, ToolPose
@@ -17,6 +18,7 @@ def _poses(device="cpu"):
 def test_config_preserves_explicit_criteria_and_clone_is_independent():
     criterion = ToolPoseCriteria.track_position([1.0, 0.0, 0.0])
     cfg = ToolPoseCostCfg(weight=[1.0, 2.0], tool_frames=["left", "right"], tool_pose_criteria={"left": criterion})
+    assert cfg.class_type is CanonicalToolPoseCost
     torch.testing.assert_close(cfg.tool_pose_criteria["left"].terminal_pose_axes_weight_factor, criterion.terminal_pose_axes_weight_factor)
     clone = cfg.clone()
     clone.tool_pose_criteria["left"].terminal_pose_axes_weight_factor.zero_()

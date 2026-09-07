@@ -15,7 +15,7 @@ from collections.abc import Iterable
 import heapq
 import math
 import random
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import networkx as nx
 import numpy as np
@@ -125,6 +125,19 @@ class _NetworkXPathFinderPortable:
         self.node_list: list[int] = []
         self.edge_list: list[list[int | float]] = []
         self.graph = _PortableGraphView(self)
+        self._update_callback: Callable[[], None] | None = None
+
+    def set_update_callback(self, callback: Callable[[], None] | None) -> None:
+        """Register owner-side lazy materialization before graph reads.
+
+        The path finder remains independently usable: without a callback its
+        buffered lifecycle is unchanged.  PRM uses this hook to defer its
+        expensive compatibility-edge rebuild until somebody actually reads
+        or searches that graph.
+        """
+        if callback is not None and not callable(callback):
+            raise TypeError("update callback must be callable or None")
+        self._update_callback = callback
 
     def reset_graph(self) -> None:
         """Discard materialized and staged roadmap state."""
@@ -163,6 +176,8 @@ class _NetworkXPathFinderPortable:
 
     def update_graph(self) -> None:
         """Materialize pending nodes and edges in stable insertion order."""
+        if self._update_callback is not None:
+            self._update_callback()
         for node in self.node_list:
             self._graph.setdefault(node, {})
         self.node_list.clear()

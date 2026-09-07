@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from tools.gauntlet.run_portable_upstream import (
     PINNED_REVISION,
@@ -77,6 +79,26 @@ def test_raw_mechanism_scopes_are_narrow_and_policy_reviewed() -> None:
             "TestOptimizerCudaGraph.test_mixin_can_optimize",
         }
     )
+
+
+def test_voxel_mechanism_scopes_leave_creation_cases_portable() -> None:
+    root = Path(__file__).resolve().parents[2]
+    policy = json.loads((root / "gauntlet/portable-dropin-parity.json").read_text())
+    module = "curobo.tests._src.geom.sdf.test_voxel_collision"
+    scopes = _raw_mechanism_scopes(policy, module)
+
+    assert "TestVoxelDataCreation" not in scopes
+    assert {
+        "TestVoxelDataWarp",
+        "TestVoxelCollisionKernelEmpty",
+        "TestVoxelCollisionKernelBox",
+        "TestVoxelCollisionKernelBatch",
+        "TestVoxelCollisionUpdateFeatures",
+        "TestSweptVoxelCollisionFreeSpace",
+        "TestSweptVoxelCollisionBox",
+        "TestSweptVoxelCollisionBatch",
+        "TestStandaloneComputeLocalSdf",
+    } <= scopes
 
 
 def test_merge_retains_complete_shard_and_synthetic_timeout(tmp_path) -> None:

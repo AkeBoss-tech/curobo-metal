@@ -23,7 +23,7 @@ from curobo._src.robot.kinematics.kinematics_state import KinematicsState
 from curobo._src.util.logging import log_and_raise, log_info
 from curobo._src.util.torch_util import get_torch_jit_decorator
 
-from .portable import BaseCost, SceneCollisionCost as _PortableSceneCollisionCost
+from .portable import SceneCollisionCost as _PortableSceneCollisionCost
 
 
 class _SceneCollisionCostPortable(_PortableSceneCollisionCost):
@@ -39,6 +39,8 @@ class _SceneCollisionCostPortable(_PortableSceneCollisionCost):
 
     def __init__(self, config: Any):
         super().__init__(config)
+        if config.scene_collision_checker is None:
+            log_and_raise("scene_collision_checker must be set before using world collision cost")
         # Config factories consult this attribute when assembling a rollout.
         # Point an instantiated record at the concrete facade even though the
         # portable dataclass cannot import this module without a cycle.
@@ -213,8 +215,12 @@ class _SceneCollisionCostPortable(_PortableSceneCollisionCost):
             penalty = 0.5 * (activation - value).clamp_min(0).square()
             self._record_gradient_buffer(value, penalty, spheres)
             if self.config.convert_to_binary:
-                return self.jit_weight_collision(penalty, self.config.sum_distance)
-            return self.jit_weight_distance(penalty, self.config.sum_distance)
+                return torch.where(penalty > 0, penalty + 1.0, penalty)
+            # The pinned SceneCollisionCost returns one value per robot sphere.
+            # ``sum_distance`` only selects the native query's gradient mode;
+            # its jit_weight_* helpers are separate utilities and are not
+            # applied by forward().
+            return penalty
         if value.shape != spheres.shape[:2]:
             raise ValueError(
                 "scene checker must return signed [batch,horizon,spheres] clearances "
@@ -252,13 +258,8 @@ class _SceneCollisionCostPortable(_PortableSceneCollisionCost):
             or not penalty.requires_grad
         ):
             return
-        reduced = (
-            penalty.sum(dim=-1)
-            if self.config.sum_distance
-            else penalty.max(dim=-1).values
-        )
-        weight = self._weight.reshape(-1)[0].to(reduced)
-        scalar = (reduced * weight).sum()
+        weight = self._weight.reshape(-1)[0].to(penalty)
+        scalar = (penalty * weight).sum()
         gradient = torch.autograd.grad(
             scalar,
             spheres,
@@ -298,10 +299,10 @@ class _SceneCollisionCostPortable(_PortableSceneCollisionCost):
         # Preserve an autograd-connected zero while avoiding needless world
         # queries for disabled cost terms.
         if not self.enabled:
-            return spheres[..., 0].sum(dim=-1) * 0
+            return spheres[..., 0] * 0
         if not self.config.sum_distance:
-            # cuRobo's full gradient buffer is required for max reduction;
-            # autograd is the portable equivalent on CPU/MPS.
+            # Match upstream's full-gradient query mode for this option.
+            log_info("sum_distance=False will be slower than sum_distance=True")
             self.use_grad_input = True
         if self.config.use_sweep:
             return self._sweep_fn(state, idxs_env_query, trajectory_dt)

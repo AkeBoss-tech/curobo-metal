@@ -22,8 +22,8 @@ def test_checked_in_census_is_exact_and_fail_closed() -> None:
         "by_disposition": {
             "unreviewed": 0,
             "applicable_unchanged": 55,
-            "platform_substituted": 122,
-            "external_unavailable": 13,
+            "platform_substituted": 120,
+            "external_unavailable": 15,
             "not_applicable": 35,
         },
         "review_complete": True,

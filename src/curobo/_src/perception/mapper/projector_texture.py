@@ -330,14 +330,35 @@ class _ProjectiveTextureProjectorPortable:
         maximum = self.config.depth_maximum_distance if camera_max_distance is None else float(camera_max_distance)
         sampled, valid, uvs = self._project_texture_points_with_uvs(
             vertices, projection, camera_min_distance=minimum, camera_max_distance=maximum)
-        result_colors = torch.where(valid[:, None], sampled, colors.to(vertices.device))
-        # Invalid vertices retain a deterministic zero UV and their supplied
-        # fallback color.  This preserves valid mesh geometry without claiming
-        # the source raw CUDA fallback-atlas patch implementation.
-        uvs = torch.where(valid[:, None], uvs, torch.zeros_like(uvs))
+        fallback_colors = colors.to(vertices.device)
+        result_colors = torch.where(valid[:, None], sampled, fallback_colors)
+        # Store unprojected vertex colors in compact appended atlas rows.  A
+        # pixel-center UV gives every fallback vertex an exact, sampleable
+        # texture coordinate while projected vertices retain their camera UV.
+        invalid = ~valid
+        if bool(invalid.any().item()):
+            atlas = projection.texture_atlas
+            old_height, width = atlas.shape[:2]
+            count = int(invalid.sum().item())
+            rows = math.ceil(count / width)
+            patches = torch.zeros((rows, width, 3), dtype=torch.uint8, device=atlas.device)
+            patches.reshape(-1, 3)[:count] = fallback_colors[invalid]
+            projection_atlas = torch.cat((atlas, patches), dim=0)
+            new_height = int(projection_atlas.shape[0])
+            if bool(valid.any().item()):
+                uvs[valid, 1] *= float(max(1, old_height - 1)) / float(max(1, new_height - 1))
+            ordinal = torch.arange(count, device=vertices.device)
+            fallback_uv = torch.stack((
+                (ordinal.remainder(width).to(vertices.dtype) + 0.5) / width,
+                (torch.div(ordinal, width, rounding_mode="floor").to(vertices.dtype)
+                 + old_height + 0.5) / new_height,
+            ), -1)
+            uvs[invalid] = fallback_uv
+        else:
+            projection_atlas = projection.texture_atlas
         return Mesh(name="block_sparse_tsdf_textured_mesh", vertices=vertices, faces=triangles,
                     vertex_colors=result_colors.float() / 255.0, vertex_normals=normals,
-                    texture_uvs=uvs, texture_image=projection.texture_atlas)
+                    texture_uvs=uvs, texture_image=projection_atlas)
 
 
 class ProjectiveTextureProjector:

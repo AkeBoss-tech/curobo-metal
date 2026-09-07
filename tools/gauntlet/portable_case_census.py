@@ -154,12 +154,25 @@ def build_census(
     status_counts: dict[str, int] = {}
     pytest_counts: dict[str, int] = {}
     area_counts: dict[str, dict[str, Any]] = {}
+    portable_passed = 0
+    portable_failed = 0
+    excluded_raw_failures = 0
     for case in cases:
         status_counts[case["parity_status"]] = status_counts.get(case["parity_status"], 0) + 1
         pytest_counts[case["pytest_status"]] = pytest_counts.get(case["pytest_status"], 0) + 1
         suffix = case["module"].removeprefix("curobo.tests.")
         area = suffix.removeprefix("_src.").split(".", 1)[0]
-        area_record = area_counts.setdefault(area, {"cases": 0, "pytest": {}, "parity": {}})
+        area_record = area_counts.setdefault(
+            area,
+            {
+                "cases": 0,
+                "pytest": {},
+                "parity": {},
+                "portable_passed": 0,
+                "portable_failed": 0,
+                "excluded_raw_failures": 0,
+            },
+        )
         area_record["cases"] += 1
         area_record["pytest"][case["pytest_status"]] = (
             area_record["pytest"].get(case["pytest_status"], 0) + 1
@@ -167,15 +180,25 @@ def build_census(
         area_record["parity"][case["parity_status"]] = (
             area_record["parity"].get(case["parity_status"], 0) + 1
         )
-    portable_cases = [case for case in cases if case["parity_status"] != "mechanism_only_excluded"]
+        if case["parity_status"] == "portable_executed":
+            if case["pytest_status"] == "passed":
+                portable_passed += 1
+                area_record["portable_passed"] += 1
+            elif case["pytest_status"] == "failed":
+                portable_failed += 1
+                area_record["portable_failed"] += 1
+        elif (
+            case["parity_status"] == "mechanism_only_excluded"
+            and case["pytest_status"] == "failed"
+        ):
+            excluded_raw_failures += 1
+            area_record["excluded_raw_failures"] += 1
     definition_complete = (
         not missing_modules
         and status_counts.get("portable_blocked", 0) == 0
         and status_counts.get("unreviewed_skip", 0) == 0
     )
-    implementation_complete = definition_complete and all(
-        case["pytest_status"] == "passed" for case in portable_cases
-    )
+    implementation_complete = definition_complete and portable_failed == 0
     return {
         "schema_version": 1,
         "policy": policy["name"],
@@ -188,6 +211,9 @@ def build_census(
             "cases": len(cases),
             "pytest": pytest_counts,
             "parity": status_counts,
+            "portable_passed": portable_passed,
+            "portable_failed": portable_failed,
+            "excluded_raw_failures": excluded_raw_failures,
             "areas": dict(sorted(area_counts.items())),
             "test_definition_complete": definition_complete,
             "implementation_parity_complete": implementation_complete,

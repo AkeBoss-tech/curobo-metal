@@ -2128,23 +2128,23 @@
       "surface": "bundled_test"
     },
     {
-      "disposition": "platform_substituted",
+      "disposition": "external_unavailable",
       "evidence": [
         "artifacts/gauntlet/upstream-workload-dependencies.json records pinned source curobo/tests/_src/util/test_usd_writer.py at SHA-256 c313f1f177d9aebf289baca8eda7bb59ae8c3c12d2cd379a8fde68b688d8711c.",
-        "gauntlet/curobo-consistency.json records the explicit platform exclusions."
+        "The pinned module skips at collection when the optional pxr/usd-core package is unavailable on the release host."
       ],
       "module": "curobo.tests._src.util.test_usd_writer",
-      "rationale": "Relevant workload directly selects platform-specific execution (cuda); unchanged Apple-Silicon execution is not claimed.",
+      "rationale": "USD authoring tests require the optional pxr/usd-core integration package; this external ecosystem is outside the core Metal release contract and the module has no executable result without it.",
       "surface": "bundled_test"
     },
     {
-      "disposition": "platform_substituted",
+      "disposition": "external_unavailable",
       "evidence": [
         "artifacts/gauntlet/upstream-workload-dependencies.json records pinned source curobo/tests/_src/util/test_usd_writer_robot.py at SHA-256 2be6d0cc05cb1b69f02d7bcd6aa8e1127dc0fbe259429305783b9ec4081ae8ab.",
-        "gauntlet/curobo-consistency.json records the explicit platform exclusions."
+        "The pinned module skips at collection when the optional pxr/usd-core package is unavailable on the release host."
       ],
       "module": "curobo.tests._src.util.test_usd_writer_robot",
-      "rationale": "Relevant workload directly selects platform-specific execution (cuda); unchanged Apple-Silicon execution is not claimed.",
+      "rationale": "Robot USD animation tests require the optional pxr/usd-core integration package (and robot assets); this external ecosystem is outside the core Metal release contract and the module has no executable result without it.",
       "surface": "bundled_test"
     },
     {
@@ -2221,9 +2221,9 @@
   "summary": {
     "by_disposition": {
       "applicable_unchanged": 55,
-      "external_unavailable": 13,
+      "external_unavailable": 15,
       "not_applicable": 35,
-      "platform_substituted": 122,
+      "platform_substituted": 120,
       "unreviewed": 0
     },
     "by_surface": {

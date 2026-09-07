@@ -12,6 +12,16 @@ from curobo._src.types.device_cfg import DeviceCfg
 from curobo._src.util.config_io import resolve_device_cfg
 
 
+_CREATE_DEFAULT_DEVICE_CFG: Optional[DeviceCfg] = None
+
+
+def _default_accelerator_device_cfg() -> DeviceCfg:
+    """Map the pinned CUDA-default factory call to Metal when available."""
+    if torch.backends.mps.is_available():
+        return DeviceCfg(torch.device("mps:0"), torch.float32)
+    return DeviceCfg()
+
+
 def _is_portable_scene_model(value: Any) -> bool:
     """Return whether ``value`` is an already-compiled portable world.
 
@@ -44,19 +54,19 @@ def _criterion_on_device(
     safely configure a CPU and an MPS retargeter independently.
     """
     target = device_cfg.device
+
+    def move_floating(value: torch.Tensor) -> torch.Tensor:
+        # MPS cannot materialize float64, even transiently.  Moving an MPS
+        # float32 tensor to CPU and changing dtype in one ``to`` call may try
+        # the dtype conversion before the device transfer, so sequence the
+        # operations explicitly.
+        return value.to(device=target).to(dtype=device_cfg.dtype)
+
     return ToolPoseCriteria(
-        criterion.terminal_pose_axes_weight_factor.to(
-            device=target, dtype=device_cfg.dtype
-        ),
-        criterion.non_terminal_pose_axes_weight_factor.to(
-            device=target, dtype=device_cfg.dtype
-        ),
-        criterion.terminal_pose_convergence_tolerance.to(
-            device=target, dtype=device_cfg.dtype
-        ),
-        criterion.non_terminal_pose_convergence_tolerance.to(
-            device=target, dtype=device_cfg.dtype
-        ),
+        move_floating(criterion.terminal_pose_axes_weight_factor),
+        move_floating(criterion.non_terminal_pose_axes_weight_factor),
+        move_floating(criterion.terminal_pose_convergence_tolerance),
+        move_floating(criterion.non_terminal_pose_convergence_tolerance),
         criterion.project_distance_to_goal.to(device=target),
         device_cfg,
     )
@@ -168,6 +178,8 @@ class MotionRetargeterCfg(_MotionRetargeterCfgPortableMixin):
         # Keep the pinned V2 ``None``-selects-default distinction.  In
         # particular, an explicitly empty optimizer list is a configuration
         # error rather than an accidental request for the default YAML.
+        if device_cfg is _CREATE_DEFAULT_DEVICE_CFG:
+            device_cfg = _default_accelerator_device_cfg()
         return MotionRetargeterCfg(
             robot=robot,
             tool_pose_criteria=tool_pose_criteria,
@@ -370,6 +382,11 @@ class MotionRetargeterCfg(_MotionRetargeterCfgPortableMixin):
             raise TypeError(f"unknown MotionRetargeterCfg fields: {unknown}")
         values.update(updates)
         return type(self)(**values)
+
+
+# Preserve the exact pinned declaration default while distinguishing an
+# omitted accelerator policy from an explicitly requested CPU DeviceCfg.
+_CREATE_DEFAULT_DEVICE_CFG = MotionRetargeterCfg.create.__defaults__[14]
 
 
 __all__ = ["MotionRetargeterCfg"]

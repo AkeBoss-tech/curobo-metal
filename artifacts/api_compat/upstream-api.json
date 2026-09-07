@@ -60582,10 +60582,10 @@
     },
     {
       "local": {
-        "missing_symbols": 0,
+        "missing_symbols": 3,
         "path": "curobo/_src/perception/mapper/mesh_extractor.py",
-        "resolved_symbols": 7,
-        "status": "resolved"
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo._src.perception.mapper.mesh_extractor",
       "path": "curobo/_src/perception/mapper/mesh_extractor.py",
@@ -64140,10 +64140,10 @@
     },
     {
       "local": {
-        "missing_symbols": 0,
+        "missing_symbols": 2,
         "path": "curobo/_src/perception/pose_estimation/mesh_robot.py",
-        "resolved_symbols": 13,
-        "status": "resolved"
+        "resolved_symbols": 11,
+        "status": "partial"
       },
       "name": "curobo._src.perception.pose_estimation.mesh_robot",
       "path": "curobo/_src/perception/pose_estimation/mesh_robot.py",
@@ -106225,9 +106225,9 @@
     {
       "local": {
         "missing_symbols": 0,
-        "path": null,
+        "path": "curobo/examples/__init__.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "resolved"
       },
       "name": "curobo.examples",
       "path": "curobo/examples/__init__.py",
@@ -106238,9 +106238,9 @@
     {
       "local": {
         "missing_symbols": 13,
-        "path": null,
+        "path": "curobo/examples/getting_started/build_robot_model.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.build_robot_model",
       "path": "curobo/examples/getting_started/build_robot_model.py",
@@ -106350,10 +106350,10 @@
     },
     {
       "local": {
-        "missing_symbols": 38,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 31,
+        "path": "curobo/examples/getting_started/feature_mapping.py",
+        "resolved_symbols": 7,
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.feature_mapping",
       "path": "curobo/examples/getting_started/feature_mapping.py",
@@ -106920,9 +106920,9 @@
     {
       "local": {
         "missing_symbols": 9,
-        "path": null,
+        "path": "curobo/examples/getting_started/forward_kinematics.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.forward_kinematics",
       "path": "curobo/examples/getting_started/forward_kinematics.py",
@@ -106993,10 +106993,10 @@
     },
     {
       "local": {
-        "missing_symbols": 21,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 18,
+        "path": "curobo/examples/getting_started/humanoid_retargeting.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.humanoid_retargeting",
       "path": "curobo/examples/getting_started/humanoid_retargeting.py",
@@ -107328,9 +107328,9 @@
     {
       "local": {
         "missing_symbols": 22,
-        "path": null,
+        "path": "curobo/examples/getting_started/inverse_kinematics.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.inverse_kinematics",
       "path": "curobo/examples/getting_started/inverse_kinematics.py",
@@ -107531,9 +107531,9 @@
     {
       "local": {
         "missing_symbols": 20,
-        "path": null,
+        "path": "curobo/examples/getting_started/motion_planning.py",
         "resolved_symbols": 0,
-        "status": "missing_module"
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.motion_planning",
       "path": "curobo/examples/getting_started/motion_planning.py",
@@ -107702,10 +107702,10 @@
     },
     {
       "local": {
-        "missing_symbols": 17,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 16,
+        "path": "curobo/examples/getting_started/reactive_control.py",
+        "resolved_symbols": 1,
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.reactive_control",
       "path": "curobo/examples/getting_started/reactive_control.py",
@@ -107841,10 +107841,10 @@
     },
     {
       "local": {
-        "missing_symbols": 34,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 28,
+        "path": "curobo/examples/getting_started/volumetric_mapping.py",
+        "resolved_symbols": 6,
+        "status": "partial"
       },
       "name": "curobo.examples.getting_started.volumetric_mapping",
       "path": "curobo/examples/getting_started/volumetric_mapping.py",
@@ -108178,10 +108178,10 @@
     },
     {
       "local": {
-        "missing_symbols": 25,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 23,
+        "path": "curobo/examples/guides/custom_optimization.py",
+        "resolved_symbols": 2,
+        "status": "partial"
       },
       "name": "curobo.examples.guides.custom_optimization",
       "path": "curobo/examples/guides/custom_optimization.py",
@@ -108406,10 +108406,10 @@
     },
     {
       "local": {
-        "missing_symbols": 107,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 104,
+        "path": "curobo/examples/reference/lidar_volumetric_mapping.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo.examples.reference.lidar_volumetric_mapping",
       "path": "curobo/examples/reference/lidar_volumetric_mapping.py",
@@ -110586,10 +110586,10 @@
     },
     {
       "local": {
-        "missing_symbols": 32,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 28,
+        "path": "curobo/examples/reference/live_volumetric_mapping_mpc.py",
+        "resolved_symbols": 4,
+        "status": "partial"
       },
       "name": "curobo.examples.reference.live_volumetric_mapping_mpc",
       "path": "curobo/examples/reference/live_volumetric_mapping_mpc.py",
@@ -110939,10 +110939,10 @@
     },
     {
       "local": {
-        "missing_symbols": 19,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 14,
+        "path": "curobo/examples/reference/robot_pose_calibration.py",
+        "resolved_symbols": 5,
+        "status": "partial"
       },
       "name": "curobo.examples.reference.robot_pose_calibration",
       "path": "curobo/examples/reference/robot_pose_calibration.py",
@@ -111113,10 +111113,10 @@
     },
     {
       "local": {
-        "missing_symbols": 24,
-        "path": null,
-        "resolved_symbols": 0,
-        "status": "missing_module"
+        "missing_symbols": 21,
+        "path": "curobo/examples/reference/sphere_fit_comparison.py",
+        "resolved_symbols": 3,
+        "status": "partial"
       },
       "name": "curobo.examples.reference.sphere_fit_comparison",
       "path": "curobo/examples/reference/sphere_fit_comparison.py",
@@ -238585,16 +238585,16 @@
   "runtime_summary": {
     "missing_modules": 0,
     "modules": 361,
-    "partial_modules": 0,
-    "resolved_modules": 361,
+    "partial_modules": 2,
+    "resolved_modules": 359,
     "symbols": 3872
   },
   "schema_version": 2,
   "summary": {
-    "missing_modules": 14,
+    "missing_modules": 0,
     "modules": 586,
-    "partial_modules": 0,
-    "resolved_modules": 572,
+    "partial_modules": 15,
+    "resolved_modules": 571,
     "symbols": 7182
   },
   "upstream": {

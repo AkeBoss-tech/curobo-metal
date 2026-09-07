@@ -25,6 +25,8 @@ from curobo._src.util_file import get_assets_path, join_path
 
 class _ArrayTextureImage:
     def __init__(self, image: Any) -> None:
+        if isinstance(image, torch.Tensor):
+            image = image.detach().cpu().numpy()
         self._image = np.asarray(image)
 
     def convert(self, mode: str) -> np.ndarray:

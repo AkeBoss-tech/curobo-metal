@@ -58,8 +58,10 @@ def test_lsr1_kernel_layout_and_validation_boundaries() -> None:
     empty = torch.zeros(0, 2, 2, 1)
     direction = jit_lsr1_compute_step_direction(empty, empty, grad, 0, 1e-3, True, torch.ones(2, 1, 1))
     torch.testing.assert_close(direction, -grad)
-    with pytest.raises(ValueError, match="stable_mode"):
-        jit_lsr1_compute_step_direction(torch.zeros(2, 0, 2), torch.zeros(2, 0, 2), grad, 0, 1e-3, False, torch.ones(2, 1, 1))
+    unstable_direction = jit_lsr1_compute_step_direction(
+        empty, empty, grad, 0, 1e-3, False, torch.ones(2, 1, 1)
+    )
+    torch.testing.assert_close(unstable_direction, -grad)
     with pytest.raises(ValueError, match="history and gradient"):
         jit_lsr1_compute_step_direction(torch.zeros(2, 1, 3), torch.zeros(2, 1, 3), grad, 1, 1e-3, True, torch.ones(2, 1, 1))
 

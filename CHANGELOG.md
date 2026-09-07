@@ -14,16 +14,18 @@ exposes a compatibility-oriented `curobo` namespace.
   whole-body slices.
 - Runtime-compiled Metal kernels for selected kinematics and collision hot
   paths, with MPS fallback-disabled tests.
-- The strict pinned Python surface is exact: all 361 runtime modules, 3,870
-  exports, and 747 callable shapes match the inventory.
+- The strict public-facade gate matches all 24 audited modules, 122 exports,
+  and 10 comparable callable signatures. The broader generated inventory
+  resolves 571/586 modules and reports the remaining 15 partial modules.
 - Nineteen bounded CUDA-vs-Metal replay capabilities have fresh, provenance-
   bound RTX 3090 evidence, including invalid, edge, and multi-case matrices.
 - Forty byte-exact, hash-pinned upstream robot/config/scene assets with their
   applicable third-party notices.
-- The complete 225-item pinned upstream workload census is classified. All 55
-  applicable modules pass unchanged in a clean installed-wheel run (1,116
-  tests); 122 platform-substituted, 35 not-applicable, and 13 external entries
-  retain explicit reasons.
+- The complete 225-item pinned upstream workload census is classified: 55
+  applicable, 120 platform-substituted, 35 not-applicable, and 15 external.
+  The installed-wheel case gauntlet exercises 2,852 cases: all 2,749 portable
+  cases pass, while 103 exact CUDA/Warp/MPS-float64 mechanism cases remain
+  explicitly excluded.
 
 ### Alpha limitations
 
@@ -32,6 +34,12 @@ exposes a compatibility-oriented `curobo` namespace.
   behavior in every untested numerical regime.
 - CUDA graphs, CUDA streams, NVRTC, Warp packed ABIs, Isaac/Omniverse, ROS, USD
   authoring/viewers, and platform-specific integrations are outside this alpha.
+- The high-level mapper rejects estimated dense ESDF mirrors above 1 GiB before
+  allocation; use standalone sparse mapping, coarser voxels, or partitioned maps
+  for larger volumes. Unbounded high-level sparse mapping is not in this alpha.
+- Thirteen bundled example workflows and two perception internals remain partial
+  in the broad static inventory; examples are a portable subset, not full
+  NVIDIA/Isaac/ROS/USD workflow replacements.
 - Do not install `curobo-metal` and NVIDIA cuRobo in the same Python environment;
   both own the `curobo` import namespace.
 

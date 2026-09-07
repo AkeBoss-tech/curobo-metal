@@ -48,6 +48,9 @@ class _KinematicsParamsPortable:
     def __post_init__(self) -> None:
         self._validate_robot_cfg()
         self.validate_shapes()
+        requested_num_envs = int(getattr(self.robot_cfg, "_curobo_num_envs", 1))
+        if requested_num_envs != self.num_envs:
+            self.set_num_envs(requested_num_envs)
 
     def _validate_robot_cfg(self) -> None:
         """Validate the portable model before lazily materializing tensors.

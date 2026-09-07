@@ -163,6 +163,13 @@ class SDFPoseDetector(PoseDetector):
         self.robot_mesh = robot_mesh
         self.config = config or SDFDetectorCfg()
         self.device = _resolve_device(self.config.device_cfg.device)
+        mesh_device = robot_mesh.vertices.device
+        # DeviceCfg is CPU by default for broad constructor compatibility,
+        # while this source API historically inherited its CUDA execution
+        # device from the already-created RobotMesh.  Preserve that behavior
+        # for an MPS mesh instead of silently staging every refinement on CPU.
+        if self.device.type == "cpu" and mesh_device.type == "mps":
+            self.device = mesh_device
         if self.device.type not in {"cpu", "mps"}:
             raise ValueError("portable SDF pose refinement supports only CPU and MPS devices")
         # The pinned CUDA implementation checks float32 tensor inputs before
@@ -175,6 +182,12 @@ class SDFPoseDetector(PoseDetector):
         self._eye6 = torch.eye(6, device=self.device, dtype=self.dtype)
         self._last_state: Optional[SDFRefinementState] = None
         self._run_count = 0
+        self._refine_inner_executor = GraphExecutor(
+            self._refine_inner_iterations,
+            self.device,
+            use_cuda_graph=self.config.use_cuda_graph,
+            clone_outputs=True,
+        )
         # PoseDetector's centroid config is intentionally not applicable here.
         self.geometry = robot_mesh
 

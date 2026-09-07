@@ -156,7 +156,11 @@ class _PortableRobotCfg:
             load_collision_spheres=load_collision_spheres,
             num_envs=num_envs,
         )
-        from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg, _apply_locked_joints
+        from curobo._src.robot.kinematics.kinematics_cfg import (
+            KinematicsCfg,
+            _apply_locked_joints,
+            _self_collision_from_robot,
+        )
 
         _apply_locked_joints(metal)
         params = cls._kinematics_params(metal)
@@ -166,10 +170,7 @@ class _PortableRobotCfg:
             device_cfg,
             list(metal.tool_frames),
             params,
-            self_collision_config={
-                "ignore": metal.self_collision_ignore,
-                "buffer": metal.self_collision_buffer,
-            },
+            self_collision_config=_self_collision_from_robot(metal, params, device_cfg),
         )
         dynamics = (
             cls._create_dynamics_config(params, device_cfg)

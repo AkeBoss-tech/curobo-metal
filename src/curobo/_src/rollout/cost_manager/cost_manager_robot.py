@@ -467,7 +467,10 @@ class RobotCostManager:
         tool = self.get_cost("tool_pose")
         if criteria is not None:
             if not isinstance(criteria, dict):
-                raise TypeError("tool_pose_criteria must be a dict")
+                # Match the public V2 contract: malformed runtime criteria are
+                # a value-validation failure (rather than a Python call-shape
+                # error).  Downstream callers rely on ValueError here.
+                raise ValueError("tool_pose_criteria must be a dict")
             if tool is not None:
                 tool.update_tool_pose_criteria(criteria)
 

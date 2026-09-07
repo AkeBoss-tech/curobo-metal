@@ -45,9 +45,9 @@ def test_native_scene_cost_aggregates_once_and_resets_workspace() -> None:
     raw = config.scene_collision_checker.get_sphere_distance(
         state, expected_buffer, torch.ones(1), config.activation_distance
     )
-    expected = 2.0 * 0.5 * (config.activation_distance[0] - raw).clamp_min(0).square().sum(-1)
+    expected = 2.0 * 0.5 * (config.activation_distance[0] - raw).clamp_min(0).square()
     torch.testing.assert_close(output, expected)
-    assert output.shape == (2, 2)
+    assert output.shape == (2, 2, 2)
     output.sum().backward()
     assert spheres.grad is not None and torch.isfinite(spheres.grad).all()
     assert cost.get_gradient_buffer().shape == spheres.shape
@@ -80,8 +80,8 @@ def test_scene_cost_topology_sweep_and_binary_lifecycle() -> None:
         requires_grad=True,
     )
     result = cost(SimpleNamespace(robot_spheres=spheres), trajectory_dt=torch.tensor([0.1]))
-    assert result.shape == (1, 3) and result.device == spheres.device
-    assert result[0, 1] >= 1.0  # binary mode adds one for a collision penalty.
+    assert result.shape == (1, 3, 2) and result.device == spheres.device
+    assert bool((result >= 1.0).any())  # binary mode adds one for a collision penalty.
     result.sum().backward()
     assert torch.isfinite(spheres.grad).all()
     with pytest.raises(ValueError, match="horizon"):

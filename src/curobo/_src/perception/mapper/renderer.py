@@ -62,7 +62,12 @@ class BlockSparseTSDFRenderer:
             depth_maximum_distance=integrator.config.depth_maximum_distance,
             minimum_tsdf_weight=integrator.config.minimum_tsdf_weight,
         )
-        self.device = integrator.device if hasattr(integrator, "device") else integrator._tsdf.device
+        if hasattr(integrator, "device"):
+            self.device = torch.device(integrator.device)
+        elif getattr(integrator._tsdf, "_portable_sparse", False):
+            self.device = integrator._tsdf.device
+        else:
+            self.device = torch.device(integrator.config.device)
         self._buffer_size = 0
         self._hit_points = None
         self._hit_normals = None
@@ -136,7 +141,10 @@ class BlockSparseTSDFRenderer:
         pose: Pose,
         image_shape: Tuple[int, int],
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        return self.integrator.render(intrinsics, pose, image_shape)
+        backend = getattr(self.integrator, "mapper", None)
+        if backend is None:
+            return self.integrator._render_sparse(intrinsics, pose, image_shape)
+        return backend.render(intrinsics, pose, image_shape)
 
     def render_depth(self, intrinsics: torch.Tensor, pose: Pose, image_shape: Tuple[int, int]) -> torch.Tensor:
         return self.render(intrinsics, pose, image_shape)[0]
@@ -155,8 +163,9 @@ class BlockSparseTSDFRenderer:
     def render_color(
         self, intrinsics: torch.Tensor, pose: Pose, image_shape: Tuple[int, int]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        if hasattr(self.integrator, "render_color"):
-            return self.integrator.render_color(intrinsics, pose, image_shape)
+        backend = getattr(self.integrator, "mapper", None)
+        if backend is not None and hasattr(backend, "render_color"):
+            return backend.render_color(intrinsics, pose, image_shape)
         depth, normals, valid = self.render(intrinsics, pose, image_shape)
         return depth, normals, torch.zeros(depth.shape + (3,), device=depth.device, dtype=torch.uint8), valid
 

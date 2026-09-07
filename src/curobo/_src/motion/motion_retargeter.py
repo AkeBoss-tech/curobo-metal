@@ -35,10 +35,6 @@ class MotionRetargeter:
     def __init__(self, config: MotionRetargeterCfg):
         if not isinstance(config, MotionRetargeterCfg):
             raise TypeError("config must be MotionRetargeterCfg")
-        if config.use_mpc and len(config.tool_pose_criteria) != 1:
-            raise NotImplementedError(
-                "portable MPC retargeting supports exactly one tracked tool frame"
-            )
         self._config = config
         self._num_envs = config.num_envs
         self._tool_pose_criteria = dict(config.tool_pose_criteria)
