@@ -36,7 +36,7 @@ jobs:
             --public-facades-only \
             --require-exact-exports
 
-  cpu:
+  python:
     runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     strategy:
       fail-fast: false
@@ -71,13 +71,13 @@ jobs:
             --inventory "$GITHUB_WORKSPACE/artifacts/api_compat/upstream-api.json" \
             --require-installed-wheel
 
-      - name: Verify unchanged portable applications on CPU
+      - name: Verify unchanged portable applications across Python versions
         run: |
           .venv/bin/python tools/application_compat/run.py run \
             --python "$GITHUB_WORKSPACE/.venv/bin/python" \
-            --backend metal --expect-device cpu \
+            --backend metal --expect-device mps \
             --wheel "$GITHUB_WORKSPACE"/dist/*.whl \
-            --output "$RUNNER_TEMP/application-compat-cpu"
+            --output "$RUNNER_TEMP/application-compat-python"
 
   macos:
     runs-on: [self-hosted, macOS, ARM64, curobo-metal, mps]

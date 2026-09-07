@@ -34,6 +34,8 @@ from curobo._src.util.logging import deprecated, log_and_raise
 from curobo_metal.ops.perception import CameraObservation as NativeObservation
 from curobo_metal.ops.perception import PerceptionConfig, PerceptionMapper
 from curobo_metal.ops.perception.core import DenseMap, dense_esdf, integrate_lidar
+from curobo_metal.ops.perception.core import RenderResult
+from curobo_metal.ops.world_collision import ESDFQueryResult
 from .renderer import depth_to_colormap, normals_to_colormap
 
 # Imported lazily by the real CUDA implementation.  Keeping the names here
@@ -87,10 +89,11 @@ def _device(value):
 class Mapper:
     def __init__(self, config: MapperCfg):
         self.config = config
-        _validate_dense_mapper_budget(config)
+        self._sparse_only = _estimated_dense_mapper_bytes(config) > _MAX_DENSE_MAPPER_BYTES
         center = (0.0,0.0,0.0) if config.grid_center is None else tuple(torch.as_tensor(config.grid_center).tolist())
+        native_shape = (2, 2, 2) if self._sparse_only else config.native_grid_shape
         native = PerceptionConfig(
-            config.native_grid_shape, config.voxel_size, center,
+            native_shape, config.voxel_size, center,
             config.truncation_distance, config.depth_minimum_distance,
             config.depth_maximum_distance, config.accumulator_w_max,
             block_size=config.block_size,
@@ -100,7 +103,7 @@ class Mapper:
         # for lifecycle metadata here.  Give it a dense-capacity marker so its
         # optional compatibility sparse mirror is not allocated and then
         # immediately discarded below (notably important for large maps).
-        self._storage = BlockSparseTSDF.from_native(BlockSparseTSDFCfg(
+        storage_config = BlockSparseTSDFCfg(
             max_blocks=config.max_blocks,
             hash_capacity=config.hash_capacity,
             voxel_size=config.voxel_size,
@@ -120,7 +123,12 @@ class Mapper:
             feature_channels_per_thread=config.feature_channels_per_thread,
             color_grid_size=config.color_grid_size,
             accumulator_w_max=config.accumulator_w_max,
-        ), self._mapper)
+        )
+        self._storage = (
+            BlockSparseTSDF._from_sparse_native(storage_config, self._mapper)
+            if self._sparse_only else
+            BlockSparseTSDF.from_native(storage_config, self._mapper)
+        )
         # Keep the source-visible RGB/feature block pool compact while the
         # native dense field supplies differentiable TSDF/ESDF queries.  The
         # pool is bounded by MapperCfg.max_blocks and therefore does not
@@ -348,7 +356,8 @@ class Mapper:
         has_static = bool(self._static_mask.any().item())
         if has_static:
             self._strip_static_layer(rebuild_esdf=False)
-        self._mapper.update(NativeObservation(depth, intrinsics, pose))
+        if not self._sparse_only:
+            self._mapper.update(NativeObservation(depth, intrinsics, pose))
         if self.config.decay_factor < 1.0:
             self._portable_sparse.decay_and_recycle(self.config.decay_factor)
         # Geometry allocation/fusion and appearance support use separate
@@ -360,13 +369,16 @@ class Mapper:
             intrinsics=intrinsics,
             pose=obs.pose,
         )
-        self._portable_sparse.integrate(sparse_obs)
+        visible_blocks = self._portable_sparse.integrate(sparse_obs)
+        if self._sparse_only:
+            self._replace_state(generation=self._mapper.state.generation + 1)
         self._update_portable_camera_support(obs)
         if has_static:
             self._apply_static_layer()
         self._frame_count += 1
         valid_pixels = torch.isfinite(depth) & (depth >= self.config.depth_minimum_distance) & (depth <= self.config.depth_maximum_distance)
-        visible_blocks = self._storage._logical_block_count()[0] if bool(valid_pixels.any().item()) else 0
+        if not self._sparse_only:
+            visible_blocks = self._storage._logical_block_count()[0] if bool(valid_pixels.any().item()) else 0
         support_overflow = 0
         if visible_blocks:
             # A bounded support list overflows whenever a projected block has
@@ -438,16 +450,19 @@ class Mapper:
         has_static = bool(self._static_mask.any().item())
         if has_static:
             self._strip_static_layer(rebuild_esdf=False)
-        self._mapper.state = integrate_lidar(
-            self._mapper.config, self._mapper.state, ranges, matrices,
-            valid_range, elevation,
-        )
+        if not self._sparse_only:
+            self._mapper.state = integrate_lidar(
+                self._mapper.config, self._mapper.state, ranges, matrices,
+                valid_range, elevation,
+            )
         if self.config.decay_factor < 1.0:
             self._portable_sparse.decay_and_recycle(self.config.decay_factor)
         visible_blocks = self._portable_sparse.integrate_lidar(
             portable_observation,
             visible_capacity=self.config.max_visible_blocks_per_lidar_integration,
         )
+        if self._sparse_only:
+            self._replace_state(generation=self._mapper.state.generation + 1)
         if has_static:
             self._apply_static_layer()
         if advance_frame:
@@ -587,6 +602,8 @@ class Mapper:
     def compute_esdf(self, esdf_origin: Optional[torch.Tensor] = None, esdf_voxel_size: Optional[float] = None) -> VoxelGrid:
         if esdf_origin is None and esdf_voxel_size is None and self.is_esdf_current:
             return self._last_voxel_grid
+        if self._sparse_only:
+            return self._compute_sparse_esdf(esdf_origin, esdf_voxel_size)
         if esdf_voxel_size is not None and esdf_voxel_size != self.config.voxel_size:
             raise NotImplementedError(
                 "portable dense Mapper computes ESDF at voxel_size; resampling is unavailable"
@@ -609,6 +626,73 @@ class Mapper:
         self._esdf_compute_count += 1
         return self._last_voxel_grid
 
+    def _compute_sparse_esdf(
+        self, esdf_origin: Optional[torch.Tensor], esdf_voxel_size: Optional[float]
+    ) -> VoxelGrid:
+        """Materialize only the requested collision window for a sparse map."""
+        import numpy as np
+        from scipy.ndimage import distance_transform_edt
+
+        voxel_size = float(esdf_voxel_size or self.config.esdf_voxel_size)
+        if not math.isfinite(voxel_size) or voxel_size <= 0:
+            raise ValueError("esdf_voxel_size must be finite and positive")
+        occupied = self._extract_sparse_occupied_voxels(
+            surface_only=False, sdf_threshold=None, subvoxel_factor=1, max_points=None
+        ).centers
+        if self.config.extent_esdf_meters_xyz is not None:
+            extent = torch.as_tensor(
+                self.config.extent_esdf_meters_xyz, device=self.device, dtype=torch.float32
+            )
+            center = (
+                torch.as_tensor(esdf_origin, device=self.device, dtype=torch.float32)
+                if esdf_origin is not None else self.config.grid_center.to(self.device)
+            )
+        elif len(occupied):
+            lower = occupied.amin(0) - 2 * voxel_size
+            upper = occupied.amax(0) + 2 * voxel_size
+            extent = (upper - lower).clamp_min(2 * voxel_size)
+            center = (lower + upper) * 0.5
+            if esdf_origin is not None:
+                center = torch.as_tensor(esdf_origin, device=self.device, dtype=torch.float32)
+        else:
+            extent = torch.full((3,), 2 * voxel_size, device=self.device)
+            center = (
+                torch.as_tensor(esdf_origin, device=self.device, dtype=torch.float32)
+                if esdf_origin is not None else self.config.grid_center.to(self.device)
+            )
+        if center.shape != (3,) or not bool(torch.isfinite(center).all().item()):
+            raise ValueError("esdf_origin must be a finite xyz vector")
+        shape = tuple(max(2, int(math.ceil(float(value) / voxel_size))) for value in extent)
+        cell_count = math.prod(shape)
+        if cell_count > 64_000_000:
+            raise MemoryError(
+                "requested ESDF output window exceeds 64 million cells; provide a smaller "
+                "extent_esdf_meters_xyz or a coarser esdf_voxel_size"
+            )
+        mask = np.zeros(shape, dtype=bool)
+        if len(occupied):
+            lower = center - torch.as_tensor(shape, device=self.device) * voxel_size * 0.5
+            index = torch.floor((occupied - lower) / voxel_size).long()
+            inside = ((index >= 0) & (index < index.new_tensor(shape))).all(-1)
+            if bool(inside.any().item()):
+                selected = index[inside].detach().cpu().numpy()
+                mask[selected[:, 0], selected[:, 1], selected[:, 2]] = True
+        if mask.any():
+            values = (
+                distance_transform_edt(~mask) - distance_transform_edt(mask)
+            ).astype(np.float32) * voxel_size
+        else:
+            values = np.full(shape, self._mapper.config.unobserved_esdf, dtype=np.float32)
+        field = torch.from_numpy(values).to(self.device)
+        self._last_voxel_grid = VoxelGrid(
+            name="mapper_esdf", pose=[*center.detach().cpu().tolist(), 1, 0, 0, 0],
+            dims=[value * voxel_size for value in shape], voxel_size=voxel_size,
+            feature_tensor=field,
+        )
+        self._last_esdf_generation = self._mapper.state.generation.clone()
+        self._esdf_compute_count += 1
+        return self._last_voxel_grid
+
     def _portable_get_voxel_grid(self):
         """Return a current collision grid, refreshing the derived cache if needed."""
         if not self.is_esdf_current:
@@ -618,9 +702,65 @@ class Mapper:
     def _portable_query(self, points: torch.Tensor, *, env_indices: Optional[torch.Tensor] = None,
               padding: float = 0.0):
         """Differentiably query the current dense ESDF on the mapper device."""
+        if self._sparse_only:
+            return self._query_sparse(points, env_indices=env_indices, padding=padding)
         if not self.is_esdf_current:
             self.compute_esdf()
         return self._mapper.query(points, env_indices=env_indices, padding=padding)
+
+    def _query_sparse(self, points: torch.Tensor, *, env_indices=None, padding: float = 0.0):
+        """Query allocated sparse surface voxels without a global dense mirror."""
+        if not isinstance(points, torch.Tensor) or not points.is_floating_point():
+            raise TypeError("points must be a floating-point torch.Tensor")
+        if points.device != self.device:
+            raise ValueError(f"points must be on {self.device}")
+        if not math.isfinite(padding) or padding < 0:
+            raise ValueError("padding must be finite and nonnegative")
+        unbatched = points.ndim == 2
+        query = points.unsqueeze(0) if unbatched else points
+        if query.ndim != 3 or query.shape[-1] != 3:
+            raise ValueError("points must have shape [Q,3] or [B,Q,3]")
+        if env_indices is not None:
+            env = torch.as_tensor(env_indices, device=self.device)
+            if env.dtype != torch.int64 or env.shape != (len(query),) or bool((env != 0).any().item()):
+                raise ValueError("sparse portable Mapper supports only environment index 0")
+        surface = self._extract_sparse_occupied_voxels(
+            surface_only=True, sdf_threshold=None, subvoxel_factor=1, max_points=None
+        ).centers.to(device=self.device, dtype=query.dtype)
+        flat = query.reshape(-1, 3)
+        if not len(surface):
+            distance = torch.full(flat.shape[:1], torch.inf, device=self.device, dtype=query.dtype)
+            gradient = torch.zeros_like(flat)
+            valid = torch.zeros(flat.shape[:1], device=self.device, dtype=torch.bool)
+        else:
+            best = torch.full(flat.shape[:1], torch.inf, device=self.device, dtype=query.dtype)
+            winner = torch.zeros(flat.shape[:1], device=self.device, dtype=torch.long)
+            for start in range(0, len(surface), 4096):
+                candidate = surface[start : start + 4096]
+                values, local = torch.cdist(flat, candidate).min(-1)
+                improve = values < best
+                best = torch.where(improve, values, best)
+                winner = torch.where(improve, local + start, winner)
+            delta = flat - surface[winner]
+            norm = torch.linalg.vector_norm(delta, dim=-1).clamp_min(torch.finfo(query.dtype).eps)
+            gradient = delta / norm[:, None]
+            # Treat points inside the nearest occupied voxel as negative.
+            sign = torch.where(best <= self.config.voxel_size * 0.5,
+                               -torch.ones_like(best), torch.ones_like(best))
+            distance = sign * best - padding
+            lower, upper = self.config.get_grid_bounds()
+            lower = flat.new_tensor(lower)
+            upper = flat.new_tensor(upper)
+            valid = ((flat >= lower) & (flat <= upper)).all(-1)
+            distance = torch.where(valid, distance, torch.full_like(distance, torch.inf))
+            gradient = torch.where(valid[:, None], sign[:, None] * gradient, torch.zeros_like(gradient))
+        shape = query.shape[:2]
+        return ESDFQueryResult(
+            distance.reshape(shape), gradient.reshape(shape + (3,)),
+            torch.where(valid, torch.zeros_like(valid, dtype=torch.long),
+                        torch.full_like(valid, -1, dtype=torch.long)).reshape(shape),
+            valid.reshape(shape),
+        )
 
     def extract_mesh(self, refine_iterations: int = 0, surface_only: bool = True) -> Mesh:
         if self._portable_sparse._pool_to_coord:
@@ -872,8 +1012,10 @@ class Mapper:
         )
         if is_sparse_block_payload(blocks):
             count = self._portable_sparse.import_blocks(blocks)
-            data = self._portable_sparse.data
-            self._sync_dense_from_sparse()
+            if not self._sparse_only:
+                self._sync_dense_from_sparse()
+            else:
+                self._replace_state(generation=self._mapper.state.generation + 1)
             self._invalidate_esdf_cache()
             return count
         if not is_portable_dense_block_payload(blocks):
@@ -889,15 +1031,36 @@ class Mapper:
 
     def get_stats(self, scan_pool: bool = True, scan_hash: bool = False) -> dict:
         stats = self._storage.get_stats(scan_pool, scan_hash)
+        if self._sparse_only:
+            data = self._portable_sparse.data
+            pools = sorted(self._portable_sparse._pool_to_coord)
+            if pools:
+                index = torch.as_tensor(pools, device=self.device, dtype=torch.long)
+                values = data.block_data[index].float()
+                observed_mask = values[..., 1] >= float(self.config.minimum_tsdf_weight)
+                occupied_mask = observed_mask & (values[..., 0] <= 0)
+                static_voxels = (
+                    int(torch.isfinite(data.static_block_data[index]).sum().item())
+                    if data.has_static else 0
+                )
+                observed_voxels = int(observed_mask.sum().item())
+                occupied_voxels = int(occupied_mask.sum().item()) + static_voxels
+            else:
+                observed_voxels = occupied_voxels = static_voxels = 0
+        else:
+            occupied_voxels = int(self._mapper.state.occupancy.sum())
+            observed_voxels = int((self._mapper.state.weight > 0).sum())
+            static_voxels = int(self._static_mask.sum())
         stats.update({
-            "occupied_voxels": int(self._mapper.state.occupancy.sum()),
-            "observed_voxels": int((self._mapper.state.weight > 0).sum()),
-            "static_voxels": int(self._static_mask.sum()),
+            "occupied_voxels": occupied_voxels,
+            "observed_voxels": observed_voxels,
+            "static_voxels": static_voxels,
             "generation": int(self._mapper.state.generation.max()),
             "frame_count": self._frame_count,
             "esdf_compute_count": self._esdf_compute_count,
             "esdf_current": self.is_esdf_current,
-            "esdf_storage": "dense_exact",
+            "esdf_storage": "sparse_window" if self._sparse_only else "dense_exact",
+            "tsdf_storage": "block_sparse" if self._sparse_only else "dense_mirror",
             "last_integration": dict(self._last_integration),
             "last_integration_kernel_timings_ms": dict(self._last_integration_kernel_timings_ms),
         })
@@ -955,15 +1118,46 @@ class Mapper:
         intrinsics, matrix, batched = self._canonical_render_inputs(intrinsics, pose)
         if batched:
             raise ValueError("_render_result is an unbatched compatibility helper; use render() for camera batches")
+        if self._sparse_only:
+            return self._render_sparse_result(intrinsics[0], matrix[0], image_shape)
         return self._mapper.render(intrinsics[0], matrix[0], image_shape)
+
+    def _render_sparse_result(self, intrinsics, matrix, image_shape) -> RenderResult:
+        """Render allocated sparse surface voxels with a deterministic z-buffer."""
+        height, width = image_shape
+        if height <= 0 or width <= 0:
+            raise ValueError("image_shape must contain positive height and width")
+        depth = torch.full((height * width,), torch.inf, device=self.device,
+                           dtype=intrinsics.dtype)
+        points = self._extract_sparse_occupied_voxels(
+            surface_only=True, sdf_threshold=None, subvoxel_factor=1, max_points=None
+        ).centers.to(device=self.device, dtype=intrinsics.dtype)
+        if len(points):
+            local = (points - matrix[:3, 3]) @ matrix[:3, :3]
+            z = local[:, 2]
+            u = torch.round(intrinsics[0, 0] * local[:, 0] / z.clamp_min(1e-6)
+                            + intrinsics[0, 2]).long()
+            v = torch.round(intrinsics[1, 1] * local[:, 1] / z.clamp_min(1e-6)
+                            + intrinsics[1, 2]).long()
+            inside = (z > 0) & (u >= 0) & (u < width) & (v >= 0) & (v < height)
+            if bool(inside.any().item()):
+                linear = v[inside] * width + u[inside]
+                depth.scatter_reduce_(0, linear, z[inside], reduce="amin", include_self=True)
+        valid = torch.isfinite(depth)
+        return RenderResult(torch.where(valid, depth, torch.zeros_like(depth)).reshape(height, width),
+                            valid.reshape(height, width))
 
     def render_depth(self, intrinsics: torch.Tensor, pose: Pose, image_shape: Tuple[int, int]) -> torch.Tensor:
         return self.render(intrinsics, pose, image_shape)[0]
 
     def render(self, intrinsics: torch.Tensor, pose: Pose, image_shape: Tuple[int, int]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         intrinsics, matrices, batched = self._canonical_render_inputs(intrinsics, pose)
-        results = [self._mapper.render(intrinsics[index], matrices[index], image_shape)
-                   for index in range(intrinsics.shape[0])]
+        results = [
+            (self._render_sparse_result(intrinsics[index], matrices[index], image_shape)
+             if self._sparse_only else
+             self._mapper.render(intrinsics[index], matrices[index], image_shape))
+            for index in range(intrinsics.shape[0])
+        ]
         depth = torch.stack([result.depth for result in results])
         valid = torch.stack([result.valid for result in results])
         # Estimate geometric normals from the rendered camera-space surface.
@@ -1169,6 +1363,12 @@ class Mapper:
         upper = torch.as_tensor(bounds_max, device=self.device, dtype=self._mapper.state.tsdf.dtype)
         if lower.shape != (3,) or upper.shape != (3,) or bool((upper < lower).any().item()):
             raise ValueError("bounds must be xyz vectors with bounds_max >= bounds_min")
+        if self._sparse_only:
+            cleared = self._portable_sparse.clear_region(lower, upper)
+            if cleared:
+                self._replace_state(generation=self._mapper.state.generation + 1)
+                self._invalidate_esdf_cache()
+            return cleared
         origin = self.config.origin.to(device=self.device, dtype=lower.dtype)
         shape = torch.tensor(self.config.native_grid_shape, device=self.device)
         # Native storage is x,y,z while this compatibility config exposes
@@ -1228,6 +1428,12 @@ class Mapper:
         return count
 
     def clear_blocks(self, pool_indices) -> int:
+        if self._sparse_only:
+            cleared = self._portable_sparse.clear_blocks(pool_indices)
+            if cleared:
+                self._replace_state(generation=self._mapper.state.generation + 1)
+                self._invalidate_esdf_cache()
+            return cleared
         index = torch.as_tensor(pool_indices, device=self.device, dtype=torch.long).reshape(-1)
         size = int(torch.tensor(self.config.native_grid_shape).prod().item())
         if bool(((index < 0) | (index >= size)).any().item()):
@@ -1267,6 +1473,8 @@ class Mapper:
             raise TypeError("static stamping requires SceneCfg or SceneData carrying SceneCfg")
         if scene.mesh or scene.voxel or scene.capsule or scene.cylinder:
             raise NotImplementedError("portable static stamping supports only cuboids and spheres; mesh/voxel/Warp primitives require CUDA/Warp")
+        if self._sparse_only:
+            return self._update_sparse_static_obstacles(scene)
         state = self._mapper.state
         centers = torch.stack(torch.meshgrid(
             *[(torch.arange(n, device=self.device, dtype=state.tsdf.dtype) - (n - 1) / 2) * self.config.voxel_size + c
@@ -1311,6 +1519,104 @@ class Mapper:
         self._apply_static_layer()
         self._invalidate_esdf_cache()
         return int(mask.sum().item())
+
+    def _update_sparse_static_obstacles(self, scene) -> int:
+        """Replace analytic static geometry directly in the sparse block pool."""
+        from curobo._src.geom.types import Cuboid, Sphere
+
+        data = self._portable_sparse.data
+        active_before = list(self._portable_sparse._pool_to_coord)
+        for pool in active_before:
+            data.static_block_data[pool].fill_(float("inf"))
+            data.static_block_sums[pool] = 0
+        block_size = int(data.block_size)
+        voxel_size = float(data.voxel_size)
+        grid_d, grid_h, grid_w = (int(value) for value in data.grid_shape)
+        grid_xyz = torch.tensor([grid_w, grid_h, grid_d], device=self.device,
+                                dtype=torch.float32)
+        block_offsets = torch.tensor(
+            [math.ceil(grid_w / block_size) // 2,
+             math.ceil(grid_h / block_size) // 2,
+             math.ceil(grid_d / block_size) // 2],
+            device=self.device, dtype=torch.long,
+        )
+        center_offset = grid_xyz * 0.5
+        local = torch.stack(torch.meshgrid(
+            *[torch.arange(block_size, device=self.device, dtype=torch.float32)
+              for _ in range(3)], indexing="ij"
+        ), -1).reshape(-1, 3)
+
+        primitives = []
+        for obstacle in scene.cuboid:
+            if not isinstance(obstacle, Cuboid):
+                raise TypeError("scene.cuboid must contain Cuboid records")
+            position = torch.tensor(obstacle.pose[:3], device=self.device, dtype=torch.float32)
+            quat = torch.tensor(obstacle.pose[3:], device=self.device, dtype=torch.float32)
+            quat = quat / torch.linalg.vector_norm(quat).clamp_min(torch.finfo(quat.dtype).eps)
+            w, x, y, z = quat.unbind()
+            rotation = torch.stack((
+                1 - 2 * (y*y + z*z), 2 * (x*y - z*w), 2 * (x*z + y*w),
+                2 * (x*y + z*w), 1 - 2 * (x*x + z*z), 2 * (y*z - x*w),
+                2 * (x*z - y*w), 2 * (y*z + x*w), 1 - 2 * (x*x + y*y),
+            )).reshape(3, 3)
+            half = torch.tensor(obstacle.dims, device=self.device, dtype=torch.float32) / 2
+            world_half = rotation.abs() @ half
+            primitives.append((position - world_half, position + world_half,
+                               lambda points, p=position, r=rotation, h=half:
+                               (((points - p) @ r).abs() <= h).all(-1)))
+        for obstacle in scene.sphere:
+            if not isinstance(obstacle, Sphere):
+                raise TypeError("scene.sphere must contain Sphere records")
+            position = torch.tensor(
+                obstacle.position if obstacle.position is not None else obstacle.pose[:3],
+                device=self.device, dtype=torch.float32,
+            )
+            radius = float(obstacle.radius)
+            extent = torch.full((3,), radius, device=self.device)
+            primitives.append((position - extent, position + extent,
+                               lambda points, p=position, r=radius:
+                               torch.linalg.vector_norm(points - p, dim=-1) <= r))
+
+        for lower, upper, contains in primitives:
+            scaled_lower = (lower - data.origin) / voxel_size + center_offset
+            scaled_upper = (upper - data.origin) / voxel_size + center_offset
+            first = torch.floor(scaled_lower / block_size).long() - block_offsets
+            last = torch.floor(scaled_upper / block_size).long() - block_offsets
+            for bx in range(int(first[0]), int(last[0]) + 1):
+                for by in range(int(first[1]), int(last[1]) + 1):
+                    for bz in range(int(first[2]), int(last[2]) + 1):
+                        coord = (bx, by, bz)
+                        bounded = self._portable_sparse._coords_in_bounds(
+                            torch.tensor([coord], dtype=torch.long)
+                        )
+                        if not len(bounded):
+                            continue
+                        pool, _ = self._portable_sparse._allocate(coord)
+                        if pool is None:
+                            continue
+                        base = ((torch.tensor(coord, device=self.device) + block_offsets)
+                                * block_size - center_offset)
+                        centers = data.origin + (base + local + 0.5) * voxel_size
+                        inside = contains(centers)
+                        if bool(inside.any().item()):
+                            data.static_block_data[pool, inside] = -0.5
+                            data.static_block_sums[pool] = int(inside.sum().item())
+
+        stale = []
+        for pool in list(self._portable_sparse._pool_to_coord):
+            has_dynamic = bool((data.block_data[pool, :, 1] > 0).any().item())
+            has_static = bool(torch.isfinite(data.static_block_data[pool]).any().item())
+            if not has_dynamic and not has_static:
+                stale.append(pool)
+        if stale:
+            self._portable_sparse.clear_blocks(stale)
+        count = sum(
+            int(torch.isfinite(data.static_block_data[pool]).sum().item())
+            for pool in self._portable_sparse._pool_to_coord
+        )
+        self._replace_state(generation=self._mapper.state.generation + 1)
+        self._invalidate_esdf_cache()
+        return count
 
     def _sync_sparse_static_layer(self, mask: torch.Tensor) -> None:
         """Mirror dense static occupancy into the exported sparse channel."""

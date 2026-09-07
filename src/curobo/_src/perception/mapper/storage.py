@@ -396,6 +396,24 @@ class BlockSparseTSDF:
         result._initialize(config, native=native)
         return result
 
+    @classmethod
+    def _from_sparse_native(
+        cls, config: BlockSparseTSDFCfg, native: PerceptionMapper
+    ) -> "BlockSparseTSDF":
+        """Build metadata around a tiny lifecycle mapper for sparse-only storage."""
+        result = cls.__new__(cls)
+        result.config = config
+        result.kernels = make_block_sparse_kernels(config)
+        result._native = native
+        result._failure_count = 0
+        result._frame_observed = None
+        result._coords_cache = None
+        result._sparse_data = None
+        result.reset = result._reset
+        result.prepare_frame = result._prepare_frame
+        result.get_stats = result._get_stats
+        return result
+
     @property
     def _state(self) -> DenseMap:
         return self._native.state

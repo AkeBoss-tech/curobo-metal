@@ -456,7 +456,7 @@ class PortableSparseTSDF:
         current[..., 1] = total_weight * scale
         self.data.block_data[pool_indices] = current.to(self.data.block_data.dtype)
 
-    def integrate(self, observation: Any, *, visible_capacity: int | None = None) -> None:
+    def integrate(self, observation: Any, *, visible_capacity: int | None = None) -> int:
         coords, _mean_rgb = self._candidate_blocks(observation)
         return self._integrate_candidates(
             coords,
@@ -679,8 +679,8 @@ class PortableSparseTSDF:
         return cleared
 
     def clear_region(self, bounds_min: Any, bounds_max: Any) -> int:
-        minimum = torch.as_tensor(bounds_min, dtype=torch.float32).reshape(3)
-        maximum = torch.as_tensor(bounds_max, dtype=torch.float32).reshape(3)
+        minimum = torch.as_tensor(bounds_min).detach().to(device="cpu", dtype=torch.float32).reshape(3)
+        maximum = torch.as_tensor(bounds_max).detach().to(device="cpu", dtype=torch.float32).reshape(3)
         if bool((maximum < minimum).any()):
             raise ValueError("bounds_max must be greater than or equal to bounds_min")
         extent = float(self.config.voxel_size * self.config.block_size)
