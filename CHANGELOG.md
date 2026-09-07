@@ -17,6 +17,9 @@ exposes a compatibility-oriented `curobo` namespace.
 - The strict public-facade gate matches all 24 audited modules, 122 exports,
   and 10 comparable callable signatures. The broader generated inventory
   resolves 571/586 modules and reports the remaining 15 partial modules.
+- The ecosystem corpus resolves all 171 documented, example-used, and
+  downstream-used compatibility targets. Thirty hash-pinned applications run
+  unchanged through an installed wheel with automatic MPS selection.
 - Nineteen bounded CUDA-vs-Metal replay capabilities have fresh, provenance-
   bound RTX 3090 evidence, including invalid, edge, and multi-case matrices.
 - Forty byte-exact, hash-pinned upstream robot/config/scene assets with their
@@ -34,9 +37,9 @@ exposes a compatibility-oriented `curobo` namespace.
   behavior in every untested numerical regime.
 - CUDA graphs, CUDA streams, NVRTC, Warp packed ABIs, Isaac/Omniverse, ROS, USD
   authoring/viewers, and platform-specific integrations are outside this alpha.
-- The high-level mapper rejects estimated dense ESDF mirrors above 1 GiB before
-  allocation; use standalone sparse mapping, coarser voxels, or partitioned maps
-  for larger volumes. Unbounded high-level sparse mapping is not in this alpha.
+- Large high-level maps automatically use block-sparse camera/LiDAR fusion,
+  queries, bounded ESDF materialization, rendering, clearing, and checkpoints
+  without allocating the nominal dense volume.
 - Thirteen bundled example workflows and two perception internals remain partial
   in the broad static inventory; examples are a portable subset, not full
   NVIDIA/Isaac/ROS/USD workflow replacements.

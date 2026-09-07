@@ -1,0 +1,40 @@
+name: upstream-drift
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.13
+      - name: Fetch current upstream state
+        run: |
+          upstream_dir="$RUNNER_TEMP/curobo-upstream"
+          rm -rf "$upstream_dir"
+          git clone --filter=blob:none https://github.com/NVlabs/curobo.git "$upstream_dir"
+          git -C "$upstream_dir" fetch --tags --force
+      - name: Generate API, test, example, and packaging drift
+        run: |
+          uv run --no-project --python 3.13 python tools/upstream/drift_report.py \
+            --source "$RUNNER_TEMP/curobo-upstream" \
+            --output "$RUNNER_TEMP/upstream-drift.json"
+      - name: Recheck the downstream compatibility corpus
+        run: |
+          PYTHONPATH=src uv run --no-project --python 3.13 python tools/api_compat/ecosystem_gate.py \
+            --corpus artifacts/api_compat/ecosystem-api.json \
+            --output "$RUNNER_TEMP/ecosystem-gate.json"
+      - name: Preserve drift evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-compatibility-drift
+          path: |
+            ${{ runner.temp }}/upstream-drift.json
+            ${{ runner.temp }}/ecosystem-gate.json

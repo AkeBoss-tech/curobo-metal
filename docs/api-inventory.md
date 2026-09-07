@@ -74,6 +74,13 @@ python tools/api_compat/generate.py \
   --check
 ```
 
+The free self-hosted workflow `.github/workflows/upstream-drift.yml` also runs
+daily and on demand. It compares the pinned revision with current upstream main,
+groups changed files into Python API, behavior-test, example, documentation, and
+packaging buckets, records added and removed public symbols, and rechecks every
+target in the committed downstream ecosystem corpus. Its JSON files are retained
+as the `upstream-compatibility-drift` workflow artifact.
+
 `--check` fails when the file is missing or stale. `--require-compatible` adds a
 strict static drop-in gate; it currently passes at 361/361 exact modules. It
 remains separate because static equality alone is not behavioral equivalence.
