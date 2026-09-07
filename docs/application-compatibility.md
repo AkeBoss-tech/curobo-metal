@@ -1,6 +1,6 @@
 # Unchanged portable V2 applications
 
-The application gate runs eight project-authored programs through the standard
+The application gate runs 30 project-authored programs through the standard
 `curobo` namespace, against an installed wheel. Their source and shared reporting
 helper are hash-pinned. The same files are supplied for CUDA replay; the runner
 never rewrites their imports, calls, device choices, graph flags, or assertions.
@@ -19,6 +19,13 @@ These are portable applications targeting upstream commit
 | Collision mutation | Cuboid penetration, world replacement, restoration |
 | IK | Moved reachable goal, endpoint accuracy, unreachable goal, input ownership |
 | Motion planning | Nonzero C-space move, repeated planning, endpoint accuracy, zero-attempt result |
+| State variants | Full derivative fields, reorder round trip, repeat/slice ownership |
+| Pose variants | Matrix round trip, batch operations, point transforms, linear/angular distance |
+| Sensor values | Camera filtering/rays and calibrated planar LiDAR projection |
+| Scene values | Named mutation, clone ownership, analytic geometry conversion |
+| Kinematics variants | Named link lookup, link transforms, limits, 64-way FK batch |
+| Solver variants | Hold-pose IK, repeatability, hold-trajectory planning |
+| Sphere collision | Penetration response and world replacement |
 
 All programs leave device and CUDA-graph settings at their public defaults.
 Solver programs also retain default seed counts and optimization settings.
@@ -96,10 +103,14 @@ Solver paths are checked locally; equivalent solvers need not choose identical
 intermediate trajectories or redundant IK joint configurations, so differential
 numerical comparison uses selected endpoint observations.
 
-Release evidence is recorded in `artifacts/release/readiness/report.json`, with
-the paired CUDA/Metal comparison in `cuda-metal-comparison.json`. The CUDA host
-is Robo's NVIDIA RTX 3090. Earlier reports are retained as historical evidence
-and must not be combined across different application source hashes or wheels.
+Release evidence for the original eight cases is recorded in
+`artifacts/release/readiness/report.json`, with the paired CUDA/Metal comparison
+in `cuda-metal-comparison.json`. The expanded 30-case Metal suite passes; a new
+paired CUDA report is required before the expanded differential gate can be
+claimed complete. The CUDA host is Robo's NVIDIA RTX 3090. Earlier reports are
+retained as historical evidence and must not be combined across different
+application source hashes or wheels.
 Process elapsed times include imports and cold start;
 they are not warm-latency performance guarantees. This gate also does not cover
-pose motion planning, graph fallback, attachments, mapping, or all upstream APIs.
+pose motion planning, graph fallback, attachments, high-level mapping, or all
+upstream APIs.

@@ -81,8 +81,8 @@ def verify_suite(suite: Path) -> dict:
     manifest = read(suite / "manifest.json")
     if manifest["upstream_revision"] != PIN:
         raise ValueError("unexpected upstream revision")
-    if not 6 <= len(manifest["cases"]) <= 10:
-        raise ValueError("expected 6–10 application cases")
+    if not 30 <= len(manifest["cases"]) <= 50:
+        raise ValueError("expected 30–50 application cases")
     if {p.name for p in suite.glob("*.py")} != set(manifest["files"]):
         raise ValueError("application Python file inventory differs from manifest")
     for name, expected in manifest["files"].items():
