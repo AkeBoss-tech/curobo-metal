@@ -1,0 +1,39 @@
+{
+  "compile_warmup_ms": 328.1079589796718,
+  "device": "mps",
+  "dtype": "torch.float32",
+  "endpoint_error": [
+    0.0
+  ],
+  "environment": {
+    "machine": "arm64",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "fallback_disabled": true,
+  "format": "curobo-metal-trajectory-benchmark",
+  "latency_ms": {
+    "median": 228.33953857421875,
+    "samples": [
+      225.22858300362714,
+      228.3395419945009,
+      226.0493340145331,
+      231.82345801615156,
+      233.26224999618717
+    ]
+  },
+  "maximum_limit_violation": [
+    0.0
+  ],
+  "minimum_clearance": [
+    null
+  ],
+  "status": [
+    "success"
+  ],
+  "success": [
+    true
+  ],
+  "version": 1
+}

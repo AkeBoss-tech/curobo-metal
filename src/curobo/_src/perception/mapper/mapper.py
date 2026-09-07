@@ -45,13 +45,9 @@ BlockSparseESDFIntegrator = None
 BlockSparseESDFIntegratorCfg = None
 
 
-# The portable high-level mapper keeps a differentiable dense TSDF/ESDF
-# mirror for collision queries.  Its storage therefore scales with the voxel
-# volume, unlike the bounded sparse pool used for RGB/features.  Fail before
-# allocating that mirror when a configuration would require an unreasonable
-# amount of resident memory.  This is deliberately a preflight guard (rather
-# than catching an allocator OOM after partial construction), and leaves the
-# standalone sparse integrator available for genuinely large maps.
+# Compact maps retain a differentiable dense TSDF/ESDF representation. Large
+# configurations automatically use the block-sparse runtime and materialize
+# only explicitly requested ESDF windows.
 _MAX_DENSE_MAPPER_BYTES = 1 << 30
 _DENSE_MAPPER_BYTES_PER_VOXEL = 26  # tsdf, weight, occupancy, esdf, gradient, static mask
 
@@ -65,19 +61,6 @@ def _estimated_dense_mapper_bytes(config: MapperCfg) -> int:
     not included, so this remains a lower bound for peak memory.
     """
     return int(math.prod(config.native_grid_shape) * _DENSE_MAPPER_BYTES_PER_VOXEL)
-
-
-def _validate_dense_mapper_budget(config: MapperCfg) -> None:
-    estimate = _estimated_dense_mapper_bytes(config)
-    if estimate > _MAX_DENSE_MAPPER_BYTES:
-        mib = estimate / (1024 * 1024)
-        raise MemoryError(
-            "portable high-level Mapper dense mirror requires approximately "
-            f"{mib:.0f} MiB for {tuple(config.native_grid_shape)} voxels, "
-            f"exceeding the {_MAX_DENSE_MAPPER_BYTES // (1024 * 1024)} MiB "
-            "safety limit; use the bounded sparse integrator or a larger "
-            "voxel size/partitioned map"
-        )
 
 
 def _device(value):

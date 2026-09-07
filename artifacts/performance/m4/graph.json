@@ -1,0 +1,35 @@
+{
+  "compile_warmup_ms": 245.43400001130067,
+  "device": "mps",
+  "dtype": "torch.float32",
+  "edge_checks": 2763,
+  "environment": {
+    "machine": "arm64",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "fallback_disabled": true,
+  "fixture": "two_link_detour.json",
+  "format": "curobo-metal-graph-planning-benchmark",
+  "latency_ms": {
+    "median": 91.098876953125,
+    "samples": [
+      110.48008399666287,
+      91.92133299075067,
+      91.0988750110846,
+      85.85154198226519,
+      88.48299999954179
+    ]
+  },
+  "path_cost": 3.8890109548786294,
+  "samples_valid": 241,
+  "status": [
+    "success"
+  ],
+  "success": [
+    true
+  ],
+  "validity_queries": 36420,
+  "version": 1
+}

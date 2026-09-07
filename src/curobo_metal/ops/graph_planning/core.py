@@ -253,11 +253,30 @@ def _validate_edges(
     nodes: torch.Tensor,
     pairs: list[tuple[int, int]],
 ) -> tuple[list[bool], int]:
-    pieces = [interpolate_edge(nodes[i], nodes[j], problem.edge_step) for i, j in pairs]
-    if not pieces:
+    if not pairs:
         return [], 0
-    lengths = [piece.shape[0] for piece in pieces]
-    validity = _valid(problem, batch_index, torch.cat(pieces)).detach().cpu()
+    # Building each edge independently used ``Tensor.item()`` once per pair.
+    # On MPS that implicitly synchronized thousands of times and dominated the
+    # entire PRM solve.  Construct the ragged interpolation batch with one
+    # device-to-host transfer for the small length vector instead.
+    indices = torch.as_tensor(pairs, dtype=torch.long, device=nodes.device)
+    starts = nodes[indices[:, 0]]
+    deltas = nodes[indices[:, 1]] - starts
+    segment_counts = torch.ceil(
+        torch.amax(torch.abs(deltas), dim=1) / problem.edge_step
+    ).to(torch.long).clamp_min(1)
+    lengths_tensor = segment_counts + 1
+    lengths = lengths_tensor.detach().cpu().tolist()
+    edge_ids = torch.repeat_interleave(
+        torch.arange(len(pairs), device=nodes.device), lengths_tensor
+    )
+    offsets = torch.cumsum(lengths_tensor, dim=0) - lengths_tensor
+    sample_ids = torch.arange(
+        int(sum(lengths)), device=nodes.device
+    ) - torch.repeat_interleave(offsets, lengths_tensor)
+    alpha = sample_ids.to(nodes.dtype) / segment_counts[edge_ids].to(nodes.dtype)
+    points = starts[edge_ids] + alpha[:, None] * deltas[edge_ids]
+    validity = _valid(problem, batch_index, points).detach().cpu()
     return [
         bool(chunk.all().item()) for chunk in torch.split(validity, lengths)
     ], sum(lengths)

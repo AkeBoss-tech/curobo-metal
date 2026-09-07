@@ -1,0 +1,48 @@
+{
+  "checks": {
+    "collision_sphere_cuboid_batch_512": {
+      "ceiling_ms": 40.0,
+      "median_ms": 0.269125,
+      "passed": true
+    },
+    "collision_sphere_sphere_batch_512": {
+      "ceiling_ms": 25.0,
+      "median_ms": 0.987292,
+      "passed": true
+    },
+    "fk_batch_1024": {
+      "ceiling_ms": 12.0,
+      "median_ms": 1.394208,
+      "passed": true
+    },
+    "ik_reachable": {
+      "ceiling_ms": 1500.0,
+      "median_ms": 977.1069170092233,
+      "passed": true
+    },
+    "perception_query": {
+      "ceiling_ms": 20.0,
+      "median_ms": 3.1445419881492853,
+      "passed": true
+    },
+    "perception_update": {
+      "ceiling_ms": 25.0,
+      "median_ms": 4.184707999229431,
+      "passed": true
+    },
+    "prm": {
+      "ceiling_ms": 250.0,
+      "median_ms": 91.098876953125,
+      "passed": true
+    },
+    "trajectory": {
+      "ceiling_ms": 600.0,
+      "median_ms": 228.33953857421875,
+      "passed": true
+    }
+  },
+  "format": "curobo-metal-release-performance-gate",
+  "passed": true,
+  "policy": "synchronized warm median on the self-hosted Apple Silicon release runner",
+  "version": 1
+}

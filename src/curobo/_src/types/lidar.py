@@ -1,9 +1,8 @@
 """Portable structured LiDAR observation value type.
 
 This is deliberately a tensor data model, not a LiDAR driver or a Warp range
-integration kernel.  It can validate, move, serialize, and convert range
-images on CPU/MPS; integration into a sparse CUDA/Warp mapper remains an
-explicit unsupported boundary.
+integration kernel. It can validate, move, serialize, convert, and feed range
+images into the portable dense or block-sparse mapper on CPU/MPS.
 """
 
 from __future__ import annotations

@@ -3,7 +3,7 @@
 This is the authoritative human-readable compatibility contract for
 `curobo-metal` 0.1.0a1. Machine-readable evidence lives in
 `artifacts/parity/capabilities.json`, `artifacts/api_compat/upstream-api.json`,
-and `artifacts/parity/replay/`. Older `dropin-*` and wave documents describe
+`artifacts/api_compat/ecosystem-api.json`, and `artifacts/parity/replay/`. Older `dropin-*` and wave documents describe
 individual implementation slices; when they conflict with this page, this page
 and the checked release artifacts control.
 
@@ -25,6 +25,9 @@ the same environment because both own `curobo`.
   resolves 571/586 audited modules; 15 remain partial (two perception internals
   and 13 bundled example workflows). Static inventory coverage is not a claim
   that every upstream internal or example workflow is implemented.
+- The real-world API corpus resolves all 171 documented, example-used, and
+  downstream-used compatibility targets collected from 545 symbols across
+  upstream and 73 downstream source files.
 - CPU and Apple MPS production paths exist for the documented configuration,
   types, kinematics, collision, cost, IK, trajectory, graph-planning,
   perception, dynamics, and high-level planning slices. Requested MPS execution
@@ -44,10 +47,10 @@ the same environment because both own `curobo`.
 
 ## Bounded claims
 
-The [application gate](application-compatibility.md) additionally verifies eight
+The [application gate](application-compatibility.md) additionally verifies 30
 hash-pinned portable V2 programs against an installed wheel, using default MPS
-selection and graph settings. The same source is packaged for CUDA replay;
-paired CUDA evidence for these application programs is still pending. This is
+selection and graph settings. The original eight have paired CUDA evidence;
+the expanded 30-case CUDA replay is pending. This is
 not a claim that the original NVIDIA CUDA-specific tutorials execute unchanged.
 
 Omitted device requests now select MPS when available, otherwise CPU. Explicit
@@ -58,11 +61,10 @@ The exact static surface is not a claim of byte-identical source or behavior in
 every numerical regime. The 19 paired adapters certify their declared corpora
 and matrices; they do not turn platform-specific ABIs into portable APIs.
 
-The high-level `Mapper` currently maintains a dense PyTorch ESDF mirror. It
-preflights that allocation and rejects configurations whose estimated mirror
-exceeds 1 GiB, before allocating native state. Large sparse maps therefore need
-the standalone sparse TSDF/ESDF APIs, a coarser voxel size, or partitioned maps;
-unbounded high-level sparse mapping is not part of this alpha.
+The high-level `Mapper` selects block-sparse storage when its nominal dense
+mirror would exceed 1 GiB. Camera and LiDAR fusion, sparse queries, bounded ESDF
+materialization, rendering, clearing, checkpoints, and analytic static geometry
+then operate without allocating the nominal dense volume.
 
 Bundled examples provide import-compatible portable entry points, but the 13
 partial example modules are not complete replacements for NVIDIA/Isaac/ROS/USD

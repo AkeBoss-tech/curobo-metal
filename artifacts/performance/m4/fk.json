@@ -1,0 +1,65 @@
+{
+  "benchmarks": [
+    {
+      "batch_size": 1024,
+      "first_call_ms": 2.23475,
+      "steady_state": {
+        "configurations_per_second_median": 734467.1670224243,
+        "iterations": 7,
+        "mean_ms": 1.3960000000000001,
+        "median_ms": 1.394208,
+        "min_ms": 1.378791,
+        "p95_ms": 1.412334,
+        "samples_ms": [
+          1.378791,
+          1.393333,
+          1.386792,
+          1.411209,
+          1.394208,
+          1.412334,
+          1.395333
+        ]
+      },
+      "warmup": {
+        "iterations": 3,
+        "total_ms": 4.134332000000001
+      }
+    }
+  ],
+  "correctness": {
+    "geometric_jacobian": {
+      "max_absolute_error": 2.384185793236071e-07,
+      "max_normalized_error": 0.0021534530595649993,
+      "passed": true
+    },
+    "passed": true,
+    "transform_jacobian": {
+      "max_absolute_error": 2.283097161326353e-07,
+      "max_normalized_error": 0.0014688334856236215,
+      "passed": true
+    },
+    "transforms": {
+      "max_absolute_error": 1.958855316841479e-07,
+      "max_normalized_error": 0.005811645873693213,
+      "passed": true
+    }
+  },
+  "device": "mps:0",
+  "dtype": "float32",
+  "environment": {
+    "machine": "arm64",
+    "mps_available": true,
+    "mps_built": true,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "python": "3.13.9",
+    "torch": "2.13.0"
+  },
+  "fallback": {
+    "disabled": true,
+    "environment_value": "0"
+  },
+  "fixture": "/Users/family/Documents/CodingProjects/curobo-metal/tests/fixtures/panda_serial.json",
+  "format": "curobo-metal-fk-benchmark",
+  "implementation": "composed-pytorch",
+  "version": 1
+}

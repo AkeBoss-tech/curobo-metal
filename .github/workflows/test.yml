@@ -121,6 +121,34 @@ jobs:
           name: application-compat-mps
           path: ${{ runner.temp }}/application-compat-mps
 
+  performance:
+    runs-on: [self-hosted, macOS, ARM64, curobo-metal, mps]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.13
+      - run: uv sync --extra test
+      - name: Measure synchronized fallback-disabled MPS workloads
+        env:
+          PYTORCH_ENABLE_MPS_FALLBACK: "0"
+          PYTORCH_MPS_HIGH_WATERMARK_RATIO: "0.0"
+        run: |
+          results="$RUNNER_TEMP/release-performance"
+          mkdir -p "$results"
+          PYTHONPATH=src .venv/bin/python benchmarks/kinematics/benchmark_fk.py --device mps --batch-sizes 1024 --warmup 3 --iterations 7 --output "$results/fk.json"
+          PYTHONPATH=src .venv/bin/python benchmarks/collision/benchmark_collision.py --device mps --batch-sizes 512 --warmup 3 --iterations 7 --output "$results/collision.json"
+          PYTHONPATH=src .venv/bin/python benchmarks/ik/benchmark_ik.py --device mps --repeats 3 --output "$results/ik.json"
+          PYTHONPATH=src .venv/bin/python benchmarks/trajectory/benchmark_trajectory.py --device mps --repeats 5 --output "$results/trajectory.json"
+          PYTHONPATH=src .venv/bin/python benchmarks/graph_planning/benchmark_graph_planning.py --device mps --repeats 5 --output "$results/graph.json"
+          PYTHONPATH=src .venv/bin/python benchmarks/perception/benchmark_perception.py --device mps --iterations 7 --output "$results/perception.json"
+          .venv/bin/python tools/performance/release_gate.py --input "$results" --output "$results/gate.json"
+      - name: Preserve performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-performance-mps
+          path: ${{ runner.temp }}/release-performance
+
   distributions:
     runs-on: [self-hosted, macOS, ARM64, curobo-metal]
     steps:
@@ -138,7 +166,7 @@ jobs:
             tools/packaging/check_distribution_contents.py dist/*
       - name: Install and test wheel in a clean environment
         run: |
-          uv venv /tmp/curobo-metal-wheel
+          uv venv --clear /tmp/curobo-metal-wheel
           uv pip install --python /tmp/curobo-metal-wheel/bin/python dist/*.whl
           cd /tmp
           /tmp/curobo-metal-wheel/bin/python \
@@ -146,7 +174,7 @@ jobs:
           uv pip check --python /tmp/curobo-metal-wheel/bin/python
       - name: Install and test sdist in a separate clean environment
         run: |
-          uv venv /tmp/curobo-metal-sdist
+          uv venv --clear /tmp/curobo-metal-sdist
           uv pip install --python /tmp/curobo-metal-sdist/bin/python dist/*.tar.gz
           cd /tmp
           /tmp/curobo-metal-sdist/bin/python \

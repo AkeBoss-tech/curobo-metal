@@ -22,7 +22,8 @@ for 24 modules, 122 exports, and 10 comparable callable signatures. The broader
 generated inventory resolves 571 of 586 audited modules; the 15 partial modules
 are two perception internals and 13 bundled example workflows. CUDA/Warp ABI
 mechanisms and external integrations remain explicit substitutions or
-exclusions. See the
+exclusions. The ecosystem corpus resolves all 171 compatibility targets mined
+from documentation, examples, tests, and downstream projects. See the
 [project plan](https://github.com/AkeBoss-tech/curobo-metal/blob/main/PLAN.md),
 [drop-in roadmap](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/dropin-roadmap.md),
 and [compatibility boundary](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/compatibility.md).
@@ -94,7 +95,8 @@ PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python benchmarks/trajectory/benchmark_traj
 ```
 
 The benchmark scripts synchronize the MPS device and report compilation/first
-use separately from steady-state latency.
+use separately from steady-state latency. The stable release regression limits
+and current M4 results are recorded in [the performance gate](docs/performance.md).
 
 Replay the pinned upstream forward-kinematics tutorial workload on Apple MPS:
 
