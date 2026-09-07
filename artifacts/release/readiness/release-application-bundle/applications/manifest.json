@@ -11,6 +11,28 @@
     "06_collision_mutation.py": "dd4ea3aede52bd5413f16638472f21a09c9c2302223589e61c345e839b485eeb",
     "07_ik.py": "0140048d2ce3a6cc97e855c9573673859885b768e8d08581be527d20c7daf149",
     "08_motion.py": "67b014b4260ec5c8d847343888e9464d96aac99b4d5742cede421c8d2ccc87be",
+    "09_joint_state_fields.py": "53fc7cc1d51df01acd63984429b723e295dec8999354e922939618811fd7ee52",
+    "10_joint_state_reorder.py": "37704773efbcbf299bc9bf6ed7482469ffdcc34bece10dd54b4a6b708d54f2df",
+    "11_joint_state_batch.py": "668c43062ddc08809763cc87eb4133abb1cd61f929e9414308face7afcbc4ce1",
+    "12_pose_matrix_roundtrip.py": "db02f7881750b5053ab05b38d98c8a0bf5c31e99da603cfb307c5a01a6a8e85f",
+    "13_pose_batch.py": "698a727fd246662d8b56defea8cd57cfae3fb23ce541046979d47a8a089b9d58",
+    "14_pose_points.py": "b66b14800e6c70b38a11d7cec4001f9922cc9403e8c975e95ecbe0d4b6c99b5d",
+    "15_pose_distance.py": "58b8c0fad2c2ac47b80f0320290dc3acd65e4d698a8fd3439279256dc07bb3e8",
+    "16_tool_pose.py": "b356143308301bad365b38555f85ba9d858c241b46e621cdf576c7a2919558a8",
+    "17_goal_tool_pose.py": "b0641f0b93fe2ba641a47108718481351ac78e9145f8e7f29a8ac162acc59cd0",
+    "18_camera_observation.py": "efb598f2b13ace8083bde460506d11b8899a55d128609d8d339a7717fcfe8c95",
+    "19_camera_projection.py": "b2f3427c1af3eb01a2bb11b44a41c46bd145771d6de7d0d70f92eefa17843381",
+    "20_lidar_observation.py": "b1704499884e813c6352d0154a3c7ae88e1a32797ed5562d70af711424d01bc0",
+    "21_scene_mutation.py": "30d467538cc32ec9087a99495f3240a009ab3d6725622328d6bcf8204259fef8",
+    "22_geometry_conversion.py": "7152034c51278609d652645f8962999224cf45af1dc14de1f0cab68808cebc34",
+    "23_fk_link_lookup.py": "ae9ce0be8fd9a2f2b72841c13bd66d21cd8d28dd08177a928bd2ffe53059b9d4",
+    "24_fk_transforms.py": "26d1de502c57b2eaf07cc0a7935aac9935ab60f87fb9aae906f5aebf4a94283e",
+    "25_joint_limits.py": "fd72b4f0075525fbb0266d09a6cfb8999ee602e090234e6d818cc7a857f814e5",
+    "26_fk_large_batch.py": "6af9a57158d57d7f5978947b9b6ca1b470d43cd5746f7874de3e7b0d07b0c077",
+    "27_ik_hold.py": "49be8bae4d75e28f7e1ae7b112522775a434944ed427ac616b90d2c21a85f293",
+    "28_ik_repeatability.py": "d4e7f0cf552e321352958282601f78b9252e1a7e38dcf2a158ecba778237ebc9",
+    "29_motion_hold.py": "32977e87422a6f4db2b532bad1ad8fdfdd44c6e70cd69af1c290cd01dde7a166",
+    "30_collision_sphere.py": "f51781e4ecedc710820e1c7f5fae9b5fa951b647525f3ce41a1db0af4fe8c22f",
     "application_support.py": "d8b6e6c6ae8d01994ab602627abe74cee8c3ba8115d214900f6d5c6cde38b155"
   },
   "cases": [
@@ -52,6 +74,116 @@
     {
       "file": "08_motion.py",
       "atol": 0.05,
+      "rtol": 0.001
+    },
+    {
+      "file": "09_joint_state_fields.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "10_joint_state_reorder.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "11_joint_state_batch.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "12_pose_matrix_roundtrip.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "13_pose_batch.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "14_pose_points.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "15_pose_distance.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "16_tool_pose.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "17_goal_tool_pose.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "18_camera_observation.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "19_camera_projection.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "20_lidar_observation.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "21_scene_mutation.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "22_geometry_conversion.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "23_fk_link_lookup.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "24_fk_transforms.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "25_joint_limits.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "26_fk_large_batch.py",
+      "atol": 0.0002,
+      "rtol": 0.001
+    },
+    {
+      "file": "27_ik_hold.py",
+      "atol": 0.005,
+      "rtol": 0.001
+    },
+    {
+      "file": "28_ik_repeatability.py",
+      "atol": 0.005,
+      "rtol": 0.001
+    },
+    {
+      "file": "29_motion_hold.py",
+      "atol": 0.05,
+      "rtol": 0.001
+    },
+    {
+      "file": "30_collision_sphere.py",
+      "atol": 0.0002,
       "rtol": 0.001
     }
   ]

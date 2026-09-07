@@ -1,0 +1,3 @@
+CUROBO_APPLICATION_RESULT={"cube_valid": true, "sentinel": {"device": "cuda", "dtype": "torch.float32", "shape": [1], "values": [0.4000000059604645]}}
+
+Sphere.position is deprecated, use Sphere.pose instead

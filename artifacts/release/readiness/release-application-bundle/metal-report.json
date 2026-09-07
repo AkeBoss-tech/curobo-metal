@@ -2,7 +2,7 @@
   "backend": "metal",
   "cases": [
     {
-      "elapsed_seconds": 1.2887342079775408,
+      "elapsed_seconds": 0.6020396249950863,
       "file": "01_device_state.py",
       "observations": {
         "names": [
@@ -45,7 +45,7 @@
       "returncode": 0
     },
     {
-      "elapsed_seconds": 1.3997556249960326,
+      "elapsed_seconds": 0.7967637500260025,
       "file": "02_pose.py",
       "observations": {
         "identity": {
@@ -127,7 +127,7 @@
       "returncode": 0
     },
     {
-      "elapsed_seconds": 1.4172581249731593,
+      "elapsed_seconds": 0.8448336250148714,
       "file": "03_fk_franka.py",
       "observations": {
         "joint_names": [
@@ -300,7 +300,7 @@
       "returncode": 0
     },
     {
-      "elapsed_seconds": 2.000424333004048,
+      "elapsed_seconds": 0.8641097500221804,
       "file": "04_fk_ur10.py",
       "observations": {
         "joint_names": [
@@ -359,7 +359,7 @@
       "returncode": 0
     },
     {
-      "elapsed_seconds": 1.3944346249918453,
+      "elapsed_seconds": 0.9137070419965312,
       "file": "05_fk_gradient.py",
       "observations": {
         "finite_difference": {
@@ -392,7 +392,7 @@
       "returncode": 0
     },
     {
-      "elapsed_seconds": 1.767326624976704,
+      "elapsed_seconds": 1.2722525830031373,
       "file": "06_collision_mutation.py",
       "observations": {
         "far": {
@@ -448,7 +448,7 @@
       "returncode": 0
     },
     {
-      "elapsed_seconds": 7.356260500004282,
+      "elapsed_seconds": 5.340912666986696,
       "file": "07_ik.py",
       "observations": {
         "joint_names": [
@@ -517,7 +517,7 @@
       "returncode": 0
     },
     {
-      "elapsed_seconds": 2.3151638749986887,
+      "elapsed_seconds": 1.766282583004795,
       "file": "08_motion.py",
       "observations": {
         "0": {
@@ -618,27 +618,1053 @@
       },
       "passed": true,
       "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6015766669879667,
+      "file": "09_joint_state_fields.py",
+      "observations": {
+        "acceleration": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.30000001192092896,
+              0.6000000238418579,
+              0.9000000357627869
+            ]
+          ]
+        },
+        "jerk": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.4000000059604645,
+              0.800000011920929,
+              1.2000000476837158
+            ]
+          ]
+        },
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              0.20000000298023224,
+              0.30000001192092896
+            ]
+          ]
+        },
+        "velocity": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.20000000298023224,
+              0.4000000059604645,
+              0.6000000238418579
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6064401250041556,
+      "file": "10_joint_state_reorder.py",
+      "observations": {
+        "names": [
+          "j0",
+          "j1",
+          "j2",
+          "j3"
+        ],
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0,
+              3.0
+            ]
+          ]
+        },
+        "velocity": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6429302920005284,
+      "file": "11_joint_state_batch.py",
+      "observations": {
+        "batch": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            5,
+            3
+          ],
+          "values": [
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ]
+          ]
+        },
+        "selected": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            3
+          ],
+          "values": [
+            1.2000000476837158,
+            0.8999999761581421,
+            1.399999976158142
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6566065409861039,
+      "file": "12_pose_matrix_roundtrip.py",
+      "observations": {
+        "matrix": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4,
+            4
+          ],
+          "values": [
+            [
+              [
+                0.7071068286895752,
+                0.0,
+                0.7071067690849304,
+                0.20000000298023224
+              ],
+              [
+                0.0,
+                1.0,
+                0.0,
+                -0.30000001192092896
+              ],
+              [
+                -0.7071067690849304,
+                0.0,
+                0.7071068286895752,
+                0.4000000059604645
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ]
+        },
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.20000000298023224,
+              -0.30000001192092896,
+              0.4000000059604645
+            ]
+          ]
+        },
+        "quaternion": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.9238795638084412,
+              0.0,
+              0.3826834261417389,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6444786670035683,
+      "file": "13_pose_batch.py",
+      "observations": {
+        "repeated": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            3,
+            3
+          ],
+          "values": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        "stacked": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            3
+          ],
+          "values": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              2.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6520862920151558,
+      "file": "14_pose_points.py",
+      "observations": {
+        "local": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            3
+          ],
+          "values": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              -1.0,
+              2.0
+            ]
+          ]
+        },
+        "world": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            3
+          ],
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              2.0,
+              1.0,
+              5.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6012498329801019,
+      "file": "15_pose_distance.py",
+      "observations": {
+        "angular": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              0.7853981256484985
+            ]
+          ]
+        },
+        "linear": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1
+          ],
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6028165419993456,
+      "file": "16_tool_pose.py",
+      "observations": {
+        "all": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  2.0,
+                  0.0
+                ]
+              ]
+            ]
+          ]
+        },
+        "frames": [
+          "left",
+          "right"
+        ],
+        "right": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.0,
+              2.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6667423330072779,
+      "file": "17_goal_tool_pose.py",
+      "observations": {
+        "goal": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  [
+                    0.10000000149011612,
+                    0.20000000298023224,
+                    0.30000001192092896
+                  ]
+                ]
+              ]
+            ]
+          ]
+        },
+        "selected": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  [
+                    0.10000000149011612,
+                    0.20000000298023224,
+                    0.30000001192092896
+                  ]
+                ]
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6416803330066614,
+      "file": "18_camera_observation.py",
+      "observations": {
+        "clone": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            2
+          ],
+          "values": [
+            [
+              0.0,
+              1.0199999809265137
+            ],
+            [
+              0.029999999329447746,
+              0.0
+            ]
+          ]
+        },
+        "filtered": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            2
+          ],
+          "values": [
+            [
+              0.0,
+              0.019999999552965164
+            ],
+            [
+              0.029999999329447746,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6075459999847226,
+      "file": "19_camera_projection.py",
+      "observations": {
+        "rays": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4,
+            3
+          ],
+          "values": [
+            [
+              [
+                -0.25,
+                -0.25,
+                1.0
+              ],
+              [
+                0.25,
+                -0.25,
+                1.0
+              ],
+              [
+                -0.25,
+                0.25,
+                1.0
+              ],
+              [
+                0.25,
+                0.25,
+                1.0
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6009043749945704,
+      "file": "20_lidar_observation.py",
+      "observations": {
+        "bounds": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            2
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              3.0
+            ]
+          ]
+        },
+        "elevation": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            2
+          ],
+          "values": [
+            [
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        "ranges": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            4
+          ],
+          "values": [
+            [
+              [
+                1.0,
+                2.0,
+                1.0,
+                2.0
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6413884159992449,
+      "file": "21_scene_mutation.py",
+      "observations": {
+        "count": 2,
+        "sentinel": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1
+          ],
+          "values": [
+            1.0
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6233597499958705,
+      "file": "22_geometry_conversion.py",
+      "observations": {
+        "cube_valid": true,
+        "sentinel": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1
+          ],
+          "values": [
+            0.4000000059604645
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.7791942910116632,
+      "file": "23_fk_link_lookup.py",
+      "observations": {
+        "frame": "panda_hand",
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.1612829715013504,
+              -5.832328977412038e-12,
+              0.6368466019630432
+            ]
+          ]
+        },
+        "quaternion": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.0010910291457548738,
+              -0.9887447357177734,
+              0.007218888495117426,
+              -0.1494341939687729
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.7558160000189673,
+      "file": "24_fk_transforms.py",
+      "observations": {
+        "last": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            4,
+            4
+          ],
+          "values": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "transforms": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            13,
+            4,
+            4
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.7662582080229186,
+      "file": "25_joint_limits.py",
+      "observations": {
+        "default": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            7
+          ],
+          "values": [
+            0.0,
+            -1.2999999523162842,
+            0.0,
+            -2.5,
+            0.0,
+            1.5,
+            0.800000011920929
+          ]
+        },
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            7
+          ],
+          "values": [
+            [
+              -2.8973000049591064,
+              -1.7627999782562256,
+              -2.8973000049591064,
+              -3.0717999935150146,
+              -2.8973000049591064,
+              -0.017500000074505806,
+              -2.8973000049591064
+            ],
+            [
+              2.8973000049591064,
+              1.7627999782562256,
+              2.8973000049591064,
+              -0.0697999969124794,
+              2.8973000049591064,
+              3.752500057220459,
+              2.8973000049591064
+            ]
+          ]
+        },
+        "velocity": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            7
+          ],
+          "values": [
+            [
+              -2.174999952316284,
+              -2.174999952316284,
+              -2.174999952316284,
+              -2.174999952316284,
+              -2.609999895095825,
+              -2.609999895095825,
+              -2.609999895095825
+            ],
+            [
+              2.174999952316284,
+              2.174999952316284,
+              2.174999952316284,
+              2.174999952316284,
+              2.609999895095825,
+              2.609999895095825,
+              2.609999895095825
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.765693041990744,
+      "file": "26_fk_large_batch.py",
+      "observations": {
+        "endpoints": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.3458801805973053,
+                  0.10767333209514618,
+                  0.7425727248191833
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.2766467332839966,
+                  0.23386578261852264,
+                  0.7425727248191833
+                ]
+              ]
+            ]
+          ]
+        },
+        "poses": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            64,
+            1,
+            1,
+            3
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 1.3810946670128033,
+      "file": "27_ik_hold.py",
+      "observations": {
+        "solution": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            9
+          ]
+        },
+        "success": {
+          "device": "mps",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 1.4032005410117563,
+      "file": "28_ik_repeatability.py",
+      "observations": {
+        "first": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            6
+          ]
+        },
+        "second": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            6
+          ]
+        },
+        "success": {
+          "device": "mps",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 1.6317381669941824,
+      "file": "29_motion_hold.py",
+      "observations": {
+        "endpoint": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            7
+          ],
+          "values": [
+            [
+              [
+                0.0,
+                -1.2999999523162842,
+                0.0,
+                -2.5,
+                0.0,
+                1.5,
+                0.800000011920929
+              ]
+            ]
+          ]
+        },
+        "path": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            81,
+            7
+          ]
+        },
+        "success": {
+          "device": "mps",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 0.6054213749885093,
+      "file": "30_collision_sphere.py",
+      "observations": {
+        "position": {
+          "device": "mps",
+          "dtype": "torch.float32",
+          "shape": [
+            3
+          ],
+          "values": [
+            0.10000000149011612,
+            0.20000000298023224,
+            0.30000001192092896
+          ]
+        },
+        "radius": 0.25
+      },
+      "passed": true,
+      "returncode": 0
     }
   ],
   "expected_device": "mps",
-  "manifest_sha256": "6f448087ede16967ef163ead4dcf29330a8b135b75dc62450d889603ae2dbfab",
+  "manifest_sha256": "881238215d4c25d5564d88c66a32b49e6ab75defa23fc01a421ca0c6deb46270",
   "mps_fallback_enabled": false,
   "passed": true,
   "runtime": {
     "cuda_available": false,
     "direct_url": {
       "archive_info": {},
-      "url": "file:///Users/family/Documents/CodingProjects/curobo-metal/dist/release-candidate/curobo_metal-0.1.0a1-py3-none-any.whl"
+      "url": "file:///tmp/curobo-metal-1.0-final.kICCEN/dist/curobo_metal-1.0.0-py3-none-any.whl"
     },
     "mps_available": true,
     "owners": [
       "curobo-metal"
     ],
-    "package_root": "/private/tmp/curobo-release-gauntlet/lib/python3.13/site-packages/curobo",
+    "package_root": "/private/tmp/curobo-metal-1.0-final.kICCEN/wheel/lib/python3.13/site-packages/curobo",
     "python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:11:29) [Clang 20.1.8 ]",
     "torch": "2.14.0",
-    "version": "0.1.0a1",
-    "wheel_files_verified": 732
+    "version": "1.0.0",
+    "wheel_files_verified": 555
   },
   "schema_version": 1,
   "source_hashes": {
@@ -650,8 +1676,30 @@
     "06_collision_mutation.py": "dd4ea3aede52bd5413f16638472f21a09c9c2302223589e61c345e839b485eeb",
     "07_ik.py": "0140048d2ce3a6cc97e855c9573673859885b768e8d08581be527d20c7daf149",
     "08_motion.py": "67b014b4260ec5c8d847343888e9464d96aac99b4d5742cede421c8d2ccc87be",
+    "09_joint_state_fields.py": "53fc7cc1d51df01acd63984429b723e295dec8999354e922939618811fd7ee52",
+    "10_joint_state_reorder.py": "37704773efbcbf299bc9bf6ed7482469ffdcc34bece10dd54b4a6b708d54f2df",
+    "11_joint_state_batch.py": "668c43062ddc08809763cc87eb4133abb1cd61f929e9414308face7afcbc4ce1",
+    "12_pose_matrix_roundtrip.py": "db02f7881750b5053ab05b38d98c8a0bf5c31e99da603cfb307c5a01a6a8e85f",
+    "13_pose_batch.py": "698a727fd246662d8b56defea8cd57cfae3fb23ce541046979d47a8a089b9d58",
+    "14_pose_points.py": "b66b14800e6c70b38a11d7cec4001f9922cc9403e8c975e95ecbe0d4b6c99b5d",
+    "15_pose_distance.py": "58b8c0fad2c2ac47b80f0320290dc3acd65e4d698a8fd3439279256dc07bb3e8",
+    "16_tool_pose.py": "b356143308301bad365b38555f85ba9d858c241b46e621cdf576c7a2919558a8",
+    "17_goal_tool_pose.py": "b0641f0b93fe2ba641a47108718481351ac78e9145f8e7f29a8ac162acc59cd0",
+    "18_camera_observation.py": "efb598f2b13ace8083bde460506d11b8899a55d128609d8d339a7717fcfe8c95",
+    "19_camera_projection.py": "b2f3427c1af3eb01a2bb11b44a41c46bd145771d6de7d0d70f92eefa17843381",
+    "20_lidar_observation.py": "b1704499884e813c6352d0154a3c7ae88e1a32797ed5562d70af711424d01bc0",
+    "21_scene_mutation.py": "30d467538cc32ec9087a99495f3240a009ab3d6725622328d6bcf8204259fef8",
+    "22_geometry_conversion.py": "7152034c51278609d652645f8962999224cf45af1dc14de1f0cab68808cebc34",
+    "23_fk_link_lookup.py": "ae9ce0be8fd9a2f2b72841c13bd66d21cd8d28dd08177a928bd2ffe53059b9d4",
+    "24_fk_transforms.py": "26d1de502c57b2eaf07cc0a7935aac9935ab60f87fb9aae906f5aebf4a94283e",
+    "25_joint_limits.py": "fd72b4f0075525fbb0266d09a6cfb8999ee602e090234e6d818cc7a857f814e5",
+    "26_fk_large_batch.py": "6af9a57158d57d7f5978947b9b6ca1b470d43cd5746f7874de3e7b0d07b0c077",
+    "27_ik_hold.py": "49be8bae4d75e28f7e1ae7b112522775a434944ed427ac616b90d2c21a85f293",
+    "28_ik_repeatability.py": "d4e7f0cf552e321352958282601f78b9252e1a7e38dcf2a158ecba778237ebc9",
+    "29_motion_hold.py": "32977e87422a6f4db2b532bad1ad8fdfdd44c6e70cd69af1c290cd01dde7a166",
+    "30_collision_sphere.py": "f51781e4ecedc710820e1c7f5fae9b5fa951b647525f3ce41a1db0af4fe8c22f",
     "application_support.py": "d8b6e6c6ae8d01994ab602627abe74cee8c3ba8115d214900f6d5c6cde38b155"
   },
   "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
-  "wheel_sha256": "ca7b888d0a311e91d1f42d164fc2be5c51ad0acdf178e84d0b0300f0d7f1f32f"
+  "wheel_sha256": "acbf2b2ec960479b03e3a7f0c346b12e299e292f1aad4299d6d7cd96a0ad73fa"
 }

@@ -28,7 +28,7 @@ from documentation, examples, tests, and downstream projects. See the
 [drop-in roadmap](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/dropin-roadmap.md),
 and [compatibility boundary](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/compatibility.md).
 
-> **Alpha namespace warning:** NVIDIA cuRobo and `curobo-metal` both install the
+> **Namespace warning:** NVIDIA cuRobo and `curobo-metal` both install the
 > `curobo` Python package. They must not be co-installed. Use a dedicated virtual
 > environment and uninstall `nvidia-curobo` (or any source-installed cuRobo)
 > before installing this distribution. The release smoke test fails if another
@@ -69,8 +69,8 @@ installation is not required for the current runtime-compiled kernels.
 
 ## Install and test
 
-The forthcoming `0.1.0a1` is a bounded preview, not a stable drop-in release.
-Its exact included behavior and exclusions are listed in the
+Version `1.0.0` is the stable release of the pinned portable Python contract.
+Its exact behavior and exclusions are listed in the
 [changelog](https://github.com/AkeBoss-tech/curobo-metal/blob/main/CHANGELOG.md)
 and [parity matrix](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/parity-matrix.md).
 
@@ -173,4 +173,4 @@ Every feature progresses through:
 See the [project plan](https://github.com/AkeBoss-tech/curobo-metal/blob/main/PLAN.md)
 for the complete gated roadmap. Report bugs through the
 [GitHub issue tracker](https://github.com/AkeBoss-tech/curobo-metal/issues);
-this alpha has no guaranteed response time or production support commitment.
+the project does not provide a guaranteed support response time.

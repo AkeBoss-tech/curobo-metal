@@ -108,6 +108,7 @@ class KinematicsLoader(KinematicsLoaderCfg):
             "debug": deepcopy(self.debug),
             "mesh_link_names": list(self.mesh_link_names or []),
             "grasp_contact_link_names": deepcopy(self.grasp_contact_link_names),
+            "extra_links": deepcopy(self.extra_links),
         })
         self._set_collision_spheres()
         self._set_cspace()
@@ -348,6 +349,7 @@ class KinematicsLoader(KinematicsLoaderCfg):
             raise TypeError("link_params must be a LinkParams")
         self._append_link(link_params)
         self.extra_links[link_params.link_name] = link_params
+        self._robot.metadata.setdefault("extra_links", {})[link_params.link_name] = link_params
         self._parser.extra_links[link_params.link_name] = link_params
         self._parser.build_link_parent()
         self.initialize_tensors()

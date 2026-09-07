@@ -2,10 +2,11 @@
 
 All notable user-visible changes are recorded here.
 
-## 0.1.0a1 - Unreleased
+## 1.0.0 - 2026-09-07
 
-First public alpha of `curobo-metal`, an Apple Silicon/MPS implementation that
-exposes a compatibility-oriented `curobo` namespace.
+First stable release of `curobo-metal`, an Apple Silicon/MPS implementation
+of the pinned portable cuRobo Python contract through the standard `curobo`
+namespace.
 
 ### Included
 
@@ -30,13 +31,13 @@ exposes a compatibility-oriented `curobo` namespace.
   cases pass, while 103 exact CUDA/Warp/MPS-float64 mechanism cases remain
   explicitly excluded.
 
-### Alpha limitations
+### Compatibility boundaries
 
 - Static surface equality and the bounded numerical matrices do not assert
   byte-identical source, identical stochastic samples or solver iterates, or
   behavior in every untested numerical regime.
 - CUDA graphs, CUDA streams, NVRTC, Warp packed ABIs, Isaac/Omniverse, ROS, USD
-  authoring/viewers, and platform-specific integrations are outside this alpha.
+  authoring/viewers, and platform-specific integrations are outside this release.
 - Large high-level maps automatically use block-sparse camera/LiDAR fusion,
   queries, bounded ESDF materialization, rendering, clearing, and checkpoints
   without allocating the nominal dense volume.
@@ -50,6 +51,6 @@ Compatibility is pinned to NVIDIA cuRobo commit
 `8e734f3ced1df898990bcd92de40abce475907db`. See `docs/parity-matrix.md` for the
 bounded evidence and explicit exclusions.
 
-Publication remains blocked until the TestPyPI/PyPI Trusted Publisher projects
-and protected GitHub environments described in `docs/releasing.md` are
-configured and the TestPyPI dry run succeeds.
+The release workflow runs the full fallback-disabled test suite, ecosystem API
+gate, installed-wheel 30-application gate, and Apple Silicon performance gate
+before building artifacts for TestPyPI or PyPI.

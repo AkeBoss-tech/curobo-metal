@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"frame": "panda_hand", "position": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 3], "values": [[0.1612830013036728, -5.832329844773776e-12, 0.6368466019630432]]}, "quaternion": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4], "values": [[0.0010910299606621265, -0.9887446761131287, 0.0072188894264400005, -0.1494341492652893]]}}
+

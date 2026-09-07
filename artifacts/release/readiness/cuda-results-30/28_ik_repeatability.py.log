@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"first": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 1, 6]}, "second": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 1, 6]}, "success": {"device": "cuda", "dtype": "torch.bool", "shape": [1, 1], "values": [[true]]}}
+

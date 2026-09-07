@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"names": ["j0", "j1", "j2", "j3"], "position": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4], "values": [[0.0, 1.0, 2.0, 3.0]]}, "velocity": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4], "values": [[0.0, 0.0, 0.0, 0.0]]}}
+

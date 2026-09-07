@@ -18,6 +18,10 @@ def test_packaged_franka_public_surface_and_shapes():
     assert model.joint_names == [f"panda_joint{i}" for i in range(1, 8)]
     assert model.tool_frames == ["panda_hand"]
     assert model.total_spheres == 65
+    assert model.config.kinematics_config.num_links == 13
+    assert model.get_all_link_transforms().get_matrix().shape == (13, 4, 4)
+    assert "ee_link" not in model.config.kinematics_config.all_link_names
+    assert "right_gripper" not in model.config.kinematics_config.all_link_names
 
     q = model.default_joint_position.repeat(2, 3, 1)
     state = model.compute_kinematics(

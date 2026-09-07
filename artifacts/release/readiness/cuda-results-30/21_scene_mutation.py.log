@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"count": 2, "sentinel": {"device": "cuda", "dtype": "torch.float32", "shape": [1], "values": [1.0]}}
+

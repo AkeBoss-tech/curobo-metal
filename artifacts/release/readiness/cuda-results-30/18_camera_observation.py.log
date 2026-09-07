@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"clone": {"device": "cuda", "dtype": "torch.float32", "shape": [2, 2], "values": [[0.0, 1.0199999809265137], [0.029999999329447746, 0.0]]}, "filtered": {"device": "cuda", "dtype": "torch.float32", "shape": [2, 2], "values": [[0.0, 0.019999999552965164], [0.029999999329447746, 0.0]]}}
+

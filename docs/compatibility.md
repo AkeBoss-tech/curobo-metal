@@ -1,7 +1,7 @@
 # Release compatibility contract
 
 This is the authoritative human-readable compatibility contract for
-`curobo-metal` 0.1.0a1. Machine-readable evidence lives in
+`curobo-metal` 1.0.0. Machine-readable evidence lives in
 `artifacts/parity/capabilities.json`, `artifacts/api_compat/upstream-api.json`,
 `artifacts/api_compat/ecosystem-api.json`, and `artifacts/parity/replay/`. Older `dropin-*` and wave documents describe
 individual implementation slices; when they conflict with this page, this page
@@ -9,7 +9,7 @@ and the checked release artifacts control.
 
 ## Release status
 
-The alpha is a bounded portable Python drop-in for the audited Apple
+The stable release is a bounded portable Python drop-in for the audited Apple
 Silicon/MPS scope, not a CUDA/Warp ABI or external-ecosystem replacement.
 Compatibility targets exactly cuRobo commit
 `8e734f3ced1df898990bcd92de40abce475907db`.
@@ -18,12 +18,12 @@ The distribution exposes both `curobo_metal` and a compatibility-oriented
 `curobo` namespace. NVIDIA cuRobo and `curobo-metal` must not be installed in
 the same environment because both own `curobo`.
 
-## Audited alpha claims
+## Audited stable claims
 
 - The release's strict public-facade gate is exact for 24 modules, 122 exports,
   and 10 comparable callable signatures. The broader generated inventory
   resolves 571/586 audited modules; 15 remain partial (two perception internals
-  and 13 bundled example workflows). Static inventory coverage is not a claim
+  and 13 bundled example workflows that include integration-specific CLI state). Static inventory coverage is not a claim
   that every upstream internal or example workflow is implemented.
 - The real-world API corpus resolves all 171 documented, example-used, and
   downstream-used compatibility targets collected from 545 symbols across
@@ -49,8 +49,8 @@ the same environment because both own `curobo`.
 
 The [application gate](application-compatibility.md) additionally verifies 30
 hash-pinned portable V2 programs against an installed wheel, using default MPS
-selection and graph settings. The original eight have paired CUDA evidence;
-the expanded 30-case CUDA replay is pending. This is
+selection and graph settings. All 30 have paired, hash-bound CUDA evidence
+with zero comparison differences. This is
 not a claim that the original NVIDIA CUDA-specific tutorials execute unchanged.
 
 Omitted device requests now select MPS when available, otherwise CPU. Explicit
@@ -118,5 +118,5 @@ A stable drop-in claim requires all of the following:
    fallback-disabled Apple MPS tests, CUDA replay, metadata/license checks, and
    namespace-conflict checks from a clean tagged commit.
 
-Until the remaining packaging and publication mechanics close, release notes
-and package metadata retain the alpha warning.
+The release workflow enforces these checks on the free self-hosted Apple
+Silicon runner before it can build or publish a tagged distribution.

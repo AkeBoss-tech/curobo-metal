@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"angular": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 1], "values": [[0.7853981256484985]]}, "linear": {"device": "cuda", "dtype": "torch.float32", "shape": [1], "values": [0.5]}}
+

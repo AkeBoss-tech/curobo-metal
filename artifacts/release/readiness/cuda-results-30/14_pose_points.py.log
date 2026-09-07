@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"local": {"device": "cuda", "dtype": "torch.float32", "shape": [2, 3], "values": [[0.0, 0.0, 0.0], [1.0, -1.0, 2.0]]}, "world": {"device": "cuda", "dtype": "torch.float32", "shape": [2, 3], "values": [[1.0, 2.0, 3.0], [2.0, 1.0, 5.0]]}}
+

@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"rays": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4, 3], "values": [[[-0.25, -0.25, 1.0], [0.25, -0.25, 1.0], [-0.25, 0.25, 1.0], [0.25, 0.25, 1.0]]]}}
+

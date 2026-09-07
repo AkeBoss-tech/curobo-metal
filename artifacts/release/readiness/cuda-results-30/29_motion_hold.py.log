@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"endpoint": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 1, 7], "values": [[[0.0, -1.3000000715255737, 0.0, -2.500000238418579, 0.0, 1.5, 0.800000011920929]]]}, "path": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 1, 81, 7]}, "success": {"device": "cuda", "dtype": "torch.bool", "shape": [1, 1], "values": [[true]]}}
+

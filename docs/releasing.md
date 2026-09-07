@@ -16,7 +16,7 @@ not upload a locally built wheel or sdist.
 3. Create protected GitHub environments named `testpypi` and `pypi`. Require a
    human reviewer for `pypi`; do not store a long-lived API token.
 
-## Alpha dry run
+## TestPyPI dry run
 
 1. Start the `publish` workflow manually. It builds one wheel and one sdist,
    runs `twine check`, retains those exact artifacts, and publishes them to
@@ -31,7 +31,7 @@ not upload a locally built wheel or sdist.
    /tmp/curobo-metal-testpypi/bin/pip install \
      --index-url https://test.pypi.org/simple/ \
      --extra-index-url https://pypi.org/simple/ \
-     curobo-metal==0.1.0a1
+     curobo-metal==1.0.0
    /tmp/curobo-metal-testpypi/bin/pip check
    ```
 
@@ -45,7 +45,7 @@ not upload a locally built wheel or sdist.
    `CHANGELOG.md` has no unresolved release blockers hidden by the advertised
    scope.
 2. Create an annotated tag matching the source version exactly, prefixed with
-   `v` (for example `v0.1.0a1`).
+   `v` (for example `v1.0.0`).
 3. Create and publish a GitHub release from that tag. The workflow refuses a
    tag/version mismatch, rebuilds the artifacts once from the tag, validates
    them, then pauses at the protected `pypi` environment for approval.

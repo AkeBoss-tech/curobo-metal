@@ -1,0 +1,1709 @@
+{
+  "backend": "cuda",
+  "cases": [
+    {
+      "elapsed_seconds": 2.1709009000333026,
+      "file": "01_device_state.py",
+      "observations": {
+        "names": [
+          "a",
+          "b",
+          "c"
+        ],
+        "restored": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              -0.20000000298023224,
+              0.30000001192092896
+            ]
+          ]
+        },
+        "state": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              -0.20000000298023224,
+              0.30000001192092896
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.5285895959241316,
+      "file": "02_pose.py",
+      "observations": {
+        "identity": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4,
+            4
+          ],
+          "values": [
+            [
+              [
+                1.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ]
+        },
+        "matrix": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4,
+            4
+          ],
+          "values": [
+            [
+              [
+                1.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              [
+                0.0,
+                1.0,
+                0.0,
+                2.0
+              ],
+              [
+                0.0,
+                0.0,
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.6820378900738433,
+      "file": "03_fk_franka.py",
+      "observations": {
+        "joint_names": [
+          "panda_joint1",
+          "panda_joint2",
+          "panda_joint3",
+          "panda_joint4",
+          "panda_joint5",
+          "panda_joint6",
+          "panda_joint7"
+        ],
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            16,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.16047731041908264,
+                  -0.01610143855214119,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1606777161359787,
+                  -0.013960368931293488,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16084954142570496,
+                  -0.011816824786365032,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1609928011894226,
+                  -0.00967117864638567,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16110743582248688,
+                  -0.007523810025304556,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16119343042373657,
+                  -0.005375104956328869,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1612507700920105,
+                  -0.0032254450488835573,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16127948462963104,
+                  -0.0010752117959782481,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16127948462963104,
+                  0.0010752117959782481,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1612507700920105,
+                  0.0032254450488835573,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16119343042373657,
+                  0.005375104956328869,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16110743582248688,
+                  0.007523810025304556,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1609928011894226,
+                  0.00967117864638567,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16084954142570496,
+                  0.011816824786365032,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.1606777161359787,
+                  0.013960368931293488,
+                  0.6368466019630432
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.16047731041908264,
+                  0.01610143855214119,
+                  0.6368466019630432
+                ]
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.4920389250619337,
+      "file": "04_fk_ur10.py",
+      "observations": {
+        "joint_names": [
+          "shoulder_pan_joint",
+          "shoulder_lift_joint",
+          "elbow_joint",
+          "wrist_1_joint",
+          "wrist_2_joint",
+          "wrist_3_joint"
+        ],
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.2986122667789459,
+                  0.2050788551568985,
+                  0.7425727248191833
+                ]
+              ]
+            ]
+          ]
+        },
+        "quaternion": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            4
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.04184797778725624,
+                  -0.7404118776321411,
+                  0.6698103547096252,
+                  -0.0373232364654541
+                ]
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.845210022991523,
+      "file": "05_fk_gradient.py",
+      "observations": {
+        "finite_difference": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [],
+          "values": -0.10740756243467331
+        },
+        "gradient": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            7
+          ],
+          "values": [
+            [
+              2.7931963506052145e-20,
+              -0.10741447657346725,
+              1.3250042339360557e-12,
+              0.5200338363647461,
+              -3.650242272074805e-13,
+              0.17193835973739624,
+              1.5428018638952147e-20
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.863210155046545,
+      "file": "06_collision_mutation.py",
+      "observations": {
+        "far": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "values": [
+            [
+              [
+                0.0
+              ]
+            ]
+          ]
+        },
+        "near": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "values": [
+            [
+              [
+                0.20000000298023224
+              ]
+            ]
+          ]
+        },
+        "restored": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "values": [
+            [
+              [
+                0.0
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 5.52651324600447,
+      "file": "07_ik.py",
+      "observations": {
+        "joint_names": [
+          "panda_joint1",
+          "panda_joint2",
+          "panda_joint3",
+          "panda_joint4",
+          "panda_joint5",
+          "panda_joint6",
+          "panda_joint7",
+          "panda_finger_joint1",
+          "panda_finger_joint2"
+        ],
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.1604773849248886,
+              0.01610139012336731,
+              0.6368466019630432
+            ]
+          ]
+        },
+        "solution": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            9
+          ]
+        },
+        "success": {
+          "device": "cuda",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        },
+        "unreachable_success": {
+          "device": "cuda",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              false
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 5.345096960896626,
+      "file": "08_motion.py",
+      "observations": {
+        "0": {
+          "endpoint": {
+            "device": "cuda",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              7
+            ],
+            "values": [
+              [
+                [
+                  0.10000000149011612,
+                  -1.3000000715255737,
+                  0.0,
+                  -2.500000238418579,
+                  0.0,
+                  1.5,
+                  0.800000011920929
+                ]
+              ]
+            ]
+          },
+          "path": {
+            "device": "cuda",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              81,
+              7
+            ]
+          },
+          "success": {
+            "device": "cuda",
+            "dtype": "torch.bool",
+            "shape": [
+              1,
+              1
+            ],
+            "values": [
+              [
+                true
+              ]
+            ]
+          }
+        },
+        "1": {
+          "endpoint": {
+            "device": "cuda",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              7
+            ],
+            "values": [
+              [
+                [
+                  0.10000000149011612,
+                  -1.3000000715255737,
+                  0.0,
+                  -2.500000238418579,
+                  0.0,
+                  1.5,
+                  0.800000011920929
+                ]
+              ]
+            ]
+          },
+          "path": {
+            "device": "cuda",
+            "dtype": "torch.float32",
+            "shape": [
+              1,
+              1,
+              81,
+              7
+            ]
+          },
+          "success": {
+            "device": "cuda",
+            "dtype": "torch.bool",
+            "shape": [
+              1,
+              1
+            ],
+            "values": [
+              [
+                true
+              ]
+            ]
+          }
+        },
+        "zero_attempts_is_none": true
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.141873546061106,
+      "file": "09_joint_state_fields.py",
+      "observations": {
+        "acceleration": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.30000001192092896,
+              0.6000000238418579,
+              0.9000000357627869
+            ]
+          ]
+        },
+        "jerk": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.4000000059604645,
+              0.800000011920929,
+              1.2000000476837158
+            ]
+          ]
+        },
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              0.20000000298023224,
+              0.30000001192092896
+            ]
+          ]
+        },
+        "velocity": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.20000000298023224,
+              0.4000000059604645,
+              0.6000000238418579
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.170641429023817,
+      "file": "10_joint_state_reorder.py",
+      "observations": {
+        "names": [
+          "j0",
+          "j1",
+          "j2",
+          "j3"
+        ],
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.0,
+              1.0,
+              2.0,
+              3.0
+            ]
+          ]
+        },
+        "velocity": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1592716850573197,
+      "file": "11_joint_state_batch.py",
+      "observations": {
+        "batch": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            5,
+            3
+          ],
+          "values": [
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ],
+            [
+              0.20000000298023224,
+              -0.10000000149011612,
+              0.4000000059604645
+            ]
+          ]
+        },
+        "selected": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            3
+          ],
+          "values": [
+            1.2000000476837158,
+            0.8999999761581421,
+            1.399999976158142
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.250093959039077,
+      "file": "12_pose_matrix_roundtrip.py",
+      "observations": {
+        "matrix": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4,
+            4
+          ],
+          "values": [
+            [
+              [
+                0.7071066498756409,
+                0.0,
+                0.7071067094802856,
+                0.20000000298023224
+              ],
+              [
+                0.0,
+                0.9999998211860657,
+                0.0,
+                -0.30000001192092896
+              ],
+              [
+                -0.7071067094802856,
+                0.0,
+                0.7071066498756409,
+                0.4000000059604645
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ]
+        },
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.20000000298023224,
+              -0.30000001192092896,
+              0.4000000059604645
+            ]
+          ]
+        },
+        "quaternion": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.9238796234130859,
+              0.0,
+              0.3826834559440613,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1686446809908375,
+      "file": "13_pose_batch.py",
+      "observations": {
+        "repeated": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            3,
+            3
+          ],
+          "values": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        "stacked": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            3
+          ],
+          "values": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              2.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1927042769966647,
+      "file": "14_pose_points.py",
+      "observations": {
+        "local": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            3
+          ],
+          "values": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              -1.0,
+              2.0
+            ]
+          ]
+        },
+        "world": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            3
+          ],
+          "values": [
+            [
+              1.0,
+              2.0,
+              3.0
+            ],
+            [
+              2.0,
+              1.0,
+              5.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1951039250707254,
+      "file": "15_pose_distance.py",
+      "observations": {
+        "angular": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              0.7853981256484985
+            ]
+          ]
+        },
+        "linear": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1
+          ],
+          "values": [
+            0.5
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.129718817071989,
+      "file": "16_tool_pose.py",
+      "observations": {
+        "all": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  2.0,
+                  0.0
+                ]
+              ]
+            ]
+          ]
+        },
+        "frames": [
+          "left",
+          "right"
+        ],
+        "right": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.0,
+              2.0,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.134242048021406,
+      "file": "17_goal_tool_pose.py",
+      "observations": {
+        "goal": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  [
+                    0.10000000149011612,
+                    0.20000000298023224,
+                    0.30000001192092896
+                  ]
+                ]
+              ]
+            ]
+          ]
+        },
+        "selected": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  [
+                    0.10000000149011612,
+                    0.20000000298023224,
+                    0.30000001192092896
+                  ]
+                ]
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.158302045078017,
+      "file": "18_camera_observation.py",
+      "observations": {
+        "clone": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            2
+          ],
+          "values": [
+            [
+              0.0,
+              1.0199999809265137
+            ],
+            [
+              0.029999999329447746,
+              0.0
+            ]
+          ]
+        },
+        "filtered": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            2
+          ],
+          "values": [
+            [
+              0.0,
+              0.019999999552965164
+            ],
+            [
+              0.029999999329447746,
+              0.0
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1722075239522383,
+      "file": "19_camera_projection.py",
+      "observations": {
+        "rays": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4,
+            3
+          ],
+          "values": [
+            [
+              [
+                -0.25,
+                -0.25,
+                1.0
+              ],
+              [
+                0.25,
+                -0.25,
+                1.0
+              ],
+              [
+                -0.25,
+                0.25,
+                1.0
+              ],
+              [
+                0.25,
+                0.25,
+                1.0
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1204276280477643,
+      "file": "20_lidar_observation.py",
+      "observations": {
+        "bounds": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            2
+          ],
+          "values": [
+            [
+              0.10000000149011612,
+              3.0
+            ]
+          ]
+        },
+        "elevation": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            2
+          ],
+          "values": [
+            [
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        "ranges": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            4
+          ],
+          "values": [
+            [
+              [
+                1.0,
+                2.0,
+                1.0,
+                2.0
+              ]
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1247068491065875,
+      "file": "21_scene_mutation.py",
+      "observations": {
+        "count": 2,
+        "sentinel": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1
+          ],
+          "values": [
+            1.0
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.26346269401256,
+      "file": "22_geometry_conversion.py",
+      "observations": {
+        "cube_valid": true,
+        "sentinel": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1
+          ],
+          "values": [
+            0.4000000059604645
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.6675402759574354,
+      "file": "23_fk_link_lookup.py",
+      "observations": {
+        "frame": "panda_hand",
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            3
+          ],
+          "values": [
+            [
+              0.1612830013036728,
+              -5.832329844773776e-12,
+              0.6368466019630432
+            ]
+          ]
+        },
+        "quaternion": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            4
+          ],
+          "values": [
+            [
+              0.0010910299606621265,
+              -0.9887446761131287,
+              0.0072188894264400005,
+              -0.1494341492652893
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.495439579943195,
+      "file": "24_fk_transforms.py",
+      "observations": {
+        "last": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            4,
+            4
+          ],
+          "values": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        "transforms": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            13,
+            4,
+            4
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.5443342499202117,
+      "file": "25_joint_limits.py",
+      "observations": {
+        "default": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            7
+          ],
+          "values": [
+            0.0,
+            -1.2999999523162842,
+            0.0,
+            -2.5,
+            0.0,
+            1.5,
+            0.800000011920929
+          ]
+        },
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            7
+          ],
+          "values": [
+            [
+              -2.8973000049591064,
+              -1.7627999782562256,
+              -2.8973000049591064,
+              -3.0717999935150146,
+              -2.8973000049591064,
+              -0.017500000074505806,
+              -2.8973000049591064
+            ],
+            [
+              2.8973000049591064,
+              1.7627999782562256,
+              2.8973000049591064,
+              -0.0697999969124794,
+              2.8973000049591064,
+              3.752500057220459,
+              2.8973000049591064
+            ]
+          ]
+        },
+        "velocity": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            7
+          ],
+          "values": [
+            [
+              -2.174999952316284,
+              -2.174999952316284,
+              -2.174999952316284,
+              -2.174999952316284,
+              -2.609999895095825,
+              -2.609999895095825,
+              -2.609999895095825
+            ],
+            [
+              2.174999952316284,
+              2.174999952316284,
+              2.174999952316284,
+              2.174999952316284,
+              2.609999895095825,
+              2.609999895095825,
+              2.609999895095825
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.4773716899799183,
+      "file": "26_fk_large_batch.py",
+      "observations": {
+        "endpoints": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            2,
+            1,
+            1,
+            3
+          ],
+          "values": [
+            [
+              [
+                [
+                  0.3458802402019501,
+                  0.10767331719398499,
+                  0.7425727248191833
+                ]
+              ]
+            ],
+            [
+              [
+                [
+                  0.27664676308631897,
+                  0.23386581242084503,
+                  0.7425727248191833
+                ]
+              ]
+            ]
+          ]
+        },
+        "poses": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            64,
+            1,
+            1,
+            3
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 4.732459926977754,
+      "file": "27_ik_hold.py",
+      "observations": {
+        "solution": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            9
+          ]
+        },
+        "success": {
+          "device": "cuda",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 4.508989572990686,
+      "file": "28_ik_repeatability.py",
+      "observations": {
+        "first": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            6
+          ]
+        },
+        "second": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            6
+          ]
+        },
+        "success": {
+          "device": "cuda",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 5.222469697939232,
+      "file": "29_motion_hold.py",
+      "observations": {
+        "endpoint": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            7
+          ],
+          "values": [
+            [
+              [
+                0.0,
+                -1.3000000715255737,
+                0.0,
+                -2.500000238418579,
+                0.0,
+                1.5,
+                0.800000011920929
+              ]
+            ]
+          ]
+        },
+        "path": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            1,
+            1,
+            81,
+            7
+          ]
+        },
+        "success": {
+          "device": "cuda",
+          "dtype": "torch.bool",
+          "shape": [
+            1,
+            1
+          ],
+          "values": [
+            [
+              true
+            ]
+          ]
+        }
+      },
+      "passed": true,
+      "returncode": 0
+    },
+    {
+      "elapsed_seconds": 2.1526185020338744,
+      "file": "30_collision_sphere.py",
+      "observations": {
+        "position": {
+          "device": "cuda",
+          "dtype": "torch.float32",
+          "shape": [
+            3
+          ],
+          "values": [
+            0.10000000149011612,
+            0.20000000298023224,
+            0.30000001192092896
+          ]
+        },
+        "radius": 0.25
+      },
+      "passed": true,
+      "returncode": 0
+    }
+  ],
+  "expected_device": "cuda",
+  "manifest_sha256": "881238215d4c25d5564d88c66a32b49e6ab75defa23fc01a421ca0c6deb46270",
+  "mps_fallback_enabled": false,
+  "passed": true,
+  "runtime": {
+    "cuda_available": true,
+    "direct_url": {
+      "dir_info": {},
+      "url": "file:///common/home/ad2046/curobo-metal-cuda-replay/upstream"
+    },
+    "mps_available": false,
+    "owners": [
+      "nvidia-curobo"
+    ],
+    "package_root": "/home/omen/akash/curobo-application-replay-20260907/.venv/lib/python3.12/site-packages/curobo",
+    "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+    "source_attestation": {
+      "python_files_verified": 586,
+      "revision": "8e734f3ced1df898990bcd92de40abce475907db"
+    },
+    "torch": "2.7.1+cu126",
+    "version": "0.0.post1.dev1",
+    "wheel_files_verified": 0
+  },
+  "schema_version": 1,
+  "source_hashes": {
+    "01_device_state.py": "2b2ef59bb496fdd71d6009386dc304e6e6b4f4679b0c3f1c3fefa740a0370fca",
+    "02_pose.py": "b8ebf4645ae72a46113116b8595765415e21d31559610b0869512a386421538b",
+    "03_fk_franka.py": "863a8401020aad0e86692859c4fca45509ae60d3963207bb63764bef3c2733f3",
+    "04_fk_ur10.py": "9712673da8c5154fa2c05ac05419f89b6f0cf9b58946cd74b3706d1c9edc1d41",
+    "05_fk_gradient.py": "caa40ac6f17d1a747120702fc2f77b7cf545997c3c712667d261e80438be3ea6",
+    "06_collision_mutation.py": "dd4ea3aede52bd5413f16638472f21a09c9c2302223589e61c345e839b485eeb",
+    "07_ik.py": "0140048d2ce3a6cc97e855c9573673859885b768e8d08581be527d20c7daf149",
+    "08_motion.py": "67b014b4260ec5c8d847343888e9464d96aac99b4d5742cede421c8d2ccc87be",
+    "09_joint_state_fields.py": "53fc7cc1d51df01acd63984429b723e295dec8999354e922939618811fd7ee52",
+    "10_joint_state_reorder.py": "37704773efbcbf299bc9bf6ed7482469ffdcc34bece10dd54b4a6b708d54f2df",
+    "11_joint_state_batch.py": "668c43062ddc08809763cc87eb4133abb1cd61f929e9414308face7afcbc4ce1",
+    "12_pose_matrix_roundtrip.py": "db02f7881750b5053ab05b38d98c8a0bf5c31e99da603cfb307c5a01a6a8e85f",
+    "13_pose_batch.py": "698a727fd246662d8b56defea8cd57cfae3fb23ce541046979d47a8a089b9d58",
+    "14_pose_points.py": "b66b14800e6c70b38a11d7cec4001f9922cc9403e8c975e95ecbe0d4b6c99b5d",
+    "15_pose_distance.py": "58b8c0fad2c2ac47b80f0320290dc3acd65e4d698a8fd3439279256dc07bb3e8",
+    "16_tool_pose.py": "b356143308301bad365b38555f85ba9d858c241b46e621cdf576c7a2919558a8",
+    "17_goal_tool_pose.py": "b0641f0b93fe2ba641a47108718481351ac78e9145f8e7f29a8ac162acc59cd0",
+    "18_camera_observation.py": "efb598f2b13ace8083bde460506d11b8899a55d128609d8d339a7717fcfe8c95",
+    "19_camera_projection.py": "b2f3427c1af3eb01a2bb11b44a41c46bd145771d6de7d0d70f92eefa17843381",
+    "20_lidar_observation.py": "b1704499884e813c6352d0154a3c7ae88e1a32797ed5562d70af711424d01bc0",
+    "21_scene_mutation.py": "30d467538cc32ec9087a99495f3240a009ab3d6725622328d6bcf8204259fef8",
+    "22_geometry_conversion.py": "7152034c51278609d652645f8962999224cf45af1dc14de1f0cab68808cebc34",
+    "23_fk_link_lookup.py": "ae9ce0be8fd9a2f2b72841c13bd66d21cd8d28dd08177a928bd2ffe53059b9d4",
+    "24_fk_transforms.py": "26d1de502c57b2eaf07cc0a7935aac9935ab60f87fb9aae906f5aebf4a94283e",
+    "25_joint_limits.py": "fd72b4f0075525fbb0266d09a6cfb8999ee602e090234e6d818cc7a857f814e5",
+    "26_fk_large_batch.py": "6af9a57158d57d7f5978947b9b6ca1b470d43cd5746f7874de3e7b0d07b0c077",
+    "27_ik_hold.py": "49be8bae4d75e28f7e1ae7b112522775a434944ed427ac616b90d2c21a85f293",
+    "28_ik_repeatability.py": "d4e7f0cf552e321352958282601f78b9252e1a7e38dcf2a158ecba778237ebc9",
+    "29_motion_hold.py": "32977e87422a6f4db2b532bad1ad8fdfdd44c6e70cd69af1c290cd01dde7a166",
+    "30_collision_sphere.py": "f51781e4ecedc710820e1c7f5fae9b5fa951b647525f3ce41a1db0af4fe8c22f",
+    "application_support.py": "d8b6e6c6ae8d01994ab602627abe74cee8c3ba8115d214900f6d5c6cde38b155"
+  },
+  "upstream_revision": "8e734f3ced1df898990bcd92de40abce475907db",
+  "wheel_sha256": null
+}

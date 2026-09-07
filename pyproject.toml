@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "curobo-metal"
-description = "Portable correctness foundations for cuRobo Metal"
+description = "A drop-in cuRobo Python implementation for Apple Silicon"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
@@ -12,7 +12,7 @@ dynamic = ["version"]
 authors = [{name = "curobo-metal contributors"}]
 keywords = ["robotics", "motion-planning", "apple-silicon", "metal", "pytorch"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Operating System :: MacOS :: MacOS X",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",

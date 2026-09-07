@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"last": {"device": "cuda", "dtype": "torch.float32", "shape": [4, 4], "values": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]}, "transforms": {"device": "cuda", "dtype": "torch.float32", "shape": [13, 4, 4]}}
+

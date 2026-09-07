@@ -2,7 +2,7 @@
 
 This directory contains intentionally red, forward-looking tests for the full
 pinned cuRoboV2 compatibility contract.  It is outside pytest's configured
-`testpaths`, so the bounded alpha suite under `tests/` remains green.
+`testpaths`, so the release suite under `tests/` remains focused.
 
 Run the full consistency gates explicitly:
 
@@ -44,6 +44,6 @@ than execution. Acceptance follows `gauntlet/curobo-consistency.json`: clean
 installed-wheel upstream tests and paired numerical/runtime evidence outrank
 static or documentary closure.
 
-The checks are intentionally broader than the `0.1.0a1` claims.  Raw CUDA/Warp
+The checks are intentionally broader than the `1.0.0` portable contract. Raw CUDA/Warp
 ABIs and unavailable external integrations remain explicit exclusions rather
 than false parity requirements.

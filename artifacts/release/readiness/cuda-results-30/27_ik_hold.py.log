@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"solution": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 1, 9]}, "success": {"device": "cuda", "dtype": "torch.bool", "shape": [1, 1], "values": [[true]]}}
+

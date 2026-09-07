@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"identity": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4, 4], "values": [[[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]]}, "matrix": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 4, 4], "values": [[[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]]}}
+

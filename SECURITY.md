@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-Security fixes are provided for the newest published `curobo-metal` alpha or
-stable release. Pre-release APIs may change as compatibility work progresses.
+Security fixes are provided for the newest published stable `curobo-metal`
+release. Pre-release APIs may change as compatibility work progresses.
 
 ## Reporting a vulnerability
 

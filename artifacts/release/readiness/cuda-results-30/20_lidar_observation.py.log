@@ -1,0 +1,2 @@
+CUROBO_APPLICATION_RESULT={"bounds": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 2], "values": [[0.10000000149011612, 3.0]]}, "elevation": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 2], "values": [[0.0, 0.0]]}, "ranges": {"device": "cuda", "dtype": "torch.float32", "shape": [1, 1, 4], "values": [[[1.0, 2.0, 1.0, 2.0]]]}}
+

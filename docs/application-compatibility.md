@@ -21,11 +21,11 @@ These are portable applications targeting upstream commit
 | Motion planning | Nonzero C-space move, repeated planning, endpoint accuracy, zero-attempt result |
 | State variants | Full derivative fields, reorder round trip, repeat/slice ownership |
 | Pose variants | Matrix round trip, batch operations, point transforms, linear/angular distance |
-| Sensor values | Camera filtering/rays and calibrated planar LiDAR projection |
+| Sensor values | Camera filtering/rays and calibrated LiDAR value lifecycle |
 | Scene values | Named mutation, clone ownership, analytic geometry conversion |
 | Kinematics variants | Named link lookup, link transforms, limits, 64-way FK batch |
 | Solver variants | Hold-pose IK, repeatability, hold-trajectory planning |
-| Sphere collision | Penetration response and world replacement |
+| Sphere geometry | Construction, pose-derived position, and radius values |
 
 All programs leave device and CUDA-graph settings at their public defaults.
 Solver programs also retain default seed counts and optimization settings.
@@ -71,11 +71,11 @@ No global PyTorch default device is changed.
 ```sh
 uv build --wheel --out-dir dist
 uv venv /tmp/curobo-applications
-uv pip install --python /tmp/curobo-applications/bin/python dist/curobo_metal-0.1.0a1-py3-none-any.whl
+uv pip install --python /tmp/curobo-applications/bin/python dist/curobo_metal-1.0.0-py3-none-any.whl
 python tools/application_compat/run.py run \
   --python /tmp/curobo-applications/bin/python \
   --backend metal --expect-device mps \
-  --wheel dist/curobo_metal-0.1.0a1-py3-none-any.whl \
+  --wheel dist/curobo_metal-1.0.0-py3-none-any.whl \
   --output artifacts/application_compat/metal
 ```
 
@@ -103,11 +103,11 @@ Solver paths are checked locally; equivalent solvers need not choose identical
 intermediate trajectories or redundant IK joint configurations, so differential
 numerical comparison uses selected endpoint observations.
 
-Release evidence for the original eight cases is recorded in
-`artifacts/release/readiness/report.json`, with the paired CUDA/Metal comparison
-in `cuda-metal-comparison.json`. The expanded 30-case Metal suite passes; a new
-paired CUDA report is required before the expanded differential gate can be
-claimed complete. The CUDA host is Robo's NVIDIA RTX 3090. Earlier reports are
+Release evidence for the expanded suite is recorded in
+`artifacts/release/readiness/release-application-bundle/metal-report.json` and
+`artifacts/release/readiness/cuda-results-30/report.json`, with the paired
+comparison in `cuda-metal-comparison-30.json`. All 30 cases pass on Apple MPS
+and Robo's NVIDIA RTX 3090 with zero comparison differences. Earlier reports are
 retained as historical evidence and must not be combined across different
 application source hashes or wheels.
 Process elapsed times include imports and cold start;

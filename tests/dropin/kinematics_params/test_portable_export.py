@@ -46,7 +46,7 @@ def test_urdf_export_reflects_mutations_and_sphere_activation(tmp_path):
     assert root.tag == "robot"
     assert root.attrib["name"] == "portable_franka"
     assert len(root.findall("link")) == params.num_links
-    assert len(root.findall("joint")) == len(params.robot_cfg.joints)
+    assert len(root.findall("joint")) == params.num_links - 1
 
     link = root.find(f"link[@name='{link_name}']")
     assert link is not None

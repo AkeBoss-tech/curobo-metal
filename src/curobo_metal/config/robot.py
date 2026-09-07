@@ -184,6 +184,31 @@ class RobotCfg:
         link_by_name = {link.name: link for link in self.links}
         joint_by_child = {joint.child: joint for joint in self.joints}
         ordered_names = _topological_links(self.base_link, self.links, self.joints)
+        # The CUDA loader compiles only links needed by active joints, tool
+        # frames, collision geometry, mesh export, or declared extra links.
+        # Raw URDFs can contain visual-only aliases (Franka's ``ee_link`` and
+        # ``right_gripper`` are examples); retaining them changed public packed
+        # transform shapes and link indices. Build the same ancestor closure.
+        targets = {
+            self.base_link,
+            *self.tool_frames,
+            *self.collision_link_names,
+            *(sphere.link_name for sphere in self.collision_spheres),
+            *(self.metadata.get("mesh_link_names") or []),
+            *(self.metadata.get("grasp_contact_link_names") or []),
+            *(self.metadata.get("extra_links") or {}).keys(),
+            *(joint.child for joint in self.joints if joint.name in self.joint_names),
+        }
+        retained = {name for name in targets if name in link_by_name}
+        for name in tuple(retained):
+            current = name
+            while current != self.base_link:
+                joint = joint_by_child.get(current)
+                if joint is None:
+                    break
+                retained.add(joint.parent)
+                current = joint.parent
+        ordered_names = [name for name in ordered_names if name in retained]
         index = {name: position for position, name in enumerate(ordered_names)}
         rows: list[dict[str, Any]] = []
         for name in ordered_names:

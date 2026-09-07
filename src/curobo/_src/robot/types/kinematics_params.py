@@ -858,7 +858,11 @@ class _KinematicsParamsPortable:
 
     @property
     def num_links(self) -> int:
-        return len(self.robot_cfg.links)
+        # Match the compiled cuRobo tree rather than the raw URDF inventory.
+        # The source loader omits visual-only aliases that are outside the
+        # active/collision/tool closure, so public packed tensors and FK link
+        # transforms must use this same count.
+        return len(self._tree().links)
 
     @property
     def num_spheres(self) -> int:
@@ -959,7 +963,10 @@ class _KinematicsParamsPortable:
                 if float(value[3].detach().cpu()) > 0.0:
                     spheres_by_link.setdefault(sphere.link_name, []).append(value)
 
+        exported_link_names = set(self.all_link_names)
         for link in self.robot_cfg.links:
+            if link.name not in exported_link_names:
+                continue
             element = ET.SubElement(root, "link", {"name": link.name})
             inertial = ET.SubElement(element, "inertial")
             ET.SubElement(inertial, "origin", {"xyz": vector(link.com, 3, "link com"), "rpy": "0 0 0"})
@@ -980,6 +987,8 @@ class _KinematicsParamsPortable:
                 ET.SubElement(geometry, "sphere", {"radius": number(sphere[3].detach().cpu(), "sphere radius")})
 
         for joint in self.robot_cfg.joints:
+            if joint.parent not in exported_link_names or joint.child not in exported_link_names:
+                continue
             joint_type = joint.kind
             if joint_type not in {"fixed", "revolute", "prismatic"}:
                 raise NotImplementedError(f"URDF export does not support joint kind {joint_type!r}")
