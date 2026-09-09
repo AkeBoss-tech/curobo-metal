@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv python install 3.13
+      - run: uv sync --python 3.13 --extra test
       - name: Fetch current upstream state
         run: |
           upstream_dir="$RUNNER_TEMP/curobo-upstream"
@@ -28,10 +29,11 @@ jobs:
             --output "$RUNNER_TEMP/upstream-drift.json"
       - name: Recheck the downstream compatibility corpus
         run: |
-          PYTHONPATH=src uv run --no-project --python 3.13 python tools/api_compat/ecosystem_gate.py \
+          PYTHONPATH=src uv run python tools/api_compat/ecosystem_gate.py \
             --corpus artifacts/api_compat/ecosystem-api.json \
             --output "$RUNNER_TEMP/ecosystem-gate.json"
       - name: Preserve drift evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: upstream-compatibility-drift
