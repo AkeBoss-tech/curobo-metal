@@ -98,11 +98,11 @@ jobs:
         with:
           name: python-distributions
           path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          packages-dir: dist/
-          attestations: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Publish to TestPyPI with trusted publishing
+        run: >-
+          uv publish --trusted-publishing always
+          --publish-url https://test.pypi.org/legacy/ dist/*
 
   publish-pypi:
     if: github.event_name == 'release'
@@ -116,7 +116,6 @@ jobs:
         with:
           name: python-distributions
           path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
-          attestations: true
+      - uses: astral-sh/setup-uv@v6
+      - name: Publish to PyPI with trusted publishing
+        run: uv publish --trusted-publishing always dist/*
