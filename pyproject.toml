@@ -36,6 +36,10 @@ Repository = "https://github.com/AkeBoss-tech/curobo-metal"
 Issues = "https://github.com/AkeBoss-tech/curobo-metal/issues"
 
 [project.optional-dependencies]
+demo = [
+  "Pillow>=10",
+  "trimesh>=4",
+]
 test = [
   "pytest>=7.4",
   "pytest-timeout>=2.4",

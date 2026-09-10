@@ -2,6 +2,29 @@
 
 All notable user-visible changes are recorded here.
 
+## 1.0.1 - Unreleased
+
+### Fixed
+
+- Preserve successful Levenberg–Marquardt IK seeds instead of always applying
+  up to 200 eager Adam refinement steps. This fixes repeated reachable-target
+  failures observed in the `1.0.0` wheel and reduces the matched M4 workload
+  from about 315 ms per successful solve to about 17.9 ms median.
+- Check eager-MPS convergence after every LM step instead of completing a
+  four-step CUDA-oriented inner group, and remove repeated validation/device
+  synchronizations from solver-owned batches.
+- Route compatible serial-tree robot models through the fused Metal FK kernel,
+  cache static joint-order tensors, and avoid a redundant MPS environment-index
+  synchronization for the default sphere environment.
+
+### Added
+
+- A minimal installed-package FK example using the public `curobo` namespace.
+- A reproducible Pillow-rendered motion-planning GIF using the bundled Franka
+  meshes and its public-API generator.
+- A practical Apple M4 versus RTX 3090 benchmark table, cold-start context,
+  intended-use guidance, optimization roadmap, and launch-post drafts.
+
 ## 1.0.0 - 2026-09-07
 
 First stable release of `curobo-metal`, an Apple Silicon/MPS implementation

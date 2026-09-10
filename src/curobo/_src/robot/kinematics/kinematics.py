@@ -19,12 +19,16 @@ from curobo._src.robot.kinematics.kinematics_cfg import KinematicsCfg
 from curobo._src.robot.kinematics.kinematics_state import KinematicsState
 from curobo._src.robot.types import JointLimits, KinematicsParams, SelfCollisionKinematicsCfg
 from curobo._src.state.state_joint import JointState
+from curobo._src.state.state_joint_ops import append_joints_to_state
 from curobo._src.state.state_joint_ops import augment_joint_state
 from curobo._src.types.pose import Pose
 from curobo._src.types.tool_pose import ToolPose
 from curobo._src.util.logging import log_and_raise
 from curobo_metal.config.robot import _topological_links
+from curobo_metal.ops.kinematics.forward import KinematicChain
+from curobo_metal.ops.kinematics.metal import fused_forward_kinematics
 from curobo_metal.ops.whole_body import WholeBodyModel, tree_forward_kinematics
+from curobo_metal.reference.forward_kinematics import Joint, SerialRobot
 from curobo_metal.reference.tree_kinematics import TreeRobot
 
 
@@ -97,8 +101,9 @@ class Kinematics:
         # tensors are rounded and fail dynamics' positive-semidefinite check.
         for link in mapping["links"]:
             link["inertial"]["inertia"] = [0.0] * 6
+        tree = TreeRobot.from_dict(mapping)
         self._model = WholeBodyModel(
-            TreeRobot.from_dict(mapping),
+            tree,
             device=config.device_cfg.device if device is None else device,
             dtype=config.device_cfg.dtype if dtype is None else dtype,
         )
@@ -110,6 +115,75 @@ class Kinematics:
             raise ValueError("compiled and public kinematics joint names do not match")
         self._model_input_order = tuple(public_names.index(name) for name in model_names)
         self._public_jacobian_order = tuple(model_names.index(name) for name in public_names)
+        self._model_input_order_tensor = torch.tensor(
+            self._model_input_order, dtype=torch.long, device=self._model.device
+        )
+        self._public_jacobian_order_tensor = torch.tensor(
+            self._public_jacobian_order, dtype=torch.long, device=self._model.device
+        )
+        self._fused_chain = None
+        self._fused_prefix_count = 0
+        prefix_count = 1
+        while (
+            prefix_count < len(tree.links)
+            and tree.links[prefix_count].parent == prefix_count - 1
+        ):
+            prefix_count += 1
+        has_plain_coordinates = all(
+            link.multiplier == 1.0 and link.offset == 0.0 for link in tree.links
+        )
+        fixed_branches = all(
+            link.kind == "fixed" for link in tree.links[prefix_count:]
+        )
+        if (
+            self._model.device.type == "mps"
+            and has_plain_coordinates
+            and fixed_branches
+        ):
+            serial = SerialRobot(
+                tree.name,
+                tuple(
+                    Joint(link.name, link.kind, link.axis, link.origin, link.q_index)
+                    for link in tree.links[:prefix_count]
+                ),
+                tree.dof,
+            )
+            self._fused_chain = KinematicChain(
+                serial, device=self._model.device, dtype=self._model.dtype
+            )
+            self._fused_prefix_count = prefix_count
+
+    def _fused_tree_forward(self, ordered: torch.Tensor):
+        """Run a serial prefix in Metal and append fixed branch transforms."""
+        transform_tensor, derivative_tensor, geometric = fused_forward_kinematics(
+            self._fused_chain, ordered
+        )
+        if self._fused_prefix_count == self._model.link_count:
+            return transform_tensor, derivative_tensor, geometric
+        transforms = list(transform_tensor.unbind(dim=1))
+        derivatives = list(derivative_tensor.unbind(dim=1))
+        geometrics = list(geometric.unbind(dim=1))
+        for index in range(self._fused_prefix_count, self._model.link_count):
+            parent = self._model.parents[index]
+            origin = self._model.origins[index].expand(ordered.shape[0], 4, 4)
+            transform = transforms[parent] @ origin
+            derivative = (
+                derivatives[parent].permute(0, 3, 1, 2) @ origin[:, None]
+            ).permute(0, 2, 3, 1)
+            omega = torch.einsum(
+                "bikd,bmk->bimd", derivative[:, :3, :3], transform[:, :3, :3]
+            )
+            angular = torch.stack(
+                (omega[:, 2, 1], omega[:, 0, 2], omega[:, 1, 0]), dim=1
+            )
+            transforms.append(transform)
+            derivatives.append(derivative)
+            geometrics.append(torch.cat((derivative[:, :3, 3], angular), dim=1))
+        return (
+            torch.stack(transforms, dim=1),
+            torch.stack(derivatives, dim=1),
+            torch.stack(geometrics, dim=1),
+        )
 
     def _ensure_model_for(self, value: torch.Tensor) -> None:
         """Compile lazily for the caller's CPU/MPS device and floating dtype."""
@@ -166,11 +240,17 @@ class Kinematics:
         batch, horizon, _ = joint_position.shape
         self.update_batch_size(batch, horizon)
         flat = joint_position.reshape(batch * horizon, self.dof)
-        input_order = torch.tensor(
-            self._model_input_order, dtype=torch.long, device=joint_position.device
-        )
-        fk = tree_forward_kinematics(self._model, flat.index_select(-1, input_order))
-        transforms = fk.transforms.reshape(batch, horizon, len(self._link_names), 4, 4)
+        ordered = flat.index_select(-1, self._model_input_order_tensor)
+        if self._fused_chain is not None:
+            transform_tensor, _, geometric = self._fused_tree_forward(ordered)
+            transforms = transform_tensor.reshape(
+                batch, horizon, len(self._link_names), 4, 4
+            )
+        else:
+            fk = tree_forward_kinematics(self._model, ordered)
+            transforms = fk.transforms.reshape(
+                batch, horizon, len(self._link_names), 4, 4
+            )
         selected = transforms[..., self._tool_indices, :, :]
         poses = ToolPose(
             self.tool_frames,
@@ -179,13 +259,11 @@ class Kinematics:
         )
         jacobian = None
         if self.compute_jacobian:
-            jacobian = fk.geometric_jacobian.reshape(
+            geometric_jacobian = geometric if self._fused_chain is not None else fk.geometric_jacobian
+            jacobian = geometric_jacobian.reshape(
                 batch, horizon, len(self._link_names), 6, self.dof
             )[..., self._tool_indices, :, :]
-            public_order = torch.tensor(
-                self._public_jacobian_order, dtype=torch.long, device=joint_position.device
-            )
-            jacobian = jacobian.index_select(-1, public_order)
+            jacobian = jacobian.index_select(-1, self._public_jacobian_order_tensor)
         spheres = self._sphere_positions(transforms, idxs_env) if self.compute_spheres else None
         com = self._center_of_mass(transforms) if self.compute_com else None
         return KinematicsState(poses, jacobian, spheres, com, None)
@@ -203,8 +281,8 @@ class Kinematics:
             env = torch.zeros(transforms.shape[0], dtype=torch.long, device=transforms.device)
         else:
             env = idxs_env.to(device=transforms.device, dtype=torch.long)
-        if bool(((env < 0) | (env >= environments.shape[0])).any().item()):
-            raise ValueError("sphere environment index is out of range")
+            if bool(((env < 0) | (env >= environments.shape[0])).any().item()):
+                raise ValueError("sphere environment index is out of range")
         values = environments.index_select(0, env)
         local = torch.cat(
             (values[..., :3], torch.ones_like(values[..., :1])), dim=-1
@@ -291,12 +369,16 @@ class Kinematics:
         if q.shape[-1] != self.dof:
             raise ValueError(f"q should have dof = {self.dof}, got {q.shape[-1]}")
         self._ensure_model_for(q)
-        input_order = torch.tensor(
-            self._model_input_order, dtype=torch.long, device=q.device
+        ordered = q.reshape(-1, self.dof).index_select(
+            -1, self._model_input_order_tensor
         )
-        transforms = tree_forward_kinematics(
-            self._model, q.reshape(-1, self.dof).index_select(-1, input_order)
-        ).transforms.reshape(*q.shape[:2], len(self._link_names), 4, 4)
+        if self._fused_chain is not None:
+            transform_tensor, _, _ = self._fused_tree_forward(ordered)
+        else:
+            transform_tensor = tree_forward_kinematics(self._model, ordered).transforms
+        transforms = transform_tensor.reshape(
+            *q.shape[:2], len(self._link_names), 4, 4
+        )
         indices = torch.tensor(
             [self._link_names.index(name) for name in query_link_names],
             device=joint_position.device,
@@ -364,7 +446,7 @@ class Kinematics:
             return joint_state
         if locked.device_cfg != joint_state.device_cfg:
             locked = locked.to(joint_state.device_cfg)
-        return joint_state.append_joints(locked)
+        return append_joints_to_state(joint_state, locked)
 
     def get_mimic_js(self, joint_state: JointState) -> JointState:
         """Expose the compiled state for chains whose mimic joints are reduced."""
@@ -383,7 +465,7 @@ class Kinematics:
                 value = getattr(source_state, channel)
                 if value is not None:
                     setattr(mimic, channel, value * multiplier)
-            result = mimic if result is None else result.append_joints(mimic)
+            result = mimic if result is None else append_joints_to_state(result, mimic)
         return result
 
     def update_kinematics_config(self, new_kin_config: KinematicsParams):

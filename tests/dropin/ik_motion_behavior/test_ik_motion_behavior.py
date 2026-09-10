@@ -104,11 +104,51 @@ def test_ik_persists_typed_goal_lifecycle_and_uses_portable_lm_seeding():
 
     assert result.success.tolist() == [[True]]
     assert result.metrics["backend"] == "torch-adam+lm"
-    assert result.metrics["iterations"] >= 1
+    # The LM stage already solves the exact goal; a successful seed must not
+    # be degraded by an unnecessary eager Adam refinement.
+    assert result.metrics["iterations"] == 0
     assert solver.seed_ik_solver is not None
     assert solver.solve_state.solve_type is SolveMode.SINGLE
     assert solver.solve_state.num_goalset == 2
     assert solver.goal_registry_manager.goal_buffer.link_goal_poses is not None
+
+
+def test_repeated_reachable_ik_keeps_successful_lm_seeds():
+    solver = _solver(num_seeds=32)
+    current = solver.default_joint_state
+    target = current.clone()
+    target.position[..., 0] += 0.1
+    state = solver.compute_kinematics(target)
+    goal = GoalToolPose(
+        solver.tool_frames,
+        state.tool_poses.position.unsqueeze(3),
+        state.tool_poses.quaternion.unsqueeze(3),
+    )
+
+    results = [solver.solve_pose(goal, current_state=current) for _ in range(3)]
+
+    assert all(result.success.tolist() == [[True]] for result in results)
+    assert all(result.metrics["iterations"] == 0 for result in results)
+
+
+def test_seed_ik_checks_convergence_before_completing_an_inner_group():
+    solver = _solver(num_seeds=32)
+    current = solver.default_joint_state
+    target = current.clone()
+    target.position[..., 0] += 0.1
+    state = solver.compute_kinematics(target)
+    goal = GoalToolPose(
+        solver.tool_frames,
+        state.tool_poses.position.unsqueeze(3),
+        state.tool_poses.quaternion.unsqueeze(3),
+    )
+
+    result = solver.seed_ik_solver.solve_single(
+        goal, current_state=current, return_seeds=32
+    )
+
+    assert result.metrics["iterations"] == 1
+    assert int(result.success.sum().item()) >= 1
 
 
 def test_ik_batch_padding_helpers_clone_and_restore_result_ranks():

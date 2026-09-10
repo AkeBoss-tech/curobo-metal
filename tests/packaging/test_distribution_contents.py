@@ -16,14 +16,14 @@ def test_repository_license_and_notices_are_complete() -> None:
 
 
 def test_wheel_requires_both_license_documents_and_rejects_leaks() -> None:
-    wheel = Path("curobo_metal-1.0.0-py3-none-any.whl")
+    wheel = Path("curobo_metal-1.0.1-py3-none-any.whl")
     valid = [
         "curobo/__init__.py",
         "curobo/types/math.py",
         "curobo/wrap/reacher/motion_gen.py",
         "curobo_metal/ops/perception/core.py",
-        "curobo_metal-1.0.0.dist-info/licenses/LICENSE",
-        "curobo_metal-1.0.0.dist-info/licenses/THIRD_PARTY_NOTICES.md",
+        "curobo_metal-1.0.1.dist-info/licenses/LICENSE",
+        "curobo_metal-1.0.1.dist-info/licenses/THIRD_PARTY_NOTICES.md",
     ]
     assert validate_members(wheel, valid) == []
 
@@ -33,13 +33,13 @@ def test_wheel_requires_both_license_documents_and_rejects_leaks() -> None:
 
 
 def test_sdist_requires_single_root_and_release_documents() -> None:
-    sdist = Path("curobo_metal-1.0.0.tar.gz")
+    sdist = Path("curobo_metal-1.0.1.tar.gz")
     valid = [
-        "curobo_metal-1.0.0/LICENSE",
-        "curobo_metal-1.0.0/THIRD_PARTY_NOTICES.md",
-        "curobo_metal-1.0.0/README.md",
-        "curobo_metal-1.0.0/pyproject.toml",
-        "curobo_metal-1.0.0/src/curobo/__init__.py",
+        "curobo_metal-1.0.1/LICENSE",
+        "curobo_metal-1.0.1/THIRD_PARTY_NOTICES.md",
+        "curobo_metal-1.0.1/README.md",
+        "curobo_metal-1.0.1/pyproject.toml",
+        "curobo_metal-1.0.1/src/curobo/__init__.py",
     ]
     assert validate_members(sdist, valid) == []
 

@@ -150,7 +150,7 @@ class SeedIKSolver:
     ) -> SeedIKState:
         if self._idxs_goal is None:
             raise RuntimeError("call _setup_batch_size before evaluating seed IK")
-        result = self.error_calculator.compute_error_and_jacobian(
+        result = self.error_calculator._compute_error_and_jacobian_unchecked(
             joint_position, goal_tool_poses, self._idxs_goal,
             self._velocity_current_position, self._velocity_current_velocity,
             self._velocity_dt, self._velocity_clamping_active,
@@ -395,12 +395,33 @@ class SeedIKSolver:
             (batch * seeds, 1, 1), self.config.lambda_initial, **self.device_cfg.as_torch_dict()
         )
         iterations = 0
+        success = self._check_convergence(state, batch * seeds).reshape(batch, seeds)
+        if self._calculate_exit_condition(
+            success, success_num_seeds, self.config.batch_success_threshold, batch
+        ):
+            q = state.joint_position.reshape(batch, seeds, self.dof)
+            return (
+                q, success, state.position_errors.reshape(batch, seeds),
+                state.orientation_errors.reshape(batch, seeds), iterations,
+            )
         groups = self.config.max_iterations // self.config.inner_iterations
+        converged = False
         for _ in range(groups):
-            state = self._levenberg_marquardt_step_inner_iterations(state, goal_tool_poses)
-            iterations += self.config.inner_iterations
-            success = self._check_convergence(state, batch * seeds).reshape(batch, seeds)
-            if self._calculate_exit_condition(success, success_num_seeds, self.config.batch_success_threshold, batch):
+            # CUDA groups inner steps to reduce graph-launch overhead.  Eager
+            # MPS pays for every full FK/Jacobian/linear-solve pass, so check
+            # the configured exit condition after each step and avoid doing
+            # the rest of a group after enough seeds have converged.
+            for _ in range(self.config.inner_iterations):
+                state = self._levenberg_marquardt_step_impl(state, goal_tool_poses)
+                iterations += 1
+                success = self._check_convergence(state, batch * seeds).reshape(batch, seeds)
+                if self._calculate_exit_condition(
+                    success, success_num_seeds,
+                    self.config.batch_success_threshold, batch,
+                ):
+                    converged = True
+                    break
+            if converged:
                 break
         q = state.joint_position.reshape(batch, seeds, self.dof)
         success = self._check_convergence(state, batch * seeds).reshape(batch, seeds)

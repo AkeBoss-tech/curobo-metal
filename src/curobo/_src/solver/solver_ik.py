@@ -777,7 +777,30 @@ class IKSolver:
         started = time.monotonic()
         iterations = 200
         executed_iterations = 0
-        if run_optimizer:
+        refine = run_optimizer
+        cached_evaluation = None
+        if refine and self.config.exit_early:
+            # The LM seed stage can already produce solutions inside every
+            # public feasibility tolerance.  Refining those seeds
+            # unconditionally wastes up to 200 eager MPS iterations and can
+            # push a valid solution back outside tolerance.  Check the seed
+            # batch before the first Adam update, matching the existing
+            # post-update exit condition below.
+            cached_evaluation = self._evaluate_pose_seeds(q, goal_tool_poses, True)
+            _, seed_pe, seed_re, _, seed_clearance, seed_self_collision = cached_evaluation
+            seed_success = (
+                (seed_pe.amax(dim=-1) <= self.config.position_tolerance)
+                & (seed_re.amax(dim=-1) <= self.config.orientation_tolerance)
+                & (seed_clearance >= 0)
+                & (seed_self_collision <= 0)
+            )
+            refine = not bool(
+                seed_success.any(dim=1).to(q.dtype).mean()
+                >= self.config.exit_early_batch_success_threshold
+            )
+            if refine:
+                cached_evaluation = None
+        if refine:
             for step in range(1, iterations + 1):
                 q = q.requires_grad_(True)
                 cost, _, _, _, _, _ = self._evaluate_pose_seeds(q, goal_tool_poses, True)
@@ -795,9 +818,10 @@ class IKSolver:
                 ).detach()
                 executed_iterations = step
                 if self.config.exit_early:
-                    _, step_pe, step_re, _, step_clearance, step_self_collision = self._evaluate_pose_seeds(
+                    cached_evaluation = self._evaluate_pose_seeds(
                         q, goal_tool_poses, True
                     )
+                    _, step_pe, step_re, _, step_clearance, step_self_collision = cached_evaluation
                     step_success = (
                         (step_pe.amax(dim=-1) <= self.config.position_tolerance)
                         & (step_re.amax(dim=-1) <= self.config.orientation_tolerance)
@@ -809,9 +833,12 @@ class IKSolver:
                         >= self.config.exit_early_batch_success_threshold
                     ):
                         break
-        cost, position_error_by_link, rotation_error_by_link, goal_index, clearance, self_collision = (
-            self._evaluate_pose_seeds(q, goal_tool_poses, run_optimizer)
-        )
+                    cached_evaluation = None
+        if cached_evaluation is None:
+            cached_evaluation = self._evaluate_pose_seeds(
+                q, goal_tool_poses, run_optimizer
+            )
+        cost, position_error_by_link, rotation_error_by_link, goal_index, clearance, self_collision = cached_evaluation
         position_error = position_error_by_link.amax(dim=-1)
         rotation_error = rotation_error_by_link.amax(dim=-1)
         rank = cost.argsort(dim=1)

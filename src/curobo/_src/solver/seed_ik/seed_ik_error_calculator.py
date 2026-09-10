@@ -98,6 +98,7 @@ class _SeedIKErrorCalculatorPortable:
         # CUDA backward), but reads the same stacked criteria state.
         self.pose_cost = self._setup_cost_function()
         self._criteria: Dict[str, ToolPoseCriteria] = self.pose_cost.config.tool_pose_criteria
+        self._refresh_static_criteria_state()
         self._streams = {}
         self._events = {}
         for stream_name in (
@@ -166,23 +167,33 @@ class _SeedIKErrorCalculatorPortable:
         project = criteria.project_distance_to_goal.to(device=value.device).bool().reshape(-1)
         return axes, project
 
+    def _refresh_static_criteria_state(self) -> None:
+        """Cache the criteria branch as a Python value outside the LM hot loop."""
+        criteria = self.pose_cost._stacked_tool_pose_criteria
+        self._projects_distance_to_goal = bool(
+            criteria.project_distance_to_goal.detach().cpu().any().item()
+        )
+
     def _compute_pose_errors(
         self,
         joint_position: torch.Tensor,
         goal_poses: GoalToolPose,
         idxs_goal: torch.Tensor,
+        *,
+        validate: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        self._validate_problem_tensor(joint_position, "joint_position", joint_position.shape[0])
-        if not isinstance(goal_poses, GoalToolPose):
-            raise TypeError("goal_poses must be a GoalToolPose")
-        if goal_poses.horizon != 1:
-            raise NotImplementedError("portable seeded IK evaluates a single target timestep")
-        if not self.device_cfg.is_same_torch_device(goal_poses.position.device) or not self.device_cfg.is_same_torch_device(goal_poses.quaternion.device):
-            raise ValueError("goal_poses must use the configured device")
-        if goal_poses.position.dtype != joint_position.dtype or goal_poses.quaternion.dtype != joint_position.dtype:
-            raise ValueError("goal_poses must use the joint-position dtype")
-        if not bool(torch.isfinite(goal_poses.position).all().item()) or not bool(torch.isfinite(goal_poses.quaternion).all().item()):
-            raise ValueError("goal_poses must contain only finite values")
+        if validate:
+            self._validate_problem_tensor(joint_position, "joint_position", joint_position.shape[0])
+            if not isinstance(goal_poses, GoalToolPose):
+                raise TypeError("goal_poses must be a GoalToolPose")
+            if goal_poses.horizon != 1:
+                raise NotImplementedError("portable seeded IK evaluates a single target timestep")
+            if not self.device_cfg.is_same_torch_device(goal_poses.position.device) or not self.device_cfg.is_same_torch_device(goal_poses.quaternion.device):
+                raise ValueError("goal_poses must use the configured device")
+            if goal_poses.position.dtype != joint_position.dtype or goal_poses.quaternion.dtype != joint_position.dtype:
+                raise ValueError("goal_poses must use the joint-position dtype")
+            if not bool(torch.isfinite(goal_poses.position).all().item()) or not bool(torch.isfinite(goal_poses.quaternion).all().item()):
+                raise ValueError("goal_poses must contain only finite values")
         state = self.robot_model.compute_kinematics(
             JointState.from_position(joint_position, self.robot_model.joint_names)
         )
@@ -190,20 +201,26 @@ class _SeedIKErrorCalculatorPortable:
             raise RuntimeError("SeedIKErrorCalculator requires a kinematics model with Jacobians")
         current_p = state.tool_poses.position[:, 0]
         current_q = state.tool_poses.quaternion[:, 0]
-        idxs_goal = idxs_goal.reshape(-1).to(dtype=torch.long, device=joint_position.device)
-        if idxs_goal.numel() != joint_position.shape[0]:
-            raise ValueError("idxs_goal must contain one goal index per joint-position row")
-        if bool(((idxs_goal < 0) | (idxs_goal >= goal_poses.batch_size)).any().item()):
-            raise ValueError("idxs_goal contains a goal index outside the goal batch")
-        goal = goal_poses.reorder_links(self.robot_model.tool_frames)
+        idxs_goal = idxs_goal.reshape(-1)
+        if validate:
+            idxs_goal = idxs_goal.to(dtype=torch.long, device=joint_position.device)
+            if idxs_goal.numel() != joint_position.shape[0]:
+                raise ValueError("idxs_goal must contain one goal index per joint-position row")
+            if bool(((idxs_goal < 0) | (idxs_goal >= goal_poses.batch_size)).any().item()):
+                raise ValueError("idxs_goal contains a goal index outside the goal batch")
+            goal = goal_poses.reorder_links(self.robot_model.tool_frames)
+        else:
+            # SeedIKSolver constructs this goal in robot tool-frame order and
+            # caches a correctly typed/device-resident index tensor per shape.
+            goal = goal_poses
         target_p = goal.position.index_select(0, idxs_goal)[:, 0, :, 0]
         target_q = goal.quaternion.index_select(0, idxs_goal)[:, 0, :, 0]
         target_q_norm = torch.linalg.vector_norm(target_q, dim=-1)
-        if bool((target_q_norm <= torch.finfo(target_q.dtype).eps).any().item()):
+        if validate and bool((target_q_norm <= torch.finfo(target_q.dtype).eps).any().item()):
             raise ValueError("goal_poses quaternion must have nonzero norm")
         position_residual = current_p - target_p
         axes, project = self._pose_axes(joint_position)
-        if bool(project.any().item()):
+        if self._projects_distance_to_goal:
             projected = torch.matmul(
                 position_residual.unsqueeze(-2), self._quaternion_to_matrix(target_q)
             ).squeeze(-2)
@@ -316,13 +333,40 @@ class _SeedIKErrorCalculatorPortable:
         dt: Optional[torch.Tensor] = None,
         velocity_clamping_active: bool = False,
     ) -> ErrorJacobianResult:
+        return self._compute_error_and_jacobian_impl(
+            joint_position, goal_poses, idxs_goal, current_position,
+            current_velocity, dt, velocity_clamping_active, validate=True,
+        )
+
+    def _compute_error_and_jacobian_unchecked(
+        self,
+        joint_position: torch.Tensor,
+        goal_poses: GoalToolPose,
+        idxs_goal: torch.Tensor,
+        current_position: Optional[torch.Tensor] = None,
+        current_velocity: Optional[torch.Tensor] = None,
+        dt: Optional[torch.Tensor] = None,
+        velocity_clamping_active: bool = False,
+    ) -> ErrorJacobianResult:
+        """Evaluate an already validated, tool-ordered solver-owned batch."""
+        return self._compute_error_and_jacobian_impl(
+            joint_position, goal_poses, idxs_goal, current_position,
+            current_velocity, dt, velocity_clamping_active, validate=False,
+        )
+
+    def _compute_error_and_jacobian_impl(
+        self, joint_position, goal_poses, idxs_goal, current_position,
+        current_velocity, dt, velocity_clamping_active, *, validate: bool,
+    ) -> ErrorJacobianResult:
         if joint_position.ndim != 2 or joint_position.shape[-1] != self.dof:
             raise ValueError(f"joint_position must have shape [problems, {self.dof}]")
         problems = joint_position.shape[0]
         if self._num_problems >= 0 and problems != self._num_problems:
             raise ValueError(f"num_problems size mismatch: {problems} != {self._num_problems}")
         with self.stream_context("pose_residual"):
-            pose = self._compute_pose_errors(joint_position, goal_poses, idxs_goal)
+            pose = self._compute_pose_errors(
+                joint_position, goal_poses, idxs_goal, validate=validate
+            )
         limits = (None, None, None)
         if self.config.joint_limit_weight > 0:
             with self.stream_context("joint_limit_residual"):
@@ -399,6 +443,7 @@ class _SeedIKErrorCalculatorPortable:
     def update_tool_pose_criteria(self, tool_pose_criteria):
         self.pose_cost.update_tool_pose_criteria(tool_pose_criteria)
         self._criteria = self.pose_cost.config.tool_pose_criteria
+        self._refresh_static_criteria_state()
 
     def stream_context(self, stream_name: str):
         if stream_name not in {"pose_residual", "joint_limit_residual", "velocity_residual", "acceleration_residual", "default", "kinematics", "cost"}:

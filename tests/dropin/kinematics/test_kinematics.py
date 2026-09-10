@@ -83,9 +83,41 @@ def test_mps_with_cpu_fallback_disabled(monkeypatch):
     monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")
     device = DeviceCfg(torch.device("mps"), torch.float32)
     model = _model(device_cfg=device, compute_jacobian=True)
+    assert model._fused_chain is not None
     q = model.default_joint_position.repeat(2, 1).requires_grad_()
     state = model.compute_kinematics(
         JointState.from_position(q, joint_names=model.joint_names)
     )
     torch.autograd.grad(state.tool_poses.position.sum(), q)
     assert state.tool_poses.position.device.type == "mps"
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS unavailable")
+def test_mps_serial_prefix_matches_full_tree_for_fixed_branches(monkeypatch):
+    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0")
+    model = _model(
+        device_cfg=DeviceCfg(torch.device("mps"), torch.float32),
+        compute_jacobian=True,
+    )
+    q = model.default_joint_position.repeat(4, 1)
+    q[:, 0] += torch.linspace(0.0, 0.3, 4, device="mps")
+    state = JointState.from_position(q, joint_names=model.joint_names)
+    fused = model.compute_kinematics(state)
+
+    model._fused_chain = None
+    composed = model.compute_kinematics(state)
+
+    torch.testing.assert_close(
+        fused.tool_poses.position, composed.tool_poses.position,
+        rtol=2e-5, atol=2e-5,
+    )
+    torch.testing.assert_close(
+        fused.tool_poses.quaternion, composed.tool_poses.quaternion,
+        rtol=2e-5, atol=2e-5,
+    )
+    torch.testing.assert_close(
+        fused.tool_jacobians, composed.tool_jacobians, rtol=2e-5, atol=2e-5
+    )
+    torch.testing.assert_close(
+        fused.robot_spheres, composed.robot_spheres, rtol=2e-5, atol=2e-5
+    )
