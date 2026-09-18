@@ -166,17 +166,19 @@ jobs:
             tools/packaging/check_distribution_contents.py dist/*
       - name: Install and test wheel in a clean environment
         run: |
-          uv venv --clear /tmp/curobo-metal-wheel
-          uv pip install --python /tmp/curobo-metal-wheel/bin/python dist/*.whl
+          wheel_env="$RUNNER_TEMP/curobo-metal-wheel"
+          uv venv --clear "$wheel_env"
+          uv pip install --python "$wheel_env/bin/python" dist/*.whl
           cd /tmp
-          /tmp/curobo-metal-wheel/bin/python \
+          "$wheel_env/bin/python" \
             "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
-          uv pip check --python /tmp/curobo-metal-wheel/bin/python
+          uv pip check --python "$wheel_env/bin/python"
       - name: Install and test sdist in a separate clean environment
         run: |
-          uv venv --clear /tmp/curobo-metal-sdist
-          uv pip install --python /tmp/curobo-metal-sdist/bin/python dist/*.tar.gz
+          sdist_env="$RUNNER_TEMP/curobo-metal-sdist"
+          uv venv --clear "$sdist_env"
+          uv pip install --python "$sdist_env/bin/python" dist/*.tar.gz
           cd /tmp
-          /tmp/curobo-metal-sdist/bin/python \
+          "$sdist_env/bin/python" \
             "$GITHUB_WORKSPACE/tools/packaging/wheel_smoke.py"
-          uv pip check --python /tmp/curobo-metal-sdist/bin/python
+          uv pip check --python "$sdist_env/bin/python"
