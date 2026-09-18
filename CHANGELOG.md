@@ -2,7 +2,7 @@
 
 All notable user-visible changes are recorded here.
 
-## 1.0.1 - Unreleased
+## 1.0.1 - 2026-09-17
 
 ### Fixed
 
@@ -20,6 +20,8 @@ All notable user-visible changes are recorded here.
 ### Added
 
 - A minimal installed-package FK example using the public `curobo` namespace.
+- A documented CPU/MPS graph-planning example covering deterministic obstacle
+  avoidance, persistent roadmaps, and fixed-knot trajectory-seed handoff.
 - A reproducible Pillow-rendered motion-planning GIF using the bundled Franka
   meshes and its public-API generator.
 - A practical Apple M4 versus RTX 3090 benchmark table, cold-start context,

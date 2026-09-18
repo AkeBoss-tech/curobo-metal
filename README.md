@@ -71,8 +71,8 @@ installation is not required for the current runtime-compiled kernels.
 
 ## Install and test
 
-Version `1.0.0` is the first release of the pinned portable Python contract.
-The source tree is preparing `1.0.1`, including the IK fix described below.
+Version `1.0.1` is the current release of the pinned portable Python contract
+and includes the IK reliability and performance fix described below.
 Exact behavior, known limitations, and exclusions are listed in the
 [changelog](https://github.com/AkeBoss-tech/curobo-metal/blob/main/CHANGELOG.md)
 and [parity matrix](https://github.com/AkeBoss-tech/curobo-metal/blob/main/docs/parity-matrix.md).
@@ -108,6 +108,23 @@ print(state.tool_poses.position)
 ```
 
 The same example is available as [`examples/minimal_fk.py`](examples/minimal_fk.py).
+
+### Graph planning
+
+Deterministic PRM/roadmap graph planning is supported on CPU and Apple MPS. The
+production API provides batched start/goal queries, A*, Dijkstra, and greedy
+search, uniform or Sobol sampling, reusable roadmap caches, device-batched
+validity checks, path shortcutting, and fixed-knot trajectory-seed handoff.
+
+```bash
+PYTORCH_ENABLE_MPS_FALLBACK=0 uv run python examples/graph_planning.py --device mps
+```
+
+See [`examples/graph_planning.py`](examples/graph_planning.py) for a complete
+obstacle-avoiding solve using `GraphPlanningProblem` and `PersistentRoadmap`.
+This is geometric planning support; it is distinct from CUDA Graph execution
+capture. PyTorch does not expose CUDA Graph-equivalent capture for MPS, so
+CUDA-graph-specific APIs retain eager, shape-stable compatibility behavior.
 
 ### Visual motion-planning demo
 
@@ -201,14 +218,14 @@ study.
 | Public workload | Apple M4 / Metal | RTX 3090 / CUDA | M4 warm gap |
 | --- | ---: | ---: | ---: |
 | FK, batch 1,024 (`1.0.0`) | 9.47 ms | 0.372 ms | 25.5× slower |
-| FK, batch 1,024 (`1.0.1` candidate) | 3.79 ms | 0.372 ms | 10.2× slower |
+| FK, batch 1,024 (`1.0.1`) | 3.79 ms | 0.372 ms | 10.2× slower |
 | Moved-target IK (`1.0.0`, successful solves) | 315 ms | 5.87 ms | about 54× slower |
-| Moved-target IK (`1.0.1` candidate) | 17.9 ms | 5.87 ms | 3.05× slower |
+| Moved-target IK (`1.0.1`) | 17.9 ms | 5.87 ms | 3.05× slower |
 | Joint-space motion plan (`1.0.0`) | 110 ms | 89.9 ms | 1.22× slower |
 
 The moved-target rows are a focused, already-seeded 32-seed Franka workload.
 They should not be read as the latency of every IK problem. The broader local
-release-gate reachable case measured 1.80 s for this candidate (under its 2.5 s
+release-gate reachable case measured 1.80 s for `1.0.1` (under its 2.5 s
 ceiling); it uses different initialization and is therefore not compared with
 the RTX 3090 number above.
 
@@ -225,14 +242,13 @@ objects around them. On the same M4, fused/low-level measurements included:
 - sphere-to-cuboid collision at batch 512: about 0.80 ms.
 
 PyPI `1.0.0` also exposed a moved-target IK reliability issue: 10 of 20
-repeated solves succeeded in one clean-environment run. The current source tree
+repeated solves succeeded in one clean-environment run. Version `1.0.1`
 short-circuits refinement when the Levenberg–Marquardt seeds already satisfy
 the tolerances, checks eager-MPS convergence after each LM step, and routes the
 serial robot prefix through fused Metal FK. The same check produced 20/20
 successes at about 17.9 ms median. The maximum position
 error observed in that run was 2.93 mm, inside the configured 5 mm tolerance.
-That fix is not part of the immutable `1.0.0` wheel and should ship in a patch
-release before broad promotion.
+That fix is not part of the immutable `1.0.0` wheel; it ships in `1.0.1`.
 
 The next performance work should focus on fused IK residual/normal-equation
 kernels, eliminating the remaining host synchronization from optimizer loops,
